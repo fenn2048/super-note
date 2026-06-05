@@ -31,7 +31,8 @@
     "selectNotebook": "Select Notebook",
     "selectNotebookHint": "Please choose which notebook this note belongs to",
     "createdBy": "by {{name}}",
-    "unknownUser": "Unknown user"
+    "unknownUser": "Unknown user",
+    "more": "More"
   },
   "auth": {
     "verifying": "Verifying identity...",

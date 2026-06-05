@@ -200,7 +200,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 200) + "px";
+      el.style.height = Math.min(el.scrollHeight, 300) + "px";
     }
   }, []);
 
@@ -576,8 +576,8 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             }}
             onPaste={handlePaste}
             placeholder={t("diary.placeholder")}
-            rows={2}
-            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none min-h-[52px]"
+            rows={4}
+            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none min-h-[100px]"
           />
         </div>
 
@@ -740,16 +740,16 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             <button
               onClick={() => setShowMoods(!showMoods)}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+                "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
                 mood
                   ? "bg-accent-primary/10 text-accent-primary"
                   : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
               )}
             >
               {selectedMoodEmoji ? (
-                <span className="text-sm">{selectedMoodEmoji}</span>
+                <span className="text-base">{selectedMoodEmoji}</span>
               ) : (
-                <Smile size={15} />
+                <Smile size={18} />
               )}
               <span className="hidden sm:inline">
                 {mood ? t(`diary.mood${mood.charAt(0).toUpperCase() + mood.slice(1)}`) : t("diary.mood")}
@@ -795,7 +795,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             onClick={() => fileInputRef.current?.click()}
             disabled={remainingSlots <= 0}
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+              "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
               remainingSlots <= 0
                 ? "text-tx-tertiary/50 cursor-not-allowed"
                 : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
@@ -809,7 +809,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                 : t("diary.addImage")
             }
           >
-            <ImagePlus size={15} />
+            <ImagePlus size={18} />
             <span className="hidden sm:inline">{t("diary.image")}</span>
             {pendingImages.length > 0 && (
               <span className="text-[10px] text-tx-tertiary tabular-nums">
@@ -823,14 +823,14 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             onClick={startRecording}
             disabled={recording || pendingVoice !== null}
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+              "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
               (recording || pendingVoice !== null)
                 ? "text-tx-tertiary/50 cursor-not-allowed"
                 : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
             )}
             title={pendingVoice !== null ? "每条说说只能录制一段语音" : "录制语音"}
           >
-            <Mic size={15} />
+            <Mic size={18} />
             <span className="hidden sm:inline">语音</span>
           </button>
 
@@ -1573,7 +1573,7 @@ function DiaryEditor({
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 200) + "px";
+      el.style.height = Math.min(el.scrollHeight, 300) + "px";
     }
   }, []);
   useEffect(() => {
@@ -1770,8 +1770,8 @@ function DiaryEditor({
           }}
           onKeyDown={handleKeyDown}
           placeholder={t("diary.editPlaceholder")}
-          rows={2}
-          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none min-h-[52px]"
+          rows={4}
+          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none min-h-[100px]"
           autoFocus
         />
 
@@ -1832,16 +1832,16 @@ function DiaryEditor({
             <button
               onClick={() => setShowMoods(!showMoods)}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+                "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
                 mood
                   ? "bg-accent-primary/10 text-accent-primary"
                   : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
               )}
             >
               {selectedMoodEmoji ? (
-                <span className="text-sm">{selectedMoodEmoji}</span>
+                <span className="text-base">{selectedMoodEmoji}</span>
               ) : (
-                <Smile size={15} />
+                <Smile size={18} />
               )}
               <span className="hidden sm:inline">
                 {mood ? t(`diary.mood${mood.charAt(0).toUpperCase() + mood.slice(1)}`) : t("diary.mood")}
@@ -1886,7 +1886,7 @@ function DiaryEditor({
             onClick={() => fileInputRef.current?.click()}
             disabled={remainingSlots <= 0}
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+              "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
               remainingSlots <= 0
                 ? "text-tx-tertiary/50 cursor-not-allowed"
                 : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
@@ -1900,7 +1900,7 @@ function DiaryEditor({
                 : t("diary.addImage")
             }
           >
-            <ImagePlus size={15} />
+            <ImagePlus size={18} />
             <span className="hidden sm:inline">{t("diary.image")}</span>
             {images.length > 0 && (
               <span className="text-[10px] text-tx-tertiary tabular-nums">

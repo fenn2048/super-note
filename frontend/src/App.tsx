@@ -34,6 +34,7 @@ import { api, getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
 import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification } from "@/hooks/useCapacitor";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import CommandPalette from "@/components/common/CommandPalette";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
@@ -697,7 +698,8 @@ function AppLayout() {
     onOpenSearch: () => setCommandPaletteOpen(true),
   });
 
-  const showMobileTabBar = !(isNotesView && state.mobileView === "editor");
+  const { visible: keyboardVisible } = useKeyboardVisible();
+  const showMobileTabBar = !(isNotesView && state.mobileView === "editor") && !keyboardVisible;
 
   return (
     <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
