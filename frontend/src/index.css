@@ -1,0 +1,2802 @@
+/* 使用系统字体栈，无需依赖 Google Fonts CDN */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== 旧版 WebView 兼容性回退 =====
+ * 小米 8 等旧设备的 WebView 不支持 dvh / color-mix,
+ * 导致根容器高度为 0 → 黑屏。
+ * 用 @supports 做渐进增强，保证新设备不受影响。
+ */
+
+/* dvh 回退：旧浏览器用 vh 兑替 */
+@supports not (height: 100dvh) {
+  .h-\[100dvh\] { height: 100vh !important; }
+  .min-h-\[100dvh\] { min-height: 100vh !important; }
+  .max-h-\[100dvh\] { max-height: 100vh !important; }
+  .max-md\:h-\[100dvh\] { height: 100vh !important; }
+  /* LoginPage 内联样式回退 */
+  [style*="100dvh"] {
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    height: 100vh !important;
+  }
+}
+
+/* color-mix 回退：用固定透明度代替（仅表单元素） */
+@supports not (color-mix(in srgb, red 50%, transparent)) {
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.5);
+  }
+}
+
+/* ===== Light Theme (默认：Obsidian Light) ===== */
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --editor-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-sidebar: #f5f5f5;
+  --color-elevated: #ffffff;
+  --color-border: #e3e3e3;
+  --color-hover: rgba(0, 0, 0, 0.04);
+  --color-active: rgba(72, 54, 153, 0.08);
+
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #5a5a5a;
+  --color-text-tertiary: #8a8a8a;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #483699;
+  --color-accent-secondary: #2a7b4c;
+  --color-accent-warning: #e67e22;
+  --color-accent-danger: #c0392b;
+  --color-accent-muted: rgba(0, 0, 0, 0.3);
+
+  /* ProseMirror 编辑器色值 */
+  --pm-text: #2e2e2e;
+  --pm-heading: #1a1a1a;
+  --pm-code-bg: #f5f5f5;
+  --pm-code-text: #c92a2a;
+  --pm-pre-bg: #f8f8f8;
+  --pm-pre-border: #e3e3e3;
+  --pm-pre-text: #2e2e2e;
+  --pm-blockquote-border: #483699;
+  --pm-blockquote-text: #5c5c5c;
+  --pm-hr: #e3e3e3;
+  --pm-placeholder: #b3b3b3;
+  --pm-task-done: #b3b3b3;
+  --pm-scrollbar: #e5e5e5;
+  --pm-scrollbar-hover: #cccccc;
+  --pm-selection: rgba(72, 54, 153, 0.15);
+}
+
+/* ===== Dark Theme (默认：Obsidian Dark) ===== */
+.dark {
+  --color-bg: #1e1e1e;
+  --color-surface: #1e1e1e;
+  --color-sidebar: #161616;
+  --color-elevated: #242424;
+  --color-border: #2e2e2e;
+  --color-hover: rgba(255, 255, 255, 0.04);
+  --color-active: rgba(122, 82, 244, 0.15);
+
+  --color-text-primary: #dadada;
+  --color-text-secondary: #a6a6a6;
+  --color-text-tertiary: #7c7c7c;
+  --color-text-inverse: #1e1e1e;
+
+  --color-accent-primary: #7a52f4;
+  --color-accent-secondary: #2ecc71;
+  --color-accent-warning: #f39c12;
+  --color-accent-danger: #e74c3c;
+  --color-accent-muted: rgba(255, 255, 255, 0.3);
+
+  --pm-text: #dadada;
+  --pm-heading: #ffffff;
+  --pm-code-bg: #272727;
+  --pm-code-text: #ff7e7e;
+  --pm-pre-bg: #181818;
+  --pm-pre-border: #2e2e2e;
+  --pm-pre-text: #dadada;
+  --pm-blockquote-border: #7a52f4;
+  --pm-blockquote-text: #a6a6a6;
+  --pm-hr: #2e2e2e;
+  --pm-placeholder: #505050;
+  --pm-task-done: #505050;
+  --pm-scrollbar: #363636;
+  --pm-scrollbar-hover: #4c4c4c;
+  --pm-selection: rgba(122, 82, 244, 0.25);
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ===== Safe Area 统一变量 =====
+ * 移动端顶部 / 底部避让高度。两种运行模式都要兼容：
+ *
+ *   A) 浏览器 / iOS WKWebView / Capacitor 开启 StatusBar.setOverlaysWebView(true)：
+ *      状态栏覆盖 WebView，CSS 的 env(safe-area-inset-*) 能拿到真实数值。
+ *   B) Android + Capacitor StatusBar.setOverlaysWebView(false)（当前默认）：
+ *      状态栏独占一条，WebView 顶边 = y=0，env(safe-area-inset-top) 恒为 0。
+ *      这种模式下我们在 JS (useStatusBarSync) 初始化时把 `visualViewport.offsetTop`
+ *      或原生状态栏高度写入 --android-status-bar-height 做兜底。
+ *
+ * 组件里统一使用 var(--safe-area-top/bottom)，无需再散落写 env() + max() 组合。
+ */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Android 原生壳：status bar / nav bar 不 overlay WebView，env() 恒为 0；
+ * 由 JS 注入 --android-status-bar-height / --android-nav-bar-height 作为更精确的
+ * 兜底值，但即便 JS 没跑（极端时序问题），CSS 这里也给一份**硬兜底**：
+ *   - 顶部 28px：贴近普通屏真实状态栏高度，避免按钮压在时间/电池图标上；
+ *               刘海/挖孔屏由 JS 注入的真实值通过 max() 自动覆盖。
+ *   - 底部 24px：覆盖手势条，避免 home indicator 压住内容。
+ * JS 注入的值会通过 max() 与硬兜底取较大者，高状态栏机型依然精准。
+ *
+ * 注：Android 15+ (targetSdk>=35) 强制 Edge-to-Edge，状态栏/手势栏会 overlay
+ * 在 WebView 上，必须依靠这两个兜底变量做避让。 */
+html[data-native="android"] {
+  --safe-area-top: max(var(--android-status-bar-height, 0px), 28px);
+  --safe-area-bottom: max(var(--android-nav-bar-height, 0px), 24px);
+}
+
+/* iOS 原生壳：env(safe-area-inset-*) 通常能正确返回，但某些机型/初始化时机
+ * 下也可能短暂为 0，给一份较温和的兜底（顶部 20px = 经典状态栏高度）。 */
+html[data-native="ios"] {
+  --safe-area-top: max(env(safe-area-inset-top, 0px), 20px);
+  --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ===== Tiptap / ProseMirror 编辑器样式 ===== */
+.ProseMirror {
+  outline: none;
+  min-height: 300px;
+  /* 底部预留可滚动的空白：写到末尾时仍能把光标行往上滚，避免贴屏幕底部 */
+  padding-bottom: 40vh;
+  font-family: var(--editor-font-family);
+}
+
+/* 编辑器内链接：可见的颜色 + 下划线 + 指针；Typora 风格的轻量提示 */
+.ProseMirror a {
+  color: #4f46e5; /* indigo-600 */
+  text-decoration: underline;
+  text-decoration-color: rgba(79, 70, 229, 0.45);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  word-break: break-all; /* 长 URL 不撑破容器 */
+}
+.ProseMirror a:hover {
+  color: #4338ca; /* indigo-700 */
+  text-decoration-color: currentColor;
+}
+.dark .ProseMirror a {
+  color: #818cf8; /* indigo-400 */
+  text-decoration-color: rgba(129, 140, 248, 0.5);
+}
+.dark .ProseMirror a:hover {
+  color: #a5b4fc; /* indigo-300 */
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--pm-placeholder);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 2rem 0 0.75rem;
+  color: var(--pm-heading);
+  line-height: 1.4;
+}
+
+.ProseMirror h2 {
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin: 1.75rem 0 0.625rem;
+  color: var(--pm-heading);
+  line-height: 1.4;
+}
+
+.ProseMirror h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--pm-heading);
+  line-height: 1.4;
+}
+
+.ProseMirror p {
+  margin: var(--pm-p-margin, 0.625rem) 0;
+  line-height: var(--pm-p-line-height, 1.8);
+  color: var(--pm-text);
+}
+
+.ProseMirror ul {
+  padding-left: 1.5rem;
+  margin: 0.75rem 0;
+  list-style-type: disc;
+}
+
+.ProseMirror ol {
+  padding-left: 1.5rem;
+  margin: 0.75rem 0;
+  list-style-type: decimal !important;
+  -webkit-padding-start: 1.5rem;
+}
+
+.ProseMirror ol li {
+  display: list-item !important;
+  list-style-type: decimal !important;
+}
+
+/* 确保嵌套有序列表也正确显示编号 */
+.ProseMirror ol ol li {
+  list-style-type: lower-alpha !important;
+}
+
+.ProseMirror ol ol ol li {
+  list-style-type: lower-roman !important;
+}
+
+.ProseMirror li:not([data-type="taskItem"]) {
+  margin: var(--pm-li-margin, 0.35rem) 0;
+  color: var(--pm-text);
+  display: list-item;
+}
+
+/* 任务项单独应用样式，不使用 list-item，避免与 flex 布局冲突 */
+.ProseMirror li[data-type="taskItem"] {
+  margin: var(--pm-li-margin, 0.35rem) 0;
+  color: var(--pm-text);
+}
+
+.ProseMirror li p {
+  margin: 0;
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid var(--pm-blockquote-border);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--pm-blockquote-text);
+  font-style: italic;
+}
+
+.ProseMirror code {
+  background: var(--pm-code-bg);
+  color: var(--pm-code-text);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Source Code Pro', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 0.85em;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* ===== 查找/替换 装饰高亮 =====
+ * 由 SearchReplacePanel 的 ProseMirror 装饰插件附加：
+ *   .search-match         —— 所有命中
+ *   .search-match-active  —— 当前选中的命中（更鲜明）
+ * 用浅黄底 + 圆角，避开 light/dark 都不刺眼。 */
+.ProseMirror .search-match {
+  background-color: rgba(250, 204, 21, 0.45); /* yellow-400 / 45% */
+  border-radius: 2px;
+}
+.ProseMirror .search-match-active {
+  background-color: rgba(249, 115, 22, 0.65); /* orange-500 / 65% */
+  outline: 1px solid rgba(234, 88, 12, 0.85);
+  border-radius: 2px;
+}
+.dark .ProseMirror .search-match {
+  background-color: rgba(202, 138, 4, 0.55);
+}
+.dark .ProseMirror .search-match-active {
+  background-color: rgba(234, 88, 12, 0.8);
+  outline-color: rgba(251, 146, 60, 0.95);
+}
+
+/* ===== Code Block（自定义 NodeView：工具栏 + 语法高亮） =====
+ * 主题通过根 <html data-code-theme="..."> 切换，以下是默认变量（GitHub Dark）。
+ * 分享页使用相同的变量体系（.shared-note-content）。
+ */
+:root {
+  --code-bg: #0d1117;
+  --code-fg: #c9d1d9;
+  --code-toolbar-bg: #161b22;
+  --code-border: #30363d;
+  --code-muted: #8b949e;
+  --code-muted-strong: #e6edf3;
+  --code-selection: rgba(56, 139, 253, 0.4);
+  --code-hover-bg: #21262d;
+  --code-popup-bg: #161b22;
+  --code-popup-input-bg: #0d1117;
+  --code-popup-placeholder: #6e7681;
+  --code-popup-active-bg: rgba(31, 111, 235, 0.2);
+  --code-popup-active-fg: #58a6ff;
+  --code-copy-success-fg: #3fb950;
+  --code-copy-success-bg: rgba(35, 134, 54, 0.1);
+
+  /* 语法 token 颜色 */
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-built-in: #ffa657;
+  --hl-attr: #7ee787;
+  --hl-symbol: #79c0ff;
+  --hl-deletion-fg: #ffa198;
+  --hl-deletion-bg: rgba(248, 81, 73, 0.15);
+  --hl-addition-fg: #7ee787;
+  --hl-addition-bg: rgba(46, 160, 67, 0.15);
+  --hl-params: #c9d1d9;
+  --hl-meta: #8b949e;
+}
+
+/* --- 主题：GitHub Light --- */
+html[data-code-theme="github-light"] {
+  --code-bg: #f6f8fa;
+  --code-fg: #24292f;
+  --code-toolbar-bg: #eaeef2;
+  --code-border: #d0d7de;
+  --code-muted: #57606a;
+  --code-muted-strong: #24292f;
+  --code-selection: rgba(9, 105, 218, 0.2);
+  --code-hover-bg: #d0d7de;
+  --code-popup-bg: #ffffff;
+  --code-popup-input-bg: #f6f8fa;
+  --code-popup-placeholder: #8c959f;
+  --code-popup-active-bg: rgba(9, 105, 218, 0.12);
+  --code-popup-active-fg: #0969da;
+  --code-copy-success-fg: #1a7f37;
+  --code-copy-success-bg: rgba(26, 127, 55, 0.1);
+
+  --hl-comment: #6e7781;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-title: #8250df;
+  --hl-built-in: #953800;
+  --hl-attr: #116329;
+  --hl-symbol: #0550ae;
+  --hl-deletion-fg: #82071e;
+  --hl-deletion-bg: rgba(255, 129, 130, 0.2);
+  --hl-addition-fg: #116329;
+  --hl-addition-bg: rgba(46, 160, 67, 0.15);
+  --hl-params: #24292f;
+  --hl-meta: #6e7781;
+}
+
+/* --- 主题：One Dark（Atom） --- */
+html[data-code-theme="one-dark"] {
+  --code-bg: #282c34;
+  --code-fg: #abb2bf;
+  --code-toolbar-bg: #21252b;
+  --code-border: #3e4451;
+  --code-muted: #7f848e;
+  --code-muted-strong: #d7dae0;
+  --code-selection: rgba(82, 139, 255, 0.4);
+  --code-hover-bg: #3e4451;
+  --code-popup-bg: #21252b;
+  --code-popup-input-bg: #282c34;
+  --code-popup-placeholder: #5c6370;
+  --code-popup-active-bg: rgba(82, 139, 255, 0.2);
+  --code-popup-active-fg: #61afef;
+  --code-copy-success-fg: #98c379;
+  --code-copy-success-bg: rgba(152, 195, 121, 0.12);
+
+  --hl-comment: #5c6370;
+  --hl-keyword: #c678dd;
+  --hl-string: #98c379;
+  --hl-number: #d19a66;
+  --hl-title: #61afef;
+  --hl-built-in: #e5c07b;
+  --hl-attr: #d19a66;
+  --hl-symbol: #56b6c2;
+  --hl-deletion-fg: #e06c75;
+  --hl-deletion-bg: rgba(224, 108, 117, 0.15);
+  --hl-addition-fg: #98c379;
+  --hl-addition-bg: rgba(152, 195, 121, 0.15);
+  --hl-params: #abb2bf;
+  --hl-meta: #7f848e;
+}
+
+/* --- 主题：Dracula --- */
+html[data-code-theme="dracula"] {
+  --code-bg: #282a36;
+  --code-fg: #f8f8f2;
+  --code-toolbar-bg: #21222c;
+  --code-border: #44475a;
+  --code-muted: #6272a4;
+  --code-muted-strong: #f8f8f2;
+  --code-selection: rgba(189, 147, 249, 0.35);
+  --code-hover-bg: #44475a;
+  --code-popup-bg: #21222c;
+  --code-popup-input-bg: #282a36;
+  --code-popup-placeholder: #6272a4;
+  --code-popup-active-bg: rgba(189, 147, 249, 0.2);
+  --code-popup-active-fg: #bd93f9;
+  --code-copy-success-fg: #50fa7b;
+  --code-copy-success-bg: rgba(80, 250, 123, 0.1);
+
+  --hl-comment: #6272a4;
+  --hl-keyword: #ff79c6;
+  --hl-string: #f1fa8c;
+  --hl-number: #bd93f9;
+  --hl-title: #50fa7b;
+  --hl-built-in: #8be9fd;
+  --hl-attr: #50fa7b;
+  --hl-symbol: #bd93f9;
+  --hl-deletion-fg: #ff5555;
+  --hl-deletion-bg: rgba(255, 85, 85, 0.15);
+  --hl-addition-fg: #50fa7b;
+  --hl-addition-bg: rgba(80, 250, 123, 0.15);
+  --hl-params: #ffb86c;
+  --hl-meta: #6272a4;
+}
+
+/* --- 主题：Monokai --- */
+html[data-code-theme="monokai"] {
+  --code-bg: #272822;
+  --code-fg: #f8f8f2;
+  --code-toolbar-bg: #1e1f1a;
+  --code-border: #3e3d32;
+  --code-muted: #75715e;
+  --code-muted-strong: #f8f8f2;
+  --code-selection: rgba(73, 72, 62, 0.8);
+  --code-hover-bg: #3e3d32;
+  --code-popup-bg: #1e1f1a;
+  --code-popup-input-bg: #272822;
+  --code-popup-placeholder: #75715e;
+  --code-popup-active-bg: rgba(166, 226, 46, 0.2);
+  --code-popup-active-fg: #a6e22e;
+  --code-copy-success-fg: #a6e22e;
+  --code-copy-success-bg: rgba(166, 226, 46, 0.1);
+
+  --hl-comment: #75715e;
+  --hl-keyword: #f92672;
+  --hl-string: #e6db74;
+  --hl-number: #ae81ff;
+  --hl-title: #a6e22e;
+  --hl-built-in: #66d9ef;
+  --hl-attr: #a6e22e;
+  --hl-symbol: #ae81ff;
+  --hl-deletion-fg: #f92672;
+  --hl-deletion-bg: rgba(249, 38, 114, 0.15);
+  --hl-addition-fg: #a6e22e;
+  --hl-addition-bg: rgba(166, 226, 46, 0.15);
+  --hl-params: #fd971f;
+  --hl-meta: #75715e;
+}
+
+/* --- 主题：Nord --- */
+html[data-code-theme="nord"] {
+  --code-bg: #2e3440;
+  --code-fg: #d8dee9;
+  --code-toolbar-bg: #272b35;
+  --code-border: #3b4252;
+  --code-muted: #7b8494;
+  --code-muted-strong: #eceff4;
+  --code-selection: rgba(136, 192, 208, 0.3);
+  --code-hover-bg: #3b4252;
+  --code-popup-bg: #272b35;
+  --code-popup-input-bg: #2e3440;
+  --code-popup-placeholder: #616e88;
+  --code-popup-active-bg: rgba(136, 192, 208, 0.2);
+  --code-popup-active-fg: #88c0d0;
+  --code-copy-success-fg: #a3be8c;
+  --code-copy-success-bg: rgba(163, 190, 140, 0.12);
+
+  --hl-comment: #616e88;
+  --hl-keyword: #81a1c1;
+  --hl-string: #a3be8c;
+  --hl-number: #b48ead;
+  --hl-title: #88c0d0;
+  --hl-built-in: #8fbcbb;
+  --hl-attr: #8fbcbb;
+  --hl-symbol: #b48ead;
+  --hl-deletion-fg: #bf616a;
+  --hl-deletion-bg: rgba(191, 97, 106, 0.15);
+  --hl-addition-fg: #a3be8c;
+  --hl-addition-bg: rgba(163, 190, 140, 0.15);
+  --hl-params: #d8dee9;
+  --hl-meta: #7b8494;
+}
+
+/* --- 主题：Solarized Light --- */
+html[data-code-theme="solarized-light"] {
+  --code-bg: #fdf6e3;
+  --code-fg: #586e75;
+  --code-toolbar-bg: #eee8d5;
+  --code-border: #d5cdb3;
+  --code-muted: #93a1a1;
+  --code-muted-strong: #073642;
+  --code-selection: rgba(181, 137, 0, 0.2);
+  --code-hover-bg: #d5cdb3;
+  --code-popup-bg: #fdf6e3;
+  --code-popup-input-bg: #eee8d5;
+  --code-popup-placeholder: #93a1a1;
+  --code-popup-active-bg: rgba(38, 139, 210, 0.15);
+  --code-popup-active-fg: #268bd2;
+  --code-copy-success-fg: #859900;
+  --code-copy-success-bg: rgba(133, 153, 0, 0.1);
+
+  --hl-comment: #93a1a1;
+  --hl-keyword: #859900;
+  --hl-string: #2aa198;
+  --hl-number: #d33682;
+  --hl-title: #268bd2;
+  --hl-built-in: #b58900;
+  --hl-attr: #cb4b16;
+  --hl-symbol: #d33682;
+  --hl-deletion-fg: #dc322f;
+  --hl-deletion-bg: rgba(220, 50, 47, 0.1);
+  --hl-addition-fg: #859900;
+  --hl-addition-bg: rgba(133, 153, 0, 0.1);
+  --hl-params: #586e75;
+  --hl-meta: #93a1a1;
+}
+
+.ProseMirror .code-block-wrapper {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Source Code Pro', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  background: var(--code-bg) !important;
+  border-color: var(--code-border) !important;
+}
+
+/* 代码区外壳 */
+.ProseMirror .code-block-pre {
+  margin: 0 !important;
+  padding: 14px 16px !important;
+  background: var(--code-bg) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  overflow-x: auto;
+}
+
+/* 代码内容 */
+.ProseMirror .code-block-content {
+  display: block;
+  color: var(--code-fg) !important;
+  background: transparent !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  line-height: 1.65 !important;
+  white-space: pre !important;
+  tab-size: 4;
+  -moz-tab-size: 4;
+}
+
+/* 代码块内选中色 */
+.ProseMirror .code-block-content::selection,
+.ProseMirror .code-block-content *::selection {
+  background: var(--code-selection) !important;
+  color: inherit !important;
+}
+
+/* 工具栏 & 选择器（配合 CodeBlockView 的语义 class） */
+.ProseMirror .code-block-toolbar {
+  background: var(--code-toolbar-bg);
+  border-color: var(--code-border) !important;
+}
+
+.ProseMirror .code-block-tool-btn {
+  color: var(--code-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.ProseMirror .code-block-tool-btn:hover {
+  color: var(--code-muted-strong);
+  background: var(--code-hover-bg);
+}
+.ProseMirror .code-block-tool-btn.is-copied {
+  color: var(--code-copy-success-fg);
+  background: var(--code-copy-success-bg);
+}
+
+/* 下拉面板（语言/主题选择器）— 使用不带 .ProseMirror 前缀的选择器，
+ * 以便 Portal 渲染到 <body> 下时仍能命中样式（避免透视/无背景）。 */
+.code-block-popup {
+  background: var(--code-popup-bg, #161b22);
+  border-color: var(--code-border, #30363d);
+  color: var(--code-muted-strong, #e6edf3);
+  /* 给一个兜底的实心背景，防止极端情况下 CSS 变量未注入时看起来透明 */
+  background-color: var(--code-popup-bg, #161b22);
+}
+.code-block-popup-title {
+  color: var(--code-muted, #8b949e);
+  border-color: var(--code-border, #30363d) !important;
+}
+.code-block-popup-input {
+  background: var(--code-popup-input-bg, #0d1117);
+  border-color: var(--code-border, #30363d) !important;
+  color: var(--code-muted-strong, #e6edf3);
+}
+.code-block-popup-input::placeholder {
+  color: var(--code-popup-placeholder, #6e7681);
+}
+.code-block-popup-empty {
+  color: var(--code-popup-placeholder, #6e7681);
+}
+.code-block-popup-item {
+  color: var(--code-fg, #c9d1d9);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.code-block-popup-item:hover {
+  background: var(--code-hover-bg, #21262d);
+}
+.code-block-popup-item.is-active {
+  background: var(--code-popup-active-bg, rgba(31, 111, 235, 0.2));
+  color: var(--code-popup-active-fg, #58a6ff);
+}
+
+.ProseMirror .code-block-wrapper {
+  transition: box-shadow 0.2s ease;
+}
+
+.ProseMirror .code-block-wrapper:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dark .ProseMirror .code-block-wrapper:hover {
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* 兼容旧的 pre/code（非 NodeView 渲染时的降级样式） */
+.ProseMirror pre:not(.code-block-pre) {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 1rem 0;
+  overflow-x: auto;
+  color: var(--code-fg);
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Source Code Pro', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ProseMirror pre:not(.code-block-pre) code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--pm-hr);
+  margin: 1.5rem 0;
+}
+
+/* ===== Table 表格（参考为知笔记：按内容自适应宽度，支持列宽拖拽） ===== */
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  padding: 2px 0;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  margin: 0;
+  width: auto;
+  max-width: 100%;
+  table-layout: fixed;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
+/* 列宽拖拽手柄 */
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: var(--color-accent-primary, #3b82f6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 20;
+}
+
+.ProseMirror table:hover .column-resize-handle,
+.ProseMirror.resize-cursor .column-resize-handle {
+  opacity: 0.6;
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+/* 行高拖拽手柄（自研 TableRowResizable 扩展使用）
+ * 单例 DOM，hover 在 <tr> 底边 ±5px 时由 plugin 动态定位 + 显示。
+ * 设计同 column-resize-handle：透明热区 + 一条 2px 蓝色横线。
+ */
+.tiptap-row-resize-handle {
+  /* 透明热区，扩展性更好；通过 ::before 画可见的横线 */
+  background: transparent !important;
+}
+.tiptap-row-resize-handle::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 2px;
+  background-color: var(--color-accent-primary, #3b82f6);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.tiptap-row-resize-handle:hover::before {
+  opacity: 1;
+  height: 3px;
+}
+
+/* ===== 阅读密度（reading density）=====
+ * 由 useUserPreferences.readingDensity 控制：默认 cozy（不需任何 class，使用上方
+ * 各规则中 var(...) 的 fallback 值，保持历史观感）；用户切到紧凑模式时由
+ * Provider 给 <body> 加 .density-compact，这里用 CSS 变量覆盖段落 / 列表项的
+ * 纵向间距与行高，纵向空间约可省 30-40%。
+ *
+ * 只动 p / li 是有意为之：标题、代码块、表格的边距构成视觉锚点，改了反而显得乱。
+ */
+body.density-compact {
+  --pm-p-margin: 0.3rem;
+  --pm-p-line-height: 1.6;
+  --pm-li-margin: 0.2rem;
+}
+
+/* ===== 缩进级别 =====
+ * 使用 margin-left（而非 padding-left）避免与列表自身的 padding-left 冲突，
+ * 保证 bullet / ordered / task list / codeBlock / blockquote / table 等
+ * 都能通过 data-indent 独立叠加缩进。
+ */
+.ProseMirror [data-indent="1"] { margin-left: 2rem !important; }
+.ProseMirror [data-indent="2"] { margin-left: 4rem !important; }
+.ProseMirror [data-indent="3"] { margin-left: 6rem !important; }
+.ProseMirror [data-indent="4"] { margin-left: 8rem !important; }
+.ProseMirror [data-indent="5"] { margin-left: 10rem !important; }
+.ProseMirror [data-indent="6"] { margin-left: 12rem !important; }
+.ProseMirror [data-indent="7"] { margin-left: 14rem !important; }
+.ProseMirror [data-indent="8"] { margin-left: 16rem !important; }
+
+.ProseMirror th,
+.ProseMirror td {
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  min-width: 60px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.ProseMirror th {
+  background: var(--color-elevated);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ProseMirror td {
+  color: var(--color-text-secondary);
+}
+
+.ProseMirror tr:nth-child(even) td {
+  background: var(--color-hover);
+}
+
+/* 表格选中状态（Tiptap table 扩展） */
+.ProseMirror .selectedCell {
+  background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.1);
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  border-radius: 8px;
+  /* 上下 margin 收紧，避免图片块与正文之间空白过大；
+     与 ResizableImageView wrapper 的 margin 保持一致。
+     注：wrapper 是 inline-block 不与外层 <p> 的 margin 折叠，
+     所以此处取小值，让叠加后的视觉间距落在 ~14px。 */
+  margin: 0.25rem auto;
+  display: block;
+  cursor: zoom-in;
+  /*
+   * 外边框：用 outline 而不是 border，原因：
+   *   1) outline 不参与盒模型尺寸计算，不会让图片"变窄一点"；
+   *   2) 不受 Tailwind preflight 和 prose 主题对 img 的 border 设置影响；
+   *   3) 也不会和 ResizableImageView wrapper 的选中态 outline 冲突
+   *      （选中态 outline 在 wrapper 上，这里在 img 上，层次不同）。
+   * 用 !important 是为了压过 prose / preflight 的潜在覆盖。
+   */
+  outline: 1px solid rgba(0, 0, 0, 0.18) !important;
+  outline-offset: 0;
+  transition: box-shadow 0.2s ease, outline-color 0.2s ease;
+}
+
+.ProseMirror img:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  outline-color: rgba(0, 0, 0, 0.32) !important;
+}
+
+/* 暗色模式下使用更柔和的边框色，避免在深色背景下太刺眼 */
+.dark .ProseMirror img {
+  outline-color: rgba(255, 255, 255, 0.22) !important;
+}
+.dark .ProseMirror img:hover {
+  outline-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/*
+ * ResizableImageView 的外层 wrapper：
+ *   - 这里再补一层 box-shadow 形式的"边框"，作为 wrapper 级别的兜底。
+ *   - 用 inset box-shadow 而不是 border，避免影响 wrapper 的实际尺寸 / 手柄定位。
+ *   - 选中态由组件 inline 写的 outline 处理，互不冲突。
+ */
+.ProseMirror .resizable-image-wrapper {
+  border-radius: 8px;
+}
+
+/* ===== Task List ===== */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.5rem 0;
+}
+
+/* 嵌套 task list 缩进 */
+.ProseMirror ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin: 0.25rem 0 0.25rem 1.25rem;
+}
+
+/* 待办项容器 - 确保复选框和文字在同一行 */
+.ProseMirror li[data-type="taskItem"],
+.ProseMirror ul[data-type="taskList"] > li {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important; /* 垂直居中对齐，使复选框与单行文字水平居中 */
+  gap: 0.5rem;
+  margin: 0.375rem 0;
+  border-radius: 6px;
+  padding: 2px 4px;
+  transition: background-color 0.15s ease;
+  list-style: none !important;
+}
+
+/* 确保任务项内部段落不产生额外换行 */
+.ProseMirror li[data-type="taskItem"] > div > p {
+  margin: 0 !important;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.ProseMirror li[data-type="taskItem"]:hover {
+  background-color: var(--color-hover);
+}
+
+/* Checkbox label 容器 —— 强制 inline-flex，避免被 UA / tailwind preflight 置为 block 导致换行 */
+.ProseMirror li[data-type="taskItem"] > label {
+  display: inline-flex !important;
+  flex: 0 0 auto !important; /* 不参与伸缩，占自身宽度 */
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+}
+
+/* 文本节点 wrapper —— 占据剩余空间但不换到下一行 */
+.ProseMirror li[data-type="taskItem"] > div {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: block !important;
+  line-height: 1.6;
+}
+
+/* ===== 自定义 Checkbox 核心样式 ===== */
+.ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid var(--task-checkbox-border);
+  background: var(--task-checkbox-bg);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Hover 效果 - 放大 + 边框变色 */
+.ProseMirror li[data-type="taskItem"] > label input[type="checkbox"]:hover {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  transform: scale(1.1);
+}
+
+/* 选中态 - 主题色背景 + 白色对勾 */
+.ProseMirror li[data-type="taskItem"] > label input[type="checkbox"]:checked {
+  background: #6366f1;
+  border-color: #6366f1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.ProseMirror li[data-type="taskItem"] > label input[type="checkbox"]:checked:hover {
+  background: #4f46e5;
+  border-color: #4f46e5;
+}
+
+/* 文本内容区（保留过渡/outline，布局由上面的 > div 规则主导） */
+.ProseMirror li[data-type="taskItem"] > div {
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+/* 已完成态：文字变灰 + 删除线 */
+.ProseMirror li[data-type="taskItem"][data-checked="true"] > div p {
+  text-decoration: line-through;
+  text-decoration-color: var(--task-done-strike);
+  color: var(--pm-task-done);
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+/* ===== Task Checkbox 色彩变量 ===== */
+:root {
+  --task-checkbox-border: #d1d5db;
+  --task-checkbox-bg: #ffffff;
+  --task-done-strike: #d1d5db;
+}
+
+.dark {
+  --task-checkbox-border: #52525b;
+  --task-checkbox-bg: #27272a;
+  --task-done-strike: #52525b;
+}
+
+/* ===== highlight.js 语法高亮配色（通过 CSS 变量支持多主题） =====
+ * 同时覆盖编辑器内代码块、降级 pre，以及分享页 .shared-note-content 内的代码块。
+ */
+.ProseMirror .code-block-content .hljs-comment,
+.ProseMirror .code-block-content .hljs-quote,
+.ProseMirror pre .hljs-comment,
+.ProseMirror pre .hljs-quote,
+.shared-note-content .shared-code-content .hljs-comment,
+.shared-note-content .shared-code-content .hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.ProseMirror .code-block-content .hljs-keyword,
+.ProseMirror .code-block-content .hljs-selector-tag,
+.ProseMirror .code-block-content .hljs-literal,
+.ProseMirror .code-block-content .hljs-doctag,
+.ProseMirror .code-block-content .hljs-subst,
+.ProseMirror pre .hljs-keyword,
+.ProseMirror pre .hljs-selector-tag,
+.shared-note-content .shared-code-content .hljs-keyword,
+.shared-note-content .shared-code-content .hljs-selector-tag,
+.shared-note-content .shared-code-content .hljs-literal,
+.shared-note-content .shared-code-content .hljs-doctag,
+.shared-note-content .shared-code-content .hljs-subst {
+  color: var(--hl-keyword);
+}
+.ProseMirror .code-block-content .hljs-string,
+.ProseMirror .code-block-content .hljs-meta .hljs-string,
+.ProseMirror .code-block-content .hljs-regexp,
+.ProseMirror pre .hljs-string,
+.shared-note-content .shared-code-content .hljs-string,
+.shared-note-content .shared-code-content .hljs-regexp {
+  color: var(--hl-string);
+}
+.ProseMirror .code-block-content .hljs-number,
+.ProseMirror .code-block-content .hljs-variable,
+.ProseMirror .code-block-content .hljs-template-variable,
+.ProseMirror .code-block-content .hljs-tag .hljs-attr,
+.ProseMirror pre .hljs-number,
+.shared-note-content .shared-code-content .hljs-number,
+.shared-note-content .shared-code-content .hljs-variable,
+.shared-note-content .shared-code-content .hljs-template-variable {
+  color: var(--hl-number);
+}
+.ProseMirror .code-block-content .hljs-title,
+.ProseMirror .code-block-content .hljs-title.function_,
+.ProseMirror .code-block-content .hljs-function .hljs-title,
+.ProseMirror .code-block-content .hljs-section,
+.ProseMirror pre .hljs-title,
+.ProseMirror pre .hljs-function,
+.shared-note-content .shared-code-content .hljs-title,
+.shared-note-content .shared-code-content .hljs-section {
+  color: var(--hl-title);
+  font-weight: 500;
+}
+.ProseMirror .code-block-content .hljs-built_in,
+.ProseMirror .code-block-content .hljs-builtin-name,
+.ProseMirror .code-block-content .hljs-type,
+.ProseMirror pre .hljs-built_in,
+.shared-note-content .shared-code-content .hljs-built_in,
+.shared-note-content .shared-code-content .hljs-builtin-name,
+.shared-note-content .shared-code-content .hljs-type {
+  color: var(--hl-built-in);
+}
+.ProseMirror .code-block-content .hljs-attr,
+.ProseMirror .code-block-content .hljs-attribute,
+.ProseMirror .code-block-content .hljs-name,
+.ProseMirror pre .hljs-attr,
+.shared-note-content .shared-code-content .hljs-attr,
+.shared-note-content .shared-code-content .hljs-attribute,
+.shared-note-content .shared-code-content .hljs-name {
+  color: var(--hl-attr);
+}
+.ProseMirror .code-block-content .hljs-symbol,
+.ProseMirror .code-block-content .hljs-bullet,
+.ProseMirror .code-block-content .hljs-link,
+.ProseMirror .code-block-content .hljs-selector-class,
+.ProseMirror .code-block-content .hljs-selector-id,
+.shared-note-content .shared-code-content .hljs-symbol,
+.shared-note-content .shared-code-content .hljs-bullet,
+.shared-note-content .shared-code-content .hljs-link {
+  color: var(--hl-symbol);
+}
+.ProseMirror .code-block-content .hljs-emphasis,
+.shared-note-content .shared-code-content .hljs-emphasis { font-style: italic; }
+.ProseMirror .code-block-content .hljs-strong,
+.shared-note-content .shared-code-content .hljs-strong { font-weight: 700; }
+.ProseMirror .code-block-content .hljs-deletion,
+.shared-note-content .shared-code-content .hljs-deletion {
+  color: var(--hl-deletion-fg);
+  background-color: var(--hl-deletion-bg);
+}
+.ProseMirror .code-block-content .hljs-addition,
+.shared-note-content .shared-code-content .hljs-addition {
+  color: var(--hl-addition-fg);
+  background-color: var(--hl-addition-bg);
+}
+.ProseMirror .code-block-content .hljs-params,
+.shared-note-content .shared-code-content .hljs-params { color: var(--hl-params); }
+.ProseMirror .code-block-content .hljs-meta,
+.shared-note-content .shared-code-content .hljs-meta { color: var(--hl-meta); }
+
+/* 清理旧版简易 hljs 色（被覆盖，但保留避免影响其他位置） */
+
+/* Highlight mark */
+.highlight-mark {
+  background: rgba(250, 204, 21, 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--pm-scrollbar);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pm-scrollbar-hover);
+}
+
+/* Selection */
+::selection {
+  background: var(--pm-selection);
+}
+
+/* ===== Hide scrollbar (mobile toolbar) ===== */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Context menu open animation */
+@keyframes contextMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ===== 移动端 Android 适配 ===== */
+
+/* 确保 Tailwind 的 max-md:!w-full 在 < 768px 时覆盖 inline style */
+@media (max-width: 767px) {
+  .max-md\:\!w-full {
+    width: 100% !important;
+  }
+}
+
+/* 移动端触控优化 */
+@media (max-width: 767px) {
+  /* 增大可触控元素的最小尺寸（排除编辑器内部元素和标签输入区域内的小按钮） */
+  button:not(.ProseMirror *):not(.ProseMirror ~ * button):not(.tag-input-area *),
+  [role="button"]:not(.ProseMirror *):not(.tag-input-area *),
+  a:not(.ProseMirror *):not(.tag-input-area *) {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  /* 确保编辑器内任务列表 checkbox 不受移动端最小尺寸影响 */
+  .ProseMirror li[data-type="taskItem"] > label {
+    min-height: auto;
+    min-width: auto;
+  }
+
+  .ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
+    min-height: auto;
+    min-width: auto;
+  }
+
+  /* 移动端强制有序列表显示数字编号 */
+  .ProseMirror ol {
+    list-style-type: decimal !important;
+    -webkit-padding-start: 1.5rem;
+    padding-inline-start: 1.5rem;
+  }
+
+  .ProseMirror ol li {
+    display: list-item !important;
+    list-style-type: decimal !important;
+  }
+
+  /* 移动端任务列表确保同行显示 */
+  .ProseMirror li[data-type="taskItem"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+  }
+
+  /* 编辑器工具栏在移动端不换行，允许横向滚动 */
+  .hide-scrollbar {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 编辑器内容区域移动端减少水平 padding */
+  .ProseMirror {
+    min-height: 200px;
+    /* 移动端键盘/浮动工具栏已由滚动容器内联 padding 处理，这里给少量额外底部空间 */
+    padding-bottom: 25vh;
+  }
+}
+
+/* ===== 分享页通用排版（不依赖 @tailwindcss/typography，自给自足） =====
+ * 现状：SharedNoteView 容器虽然写了 prose / prose-a:* 等修饰类，但项目并未启用
+ * @tailwindcss/typography 插件，导致 Tailwind preflight 把 p/h1~h3/ul/ol/a 全部
+ * 重置后没人补回去——段落贴在一起、列表无 bullet、链接看不出是链接。
+ * 这里给 .shared-note-content 自带一套基础排版规则，保证分享页可读且链接醒目。
+ */
+.shared-note-content {
+  color: #3f3f46; /* zinc-700 */
+  line-height: 1.75;
+  font-size: 15px;
+  word-wrap: break-word;
+}
+.dark .shared-note-content {
+  color: #d4d4d8; /* zinc-300 */
+}
+
+/* 段落 / 通用块级间距 */
+.shared-note-content p {
+  margin: 0.85em 0;
+}
+.shared-note-content > :first-child {
+  margin-top: 0;
+}
+.shared-note-content > :last-child {
+  margin-bottom: 0;
+}
+
+/* 标题层级 */
+.shared-note-content h1,
+.shared-note-content h2,
+.shared-note-content h3,
+.shared-note-content h4,
+.shared-note-content h5,
+.shared-note-content h6 {
+  color: #18181b; /* zinc-900 */
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.6em 0 0.6em;
+}
+.dark .shared-note-content h1,
+.dark .shared-note-content h2,
+.dark .shared-note-content h3,
+.dark .shared-note-content h4,
+.dark .shared-note-content h5,
+.dark .shared-note-content h6 {
+  color: #fafafa; /* zinc-50 */
+}
+.shared-note-content h1 { font-size: 1.7em; }
+.shared-note-content h2 { font-size: 1.4em; }
+.shared-note-content h3 { font-size: 1.2em; }
+.shared-note-content h4 { font-size: 1.05em; }
+.shared-note-content h5 { font-size: 1em; }
+.shared-note-content h6 { font-size: 0.95em; color: #71717a; }
+
+/* 链接（与编辑器视觉保持一致） */
+.shared-note-content a {
+  color: #4f46e5; /* indigo-600 */
+  text-decoration: underline;
+  text-decoration-color: rgba(79, 70, 229, 0.45);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  word-break: break-all;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.shared-note-content a:hover {
+  color: #4338ca;
+  text-decoration-color: currentColor;
+}
+.dark .shared-note-content a {
+  color: #818cf8;
+  text-decoration-color: rgba(129, 140, 248, 0.5);
+}
+.dark .shared-note-content a:hover {
+  color: #a5b4fc;
+}
+
+/* 列表：恢复项目符号与缩进 */
+.shared-note-content ul,
+.shared-note-content ol {
+  margin: 0.85em 0;
+  padding-left: 1.6em;
+}
+.shared-note-content ul { list-style: disc; }
+.shared-note-content ol { list-style: decimal; }
+.shared-note-content ul ul { list-style: circle; }
+.shared-note-content ul ul ul { list-style: square; }
+.shared-note-content li {
+  margin: 0.25em 0;
+}
+.shared-note-content li > p {
+  margin: 0.25em 0;
+}
+
+/* Task list（GFM `- [ ]` / `- [x]`） */
+.shared-note-content ul[data-type="taskList"],
+.shared-note-content ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.5em;
+}
+.shared-note-content li[data-checked="true"] > p,
+.shared-note-content li.task-list-item input:checked ~ * {
+  color: #a1a1aa;
+  text-decoration: line-through;
+}
+
+/* 引用块 */
+.shared-note-content blockquote {
+  margin: 1em 0;
+  padding: 0.4em 1em;
+  border-left: 4px solid #c7d2fe; /* indigo-200 */
+  background: rgba(99, 102, 241, 0.05);
+  color: #52525b;
+  border-radius: 0 6px 6px 0;
+}
+.dark .shared-note-content blockquote {
+  border-left-color: #4338ca;
+  background: rgba(99, 102, 241, 0.12);
+  color: #d4d4d8;
+}
+
+/* 行内代码 */
+.shared-note-content :not(pre) > code {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.92em;
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Source Code Pro', 'Menlo', 'Consolas', 'Courier New', monospace;
+}
+.dark .shared-note-content :not(pre) > code {
+  background: rgba(129, 140, 248, 0.15);
+  color: #a5b4fc;
+}
+
+/* 图片 */
+.shared-note-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid #e4e4e7;
+  margin: 0.75em 0;
+}
+.dark .shared-note-content img {
+  border-color: #3f3f46;
+}
+
+/* 分隔线 */
+.shared-note-content hr {
+  border: none;
+  border-top: 1px solid #e4e4e7;
+  margin: 2em 0;
+}
+.dark .shared-note-content hr {
+  border-top-color: #3f3f46;
+}
+
+/* 表格 */
+.shared-note-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.95em;
+}
+.shared-note-content th,
+.shared-note-content td {
+  border: 1px solid #e4e4e7;
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.shared-note-content th {
+  background: #f4f4f5;
+  font-weight: 600;
+}
+.dark .shared-note-content th,
+.dark .shared-note-content td {
+  border-color: #3f3f46;
+}
+.dark .shared-note-content th {
+  background: #27272a;
+}
+
+/* ===== 分享页代码块（视觉与编辑器 CodeBlockView 一致，通过 CSS 变量支持多主题） ===== */
+.shared-note-content .shared-code-block {
+  margin: 1rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--code-border);
+  background: var(--code-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Source Code Pro', 'Menlo', 'Consolas', 'Courier New', monospace;
+}
+
+.shared-note-content .shared-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--code-toolbar-bg);
+  border-bottom: 1px solid var(--code-border);
+  user-select: none;
+}
+
+.shared-note-content .shared-code-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shared-note-content .shared-code-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shared-note-content .shared-code-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.shared-note-content .shared-code-lang {
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--code-muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.shared-note-content .shared-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--code-muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.shared-note-content .shared-code-copy:hover {
+  color: var(--code-muted-strong);
+  background: var(--code-hover-bg);
+}
+
+.shared-note-content .shared-code-copy[data-copied="1"] {
+  color: var(--code-copy-success-fg);
+  background: var(--code-copy-success-bg);
+}
+
+.shared-note-content .shared-code-copy[data-copied="1"] .shared-code-copy-label::after {
+  content: "已复制";
+}
+.shared-note-content .shared-code-copy[data-copied="1"] .shared-code-copy-label {
+  font-size: 0;
+}
+.shared-note-content .shared-code-copy[data-copied="1"] .shared-code-copy-label::after {
+  font-size: 11px;
+}
+
+.shared-note-content .shared-code-pre {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--code-bg);
+  overflow-x: auto;
+}
+
+.shared-note-content .shared-code-content {
+  display: block;
+  color: var(--code-fg);
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre;
+  tab-size: 4;
+  -moz-tab-size: 4;
+}
+
+/* 覆盖 tailwind typography 的 prose 对代码块的默认样式 */
+.shared-note-content .shared-code-block :where(code):not(:where([class~="not-prose"] *)) {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  font-weight: inherit !important;
+}
+.shared-note-content .shared-code-block :where(code):not(:where([class~="not-prose"] *))::before,
+.shared-note-content .shared-code-block :where(code):not(:where([class~="not-prose"] *))::after {
+  content: none !important;
+}
+.shared-note-content .shared-code-block :where(pre):not(:where([class~="not-prose"] *)) {
+  background: var(--code-bg) !important;
+  color: var(--code-fg) !important;
+  padding: 14px 16px !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}
+
+/* ============================================================================
+ * Mermaid 流程图样式
+ * ----------------------------------------------------------------------------
+ * 编辑器内（CodeBlockView 预览态）和分享页两处共用大部分外观，差异由各自
+ * 容器类驱动。
+ * ========================================================================= */
+
+/* 编辑器内 mermaid 预览：把 SVG 居中，浅色背景与代码区拉开层次 */
+.ProseMirror .code-block-wrapper .mermaid-preview-host {
+  background: var(--app-bg, #fafafa);
+  border-radius: 0 0 12px 12px;
+  min-height: 80px;
+}
+.dark .ProseMirror .code-block-wrapper .mermaid-preview-host {
+  background: rgba(255, 255, 255, 0.02);
+}
+.mermaid-view svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 分享页 mermaid 块占位与加载/错误态 */
+.shared-note-content .shared-mermaid-block {
+  margin: 1rem 0;
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: #fafafa;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: auto;
+}
+.dark .shared-note-content .shared-mermaid-block {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.shared-note-content .shared-mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+.shared-note-content .shared-mermaid-loading {
+  color: #888;
+  font-size: 12px;
+  padding: 24px 0;
+}
+.shared-note-content .shared-mermaid-error {
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.06);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  border-radius: 8px;
+  padding: 12px 14px;
+  width: 100%;
+  font-size: 12px;
+}
+.shared-note-content .shared-mermaid-error-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.shared-note-content .shared-mermaid-error-msg {
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.9;
+}
+.dark .shared-note-content .shared-mermaid-error {
+  color: #ff8a80;
+  background: rgba(255, 110, 110, 0.08);
+  border-color: rgba(255, 110, 110, 0.3);
+}
+
+/* ============================================================================
+ * LaTeX 数学公式样式（KaTeX）
+ * ----------------------------------------------------------------------------
+ * 三个使用场景：
+ *   1) 编辑器内的 MathInline / MathBlock NodeView（`.math-node-*`、`.math-view-*`）
+ *   2) 编辑器内编辑态的源码 + 实时预览（`.math-edit-*`）
+ *   3) 分享页 MD / PM 路径的占位与异步注入（`.shared-math-*`）
+ * KaTeX 自带的 CSS 在 lib 里按需 inject，这里只补 nowen 自定义的容器。
+ * ========================================================================= */
+
+/* —— 编辑器内：math 节点视觉 —— */
+.math-node-inline {
+  display: inline-block;
+  vertical-align: middle;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: background-color 0.15s;
+}
+.math-node-inline:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+.math-node-block {
+  display: block;
+  margin: 0.5em 0;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+.math-node-block:hover {
+  background: rgba(99, 102, 241, 0.05);
+}
+.math-node.math-selected {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+/* 编辑态的源码框 */
+.math-edit-box {
+  min-width: 180px;
+}
+.math-edit-textarea {
+  font-family: ui-monospace, SFMono-Regular, "Menlo", monospace;
+  line-height: 1.4;
+}
+.math-edit-preview {
+  font-size: 13px;
+}
+
+/* —— 分享页：math 占位 / 错误 —— */
+.shared-note-content .shared-math-block {
+  display: block;
+  margin: 1rem 0;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  background: #fafafa;
+  overflow-x: auto;
+  text-align: center;
+}
+.dark .shared-note-content .shared-math-block {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.shared-note-content .shared-math-inline {
+  /* 行内：不加背景色避免视觉噪音；KaTeX 自己的样式接管 */
+  display: inline;
+}
+.shared-note-content .shared-math-loading {
+  color: #888;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, "Menlo", monospace;
+  opacity: 0.7;
+}
+.shared-note-content .shared-math-error {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  background: rgba(192, 57, 43, 0.06);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #c0392b;
+  max-width: 100%;
+  text-align: left;
+}
+.shared-note-content .shared-math-error-title {
+  font-weight: 600;
+}
+.shared-note-content .shared-math-error-src {
+  font-family: ui-monospace, SFMono-Regular, "Menlo", monospace;
+  color: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 4px;
+  border-radius: 3px;
+  word-break: break-all;
+}
+.shared-note-content .shared-math-error-msg {
+  opacity: 0.85;
+  word-break: break-word;
+}
+.dark .shared-note-content .shared-math-error {
+  color: #ff8a80;
+  background: rgba(255, 110, 110, 0.08);
+  border-color: rgba(255, 110, 110, 0.3);
+}
+.dark .shared-note-content .shared-math-error-src {
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* KaTeX 自身在分享页/编辑器里的对齐与字号细节调整。
+ * KaTeX 默认行内字号略小于正文，块级居中。在 prose 样式作用下
+ * 字号会被压缩，这里给一个略大的字号让公式更易读。 */
+.shared-note-content .katex,
+.ProseMirror .katex {
+  font-size: 1.05em;
+}
+.shared-note-content .katex-display,
+.ProseMirror .katex-display {
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ============================================================================
+ * 脚注（Footnote）样式
+ * ----------------------------------------------------------------------------
+ * 三个场景：
+ *   1) 编辑器内：FootnoteReference (`.footnote-ref`) + FootnoteDefinition (`.footnote-def`)
+ *   2) 分享页 PM 路径占位：`.shared-footnote-ref` + `.shared-footnote-def`
+ *   3) 分享页 MD 路径占位：同上（preprocessMarkdownFootnotes 生成相同 class）
+ * ========================================================================= */
+
+/* —— 编辑器内：引用 —— */
+.footnote-ref {
+  display: inline;
+  cursor: pointer;
+  user-select: none;
+  vertical-align: baseline;
+}
+.footnote-ref-sup {
+  display: inline-block;
+  font-size: 0.72em;
+  line-height: 1;
+  padding: 1px 3px;
+  margin: 0 1px;
+  border-radius: 3px;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  font-weight: 600;
+  vertical-align: super;
+  transition: background-color 0.15s;
+}
+.footnote-ref:hover .footnote-ref-sup {
+  background: rgba(99, 102, 241, 0.2);
+}
+.footnote-ref-selected .footnote-ref-sup {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  outline-offset: 1px;
+}
+.dark .footnote-ref-sup {
+  color: #a5b4fc;
+  background: rgba(165, 180, 252, 0.15);
+}
+.dark .footnote-ref:hover .footnote-ref-sup {
+  background: rgba(165, 180, 252, 0.25);
+}
+
+/* —— 编辑器内：定义 —— */
+.footnote-def {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-left: 3px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.04);
+  border-radius: 4px;
+  font-size: 0.9em;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.footnote-def:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+.footnote-def-selected {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+}
+.footnote-def-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: #6366f1;
+  font-weight: 600;
+}
+.footnote-def-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+.footnote-def-back:hover {
+  background: rgba(99, 102, 241, 0.18);
+}
+.footnote-def-index {
+  min-width: 18px;
+}
+.footnote-def-content {
+  flex: 1;
+  color: var(--tx-primary, #1f2937);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.footnote-def-empty {
+  color: #94a3b8;
+  font-style: italic;
+}
+.footnote-def-id {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, "Menlo", monospace;
+  font-size: 11px;
+  color: #94a3b8;
+  opacity: 0.7;
+  align-self: center;
+}
+.dark .footnote-def {
+  border-left-color: rgba(165, 180, 252, 0.5);
+  background: rgba(165, 180, 252, 0.06);
+}
+.dark .footnote-def:hover {
+  background: rgba(165, 180, 252, 0.1);
+}
+.dark .footnote-def-marker,
+.dark .footnote-def-back {
+  color: #a5b4fc;
+}
+.dark .footnote-def-content {
+  color: rgba(229, 231, 235, 0.92);
+}
+.dark .footnote-def-id {
+  color: rgba(229, 231, 235, 0.4);
+}
+
+/* —— 分享页：引用（上标小数字） —— */
+.shared-note-content .shared-footnote-ref {
+  display: inline;
+  vertical-align: super;
+  font-size: 0.72em;
+  line-height: 1;
+}
+.shared-note-content .shared-footnote-ref a {
+  display: inline-block;
+  padding: 1px 3px;
+  margin: 0 1px;
+  border-radius: 3px;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+.shared-note-content .shared-footnote-ref a:hover {
+  background: rgba(99, 102, 241, 0.22);
+}
+.dark .shared-note-content .shared-footnote-ref a {
+  color: #a5b4fc;
+  background: rgba(165, 180, 252, 0.15);
+}
+.dark .shared-note-content .shared-footnote-ref a:hover {
+  background: rgba(165, 180, 252, 0.28);
+}
+
+/* —— 分享页：定义 —— */
+.shared-note-content .shared-footnote-def {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-left: 3px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.04);
+  border-radius: 4px;
+  font-size: 0.9em;
+  line-height: 1.55;
+}
+.shared-note-content .shared-footnote-def-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: #6366f1;
+  font-weight: 600;
+}
+.shared-note-content .shared-footnote-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  color: #6366f1;
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1;
+}
+.shared-note-content .shared-footnote-back:hover {
+  background: rgba(99, 102, 241, 0.18);
+}
+.shared-note-content .shared-footnote-def-index {
+  min-width: 18px;
+}
+.shared-note-content .shared-footnote-def-content {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: inherit;
+}
+.dark .shared-note-content .shared-footnote-def {
+  border-left-color: rgba(165, 180, 252, 0.5);
+  background: rgba(165, 180, 252, 0.06);
+}
+.dark .shared-note-content .shared-footnote-def-marker,
+.dark .shared-note-content .shared-footnote-back {
+  color: #a5b4fc;
+}
+
+/* —— 跳转高亮闪烁（点击 ref → def 或 def → ref 时短暂高亮目标） —— */
+@keyframes shared-footnote-flash {
+  0%   { background-color: rgba(250, 204, 21, 0.35); }
+  100% { background-color: transparent; }
+}
+.shared-footnote-flash,
+.footnote-flash {
+  animation: shared-footnote-flash 1.1s ease-out;
+  border-radius: 4px;
+}
+
+
+
+
+
+/* ============================================================================
+ * macOS 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：Apple Human Interface Guidelines（color / materials / typography）。
+ *
+ * 与默认皮肤的关键差异：
+ *   1. 调色板更冷、更"真实 Apple"。Light 用 macOS windowBackground (#ECECEC)
+ *      + 白色内容面板；Dark 用炭灰 (#1E1E1E / #2E2E2E) 而非纯黑，避免 OLED halo。
+ *   2. 强调色 Light=#007AFF / Dark=#0A84FF（System Blue），不是 Tailwind 默认蓝。
+ *   3. 分隔线与悬停态用 rgba() 而非硬编码灰——可叠加在任意背景上保持层级。
+ *   4. 新增第四级文字色 --color-text-quaternary（禁用态 / 极弱提示）。
+ *   5. 提供 --radius-window/card/button/input 四级圆角语义令牌。
+ *   6. 侧边栏语义色偏半透明，配合 .vibrancy-* 工具类呈现 Vibrancy 毛玻璃。
+ *
+ * 通过 [data-skin="macos"] 与 next-themes 的 .dark 正交组合：
+ *   [data-skin="macos"]          → macOS Light
+ *   [data-skin="macos"].dark     → macOS Dark
+ * ========================================================================= */
+
+:root {
+  /* 默认底色风格（Obsidian）的圆角令牌 */
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
+
+  /* 默认底色风格的第四级文字色（禁用态） */
+  --color-text-quaternary: #b8b8b8;
+
+  /* 毛玻璃降级时使用的不透明底色（默认风格） */
+  --color-sidebar-solid: #f5f5f5;
+  --color-elevated-solid: #ffffff;
+}
+
+.dark {
+  --color-text-quaternary: #505050;
+  --color-sidebar-solid: #161616;
+  --color-elevated-solid: #242424;
+}
+
+/* ---------- macOS Light ---------- */
+:root[data-skin="macos"] {
+  --color-bg: #ECECEC;
+  --color-surface: #ffffff;
+  --color-sidebar: rgba(246, 246, 246, 0.72);
+  --color-sidebar-solid: #F6F6F6;
+  --color-elevated: rgba(255, 255, 255, 0.85);
+  --color-elevated-solid: #ffffff;
+  --color-border: rgba(0, 0, 0, 0.10);
+  --color-hover: rgba(0, 0, 0, 0.04);
+  --color-active: #B4D8FF;
+
+  --color-text-primary: #000000;
+  --color-text-secondary: rgba(0, 0, 0, 0.60);
+  --color-text-tertiary: rgba(0, 0, 0, 0.40);
+  --color-text-quaternary: rgba(0, 0, 0, 0.20);
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #007AFF;
+  --color-accent-secondary: #34C759;
+  --color-accent-warning: #FF9500;
+  --color-accent-danger: #FF3B30;
+  --color-accent-muted: rgba(0, 0, 0, 0.40);
+
+  /* 编辑器与默认皮肤解耦：macOS 皮肤下编辑器正文用白底 + SF 灰 */
+  --pm-text: #1d1d1f;
+  --pm-heading: #000000;
+  --pm-code-bg: rgba(0, 0, 0, 0.05);
+  --pm-code-text: #D70015;
+  --pm-pre-bg: #F6F6F6;
+  --pm-pre-border: rgba(0, 0, 0, 0.10);
+  --pm-pre-text: #1d1d1f;
+  --pm-blockquote-border: #007AFF;
+  --pm-blockquote-text: rgba(0, 0, 0, 0.55);
+  --pm-hr: rgba(0, 0, 0, 0.10);
+  --pm-placeholder: rgba(0, 0, 0, 0.30);
+  --pm-task-done: rgba(0, 0, 0, 0.30);
+  --pm-scrollbar: rgba(0, 0, 0, 0.20);
+  --pm-scrollbar-hover: rgba(0, 0, 0, 0.35);
+  --pm-selection: rgba(0, 122, 255, 0.20);
+}
+
+/* ---------- macOS Dark ---------- */
+:root[data-skin="macos"].dark {
+  --color-bg: #1E1E1E;
+  --color-surface: #2E2E2E;
+  --color-sidebar: rgba(30, 30, 30, 0.72);
+  --color-sidebar-solid: #252525;
+  --color-elevated: rgba(58, 58, 58, 0.85);
+  --color-elevated-solid: #3A3A3A;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-hover: rgba(255, 255, 255, 0.06);
+  --color-active: rgba(10, 132, 255, 0.30);
+
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: rgba(255, 255, 255, 0.60);
+  --color-text-tertiary: rgba(255, 255, 255, 0.40);
+  --color-text-quaternary: rgba(255, 255, 255, 0.20);
+  --color-text-inverse: #1E1E1E;
+
+  --color-accent-primary: #0A84FF;
+  --color-accent-secondary: #30D158;
+  --color-accent-warning: #FF9F0A;
+  --color-accent-danger: #FF453A;
+  --color-accent-muted: rgba(255, 255, 255, 0.40);
+
+  --pm-text: #E8E8E8;
+  --pm-heading: #FFFFFF;
+  --pm-code-bg: rgba(255, 255, 255, 0.08);
+  --pm-code-text: #FF6B6B;
+  --pm-pre-bg: #252525;
+  --pm-pre-border: rgba(255, 255, 255, 0.10);
+  --pm-pre-text: #E8E8E8;
+  --pm-blockquote-border: #0A84FF;
+  --pm-blockquote-text: rgba(255, 255, 255, 0.55);
+  --pm-hr: rgba(255, 255, 255, 0.10);
+  --pm-placeholder: rgba(255, 255, 255, 0.30);
+  --pm-task-done: rgba(255, 255, 255, 0.30);
+  --pm-scrollbar: rgba(255, 255, 255, 0.20);
+  --pm-scrollbar-hover: rgba(255, 255, 255, 0.35);
+  --pm-selection: rgba(10, 132, 255, 0.30);
+}
+
+/* ---------- macOS 圆角令牌 ---------- */
+:root[data-skin="macos"] {
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 5px;
+}
+
+/* ---------- macOS 字体栈调整 ----------
+ * 默认栈把 Inter 排在 -apple-system 之前。macOS 下 -apple-system 会命中 SF Pro，
+ * 但被 Inter 抢先，用户感受不到"Apple 味"。皮肤激活后调换顺序。
+ */
+:root[data-skin="macos"] {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+               'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+               'Microsoft YaHei', Helvetica, Arial, sans-serif;
+  --editor-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+               'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+               'Microsoft YaHei', Helvetica, Arial, sans-serif;
+}
+
+/* ============================================================================
+ * Vibrancy（毛玻璃）工具类
+ * ----------------------------------------------------------------------------
+ * 用法：在侧边栏、下拉菜单、弹出面板根节点加 className="vibrancy-sidebar" 等。
+ *
+ * 重要实现细节（踩坑经验）：
+ *   CSS 规范规定：非 none 的 `backdrop-filter` 会让元素成为 fixed/absolute 后代
+ *   的 containing block。若宿主元素内部有 `position: fixed` 的 Modal / Portal
+ *   组件（例如 SettingsModal 渲染在 Sidebar 子树里），宿主一旦开启 backdrop-filter，
+ *   fixed 就会被困在宿主盒子里而不是铺满视口——导致弹窗被挤成一小条。
+ *
+ *   因此**不能直接**在宿主上应用 `backdrop-filter`。这里改用 `::before` 伪元素
+ *   承担毛玻璃层：宿主保持"干净"，内部 fixed 不受影响。宿主需要 position: relative
+ *   以便 ::before 能 absolute 填充；实际 .vibrancy-sidebar 已经处在 flex 布局中，
+ *   加 position: relative 无副作用。
+ *
+ *   其它注意事项：
+ *   1. 依赖 backdrop-filter。Electron（Chromium 新版本）全平台支持；Web 端
+ *      Safari 14+ / Chrome 76+ / Firefox 103+。不支持时自动回退为 solid 变量。
+ *   2. @media (prefers-reduced-transparency: reduce) 会强制走 solid，尊重系统偏好。
+ *   3. 仅在 macOS 皮肤启用时才显露毛玻璃语义——默认皮肤只用 solid 底色，
+ *      避免给非 Apple 风格的设计引入不必要视觉负担。
+ * ========================================================================= */
+.vibrancy-sidebar,
+.vibrancy-panel {
+  position: relative;
+  background-color: var(--color-sidebar-solid);
+}
+
+/* macOS 皮肤下：宿主 bg 透明，由 ::before 伪元素负责毛玻璃层。
+ * 不使用 isolation: isolate，避免创建新层叠上下文（否则宿主内部的高 z-index
+ * 子元素，例如 Sidebar 子树里可能渲染的 SettingsModal，将被困在宿主 stacking
+ * context 内，出现被"塞进侧栏"的错乱）。靠 ::before 的 z-index: -1 让它穿透
+ * 宿主背景层；宿主本身背景透明，真实内容自然叠在上方。 */
+:root[data-skin="macos"] .vibrancy-sidebar,
+:root[data-skin="macos"] .vibrancy-panel {
+  background-color: transparent;
+}
+
+:root[data-skin="macos"] .vibrancy-sidebar::before,
+:root[data-skin="macos"] .vibrancy-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+:root[data-skin="macos"] .vibrancy-sidebar::before {
+  background-color: var(--color-sidebar);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
+  backdrop-filter: saturate(180%) blur(30px);
+}
+
+:root[data-skin="macos"] .vibrancy-panel::before {
+  background-color: var(--color-elevated);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* 不支持 backdrop-filter 时回退到不透明底色（直接打到宿主，放弃伪元素） */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-skin="macos"] .vibrancy-sidebar { background-color: var(--color-sidebar-solid); }
+  :root[data-skin="macos"] .vibrancy-panel { background-color: var(--color-elevated-solid); }
+  :root[data-skin="macos"] .vibrancy-sidebar::before,
+  :root[data-skin="macos"] .vibrancy-panel::before { display: none; }
+}
+
+/* 用户开启"减少透明度"偏好 → 强制 solid（HIG 可访问性准则） */
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-skin="macos"] .vibrancy-sidebar { background-color: var(--color-sidebar-solid); }
+  :root[data-skin="macos"] .vibrancy-panel { background-color: var(--color-elevated-solid); }
+  :root[data-skin="macos"] .vibrancy-sidebar::before,
+  :root[data-skin="macos"] .vibrancy-panel::before { display: none; }
+}
+
+/* ============================================================================
+ * Focus Ring：HIG 标准的 3px 蓝色光晕
+ * ----------------------------------------------------------------------------
+ * 仅在 macOS 皮肤下生效，不覆盖默认皮肤（默认皮肤继续用 Tailwind ring）。
+ * 使用 :focus-visible 而非 :focus，避免鼠标点击产生光晕。
+ * ========================================================================= */
+:root[data-skin="macos"] *:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 50%, transparent);
+  border-radius: var(--radius-input);
+  transition: box-shadow 0.12s ease-out;
+}
+
+/* 输入框自身原本就有 ring-*，我们避免双重光晕 */
+:root[data-skin="macos"] input:focus-visible,
+:root[data-skin="macos"] textarea:focus-visible,
+:root[data-skin="macos"] select:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
+  border-color: var(--color-accent-primary);
+}
+
+/* ============================================================================
+ * Reduce Motion：尊重系统"减少动效"偏好（HIG 无障碍要求）
+ * 注：仅限制 CSS transition 与 CSS 动画；framer-motion 的 JS 动画需要组件侧
+ *     配合 useReducedMotion()——本次方案 B 暂不全局铺设，可按需增补。
+ * ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+ * Electron macOS：hiddenInset 窗口下的拖拽区与 Traffic Light 让位
+ * ----------------------------------------------------------------------------
+ * 主进程 createWindow() 里仅 macOS 开启 titleBarStyle:"hiddenInset"。
+ * 此时窗口没有独立标题栏，用户必须通过 -webkit-app-region: drag 的区域来拖动；
+ * 同时左上角三个 Traffic Light 按钮固定在 (x:12, y:14)，需要给 Sidebar 顶端
+ * 留出 ~72px 左 padding，避免被按钮压住。
+ *
+ * 选择器用 `html[data-electron="darwin"]`——main.tsx 在挂载前已写入；
+ * Web 端和 Windows/Linux Electron 下完全不生效，零影响。
+ * ========================================================================= */
+html[data-electron="darwin"] .vibrancy-sidebar,
+html[data-electron="darwin"] .vibrancy-sidebar > :first-child {
+  /* 整个侧栏顶部变成拖拽区，子元素里的按钮/链接单独声明 no-drag 放行交互 */
+  -webkit-app-region: drag;
+}
+
+html[data-electron="darwin"] .vibrancy-sidebar button,
+html[data-electron="darwin"] .vibrancy-sidebar a,
+html[data-electron="darwin"] .vibrancy-sidebar input,
+html[data-electron="darwin"] .vibrancy-sidebar [role="button"],
+html[data-electron="darwin"] .vibrancy-sidebar [contenteditable="true"] {
+  -webkit-app-region: no-drag;
+}
+
+/* Sidebar 顶部 header 给 Traffic Light 让位（72px 足够容纳红黄绿 + 12px 右侧间距） */
+html[data-electron="darwin"] .vibrancy-sidebar > :first-child {
+  padding-left: 72px;
+}
+
+/* 全屏：Traffic Light 自动隐藏，回收 72px 左 padding 避免顶部空白 */
+html[data-electron="darwin"][data-fullscreen="1"] .vibrancy-sidebar > :first-child {
+  padding-left: 0;
+}
+
+/* ----------------------------------------------------------------------------
+ * NSFullSizeContentView：内容延伸到标题栏
+ *   主进程已设 `titleBarStyle: "hiddenInset"`，等价于 AppKit 的
+ *   NSFullSizeContentViewWindowMask——窗口没有独立标题栏，内容从 y=0 开始绘制。
+ *   但 HIG 要求"原应由标题栏承担的拖拽能力"必须在内容区补回，否则用户无处抓取
+ *   窗口。给主内容区顶部 28px 设为 drag region 即可；侧栏顶部本身已是 drag region，
+ *   这里补的是 Sidebar 之外的大区域（编辑器/笔记列表上方）。
+ *
+ *   选择器用 `main`（App.tsx 根布局中的 <main> 元素）。若未来结构改变，可改成
+ *   data-app-root 之类的稳定选择器；这里先用语义标签以免污染业务 DOM。
+ * -------------------------------------------------------------------------- */
+html[data-electron="darwin"] main::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  -webkit-app-region: drag;
+  pointer-events: none; /* 不阻挡下层点击 */
+  z-index: 1;
+}
+
+/* main 需要是 relative，::before 才能定位到它 */
+html[data-electron="darwin"] main {
+  position: relative;
+}
+
+/* 全屏下标题栏彻底消失，回收拖拽条 */
+html[data-electron="darwin"][data-fullscreen="1"] main::before {
+  display: none;
+}
+
+
+
+/* ============================================================================
+ * prefers-contrast: more —— 高对比度偏好（HIG / WCAG 2.1 AA-AAA 过渡要求）
+ * ----------------------------------------------------------------------------
+ * 触发条件：
+ *   - macOS：系统设置 → 辅助功能 → 显示 → 提高对比度
+ *   - Windows：设置 → 辅助功能 → 对比度主题（高对比度模式下浏览器会上报 more）
+ *   - iOS：设置 → 辅助功能 → 显示与文字大小 → 提高对比度
+ *
+ * 策略：
+ *   1. 弱化的 border 一律强化为 currentColor，宽度不增（增宽会让布局抖动）；
+ *   2. 毛玻璃 / 半透明覆盖层一律回落成 solid 变量；
+ *   3. 焦点环加粗到 3px 且更纯的 accent 色，不再用 color-mix 40% 透明；
+ *   4. 次要文字从 --color-text-secondary（~0.6 alpha）回落到主文本色。
+ *
+ * 所有覆写都走语义 token，组件侧无需任何改动。
+ * ========================================================================= */
+@media (prefers-contrast: more) {
+  :root {
+    /* 边框：从弱灰到纯黑/纯白（跟 text 对齐） */
+    --color-border: currentColor;
+    --color-border-soft: currentColor;
+  }
+
+  /* 毛玻璃 → solid */
+  .vibrancy-sidebar,
+  .vibrancy-panel,
+  :root[data-skin="macos"] .vibrancy-sidebar,
+  :root[data-skin="macos"] .vibrancy-panel {
+    background-color: var(--color-sidebar-solid) !important;
+  }
+  :root[data-skin="macos"] .vibrancy-sidebar::before,
+  :root[data-skin="macos"] .vibrancy-panel::before {
+    display: none !important;
+  }
+
+  /* 焦点环：更粗、更纯 */
+  *:focus-visible {
+    outline: 3px solid var(--color-accent-primary) !important;
+    outline-offset: 2px !important;
+    box-shadow: none !important;
+  }
+  :root[data-skin="macos"] input:focus-visible,
+  :root[data-skin="macos"] textarea:focus-visible,
+  :root[data-skin="macos"] select:focus-visible {
+    outline: 3px solid var(--color-accent-primary) !important;
+    outline-offset: 1px !important;
+    box-shadow: none !important;
+  }
+
+  /* 半透明次级文字 → 满对比度 */
+  .text-app-muted,
+  .text-app-secondary {
+    color: var(--color-text) !important;
+  }
+
+  /* 通用的 hover 半透明色层（很多按钮用 bg-white/5 类）在高对比下几乎不可见，
+   * 通过 :hover 时加可见的 outline 补偿语义。 */
+  button:hover:not(:disabled),
+  [role="button"]:hover {
+    outline: 1px solid currentColor;
+    outline-offset: -1px;
+  }
+}
+
+
+
+/* ===== 作者感言 Modal 专属排版微调 =====
+ * 复用 .shared-note-content 自给自足的基础排版，再为长文阅读场景做几处增强：
+ *   - 主标题（H1）更大、靠下加一道淡描边，强化"封面感"
+ *   - H2 前面留更多呼吸空间，做章节切分
+ *   - blockquote 改成左侧色条 + 浅底，让"副标题/题记"更醒目
+ *   - <hr> 用渐变虚线，避免 Tailwind preflight 重置后看不见
+ *   - <strong> 借品牌色，跟正文区分但不喧宾夺主
+ */
+.author-story-content {
+  font-size: 14.5px;
+  line-height: 1.85;
+}
+.author-story-content h1 {
+  font-size: 1.5em;
+  text-align: left;
+  margin: 0.2em 0 0.8em;
+  padding-bottom: 0.55em;
+  border-bottom: 1px solid rgb(228 228 231 / 0.8); /* zinc-200 */
+}
+.dark .author-story-content h1 {
+  border-bottom-color: rgb(63 63 70 / 0.6); /* zinc-700 */
+}
+.author-story-content h2 {
+  font-size: 1.18em;
+  margin: 2em 0 0.7em;
+}
+.author-story-content blockquote {
+  margin: 1em 0 1.4em;
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--color-accent-primary, #6366f1);
+  background: rgb(99 102 241 / 0.06);
+  border-radius: 0 6px 6px 0;
+  color: rgb(82 82 91); /* zinc-600 */
+  font-style: normal;
+}
+.dark .author-story-content blockquote {
+  background: rgb(99 102 241 / 0.1);
+  color: rgb(212 212 216); /* zinc-300 */
+}
+.author-story-content blockquote p {
+  margin: 0.25em 0;
+}
+.author-story-content hr {
+  border: none;
+  height: 1px;
+  margin: 2em 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgb(161 161 170 / 0.4) 20%,
+    rgb(161 161 170 / 0.4) 80%,
+    transparent
+  );
+}
+.author-story-content strong {
+  color: var(--color-accent-primary, #6366f1);
+  font-weight: 600;
+}
+.dark .author-story-content strong {
+  color: #a5b4fc; /* indigo-300，深色模式下加亮一档 */
+}
+/* 内联代码：让 nowen-note / 群名 QQ 号一类的标识更显眼 */
+.author-story-content :not(pre) > code {
+  background: rgb(244 244 245); /* zinc-100 */
+  color: rgb(99 102 241);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+.dark .author-story-content :not(pre) > code {
+  background: rgb(39 39 42); /* zinc-800 */
+  color: #a5b4fc;
+}
+/* 列表项给一点点间距，长文阅读不挤 */
+.author-story-content ol > li,
+.author-story-content ul > li {
+  margin: 0.4em 0;
+}
+
+/* ===== 说说渲染内容中 iframe (音视频嵌套) 样式 ===== */
+.diary-rendered-content iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  background-color: #000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.dark .diary-rendered-content iframe {
+  border-color: var(--color-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== 编辑器媒体渲染响应式适配 ===== */
+.ProseMirror iframe,
+.ProseMirror video {
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  margin: 12px auto;
+  display: block;
+}
+
+.ProseMirror audio {
+  max-width: 100% !important;
+  margin: 12px auto;
+  display: block;
+}
+
+
+/* ============================================================================
+ * Notion 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：Notion.so（奶油灰侧边栏、知性蓝强调色、精细分隔线、极小圆角）。
+ * ========================================================================= */
+
+/* ---------- Notion Light ---------- */
+:root[data-skin="notion"] {
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-sidebar: #f1f1ef;
+  --color-sidebar-solid: #f1f1ef;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: rgba(55, 53, 47, 0.09);
+  --color-hover: rgba(55, 53, 47, 0.04);
+  --color-active: rgba(55, 53, 47, 0.08);
+
+  --color-text-primary: #37352f;
+  --color-text-secondary: rgba(55, 53, 47, 0.65);
+  --color-text-tertiary: rgba(55, 53, 47, 0.45);
+  --color-text-quaternary: rgba(55, 53, 47, 0.20);
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #2383e2;
+  --color-accent-secondary: #0f7b6c;
+  --color-accent-warning: #dfab01;
+  --color-accent-danger: #e03e3e;
+  --color-accent-muted: rgba(55, 53, 47, 0.45);
+
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
+
+  /* 编辑器样式 */
+  --pm-text: #37352f;
+  --pm-heading: #1f1f1f;
+  --pm-code-bg: rgba(135, 131, 120, 0.15);
+  --pm-code-text: #eb5757;
+  --pm-pre-bg: #f7f7f5;
+  --pm-pre-border: rgba(55, 53, 47, 0.09);
+  --pm-pre-text: #37352f;
+  --pm-blockquote-border: #37352f;
+  --pm-blockquote-text: rgba(55, 53, 47, 0.6);
+  --pm-hr: rgba(55, 53, 47, 0.09);
+  --pm-placeholder: rgba(55, 53, 47, 0.3);
+  --pm-task-done: rgba(55, 53, 47, 0.4);
+  --pm-scrollbar: rgba(55, 53, 47, 0.15);
+  --pm-scrollbar-hover: rgba(55, 53, 47, 0.3);
+  --pm-selection: rgba(35, 131, 226, 0.15);
+}
+
+/* ---------- Notion Dark ---------- */
+:root[data-skin="notion"].dark {
+  --color-bg: #191919;
+  --color-surface: #191919;
+  --color-sidebar: #202020;
+  --color-sidebar-solid: #202020;
+  --color-elevated: #252525;
+  --color-elevated-solid: #252525;
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-hover: rgba(255, 255, 255, 0.055);
+  --color-active: rgba(255, 255, 255, 0.1);
+
+  --color-text-primary: rgba(255, 255, 255, 0.9);
+  --color-text-secondary: rgba(255, 255, 255, 0.6);
+  --color-text-tertiary: rgba(255, 255, 255, 0.4);
+  --color-text-quaternary: rgba(255, 255, 255, 0.2);
+  --color-text-inverse: #191919;
+
+  --color-accent-primary: #2eaadc;
+  --color-accent-secondary: #34d158;
+  --color-accent-warning: #eab308;
+  --color-accent-danger: #ef4444;
+  --color-accent-muted: rgba(255, 255, 255, 0.4);
+
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
+
+  /* 编辑器样式 */
+  --pm-text: rgba(255, 255, 255, 0.9);
+  --pm-heading: #ffffff;
+  --pm-code-bg: rgba(255, 255, 255, 0.1);
+  --pm-code-text: #ff7373;
+  --pm-pre-bg: #202020;
+  --pm-pre-border: rgba(255, 255, 255, 0.09);
+  --pm-pre-text: rgba(255, 255, 255, 0.9);
+  --pm-blockquote-border: rgba(255, 255, 255, 0.8);
+  --pm-blockquote-text: rgba(255, 255, 255, 0.6);
+  --pm-hr: rgba(255, 255, 255, 0.09);
+  --pm-placeholder: rgba(255, 255, 255, 0.3);
+  --pm-task-done: rgba(255, 255, 255, 0.4);
+  --pm-scrollbar: rgba(255, 255, 255, 0.15);
+  --pm-scrollbar-hover: rgba(255, 255, 255, 0.3);
+  --pm-selection: rgba(46, 170, 220, 0.25);
+}
+
+
+/* ============================================================================
+ * Memos 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：usememos（清爽翡翠绿强调色、灰色大背景、高亮独立的白色卡片容器）。
+ * ========================================================================= */
+
+/* ---------- Memos Light ---------- */
+:root[data-skin="memos"] {
+  --color-bg: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-sidebar-solid: #ffffff;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: #e5e7eb;
+  --color-hover: #f4f4f5;
+  --color-active: rgba(16, 185, 129, 0.08);
+
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #4b5563;
+  --color-text-tertiary: #9ca3af;
+  --color-text-quaternary: #d1d5db;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #10b981;
+  --color-accent-secondary: #06b6d4;
+  --color-accent-warning: #f59e0b;
+  --color-accent-danger: #ef4444;
+  --color-accent-muted: #9ca3af;
+
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+
+  /* 编辑器样式 */
+  --pm-text: #1f2937;
+  --pm-heading: #111827;
+  --pm-code-bg: #f3f4f6;
+  --pm-code-text: #047857;
+  --pm-pre-bg: #f9fafb;
+  --pm-pre-border: #e5e7eb;
+  --pm-pre-text: #1f2937;
+  --pm-blockquote-border: #10b981;
+  --pm-blockquote-text: #4b5563;
+  --pm-hr: #e5e7eb;
+  --pm-placeholder: #9ca3af;
+  --pm-task-done: #9ca3af;
+  --pm-scrollbar: #d1d5db;
+  --pm-scrollbar-hover: #9ca3af;
+  --pm-selection: rgba(16, 185, 129, 0.2);
+}
+
+/* ---------- Memos Dark ---------- */
+:root[data-skin="memos"].dark {
+  --color-bg: #121214;
+  --color-surface: #1e1e24;
+  --color-sidebar: #121214;
+  --color-sidebar-solid: #121214;
+  --color-elevated: #1e1e24;
+  --color-elevated-solid: #1e1e24;
+  --color-border: #2e2e33;
+  --color-hover: #27272a;
+  --color-active: rgba(16, 185, 129, 0.15);
+
+  --color-text-primary: #e4e4e7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-text-quaternary: #3f3f46;
+  --color-text-inverse: #121214;
+
+  --color-accent-primary: #10b981;
+  --color-accent-secondary: #06b6d4;
+  --color-accent-warning: #f59e0b;
+  --color-accent-danger: #ef4444;
+  --color-accent-muted: #71717a;
+
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+
+  /* 编辑器样式 */
+  --pm-text: #e4e4e7;
+  --pm-heading: #ffffff;
+  --pm-code-bg: #27272a;
+  --pm-code-text: #34d399;
+  --pm-pre-bg: #1e1e24;
+  --pm-pre-border: #2e2e33;
+  --pm-pre-text: #e4e4e7;
+  --pm-blockquote-border: #10b981;
+  --pm-blockquote-text: #a1a1aa;
+  --pm-hr: #2e2e33;
+  --pm-placeholder: #71717a;
+  --pm-task-done: #71717a;
+  --pm-scrollbar: #27272a;
+  --pm-scrollbar-hover: #3f3f46;
+  --pm-selection: rgba(16, 185, 129, 0.25);
+}
+
+
+/* ============================================================================
+ * flomo 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：flomoapp.com（标志性暖沙绿水洗色、草绿强调色、无压力输入）。
+ * ========================================================================= */
+
+/* ---------- flomo Light ---------- */
+:root[data-skin="flomo"] {
+  --color-bg: #f4f4f0;
+  --color-surface: #ffffff;
+  --color-sidebar: #f4f4f0;
+  --color-sidebar-solid: #f4f4f0;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: #e1e1db;
+  --color-hover: #eaeae5;
+  --color-active: rgba(50, 182, 122, 0.08);
+
+  --color-text-primary: #2c3e50;
+  --color-text-secondary: #5d6d7e;
+  --color-text-tertiary: #85929e;
+  --color-text-quaternary: #bdc3c7;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #32b67a;
+  --color-accent-secondary: #2e9d68;
+  --color-accent-warning: #f39c12;
+  --color-accent-danger: #e74c3c;
+  --color-accent-muted: #85929e;
+
+  --radius-window: 12px;
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+
+  /* 编辑器样式 */
+  --pm-text: #2c3e50;
+  --pm-heading: #2c3e50;
+  --pm-code-bg: #f4f4f0;
+  --pm-code-text: #27ae60;
+  --pm-pre-bg: #fafaf8;
+  --pm-pre-border: #e1e1db;
+  --pm-pre-text: #2c3e50;
+  --pm-blockquote-border: #32b67a;
+  --pm-blockquote-text: #5d6d7e;
+  --pm-hr: #e1e1db;
+  --pm-placeholder: #bdc3c7;
+  --pm-task-done: #bdc3c7;
+  --pm-scrollbar: #eaeae5;
+  --pm-scrollbar-hover: #d5d5cd;
+  --pm-selection: rgba(50, 182, 122, 0.15);
+}
+
+/* ---------- flomo Dark ---------- */
+:root[data-skin="flomo"].dark {
+  --color-bg: #181816;
+  --color-surface: #252522;
+  --color-sidebar: #181816;
+  --color-sidebar-solid: #181816;
+  --color-elevated: #2b2b28;
+  --color-elevated-solid: #2b2b28;
+  --color-border: #363632;
+  --color-hover: rgba(255, 255, 255, 0.04);
+  --color-active: rgba(50, 182, 122, 0.15);
+
+  --color-text-primary: #e0e0d8;
+  --color-text-secondary: #a5a59e;
+  --color-text-tertiary: #787873;
+  --color-text-quaternary: #454542;
+  --color-text-inverse: #181816;
+
+  --color-accent-primary: #3cd08c;
+  --color-accent-secondary: #32b67a;
+  --color-accent-warning: #f39c12;
+  --color-accent-danger: #e74c3c;
+  --color-accent-muted: #787873;
+
+  --radius-window: 12px;
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+
+  /* 编辑器样式 */
+  --pm-text: #e0e0d8;
+  --pm-heading: #ffffff;
+  --pm-code-bg: #363632;
+  --pm-code-text: #3cd08c;
+  --pm-pre-bg: #252522;
+  --pm-pre-border: #363632;
+  --pm-pre-text: #e0e0d8;
+  --pm-blockquote-border: #3cd08c;
+  --pm-blockquote-text: #a5a59e;
+  --pm-hr: #363632;
+  --pm-placeholder: #787873;
+  --pm-task-done: #787873;
+  --pm-scrollbar: #363632;
+  --pm-scrollbar-hover: #454542;
+  --pm-selection: rgba(60, 208, 140, 0.25);
+}
+
+
+/* ============================================================================
+ * macOS 外观风格重设计与圆角阴影微调
+ * ========================================================================= */
+:root[data-skin="macos"] {
+  --radius-window: 12px;
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 6px;
+}
+:root[data-skin="macos"] *:focus-visible {
+  outline: 2px solid var(--color-accent-primary) !important;
+  outline-offset: -1px !important;
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.4) !important;
+}
+
+/* 弱化 flomo 和 notion 皮肤下的卡片立体虚饰投影 */
+:root[data-skin="flomo"] .shadow-sm,
+:root[data-skin="flomo"] .shadow,
+:root[data-skin="flomo"] .shadow-md,
+:root[data-skin="flomo"] .shadow-lg,
+:root[data-skin="flomo"] .shadow-xl,
+:root[data-skin="notion"] .shadow-sm,
+:root[data-skin="notion"] .shadow,
+:root[data-skin="notion"] .shadow-md,
+:root[data-skin="notion"] .shadow-lg,
+:root[data-skin="notion"] .shadow-xl {
+  box-shadow: none !important;
+}
+
+/* 弱化 flomo 和 notion 皮肤下卡片边框 */
+:root[data-skin="flomo"] .border-zinc-200,
+:root[data-skin="flomo"] .border-zinc-300,
+:root[data-skin="notion"] .border-zinc-200,
+:root[data-skin="notion"] .border-zinc-300 {
+  border-color: var(--color-border) !important;
+}
+
+
+
+
+

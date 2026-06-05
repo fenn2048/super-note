@@ -1,0 +1,55 @@
+{
+  "generatedAt": "2026-06-02T01:14:31.113Z",
+  "entries": [
+    {
+      "version": "1.1.13",
+      "date": "2026-06-02",
+      "body": "### 🐛 修复\n\n- restrict color-mix focus fallback to form elements only (f9e58ec)\n- Backspace at line start now correctly decreases indent (Office-like behavior) (aadc88a)\n- add CSS fallbacks for older Android WebViews (Xiaomi 8 black screen) (aa9a2fd)"
+    },
+    {
+      "version": "1.1.12",
+      "date": "2026-06-01",
+      "body": "### 🐛 修复\n\n- resolve remaining TS null-check and changeIndent type errors (98fc8fd)\n- resolve all 13 TS7006/7022/7023/7031 implicit any errors (732420d)\n- clip row resize guide line to table bounds (a5a6c5c)\n- clip row resize guide line to editor bounds (45f9342)\n- table row height drag now follows mouse in real-time via transaction (1edae9c)\n- improve table row height resize UX - wider hit area and real-time visual feedback (539c56c)\n- Backspace at line start reduces indent level (437fb38)\n- table bubble merge button visibility + mini toolbar (ea6a088)\n\n### 📌 杂项\n\n- Update README.md (4b9a660)"
+    },
+    {
+      "version": "1.1.11",
+      "date": "2026-05-29",
+      "body": "### ✨ 新增\n\n- **editor**: 表格交互优化 - 网格选择器与行高丝滑拖拽 (f92168e)"
+    },
+    {
+      "version": "1.1.10",
+      "date": "2026-05-29",
+      "body": "### ✨ 新增\n\n- **prefs**: 新增阅读密度偏好（宽松/紧凑） (3d94607)\n- **mobile**: 搜索按钮上提到笔记标题栏 (e0f047c)\n- **editor**: 表格新增行高可拖拽功能 (c5c2461)\n- 新增客户端下载面板 + Gitee Release 镜像同步 (93a6117)\n\n### 🐛 修复\n\n- **download**: 修复 DownloadPanel icon 类型 TS2322 编译错误 (ced169b)\n- **editor**: 收紧图片上下间距 (29ccead)\n- **upk**: use host network for ugreen package (68065b9)\n\n### 🔧 其他\n\n- **upk**: update zh-CN display name (bcd55ee)"
+    },
+    {
+      "version": "1.1.9",
+      "date": "2026-05-28",
+      "body": "### 🐛 修复\n\n- **desktop**: prevent local mode reload loop (490f5a3)"
+    },
+    {
+      "version": "1.1.8",
+      "date": "2026-05-28",
+      "body": "### 🐛 修复\n\n- 调整访问控制默认开关 (b49534c)"
+    },
+    {
+      "version": "1.1.7",
+      "date": "2026-05-28",
+      "body": "### ✨ 新增\n\n- 优化桌面端云端本地模式与访问控制 (783cf6a)\n- **release**: 选项 10 改为'补 upk 到现有 Release'模式（不打新 tag、不升版本） (7e4c626)\n\n### 🐛 修复\n\n- 修复桌面端切回本地离线模式时，本地后端被误判为远端导致黑屏/反复闪屏的问题。\n- 修复后端实时删除广播编译错误 (22fcc3c)\n- improve multi-device note sync (0beb31e)\n- **upk**: 补回被上一个 commit 误删的 const found 行 (0e81338)\n- **upk**: cp/rm 之前按 resolve(src) 去重，避免重复处理同一文件 (9e95e54)\n- **upk**: 递归扫描 .upk 产物，覆盖 ugcli 实际输出路径 build_dir/pkgs/upk/ (49467ff)\n- **upk**: 补 upk 模式支持版本复用 + 修 RepoTag 与 compose 不一致 + ugcli 权限自愈 (00de4d9)\n\n### 📝 文档\n\n- **readme**: 添加在线体验入口（note.nowen.cn） (b626b3e)\n\n### 🔧 其他\n\n- 完善发布流程与编辑器设置 (0ae451d)\n- update release workflow and editor UI (53c2e4d)\n\n> 🚨 **紧急安全修复**：1.1.6 用户请尽快升级。该版本修复\"登录云端账号\"迁移功能在\n> 同一台后端上误操作导致的**附件物理文件丢失**问题。\n\n### 🐛 修复\n\n- **【数据保护】回收站清空 / 永久删除笔记不再误删被多笔记共享的附件物理文件**\n  - 受影响场景：1.1.6 在同一台服务器上点击\"登录云端账号\"产生双份笔记本后，\n    手动删除其中一份并清空回收站，会触发被另一份笔记引用的图片被 unlink。\n  - 修复后：批量删除附件文件前会做引用计数检查，仍有活引用的物理文件不会被删，\n    与单条 `DELETE /api/attachments/:id` 的行为对齐。\n- **【迁移防呆】\"登录云端账号\"对话框现在会拒绝迁移到同一台服务器**\n  - 后端 `/api/version` 返回新增 `serverInstanceId` 字段（首次启动 lazy 写入\n    `system_settings`，跨重启稳定）。\n  - 前端 MigrationModal 在登录拿到云端 token 后立即比对两端 `serverInstanceId`，\n    相同则直接拦截、提示\"无需迁移，请退出登录后用新账号登录即可\"。\n  - 同账号场景（不同实例但本地与云端用户名一致）会弹二次确认，避免误操作。\n- **【迁移一致性】附件 hash 去重命中时不再复用旧附件 id**\n  - 编辑器上传、内联 base64 抽取、公众号/URL 导入图片在 hash 命中时，会新建一条\n    绑定当前笔记的 `attachments` 元数据行，同时复用同一份磁盘物理文件。\n  - 迁移引擎层新增 `serverInstanceId` 预检查；即使绕过弹窗直接调用迁移函数，\n    也会在写入云端前阻断\"本地端 == 云端\"的同源迁移。\n- **【附件健康检查】新增只读健康报告，帮助定位裂图 / 404**\n  - 管理员可在「设置 → 数据管理 → 系统 → 数据库」执行附件健康检查。\n  - 报告会列出 `attachments` 行存在但物理文件缺失、正文引用不存在附件 ID、\n    以及多行共享同一物理文件的情况。\n  - 孤儿清理逻辑同步补强：多条附件行共享同一个 `path` 时，只有最后一个引用消失\n    才会删除物理文件，避免清理工具自身误删活文件。\n- **【附件修复向导】健康检查结果现在可直接执行基础修复**\n  - 对“DB 行存在但物理文件缺失”的附件，管理员可上传替代文件写回原 `path`；\n    若多条附件记录共享同一物理文件，会一起恢复。\n  - 对“正文引用不存在附件 ID”的悬空引用，管理员可批量从笔记正文中移除坏 URL，\n    避免前端继续请求 404。\n  - 修复类操作均要求管理员 sudo 二次验证；修复后会自动重新生成健康报告。\n- **【多端同步】修复同账号 PC/Web 与手机端当前笔记不同步的问题**\n  - 实时更新不再按 `userId` 过滤同账号其它设备，只按 `connectionId` 排除当前连接回声。\n  - PC/Web 保存后会向同账号其它连接广播轻量列表更新，手机端停留在列表或当前笔记时都能立即看到变更。\n  - 当前笔记无本地未保存修改时会自动拉取并应用远端新版本；本地也有修改时进入冲突横幅。\n  - 正文保存遇到 `409 VERSION_CONFLICT` 不再盲目重放旧内容覆盖远端，而是保留本地草稿，提示用户选择“重新加载”或“覆盖远端”。\n  - 移动端前台恢复、联网恢复、WebSocket 重连时会主动补查当前笔记版本，补偿后台期间漏掉的实时消息。\n\n### ⚠️ 影响范围与建议\n\n- 仅 1.1.6 用户受影响。1.1.5 及更早版本没有\"登录云端账号\"功能，无此风险。\n- **如果你已经丢失图片**：先检查 NAS 快照 / 备份；该场景下数据库行可能仍在，\n  但物理文件已被 unlink，应用层无法凭空恢复原图。升级后可先运行\"附件健康检查\"，\n  再对缺失项上传从备份或其它来源找回的替代文件；找不回的悬空引用可在修复向导中移除。"
+    },
+    {
+      "version": "1.1.6",
+      "date": "2026-05-26",
+      "body": "### ✨ 新增\n\n- **release**: 将绿联 .upk 从一键全量(选项5)中移除，独立到选项10 (78bbdf6)\n- **notes**: 支持客户端生成的 UUID 作为笔记 ID（离线创建） (c8d8961)\n- **login**: 登录页支持桌面端跳过登录直接用本地 (21c9183)\n- **migration**: 本地→云端账号一键迁移（D-2/D-3 + 回滚） (f61a6a9)\n- **local-mode**: 本地模式离线读 + 同步引擎 + localStore (660489a)\n- **desktop**: Electron 桌面端框架 + 内嵌后端启动 (762e6b0)\n- **attachment-preview**: 视频/音频按扩展名兜底 + 抽屉打开时隐藏链接气泡 (33d6c61)\n- **editor-mobile**: 移动端顶栏改 iOS 风双行结构 + 桌面面包屑末段截断修复 (235db1f)\n- **frontend**: add video embed extension and rich-text video URL support (b8e3493)\n- **editor**: auto-convert '- [ ] ' / '- [x] ' to task list (5c9a916)\n- **login**: add demo mode banner with one-click credential fill (0a0c271)\n- **auth**: 新增体验账号(isDemo) 机制 (8e0ab8a)\n- **url-import**: 公众号文章一键导入笔记 (d6c7c17)\n\n### 🐛 修复\n\n- **release**: multi 模式 upk 打包前 buildx --load 各架构镜像 (7cceed0)\n- **editor**: TiptapEditor 桌面端样式/行为微调 (7b72d7d)\n- **mac-build**: 单架构构建 + .node 魔数 arch 校验，修复 Intel Mac ERR_DLOPEN_FAILED (54a9c90)\n- **release**: defer UPK_IMAGE_REF assembly until VERSION is finalized (80390c9)\n- **upk**: 改进多架构镜像查找逻辑，支持 DOCKERHUB_REPO 环境变量 (cc57a7f)\n- **VideoExtension**: 修正 NodeView props 类型为 ReactNodeViewProps，修复 tsc 报错 (1083377)\n- 绿联nas 构建包 (eb15be2)\n- **clipper**: split footer build for markdown branch to preserve source link (45402e8)\n- **update-notifier**: move useCallback before early return to fix hook order (63f2624)\n\n### 📝 文档\n\n- **readme**: 补 macOS 首次打开 ERR_DLOPEN_FAILED 的 xattr 解隔离指引 (bf108cd)\n- **readme**: sync features and changelog with Unreleased (e301e93)\n\n### 📦 构建\n\n- **upk**: 新增绿联 NAS 应用包(.upk) 打包流程 (967d00d)\n\n### 🔧 其他\n\n- **clipper**: release v0.1.3 (5d70c08)"
+    },
+    {
+      "version": "1.1.5",
+      "date": "2026-05-21",
+      "body": "### ✨ 新增\n\n- **attachments**: 附件预览抽屉 + 本笔记附件目录面板 (df2e06f)\n- **editor**: 搜索替换面板 / docx 自研解析与导入 / 字号弹层优化等 (3a37905)\n- **about**: 新增'作者感言'板块及阅读弹窗 (82e872d)\n\n### 📝 文档\n\n- **readme**: add Author's Note link in header (6e5d863)"
+    },
+    {
+      "version": "1.1.4",
+      "date": "2026-05-20",
+      "body": "_本版本无可展示的 commit 变更（可能全部是合并 / 工作流修改）_"
+    }
+  ]
+}
