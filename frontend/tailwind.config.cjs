@@ -87,6 +87,11 @@ module.exports = {
         card: "var(--radius-card)",
         button: "var(--radius-button)",
         input: "var(--radius-input)",
+        // 覆盖 Tailwind 默认大小以执行全局圆角统一，映射到 CSS 变量以支持不同皮肤切换圆角
+        md: "var(--radius-button)",
+        lg: "var(--radius-card)",
+        xl: "var(--radius-window)",
+        "2xl": "var(--radius-window)",
       },
       animation: {
         "fade-in": "fadeIn 0.2s ease-out",

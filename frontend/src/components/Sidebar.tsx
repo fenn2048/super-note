@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import SettingsModal from "@/components/SettingsModal";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import TagColorPopover from "@/components/TagColorPopover";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
@@ -785,7 +784,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   // 避免用户陷入"完全无侧栏入口"的死局——本组件不需要关心这个边界。
   const [railMode, setRailMode] = useRailMode();
   const [searchInput, setSearchInput] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
   // Y4: 当前工作区的功能开关。null = 个人空间（不受限），对象 = 工作区 normalized 配置。
   //     由 workspace-changed / workspace-features-changed 两个事件驱动刷新。
   const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
@@ -2009,10 +2007,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       {/* Footer：v16 桌面端 / v16 P3 后续移动端，设置 + 登出 都迁到 NavRail。
           本组件不再渲染任何 Footer。 */}
 
-      {/* Settings Modal */}
-      <AnimatePresence>
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      </AnimatePresence>
+
 
       {/* Notebook Context Menu */}
       <ContextMenu

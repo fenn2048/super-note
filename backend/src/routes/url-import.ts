@@ -340,18 +340,18 @@ app.post("/", async (c) => {
 
   const db = getDb();
 
-  // 确定目标笔记本：未指定 → "导入的文章"
+  // 确定目标笔记本：未指定 → "剪藏笔记本"
   let targetNotebookId = notebookId;
   if (!targetNotebookId) {
     const exist = db
       .prepare("SELECT id FROM notebooks WHERE userId = ? AND name = ?")
-      .get(userId, "导入的文章") as { id: string } | undefined;
+      .get(userId, "剪藏笔记本") as { id: string } | undefined;
     if (exist) {
       targetNotebookId = exist.id;
     } else {
       targetNotebookId = uuid();
       db.prepare("INSERT INTO notebooks (id, userId, name, icon) VALUES (?, ?, ?, ?)")
-        .run(targetNotebookId, userId, "导入的文章", "📄");
+        .run(targetNotebookId, userId, "剪藏笔记本", "📓");
     }
   }
 

@@ -1201,6 +1201,27 @@ export const api = {
       body: JSON.stringify({ notes, notebookId, notebookName }),
     });
   },
+  getExportAllData: (workspaceId?: string) => {
+    const ws = workspaceId ?? getCurrentWorkspace();
+    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    return request<any>(`/export/all${qs}`);
+  },
+  importAllData: (data: any, workspaceId?: string) => {
+    const ws = workspaceId ?? getCurrentWorkspace();
+    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    return request<{ success: boolean; count: number }>(`/export/import/all${qs}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  importAttachment: (formData: FormData, workspaceId?: string) => {
+    const ws = workspaceId ?? getCurrentWorkspace();
+    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    return request<{ success: boolean }>(`/export/import/attachment${qs}`, {
+      method: "POST",
+      body: formData,
+    });
+  },
 
   // Site Settings
   getSiteSettings: () =>

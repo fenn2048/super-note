@@ -855,20 +855,44 @@ export async function exportAllNotes(
 ): Promise<boolean> {
   const inlineImages = !!options?.inlineImages;
   try {
-    // 1. 获取所有笔记
+    // 1. 获取所有元数据
     onProgress?.({ phase: "fetching", current: 0, total: 0, message: i18n.t('export.fetchingData') });
-    const notes = await api.getExportNotes(options?.workspaceId) as ExportNote[];
+    const allData = await api.getExportAllData(options?.workspaceId);
+    
+    const {
+      notebooks = [],
+      notes: rawNotes = [],
+      diaries = [],
+      tasks = [],
+      tags = [],
+      noteTags = [],
+      diaryTags = [],
+      taskTags = [],
+      attachments = [],
+      diaryAttachments = [],
+      taskAttachments = []
+    } = allData;
 
-    if (!notes || notes.length === 0) {
+    if (!rawNotes) {
       onProgress?.({ phase: "error", current: 0, total: 0, message: i18n.t('export.noNotesToExport') });
       return false;
     }
+
+    // 映射 notebookName 到笔记行中，维持原有 markdown 文件夹生成逻辑
+    const nbMap = new Map<string, string>();
+    for (const nb of notebooks) {
+      nbMap.set(nb.id, nb.name);
+    }
+    const notes: ExportNote[] = rawNotes.map((n: any) => ({
+      ...n,
+      notebookName: n.notebookId ? (nbMap.get(n.notebookId) || null) : null
+    }));
 
     const total = notes.length;
     const zip = new JSZip();
     const td = createTurndown();
 
-    // 2. 转换并打包
+    // 2. 转换并打包 Markdown 笔记
     const folderCounts = new Map<string, number>();
     // 每个笔记本目录独立的 hash->相对路径 注册表，保证 md 中 ./assets/xxx 一定存在于同级目录
     const perFolderRegistry = new Map<string, Map<string, string>>();
@@ -954,6 +978,68 @@ export async function exportAllNotes(
       }
     }
 
+    // 2.1 写入结构化 JSON 数据文件用于完整备份恢复
+    zip.file("notebooks.json", JSON.stringify(notebooks, null, 2));
+    zip.file("notes.json", JSON.stringify(rawNotes, null, 2));
+    zip.file("diaries.json", JSON.stringify(diaries, null, 2));
+    zip.file("tasks.json", JSON.stringify(tasks, null, 2));
+    zip.file("tags.json", JSON.stringify(tags, null, 2));
+    zip.file("note_tags.json", JSON.stringify(noteTags, null, 2));
+    zip.file("diary_tags.json", JSON.stringify(diaryTags, null, 2));
+    zip.file("task_tags.json", JSON.stringify(taskTags, null, 2));
+    zip.file("attachments.json", JSON.stringify(attachments, null, 2));
+    zip.file("diary_attachments.json", JSON.stringify(diaryAttachments, null, 2));
+    zip.file("task_attachments.json", JSON.stringify(taskAttachments, null, 2));
+
+    // 2.2 下载并打包所有物理附件文件到 assets/
+    const allAttachments = [
+      ...attachments.map((a: any) => ({ ...a, type: "note_attachment", url: `/api/attachments/${a.id}` })),
+      ...diaryAttachments.map((a: any) => ({ ...a, type: "diary_attachment", url: `/api/diary/attachments/${a.id}` })),
+      ...taskAttachments.map((a: any) => ({ ...a, type: "task_attachment", url: `/api/task-attachments/${a.id}` }))
+    ];
+
+    const totalAttachments = allAttachments.length;
+    for (let i = 0; i < totalAttachments; i++) {
+      const att = allAttachments[i];
+      onProgress?.({
+        phase: "converting",
+        current: i + 1,
+        total: totalAttachments,
+        message: `正在打包附件 (${i + 1}/${totalAttachments}): ${att.filename || att.id}`
+      });
+
+      try {
+        const absUrl = resolveAttachmentUrl(att.url);
+        const res = await fetch(absUrl, { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength === 0) throw new Error("empty body");
+
+        // ArrayBuffer -> base64
+        const bytes = new Uint8Array(buf);
+        let binary = "";
+        const chunk = 0x8000;
+        for (let j = 0; j < bytes.length; j += chunk) {
+          binary += String.fromCharCode.apply(
+            null,
+            bytes.subarray(j, j + chunk) as unknown as number[]
+          );
+        }
+        const base64 = btoa(binary);
+
+        zip.file(`assets/${att.path}`, base64, { base64: true });
+        imgStats.ok++;
+      } catch (err: any) {
+        console.warn(`[exportService] failed to download attachment: ${att.url}`, err);
+        imgStats.failed++;
+        imgStats.failures.push({
+          src: att.url,
+          error: err instanceof Error ? err.message : String(err),
+          phase: "download"
+        });
+      }
+    }
+
     // 3. 添加元数据
     zip.file(
       "metadata.json",
@@ -962,14 +1048,16 @@ export async function exportAllNotes(
         app: "nowen-note",
         exportedAt: new Date().toISOString(),
         totalNotes: total,
+        totalDiaries: diaries.length,
+        totalTasks: tasks.length,
+        totalFiles: totalAttachments,
         notebooks: Array.from(folderCounts.entries()).map(([name, count]) => ({ name, count })),
-        // P0-2：汇总在 metadata 里，快速看总体；明细看 export-warnings.json
         imageStats: { ok: imgStats.ok, failed: imgStats.failed },
+        isFullBackup: true
       }, null, 2)
     );
 
-    // 3.1 如果有图片处理失败，写明细信息到 export-warnings.json，让用户能看到
-    // “哪些笔记的哪些图”失败了，而不是只看到一个“失败 N 张”的总数。
+    // 3.1 如果有图片/附件处理失败，写明细信息到 export-warnings.json
     if (imgStats.failures.length > 0) {
       zip.file(
         "export-warnings.json",
@@ -979,7 +1067,7 @@ export async function exportAllNotes(
           generatedAt: new Date().toISOString(),
           summary: { ok: imgStats.ok, failed: imgStats.failed },
           failures: imgStats.failures,
-          hint: "请检查：原始附件是否仍在（/api/attachments/<id>）、网络是否可用。导入到其它实例时可能出现这些图加载失败。",
+          hint: "请检查：原始附件是否仍在、网络是否可用。导入到其它实例时可能出现这些文件加载失败。",
         }, null, 2)
       );
     }
@@ -1006,13 +1094,13 @@ export async function exportAllNotes(
     const date = new Date().toISOString().slice(0, 10);
     saveAs(blob, `nowen-note_backup_${date}.zip`);
 
-    // 若有图片下载失败，给用户一个非阻塞警告（done 前多 emit 一条 error 消息）
+    // 若有图片下载失败，给用户一个非阻塞警告
     if (imgStats.failed > 0) {
       onProgress?.({
         phase: "error",
         current: imgStats.failed,
         total: imgStats.ok + imgStats.failed,
-        message: i18n.t('export.someImagesFailed', { count: imgStats.failed }),
+        message: `有 ${imgStats.failed} 个附件下载失败，已自动跳过。`,
       });
     }
     onProgress?.({ phase: "done", current: total, total, message: i18n.t('export.exportComplete') });

@@ -544,7 +544,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   return (
     <div
       className={cn(
-        "bg-app-surface/60 backdrop-blur-sm rounded-2xl border border-app-border shadow-sm transition-all",
+        "bg-app-surface/60 backdrop-blur-sm rounded-lg border border-app-border shadow-sm transition-all",
         isDragging && "ring-2 ring-accent-primary/50 border-accent-primary/40",
       )}
       onDragEnter={handleDragEnter}
@@ -1066,10 +1066,11 @@ function VoicePlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [transcribing, setTranscribing] = useState(false);
-  const [showVolume, setShowVolume] = useState(false);
+  const [pressProgress, setPressProgress] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const pressTimerRef = useRef<any>(null);
+  const progressIntervalRef = useRef<any>(null);
+  const startTimeRef = useRef<number>(0);
 
   const voice = item.voice!;
   const audioUrl = api.diaryImages.urlFor(voice.id);
@@ -1181,20 +1182,57 @@ function VoicePlayer({
   const handleStartPress = (e: React.MouseEvent | React.TouchEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest("button") || target.closest("input")) return;
-    pressTimerRef.current = setTimeout(() => {
-      handleTranscribe();
-    }, 800);
+    
+    // Reset progress
+    setPressProgress(0);
+    startTimeRef.current = Date.now();
+
+    // Set interval to update progress
+    const durationTime = 800; // 800ms
+    progressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current;
+      const progress = Math.min((elapsed / durationTime) * 100, 100);
+      setPressProgress(progress);
+
+      if (progress >= 100) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+        setPressProgress(0);
+        handleTranscribe();
+      }
+    }, 16); // ~60fps
   };
 
   const handleEndPress = () => {
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
     }
+    setPressProgress(0);
   };
 
   return (
     <div className="flex flex-col gap-2 w-full mt-3">
+      {/* Equalizer animation style */}
+      <style>{`
+        @keyframes eq-bounce-1 {
+          0%, 100% { transform: scaleY(0.3); }
+          50% { transform: scaleY(1); }
+        }
+        @keyframes eq-bounce-2 {
+          0%, 100% { transform: scaleY(0.6); }
+          50% { transform: scaleY(0.2); }
+          75% { transform: scaleY(0.9); }
+        }
+        @keyframes eq-bounce-3 {
+          0%, 100% { transform: scaleY(0.4); }
+          50% { transform: scaleY(0.8); }
+        }
+        .eq-bar-1 { animation: eq-bounce-1 0.8s ease-in-out infinite; transform-origin: bottom; }
+        .eq-bar-2 { animation: eq-bounce-2 0.7s ease-in-out infinite; transform-origin: bottom; }
+        .eq-bar-3 { animation: eq-bounce-3 0.9s ease-in-out infinite; transform-origin: bottom; }
+      `}</style>
+
       {/* 播放器面板 */}
       <div
         onMouseDown={handleStartPress}
@@ -1202,13 +1240,21 @@ function VoicePlayer({
         onMouseLeave={handleEndPress}
         onTouchStart={handleStartPress}
         onTouchEnd={handleEndPress}
-        className="flex items-center gap-3 p-3 rounded-2xl bg-accent-primary/5 border border-accent-primary/10 select-none hover:bg-accent-primary/10 transition-colors duration-200"
+        className="relative overflow-hidden flex items-center gap-3 p-3 rounded-lg bg-accent-primary/5 border border-accent-primary/10 select-none hover:bg-accent-primary/10 transition-colors duration-200"
         title="长按此区域语音转文字"
       >
+        {/* 长按转文字进度遮罩层 */}
+        {pressProgress > 0 && (
+          <div 
+            className="absolute inset-y-0 left-0 bg-accent-primary/15 pointer-events-none transition-all duration-[16ms]"
+            style={{ width: `${pressProgress}%` }}
+          />
+        )}
+
         {/* 播放/暂停按钮 */}
         <button
           onClick={togglePlay}
-          className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all shrink-0"
+          className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all shrink-0 z-10"
         >
           {isPlaying ? (
             <Pause size={16} fill="white" />
@@ -1218,7 +1264,7 @@ function VoicePlayer({
         </button>
 
         {/* 进度条 & 时间 */}
-        <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <div className="flex-1 flex flex-col gap-1 min-w-0 z-10">
           <input
             type="range"
             min="0"
@@ -1228,49 +1274,43 @@ function VoicePlayer({
             className="w-full h-1 bg-app-border rounded-lg appearance-none cursor-pointer accent-accent-primary"
           />
           <div className="flex items-center justify-between text-[10px] text-tx-tertiary tabular-nums">
-            <span>{formatTime(currentTime)}</span>
+            <div className="flex items-center gap-1.5">
+              <span>{formatTime(currentTime)}</span>
+              {isPlaying && (
+                <div className="flex items-end gap-[1.5px] h-3 w-3 pb-[1.5px]">
+                  <div className="w-[1.5px] h-3 bg-accent-primary rounded-full eq-bar-1" />
+                  <div className="w-[1.5px] h-3 bg-accent-primary rounded-full eq-bar-2" />
+                  <div className="w-[1.5px] h-3 bg-accent-primary rounded-full eq-bar-3" />
+                </div>
+              )}
+            </div>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
-        {/* 音量控制 */}
-        <div
-          className="relative flex items-center"
-          onMouseEnter={() => setShowVolume(true)}
-          onMouseLeave={() => setShowVolume(false)}
-        >
+        {/* 音量控制 - 始终可见且紧凑 */}
+        <div className="flex items-center gap-1 z-10 shrink-0">
           <button
             onClick={toggleMute}
             className="w-7 h-7 rounded-lg hover:bg-app-hover text-tx-secondary flex items-center justify-center transition-colors"
           >
             {isMuted || volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </button>
-          <AnimatePresence>
-            {showVolume && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 60 }}
-                exit={{ opacity: 0, width: 0 }}
-                className="overflow-hidden flex items-center h-full mr-1"
-              >
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeChange}
-                  className="w-12 h-1 bg-app-border rounded-lg appearance-none cursor-pointer accent-accent-primary"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={isMuted ? 0 : volume}
+            onChange={handleVolumeChange}
+            className="w-12 h-1 bg-app-border rounded-lg appearance-none cursor-pointer accent-accent-primary max-sm:hidden"
+          />
         </div>
 
         {/* 倍速播放 */}
         <button
           onClick={cycleSpeed}
-          className="px-2 py-0.5 rounded bg-app-hover hover:bg-app-active text-[10px] font-semibold text-tx-secondary transition-all shrink-0"
+          className="px-2 py-0.5 rounded bg-app-hover hover:bg-app-active text-[10px] font-semibold text-tx-secondary transition-all shrink-0 z-10"
         >
           {playbackRate}x
         </button>
@@ -1278,14 +1318,14 @@ function VoicePlayer({
 
       {/* 转文字状态 / 结果 */}
       {transcribing && (
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-app-hover/30 border border-app-border/40 text-xs text-tx-tertiary">
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-app-hover/30 border border-app-border/40 text-xs text-tx-tertiary">
           <Loader2 size={12} className="animate-spin text-accent-primary" />
           <span>正在转写文字...</span>
         </div>
       )}
 
       {voice.text && (
-        <div className="p-3 rounded-xl bg-app-hover/30 border border-app-border/40 relative group/trans">
+        <div className="p-3 rounded-lg bg-app-hover/30 border border-app-border/40 relative group/trans">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-accent-primary font-medium flex items-center gap-1 bg-accent-primary/5 px-2 py-0.5 rounded-full select-none">
               <Sparkles size={10} /> SenseVoice 转写文本
@@ -1317,10 +1357,12 @@ function DiaryCard({
   item,
   onDelete,
   onUpdate,
+  isHighlighted,
 }: {
   item: Diary;
   onDelete: (id: string) => void;
   onUpdate: (updated: Diary) => void;
+  isHighlighted?: boolean;
 }) {
   const { t } = useTranslation();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -1357,13 +1399,17 @@ function DiaryCard({
   return (
     <>
       <motion.div
+        id={`diary-card-${item.id}`}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8, transition: { duration: 0.2 } }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="group"
+        className="group scroll-mt-20"
       >
-        <div className="bg-app-surface/40 backdrop-blur-sm rounded-2xl border border-app-border hover:border-app-border/80 transition-all duration-200 hover:shadow-sm">
+        <div className={cn(
+          "bg-app-surface/40 backdrop-blur-sm rounded-lg border border-app-border hover:border-app-border/80 transition-all duration-300 hover:shadow-sm",
+          isHighlighted ? "ring-2 ring-accent-primary border-accent-primary shadow-lg shadow-accent-primary/20 scale-[1.01]" : ""
+        )}>
           <div className="p-4">
             {/* 内容（支持 HTML & Markdown 渲染） */}
             {item.contentText && (
@@ -1409,15 +1455,20 @@ function DiaryCard({
                 <span className="shrink-0">{timeAgo(item.createdAt, t)}</span>
                 {/* 空间可见性标识 */}
                 <span className="text-tx-tertiary/60 shrink-0">·</span>
-                <span className="flex items-center gap-0.5 shrink-0" title={item.visibility === "PUBLIC" ? "公开的说说" : "仅自己可见的说说"}>
+                <span className={cn(
+                  "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
+                  item.visibility === "PUBLIC"
+                    ? "bg-blue-500/5 text-blue-500 border border-blue-500/10 dark:bg-blue-500/10 dark:border-blue-500/20"
+                    : "bg-zinc-500/5 text-zinc-500 border border-zinc-500/10 dark:bg-zinc-500/10 dark:border-zinc-500/20"
+                )} title={item.visibility === "PUBLIC" ? "公开的说说" : "仅自己可见的说说"}>
                   {item.visibility === "PUBLIC" ? (
                     <>
-                      <Globe size={11} />
+                      <Globe size={10} />
                       <span>公开</span>
                     </>
                   ) : (
                     <>
-                      <Lock size={11} />
+                      <Lock size={10} />
                       <span>仅自己可见</span>
                     </>
                   )}
@@ -1702,7 +1753,7 @@ function DiaryEditor({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="bg-app-surface/60 backdrop-blur-sm rounded-2xl border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm"
+      className="bg-app-surface/60 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm"
     >
       <div className="p-4 pb-2">
         <div className="flex items-center gap-1.5 mb-2 text-[11px] text-accent-primary">
@@ -2122,6 +2173,7 @@ export default function DiaryCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
   const [items, setItems] = useState<Diary[]>([]);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -2197,6 +2249,44 @@ export default function DiaryCenter() {
     loadStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 监听的说说快捷跳转事件，自动滚动并高亮目标说说
+  useEffect(() => {
+    const checkPendingNavigate = () => {
+      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      if (!pendingRaw) return;
+      try {
+        const pending = JSON.parse(pendingRaw);
+        if (pending.sourceType === "diary" && pending.sourceId) {
+          const diaryId = pending.sourceId;
+          sessionStorage.removeItem("nowen:pending-navigate");
+
+          // 滚动并高亮
+          setTimeout(() => {
+            const el = document.getElementById(`diary-card-${diaryId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              setHighlightedId(diaryId);
+              setTimeout(() => {
+                setHighlightedId(null);
+              }, 2000);
+            }
+          }, 150);
+        }
+      } catch (e) {
+        console.error("Error handling diary pending navigate:", e);
+      }
+    };
+
+    if (items.length > 0) {
+      checkPendingNavigate();
+    }
+
+    window.addEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+    return () => {
+      window.removeEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+    };
+  }, [items]);
 
   useEffect(() => {
     const onWs = () => {
@@ -2465,6 +2555,7 @@ export default function DiaryCenter() {
                           item={item}
                           onDelete={handleDelete}
                           onUpdate={handleUpdate}
+                          isHighlighted={highlightedId === item.id}
                         />
                       ))}
                     </AnimatePresence>

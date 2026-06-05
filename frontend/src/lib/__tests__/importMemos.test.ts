@@ -19,7 +19,7 @@ vi.mock("@/lib/api", () => {
   return {
     api: {
       postDiary: vi.fn().mockResolvedValue({ id: "diary_id" }),
-      importNotes: vi.fn().mockResolvedValue({ count: 2 }),
+      importNotes: vi.fn().mockResolvedValue({ success: true, notes: [{ id: "1" }, { id: "2" }] }),
       diaryImages: {
         upload: vi.fn().mockResolvedValue({ id: "image_id" }),
       },

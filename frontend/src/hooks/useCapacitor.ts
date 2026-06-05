@@ -424,11 +424,53 @@ export async function syncAllTaskNotifications(tasks: Task[]) {
   }
 }
 
+// ─── 实时消息本地通知触发 ──────────────────────────────────────────
+export async function showLocalNotification(title: string, body: string, extra: any) {
+  if (!isNativePlatform()) return;
+  try {
+    const granted = await checkAndRequestPermissions();
+    if (!granted) return;
+
+    // 生成随机不冲突 ID
+    const notificationId = Math.floor(Math.random() * 1000000) + 1;
+
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title,
+          body,
+          id: notificationId,
+          extra
+        }
+      ]
+    });
+  } catch (err) {
+    console.error("showLocalNotification failed:", err);
+  }
+}
+
 // 注册通知点击跳转事件
 if (typeof window !== "undefined" && isNativePlatform()) {
   try {
-    LocalNotifications.addListener("localNotificationActionPerformed", () => {
-      window.dispatchEvent(new CustomEvent("nowen:navigate-to-tasks"));
+    LocalNotifications.addListener("localNotificationActionPerformed", (action) => {
+      const extra = action.notification.extra;
+      if (extra) {
+        if (extra.sourceType && extra.sourceId) {
+          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+            sourceType: extra.sourceType,
+            sourceId: extra.sourceId
+          }));
+          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+        } else if (extra.taskId) {
+          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+            sourceType: "task",
+            sourceId: extra.taskId
+          }));
+          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+        }
+      } else {
+        window.dispatchEvent(new CustomEvent("nowen:navigate-to-tasks"));
+      }
     });
   } catch (err) {
     console.error("Failed to register localNotificationActionPerformed listener:", err);

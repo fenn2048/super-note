@@ -35,6 +35,8 @@ export const API_TOKEN_SCOPES = [
   "notes:write",
   "notebooks:read",
   "notebooks:write",
+  "diaries:read",
+  "diaries:write",
   "attachments:write",
   "tags:read",
   "tags:write",

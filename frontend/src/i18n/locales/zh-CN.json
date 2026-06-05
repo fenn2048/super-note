@@ -1083,11 +1083,17 @@
   },
   "appearance": {
     "skinTitle": "外观风格",
-    "skinDesc": "选择整体视觉语言。macOS 风格在 Apple 设备上体验最佳。",
-    "skinDefault": "默认",
-    "skinDefaultDesc": "现代简约风格，跨平台一致",
+    "skinDesc": "选择整体视觉语言。不同风格带来截然不同的工作心境与圆角质感。",
     "skinMacos": "macOS",
-    "skinMacosDesc": "Apple 设计语言，毛玻璃与系统蓝"
+    "skinMacosDesc": "Apple 设计语言，精致半透明毛玻璃与系统强调色，优雅圆润",
+    "skinObsidian": "Obsidian (默认)",
+    "skinObsidianDesc": "Obsidian 安静深色模式与极简无干扰编辑，几何硬朗直角",
+    "skinNotion": "Notion",
+    "skinNotionDesc": "Notion 风格，标志性奶油灰侧栏与极细分隔线，经典知性蓝",
+    "skinMemos": "Memos",
+    "skinMemosDesc": "Memos 风格，舒适的灰底独立卡片布局，生机翡翠绿，清爽透气",
+    "skinFlomo": "flomo",
+    "skinFlomoDesc": "flomo 风格，暖沙水洗色与标志性绿，营造无压力的输入氛围"
   },
   "export": {
     "fetchingData": "正在获取笔记数据...",
@@ -1121,7 +1127,7 @@
     "urlLabel": "文章链接",
     "urlRequired": "请输入文章链接",
     "unsupportedUrl": "目前仅支持微信公众号文章链接（mp.weixin.qq.com/s/...）",
-    "autoCreateNotebook": "自动创建「导入的文章」",
+    "autoCreateNotebook": "自动创建「剪藏笔记本」",
     "importing": "正在抓取并导入...",
     "importButton": "导入文章",
     "importedAgain": "再导入一篇",

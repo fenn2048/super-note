@@ -21,7 +21,7 @@ import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPorta
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
 
-type TabId = "appearance" | "switches" | "ai" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about";
+export type TabId = "appearance" | "switches" | "ai" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about";
 
 interface SettingsModalProps {
   onClose: () => void;

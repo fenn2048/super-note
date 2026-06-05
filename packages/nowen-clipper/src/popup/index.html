@@ -9,118 +9,140 @@
     <div class="app">
       <header>
         <img src="../icons/icon-32.png" class="logo" alt="" />
-        <h1>Nowen Note 剪藏</h1>
+        <h1>Nowen Note 智能剪藏</h1>
       </header>
 
-      <div id="not-configured" class="panel hidden">
-        <p class="warn">尚未配置服务器地址或登录账号。</p>
-        <button id="open-options" class="btn primary">打开设置</button>
+      <!-- 1. 私有化服务器配置区域 -->
+      <div class="section-card config-section">
+        <div class="row">
+          <label for="server-url">服务器地址</label>
+          <input id="server-url" type="text" placeholder="http://localhost:3000" autocomplete="off" />
+        </div>
+        <div class="row">
+          <label for="api-token">访问令牌</label>
+          <input id="api-token" type="password" placeholder="输入 nkn_ 开头的个人访问令牌" autocomplete="off" />
+        </div>
+        <!-- 令牌连接状态提示 -->
+        <div class="status-row">
+          <span id="connection-badge" class="badge err">❌ 未连接</span>
+        </div>
       </div>
 
-      <div id="main" class="panel">
-        <!-- 页面标题预览 -->
-        <div id="page-title-row" class="page-title-row">
-          <span id="page-title" class="page-title">加载中...</span>
+      <!-- 2. 剪藏设置区域 -->
+      <div id="clip-settings-panel" class="section-card settings-section disabled">
+        <!-- 图片本地化开关 -->
+        <div class="row image-loc-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="image-localization" checked />
+            <span>图片本地化存储（上传至服务器）</span>
+          </label>
         </div>
 
-        <!-- 剪藏模式选择：下拉框 -->
+        <!-- 工作区选择 -->
         <div class="row">
-          <div class="mode-select-row">
-            <svg class="mode-icon" viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
-              <path d="M5.5 3A2.5 2.5 0 003 5.5v9A2.5 2.5 0 005.5 17h9a2.5 2.5 0 002.5-2.5v-9A2.5 2.5 0 0014.5 3h-9zM5 5.5A.5.5 0 015.5 5h9a.5.5 0 01.5.5v9a.5.5 0 01-.5.5h-9a.5.5 0 01-.5-.5v-9z"/>
-            </svg>
-            <select id="clip-mode" class="mode-select">
-              <option value="simplified">简化内容</option>
-              <option value="article" selected>完整内容</option>
-              <option value="fullpage">完全克隆</option>
-              <option value="fullScreenshot">整个页面屏幕截图</option>
-              <option value="screenshot">屏幕截图</option>
-              <option value="selection">选区</option>
+          <label for="workspace-select">工作区</label>
+          <div class="select-wrapper">
+            <select id="workspace-select" disabled>
+              <option value="personal">个人空间</option>
             </select>
           </div>
         </div>
 
-        <!-- 笔记本 -->
+        <!-- 笔记本选择 -->
         <div class="row">
-          <div class="input-row">
-            <svg class="field-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-              <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z"/>
-            </svg>
-            <input id="notebook" type="text" placeholder="Web 剪藏" autocomplete="off" />
+          <label for="notebook-select">保存至</label>
+          <div class="select-wrapper">
+            <select id="notebook-select" disabled>
+              <option value="__default__">📓 默认：剪藏笔记本</option>
+              <option value="__diary__">💬 保存为说说</option>
+            </select>
           </div>
         </div>
+      </div>
 
-        <!-- 标签 -->
-        <div class="row">
-          <div class="input-row">
-            <svg class="field-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-              <path fill-rule="evenodd" d="M3.5 2A1.5 1.5 0 002 3.5v4.879a1.5 1.5 0 00.44 1.06l7.12 7.122a1.5 1.5 0 002.122 0l4.879-4.878a1.5 1.5 0 000-2.122L9.44 2.44A1.5 1.5 0 008.378 2H3.5zM6 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-            </svg>
-            <input id="tags" type="text" placeholder="标签（逗号分隔）" autocomplete="off" />
-          </div>
+      <!-- 3. 高级可折叠面板 (标签、评论、AI) -->
+      <div id="advanced-panel" class="section-card advanced-section disabled">
+        <div class="advanced-header" id="toggle-advanced">
+          <span>高级设置 (标签、备注、AI)</span>
+          <svg class="chevron-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
         </div>
 
-        <!-- 添加评论 -->
-        <div class="row">
-          <div class="input-row comment-row">
-            <svg class="field-icon comment-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-              <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/>
-            </svg>
-            <textarea id="comment" rows="2" placeholder="添加评论"></textarea>
+        <div id="advanced-content" class="advanced-content hidden">
+          <!-- 标签 -->
+          <div class="row">
+            <input id="tags" type="text" placeholder="标签（英文或中文逗号分隔）" autocomplete="off" />
           </div>
-        </div>
 
-        <!-- AI 优化 -->
-        <div class="ai-row">
-          <label class="ai-toggle-label">
-            <input type="checkbox" id="ai-enhance" />
-            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" class="ai-icon">
-              <path d="M10 2a1 1 0 01.894.553l1.382 2.764 3.05.443a1 1 0 01.554 1.706l-2.207 2.151.521 3.038a1 1 0 01-1.451 1.054L10 12.347l-2.728 1.434a1 1 0 01-1.451-1.054l.52-3.038-2.206-2.15a1 1 0 01.554-1.707l3.05-.443L9.106 2.553A1 1 0 0110 2z"/>
-            </svg>
-            <span>使用 AI 优化（剪藏后自动整理）</span>
-            <button type="button" id="ai-toggle-details" class="ai-details-btn" title="任务勾选">⋯</button>
-          </label>
-          <div id="ai-details" class="ai-details hidden">
-            <label class="ai-task"><input type="checkbox" data-task="summary" /><span>TL;DR 摘要</span></label>
-            <label class="ai-task"><input type="checkbox" data-task="tags" /><span>自动标签</span></label>
-            <label class="ai-task"><input type="checkbox" data-task="outline" /><span>结构化大纲</span></label>
-            <label class="ai-task"><input type="checkbox" data-task="title" /><span>重写标题</span></label>
-            <label class="ai-task"><input type="checkbox" data-task="highlight" /><span>重点高亮</span></label>
-            <label class="ai-task"><input type="checkbox" data-task="translation" /><span>翻译为中文</span></label>
-            <div class="ai-mode-row">
-              <span class="ai-mode-label">拼接方式</span>
-              <select id="ai-mode" class="ai-mode-select">
-                <option value="prepend">摘要置顶 + 原文</option>
-                <option value="append">原文 + 摘要末尾</option>
-                <option value="replace">只保留 AI 产物</option>
-              </select>
+          <!-- 评论 -->
+          <div class="row">
+            <textarea id="comment" rows="2" placeholder="添加备注评论..."></textarea>
+          </div>
+
+          <!-- AI 优化 -->
+          <div class="ai-row">
+            <label class="ai-toggle-label">
+              <input type="checkbox" id="ai-enhance" />
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" class="ai-icon">
+                <path d="M10 2a1 1 0 01.894.553l1.382 2.764 3.05.443a1 1 0 01.554 1.706l-2.207 2.151.521 3.038a1 1 0 01-1.451 1.054L10 12.347l-2.728 1.434a1 1 0 01-1.451-1.054l.52-3.038-2.206-2.15a1 1 0 01.554-1.707l3.05-.443L9.106 2.553A1 1 0 0110 2z"/>
+              </svg>
+              <span>使用 AI 智能整理</span>
+              <button type="button" id="ai-toggle-details" class="ai-details-btn" title="AI任务勾选">⋯</button>
+            </label>
+            <div id="ai-details" class="ai-details hidden">
+              <label class="ai-task"><input type="checkbox" data-task="summary" /><span>TL;DR 摘要</span></label>
+              <label class="ai-task"><input type="checkbox" data-task="tags" /><span>自动标签</span></label>
+              <label class="ai-task"><input type="checkbox" data-task="outline" /><span>结构化大纲</span></label>
+              <label class="ai-task"><input type="checkbox" data-task="title" /><span>重写标题</span></label>
+              <label class="ai-task"><input type="checkbox" data-task="highlight" /><span>重点高亮</span></label>
+              <label class="ai-task"><input type="checkbox" data-task="translation" /><span>翻译为中文</span></label>
+              <div class="ai-mode-row">
+                <span class="ai-mode-label">拼接方式</span>
+                <select id="ai-mode" class="ai-mode-select">
+                  <option value="prepend">摘要置顶 + 原文</option>
+                  <option value="append">原文 + 摘要末尾</option>
+                  <option value="replace">只保留 AI 产物</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- 剪藏按钮 -->
-        <button id="clip" class="btn primary large">剪藏到 Nowen Note</button>
+      <!-- 4. 双剪藏核心按钮 -->
+      <div class="clip-actions">
+        <button id="clip-article" class="btn primary clip-btn" disabled>整页智能剪藏</button>
+        <button id="clip-selection" class="btn secondary clip-btn" disabled>选区精准剪藏</button>
+      </div>
 
-        <div id="progress" class="progress hidden">
-          <div class="spinner"></div>
-          <span id="progress-text"></span>
+      <!-- 5. 更多剪藏模式 -->
+      <div id="more-actions-row" class="more-actions-row disabled">
+        <div class="mode-select-container">
+          <select id="clip-mode" class="more-select" disabled>
+            <option value="simplified">简化内容（无图纯文本）</option>
+            <option value="fullpage">完全克隆（1:1 离线HTML）</option>
+            <option value="fullScreenshot">滚动整页屏幕截图</option>
+            <option value="screenshot">当前可视区域截图</option>
+          </select>
+          <button id="clip-more" class="btn small-btn" disabled>剪藏</button>
         </div>
+      </div>
 
-        <div id="result" class="result hidden"></div>
+      <!-- 进度与结果提示 -->
+      <div id="progress" class="progress hidden">
+        <div class="spinner"></div>
+        <span id="progress-text"></span>
+      </div>
 
-        <!-- 快速捕捉模式 -->
-        <div class="quick-capture-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="quick-capture" />
-            <span>启用快速捕捉模式</span>
-          </label>
-        </div>
+      <div id="result" class="result hidden"></div>
 
-        <footer>
-          <a href="#" id="open-options-footer">设置</a>
-          <span class="dot">·</span>
-          <span id="server-preview"></span>
-        </footer>
+      <!-- 快速捕捉模式 -->
+      <div class="quick-capture-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="quick-capture" />
+          <span>启用快速捕捉模式（点击图标自动剪藏）</span>
+        </label>
       </div>
     </div>
     <script type="module" src="./popup.ts"></script>

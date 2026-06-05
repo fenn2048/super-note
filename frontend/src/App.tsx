@@ -1,6 +1,7 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Loader2 } from "lucide-react";
+import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
 import NavRail from "@/components/NavRail";
@@ -16,6 +17,7 @@ import LoginPage from "@/components/LoginPage";
 import QuickLoginGate from "@/components/QuickLoginGate";
 import QuickLoginEnrollDialog from "@/components/QuickLoginEnrollDialog";
 import WhatsNewModal, { useWhatsNew } from "@/components/WhatsNewModal";
+import SettingsModal, { TabId } from "@/components/SettingsModal";
 // 延时加载的重型组件
 const EditorPane = React.lazy(() => import("@/components/EditorPane"));
 const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
@@ -27,15 +29,17 @@ import { UserPreferencesProvider, useUserPreferences } from "@/hooks/useUserPref
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmProvider } from "@/components/ui/confirm";
 import Toaster from "@/components/Toaster";
-import { User } from "@/types";
+import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform } from "@/hooks/useCapacitor";
+import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification } from "@/hooks/useCapacitor";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import CommandPalette from "@/components/common/CommandPalette";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
 import { realtime } from "@/lib/realtime";
+
+import { App as CapApp } from "@capacitor/app";
 
 const AUTH_USER_CACHE_PREFIX = "nowen-auth-user:";
 
@@ -292,7 +296,24 @@ function useSwipeGesture({
 function AppLayout() {
   const { state } = useApp();
   const actions = useAppActions();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<TabId>("appearance");
+
+  // Listen to custom open-settings event
+  useEffect(() => {
+    const onOpenSettings = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab?: TabId }>;
+      const tab = customEvent.detail?.tab || "appearance";
+      setSettingsTab(tab);
+      setShowSettings(true);
+    };
+    window.addEventListener("nowen:open-settings", onOpenSettings);
+    return () => {
+      window.removeEventListener("nowen:open-settings", onOpenSettings);
+    };
+  }, []);
   // v16 P3 后续：Rail 视觉模式三档（icon / label / hidden）。
   // 约束：主侧栏折叠时强制显示 Rail（即便偏好是 hidden），
   // 否则用户会陷入"既无 Rail 又无主侧栏"的死局，找不到任何导航入口。
@@ -365,19 +386,109 @@ function AppLayout() {
     };
   }, [actions]);
 
-  // 监听 WebSocket 的实时通知，收到后立即刷新或更新未读数红点
+  // 监听 WebSocket 的实时通知，收到后立即刷新或更新未读数红点，并在原生平台展示本地通知
   useEffect(() => {
     const offNotification = realtime.on("notification:received", (msg: any) => {
       if (msg && typeof msg.unreadCount === "number") {
         actions.setUnreadMentionCount(msg.unreadCount);
       }
+      if (msg && msg.notification && isNativePlatform()) {
+        const notif = msg.notification;
+        const isZh = i18n.language?.startsWith("zh");
+        let title = isZh ? "新消息" : "New Message";
+        let body = notif.sourceTitle || (isZh ? "你收到了一条新消息" : "You received a new message");
+        const actor = notif.actorName || (isZh ? "某人" : "Someone");
+        const targetTitle = notif.sourceTitle || "";
+
+        switch (notif.type) {
+          case "mention":
+            title = isZh ? "有人提到你" : "Mentioned You";
+            body = isZh
+              ? `${actor} 在「${targetTitle || "内容"}」中提到了你`
+              : `${actor} mentioned you in "${targetTitle || "content"}"`;
+            break;
+          case "task_completed":
+            title = isZh ? "任务完成" : "Task Completed";
+            body = isZh
+              ? `${actor} 完成了任务: ${targetTitle}`
+              : `${actor} completed task: ${targetTitle}`;
+            break;
+          case "diary_posted":
+            title = isZh ? "新说说" : "New Diary Entry";
+            body = isZh
+              ? `${actor} 发表了说说: ${targetTitle}`
+              : `${actor} posted a new diary entry: ${targetTitle}`;
+            break;
+          case "note_updated":
+            title = isZh ? "笔记更新" : "Note Updated";
+            body = isZh
+              ? `${actor} 更新了笔记: ${targetTitle}`
+              : `${actor} updated note: ${targetTitle}`;
+            break;
+        }
+
+        showLocalNotification(title, body, {
+          sourceType: notif.sourceType,
+          sourceId: notif.sourceId,
+        });
+      }
     });
     return () => {
       offNotification();
     };
+  }, [actions, i18n.language]);
+
+  // 监听通知点击/仪表盘点击的快捷跳转事件
+  useEffect(() => {
+    const handleNavigateTrigger = async () => {
+      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      if (!pendingRaw) return;
+      try {
+        const pending = JSON.parse(pendingRaw);
+        if (!pending.sourceType || !pending.sourceId) return;
+
+        const { sourceType, sourceId } = pending;
+        if (sourceType === "note") {
+          actions.setViewMode("all");
+          actions.setNoteLoading(true);
+          actions.setMobileView("editor");
+          try {
+            const note = await api.getNote(sourceId);
+            if (note) {
+              actions.setActiveNote(note);
+            }
+          } catch (err) {
+            console.error("Failed to load navigated note:", err);
+            const { toast } = await import("@/lib/toast");
+            toast.error("加载笔记失败");
+          } finally {
+            actions.setNoteLoading(false);
+          }
+          sessionStorage.removeItem("nowen:pending-navigate");
+        } else if (sourceType === "diary") {
+          actions.setViewMode("diary");
+          actions.setMobileView("list");
+        } else if (sourceType === "task") {
+          actions.setViewMode("tasks");
+          actions.setMobileView("list");
+        }
+      } catch (e) {
+        console.error("Failed to parse pending navigate:", e);
+      }
+    };
+
+    window.addEventListener("nowen:navigate-to-item-trigger", handleNavigateTrigger);
+
+    // 延迟少许检查挂起的导航，等待组件及状态初始化完成
+    const timer = setTimeout(handleNavigateTrigger, 200);
+
+    return () => {
+      window.removeEventListener("nowen:navigate-to-item-trigger", handleNavigateTrigger);
+      clearTimeout(timer);
+    };
   }, [actions]);
 
-  // 监听通知点击跳转事件
+  // 监听旧待办快捷跳转事件
   useEffect(() => {
     const onNavigateToTasks = () => {
       actions.setViewMode("tasks");
@@ -518,6 +629,62 @@ function AppLayout() {
     return () => window.removeEventListener("nowen:workspace-changed", onWorkspaceChanged);
   }, [actions]);
 
+  // 微信公众号文章保存自动导入与跳转
+  useEffect(() => {
+    let active = true;
+    const handlePendingImport = async () => {
+      const url = sessionStorage.getItem("nowen:pending-import-url");
+      if (!url) return;
+
+      // 马上清除，避免重复触发
+      sessionStorage.removeItem("nowen:pending-import-url");
+
+      const { toast } = await import("@/lib/toast");
+      const loadingToastId = toast.info("正在抓取并保存文章到剪藏笔记本...", 0);
+
+      try {
+        const { api } = await import("@/lib/api");
+        const result = await api.urlImport(url);
+
+        if (!active) return;
+
+        toast.dismiss(loadingToastId);
+        toast.success("已成功保存至「剪藏笔记本」");
+
+        // 刷新列表和笔记本
+        actions.refreshNotebooks();
+        actions.refreshNotes();
+
+        // 自动进入该笔记页面进行查看
+        setTimeout(() => {
+          if (!active) return;
+          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+            sourceType: "note",
+            sourceId: result.noteId
+          }));
+          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+        }, 500);
+      } catch (err: any) {
+        if (!active) return;
+        toast.dismiss(loadingToastId);
+        toast.error(`保存失败：${err?.message || err}`);
+      }
+    };
+
+    // 1) 挂载时立即尝试处理一次（针对从非活跃状态启动的情况）
+    // 延迟 800ms 等主界面和同步初始化完毕，防止列表还未加载导致导航失败
+    const timer = setTimeout(handlePendingImport, 800);
+
+    // 2) 监听后续新接收到的链接事件（针对应用在后台运行，用户再次点击分享的情况）
+    window.addEventListener("nowen:pending-import-url-trigger", handlePendingImport);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      window.removeEventListener("nowen:pending-import-url-trigger", handlePendingImport);
+    };
+  }, [actions]);
+
   // Electron 桌面端：菜单 / 托盘动作 IPC 桥
   useDesktopMenuBridge({
     onNewNote: () => void quickCreateNote(),
@@ -530,6 +697,8 @@ function AppLayout() {
     onOpenSearch: () => setCommandPaletteOpen(true),
   });
 
+  const showMobileTabBar = !(isNotesView && state.mobileView === "editor");
+
   return (
     <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
       {/* ===== 移动端：抽屉式侧边栏 =====
@@ -537,7 +706,7 @@ function AppLayout() {
           - NavRail variant="mobile"：48/64px，顶部含关闭 X 与图标/文字模式切换；
                                        不接受 hidden 模式（抽屉里没意义）。
           - Sidebar variant="mobile"：主区只渲染 WorkspaceSwitcher + 搜索 + 笔记本 + 标签。
-          抽屉总宽 max-w 从 340 → 380：Rail 约占 48-64px，主区保持 ~320px 与改造前持平。 */}
+          抽屉总宽 max-w 从 340 → 380: Rail 约占 48-64px，主区保持 ~320px 与改造前持平。 */}
       <AnimatePresence>
         {state.mobileSidebarOpen && (
           <>
@@ -587,82 +756,93 @@ function AppLayout() {
       <SidebarResizeHandle />
 
       {/* ===== 主内容区 ===== */}
-      {isTaskView ? (
-        <div className="flex-1 flex flex-col">
-          {/* 移动端顶栏 */}
-          <MobileTopBar />
-          <TaskCenter />
-        </div>
-      ) : isMindMapView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-            <MindMapCenter />
-          </Suspense>
-        </div>
-      ) : isAIChatView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-            <AIChatPanel
-            onClose={() => actions.setViewMode("all")}
-            onNavigateToNote={async (noteId) => {
-              try {
-                const { api } = await import("@/lib/api");
-                const note = await api.getNote(noteId);
-                if (note) {
-                  actions.setActiveNote(note);
-                  actions.setViewMode("all");
-                  actions.setMobileView("editor");
-                }
-              } catch (err) {
-                console.error("Navigate to note failed:", err);
-              }
-            }}
-          />
-          </Suspense>
-        </div>
-      ) : isDiaryView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <DiaryCenter />
-        </div>
-      ) : isFilesView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <FileManager />
-        </div>
-      ) : isHomeView ? (
-        <Dashboard />
-      ) : isMentionsView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <MentionList />
-        </div>
-      ) : (
-        <div className="flex-1 flex relative overflow-hidden">
-
-          {/* 笔记列表（仅笔记相关视图展示） */}
-          {isNotesView && (
-            <div
-              className="hidden md:flex shrink-0 border-r border-app-border bg-app-bg"
-              style={{ width: state.noteListWidth + 'px' }}
-            >
-              <NoteList />
-            </div>
-          )}
-
-          {/* 编辑器 — 移动端全屏覆盖 */}
-          <div className={`
-            absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0
-            ${state.mobileView === "editor" ? "flex" : "hidden md:flex"}
-          `}>
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0 relative overflow-hidden",
+        showMobileTabBar ? "pb-[calc(56px+var(--safe-area-bottom))] md:pb-0" : ""
+      )}>
+        {isTaskView ? (
+          <div className="flex-1 flex flex-col">
+            {/* 移动端顶栏 */}
+            <MobileTopBar />
+            <TaskCenter />
+          </div>
+        ) : isMindMapView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <EditorPane />
+              <MindMapCenter />
             </Suspense>
           </div>
-        </div>
-      )}
+        ) : isAIChatView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <AIChatPanel
+                onClose={() => actions.setViewMode("all")}
+                onNavigateToNote={async (noteId) => {
+                  try {
+                    const { api } = await import("@/lib/api");
+                    const note = await api.getNote(noteId);
+                    if (note) {
+                      actions.setActiveNote(note);
+                      actions.setViewMode("all");
+                      actions.setMobileView("editor");
+                    }
+                  } catch (err) {
+                    console.error("Navigate to note failed:", err);
+                  }
+                }}
+              />
+            </Suspense>
+          </div>
+        ) : isDiaryView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <DiaryCenter />
+          </div>
+        ) : isFilesView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <FileManager />
+          </div>
+        ) : isHomeView ? (
+          <Dashboard />
+        ) : isMentionsView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <MentionList />
+          </div>
+        ) : (
+          <div className="flex-1 flex relative overflow-hidden">
+            {/* 笔记列表（仅笔记相关视图展示） */}
+            {isNotesView && (
+              <div
+                className={cn(
+                  state.mobileView === "list" ? "flex" : "hidden md:flex",
+                  "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)]"
+                )}
+                style={{
+                  "--note-list-width": `${state.noteListWidth}px`,
+                } as React.CSSProperties}
+              >
+                <NoteList />
+              </div>
+            )}
+
+            {/* 编辑器 — 移动端全屏覆盖 */}
+            <div className={cn(
+              "absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0",
+              state.mobileView === "editor" ? "flex" : "hidden md:flex"
+            )}>
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                <EditorPane />
+              </Suspense>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showMobileTabBar && <MobileTabBar />}
 
       {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
       <CommandPalette
@@ -675,6 +855,16 @@ function AppLayout() {
 
       {/* 服务端版本升级提示（前端 bundle 与服务端不一致时） */}
       <UpdateNotifier />
+
+      {/* 全局设置弹窗 */}
+      <AnimatePresence>
+        {showSettings && (
+          <SettingsModal
+            defaultTab={settingsTab}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -692,6 +882,89 @@ function MobileTopBar() {
       </button>
       <span className="ml-3 text-sm font-semibold text-tx-primary">{siteConfig.title}</span>
     </header>
+  );
+}
+
+function MobileTabBar() {
+  const { state } = useApp();
+  const actions = useAppActions();
+  const { t } = useTranslation();
+
+  const handleTabClick = (mode: ViewMode) => {
+    actions.setViewMode(mode);
+    actions.setSelectedNotebook(null);
+    actions.setMobileView("list");
+  };
+
+  const tabs = [
+    {
+      id: "home",
+      label: t("sidebar.home") || "首页",
+      icon: <Home size={20} />,
+      active: state.viewMode === "home",
+    },
+    {
+      id: "diary",
+      label: t("sidebar.diary") || "说说",
+      icon: <NotebookPen size={20} />,
+      active: state.viewMode === "diary",
+    },
+    {
+      id: "all",
+      label: t("sidebar.allNotes") || "笔记",
+      icon: <BookOpen size={20} />,
+      active: ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode),
+    },
+    {
+      id: "tasks",
+      label: t("sidebar.tasks") || "待办",
+      icon: <ListTodo size={20} />,
+      active: state.viewMode === "tasks",
+    },
+    {
+      id: "more",
+      label: t("common.more") || "更多",
+      icon: <MoreHorizontal size={20} />,
+      active: state.mobileSidebarOpen,
+    },
+  ];
+
+  return (
+    <div 
+      className="fixed bottom-0 left-0 right-0 z-35 md:hidden bg-app-surface/80 backdrop-blur-md border-t border-app-border flex items-center justify-around transition-colors duration-200"
+      style={{ 
+        paddingBottom: "var(--safe-area-bottom)",
+        height: "calc(56px + var(--safe-area-bottom))"
+      }}
+    >
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => {
+            if (tab.id === "more") {
+              actions.setMobileSidebar(true);
+            } else {
+              handleTabClick(tab.id as ViewMode);
+            }
+          }}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 h-14 relative transition-colors duration-150 active:scale-95",
+            tab.active ? "text-accent-primary" : "text-tx-secondary hover:text-tx-primary"
+          )}
+        >
+          <div className={cn(
+            "p-1 rounded-md transition-transform duration-200",
+            tab.active ? "scale-110" : ""
+          )}>
+            {tab.icon}
+          </div>
+          <span className="text-[10px] font-medium tracking-wide mt-0.5">{tab.label}</span>
+          {tab.active && (
+            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent-primary" />
+          )}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -1076,7 +1349,7 @@ function App() {
   const [webUiAllowed, setWebUiAllowed] = useState<boolean | null>(() => isNativeClientRuntime() ? true : null);
 
   useEffect(() => {
-    if (isNativeClientRuntime()) {
+    if (isNativePlatform()) {
       setWebUiAllowed(true);
       return;
     }
@@ -1085,6 +1358,36 @@ function App() {
       if (!cancelled) setWebUiAllowed(enabled);
     });
     return () => { cancelled = true; };
+  }, []);
+
+  // 监听原生 App 打开 URL 事件 (Capacitor)
+  useEffect(() => {
+    if (typeof window === "undefined" || !isNativePlatform()) return;
+
+    let isAttached = true;
+    const registerListener = async () => {
+      try {
+        const handler = await CapApp.addListener("appUrlOpen", (event) => {
+          if (!isAttached) return;
+          const url = event.url;
+          if (url && /^https?:\/\/mp\.weixin\.qq\.com\/s[\/?]/.test(url)) {
+            sessionStorage.setItem("nowen:pending-import-url", url);
+            window.dispatchEvent(new CustomEvent("nowen:pending-import-url-trigger"));
+          }
+        });
+        return handler;
+      } catch (err) {
+        console.warn("Failed to register appUrlOpen listener:", err);
+      }
+    };
+
+    const handlerPromise = registerListener();
+    return () => {
+      isAttached = false;
+      handlerPromise.then((h) => {
+        if (h) h.remove();
+      });
+    };
   }, []);
 
   if (webUiAllowed === null) {

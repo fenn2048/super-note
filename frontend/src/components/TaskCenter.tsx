@@ -900,6 +900,48 @@ export default function TaskCenter() {
     return () => window.removeEventListener("nowen:workspace-changed", onWs);
   }, [loadTasks]);
 
+  // 监听待办快捷跳转事件，自动打开详情抽屉
+  useEffect(() => {
+    const checkPendingNavigate = async () => {
+      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      if (!pendingRaw) return;
+      try {
+        const pending = JSON.parse(pendingRaw);
+        if (pending.sourceType === "task" && pending.sourceId) {
+          const taskId = pending.sourceId;
+          sessionStorage.removeItem("nowen:pending-navigate");
+
+          // 尝试从本地加载的任务中查找
+          const localTask = tasks.find((t) => t.id === taskId);
+          if (localTask) {
+            setSelectedTask(localTask);
+          } else {
+            // 如果本地列表里还没拉到（例如不在当前过滤器视图里），则从 API 获取详情
+            try {
+              const fetchedTask = await api.getTask(taskId);
+              if (fetchedTask) {
+                setSelectedTask(fetchedTask);
+              }
+            } catch (err) {
+              console.error("Failed to fetch task details for navigation:", err);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error handling task pending navigate:", e);
+      }
+    };
+
+    if (!isLoading) {
+      checkPendingNavigate();
+    }
+
+    window.addEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+    return () => {
+      window.removeEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+    };
+  }, [isLoading, tasks]);
+
   const handleToggle = async (id: string) => {
     // Optimistic update
     setTasks((prev) =>

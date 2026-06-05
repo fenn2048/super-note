@@ -244,11 +244,11 @@ export default function AIWritingAssistant({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.96 }}
       transition={{ duration: 0.15 }}
-      className="fixed z-[60] w-[400px] max-h-[480px] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden"
+      className="fixed z-[60] w-[360px] max-h-[480px] flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl shadow-2xl overflow-hidden"
       style={position ? { top: position.top, left: position.left } : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-800/20">
         <div className="flex items-center gap-1.5">
           <Sparkles size={14} className="text-accent-primary" />
           <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{t("ai.assistant")}</span>
@@ -404,7 +404,7 @@ export default function AIWritingAssistant({
 
       {/* 底部操作栏 */}
       {(result && !isLoading) && (
-        <div className="flex items-center gap-1.5 px-3 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+        <div className="flex items-center gap-1.5 px-3 py-2 border-t border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-800/20">
           <button
             onClick={handleReplace}
             className="flex items-center gap-1 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-xs font-medium transition-colors"

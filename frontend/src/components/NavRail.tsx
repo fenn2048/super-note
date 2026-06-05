@@ -40,7 +40,6 @@ import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace, getServerUrl, clearServerUrl } from "@/lib/api";
 import { ViewMode, WorkspaceFeatures } from "@/types";
 import { cn } from "@/lib/utils";
-import SettingsModal from "@/components/SettingsModal";
 import MigrationModal from "@/components/MigrationModal";
 import { useRailMode, nextRailMode, RailMode } from "@/hooks/useRailMode";
 import { getAppInfo, isDesktop as isDesktopApp, switchDesktopToFull, type AppInfo } from "@/lib/desktopBridge";
@@ -121,9 +120,6 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     };
   }, []);
 
-  // 设置弹窗（与 Sidebar 内的 settings 入口逻辑一致——这里独占一份，
-  // 因为 Sidebar 桌面变体不再渲染 Settings 入口）
-  const [showSettings, setShowSettings] = useState(false);
   // D-2：迁移向导弹窗。点"切换到云端"会先弹出，让用户选择是否把本地数据迁过去。
   const [showMigration, setShowMigration] = useState(false);
   const [desktopInfo, setDesktopInfo] = useState<AppInfo | null>(null);
@@ -396,7 +392,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
       {/* 设置 + 登出 */}
       <button
-        onClick={() => setShowSettings(true)}
+        onClick={() => window.dispatchEvent(new CustomEvent("nowen:open-settings"))}
         title={showLabel ? undefined : t('sidebar.settings')}
         aria-label={t('sidebar.settings')}
         className={cn(
@@ -462,9 +458,8 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
         </button>
       )}
 
-      {/* Settings Modal（Rail 自持一份，与 Sidebar 互不影响） */}
+      {/* Settings Modal (now globally managed via custom event listener) */}
       <AnimatePresence>
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
         {showMigration && (
           <MigrationModal
             onClose={() => {

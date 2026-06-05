@@ -1076,11 +1076,17 @@
   },
   "appearance": {
     "skinTitle": "Appearance Style",
-    "skinDesc": "Pick an overall visual language. macOS style feels most at home on Apple devices.",
-    "skinDefault": "Default",
-    "skinDefaultDesc": "Modern and minimal, consistent across platforms",
+    "skinDesc": "Pick an overall visual language. Different skins yield completely different mindsets and shapes.",
     "skinMacos": "macOS",
-    "skinMacosDesc": "Apple design language with vibrancy and System Blue"
+    "skinMacosDesc": "Apple design language with elegant translucency, native shadows, and system blue",
+    "skinObsidian": "Obsidian (Default)",
+    "skinObsidianDesc": "Obsidian quiet dark mode, minimalist style with sharp geometric corners",
+    "skinNotion": "Notion",
+    "skinNotionDesc": "Notion style, signature warm-grey sidebar, fine borders, and intellectual blue",
+    "skinMemos": "Memos",
+    "skinMemosDesc": "Memos style, comfortable grey canvas with separate cards, and fresh emerald green",
+    "skinFlomo": "flomo",
+    "skinFlomoDesc": "flomo style, warm-sand canvas and grass green accents for stress-free logging"
   },
   "export": {
     "fetchingData": "Fetching note data...",
@@ -1112,7 +1118,7 @@
     "urlLabel": "Article URL",
     "urlRequired": "Please enter an article URL",
     "unsupportedUrl": "Only WeChat public-account article links are supported for now (mp.weixin.qq.com/s/...)",
-    "autoCreateNotebook": "Auto-create \"Imported Articles\"",
+    "autoCreateNotebook": "Auto-create \"Clipped Notebook\"",
     "importing": "Fetching and importing...",
     "importButton": "Import Article",
     "importedAgain": "Import another",

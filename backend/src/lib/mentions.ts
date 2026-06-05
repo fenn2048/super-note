@@ -48,6 +48,12 @@ export function createMentions(
 
   const created: string[] = [];
 
+  // 获取触发者名字
+  const actor = db
+    .prepare("SELECT displayName, username FROM users WHERE id = ?")
+    .get(mentionedByUserId) as { displayName: string | null; username: string } | undefined;
+  const actorName = actor?.displayName || actor?.username || "某人";
+
   for (const username of usernames) {
     const target = db
       .prepare("SELECT id, displayName FROM users WHERE username = ? AND isDisabled = 0")
@@ -66,11 +72,11 @@ export function createMentions(
       `INSERT INTO mentions (id, sourceType, sourceId, sourceTitle, mentionedUserId, mentionedByUserId, createdAt)
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
     ).run(id, sourceType, sourceId, sourceTitle || null, target.id, mentionedByUserId);
-    // 写入通用 notifications
+    // 写入通用 notifications (包含 actorName)
     db.prepare(
-      `INSERT INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, createdAt)
-       VALUES (?, ?, 'mention', ?, ?, ?, ?, datetime('now'))`,
-    ).run(id, target.id, sourceType, sourceId, sourceTitle || null, mentionedByUserId);
+      `INSERT INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, actorName, createdAt)
+       VALUES (?, ?, 'mention', ?, ?, ?, ?, ?, datetime('now'))`,
+    ).run(id, target.id, sourceType, sourceId, sourceTitle || null, mentionedByUserId, actorName);
 
     try {
       const { broadcastToUser } = require("../services/realtime");
@@ -78,6 +84,15 @@ export function createMentions(
       broadcastToUser(target.id, {
         type: "notification:received",
         unreadCount: unread.count,
+        notification: {
+          id,
+          type: "mention",
+          sourceType,
+          sourceId,
+          sourceTitle: sourceTitle || null,
+          actorId: mentionedByUserId,
+          actorName,
+        }
       });
     } catch (e) {
       console.warn("[mentions] failed to broadcast mention notification:", e);
@@ -138,22 +153,29 @@ export function broadcastToWorkspace(
       .get(type, sourceId, member.userId);
     if (existing) continue;
 
-    stmt.run(crypto.randomUUID(), member.userId, type, sourceType, sourceId, sourceTitle || null, actorId, actorName);
+    const notifId = crypto.randomUUID();
+    stmt.run(notifId, member.userId, type, sourceType, sourceId, sourceTitle || null, actorId, actorName);
     count++;
-  }
 
-  if (count > 0) {
+    // 写入后立即向该用户发送实时通知推送
     try {
       const { broadcastToUser } = require("../services/realtime");
-      for (const member of members) {
-        const unread = db.prepare("SELECT COUNT(*) as count FROM mentions WHERE mentionedUserId = ? AND readAt IS NULL").get(member.userId) as { count: number };
-        broadcastToUser(member.userId, {
-          type: "notification:received",
-          unreadCount: unread.count,
-        });
-      }
+      const unread = db.prepare("SELECT COUNT(*) as count FROM mentions WHERE mentionedUserId = ? AND readAt IS NULL").get(member.userId) as { count: number };
+      broadcastToUser(member.userId, {
+        type: "notification:received",
+        unreadCount: unread.count,
+        notification: {
+          id: notifId,
+          type,
+          sourceType,
+          sourceId,
+          sourceTitle: sourceTitle || null,
+          actorId,
+          actorName,
+        }
+      });
     } catch (e) {
-      console.warn("[mentions] failed to broadcast workspace notifications:", e);
+      console.warn("[mentions] failed to broadcast workspace notification to user:", member.userId, e);
     }
   }
 

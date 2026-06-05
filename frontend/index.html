@@ -22,8 +22,8 @@
       (function () {
         try {
           var s = localStorage.getItem("nowen-note-skin");
-          if (s === "macos") {
-            document.documentElement.setAttribute("data-skin", "macos");
+          if (s && s !== "obsidian") {
+            document.documentElement.setAttribute("data-skin", s);
           }
         } catch (e) { /* 隐私模式 / localStorage 被禁：静默忽略，按默认皮肤渲染 */ }
       })();

@@ -1,11 +1,29 @@
 import { Hono } from "hono";
 import { getDb } from "../db/schema";
-import { extractInlineBase64Images } from "./attachments";
+import {
+  extractInlineBase64Images,
+  ensureAttachmentsDir,
+  getAttachmentsDir,
+  MIME_TO_EXT
+} from "./attachments";
 import { syncReferences as syncAttachmentReferences } from "../lib/attachmentRefs";
 import { broadcastToUser } from "../services/realtime";
-import { isSystemAdmin } from "../middleware/acl";
+import { isSystemAdmin, getUserWorkspaceRole, hasRole } from "../middleware/acl";
+import path from "path";
+import fs from "fs";
 
 const app = new Hono();
+
+// 从文件名兜底推断扩展名（file.name 为空或无点时用 MIME 映射，再兜底 "bin"）。
+function pickExt(filename: string | undefined, mime: string): string {
+  const name = filename || "";
+  const idx = name.lastIndexOf(".");
+  if (idx >= 0 && idx < name.length - 1) {
+    const ext = name.slice(idx + 1).toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (ext && ext.length <= 8) return ext;
+  }
+  return MIME_TO_EXT[mime.toLowerCase()] || "bin";
+}
 
 /**
  * 个人空间导出/导入开关闸门（方案 B：per-user）。
@@ -343,6 +361,356 @@ app.post("/import", async (c) => {
     notebookIds: Array.from(usedNotebookIds),
     notes: imported,
   }, 201);
+});
+
+// 获取该工作区/个人空间下的所有数据库元数据，用于全量导出
+app.get("/all", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const wsRaw = c.req.query("workspaceId") ?? undefined;
+
+  const ws = (wsRaw || "").trim();
+  const isPersonal = !ws || ws === "personal";
+  const targetWs = isPersonal ? null : ws;
+
+  // 闸门：个人空间导出
+  const denied = denyIfPersonalFeatureDisabled(
+    userId,
+    isPersonal,
+    "personalExportEnabled",
+  );
+  if (denied) return c.json(denied, 403);
+
+  // 工作区校验
+  if (!isPersonal && targetWs) {
+    const role = getUserWorkspaceRole(targetWs, userId);
+    if (!role) return c.json({ error: "无权访问该工作区" }, 403);
+  }
+
+  // Helper 运行查询：
+  // 个人空间：按 userId + workspaceId IS NULL 过滤
+  // 工作区：直接按 workspaceId 过滤所有用户的数据（全员数据）
+  const runQuery = (tableName: string, whereClause: string, args: any[]) => {
+    return db.prepare(`SELECT * FROM ${tableName} WHERE ${whereClause}`).all(...args);
+  };
+
+  const userWsWhere = isPersonal
+    ? "userId = ? AND workspaceId IS NULL"
+    : "workspaceId = ?";
+  const userWsArgs = isPersonal ? [userId] : [targetWs];
+
+  // 1. 笔记本 (工作区下不限制 userId)
+  const notebooks = runQuery("notebooks", userWsWhere, userWsArgs);
+  // 2. 笔记
+  const notes = runQuery("notes", userWsWhere, userWsArgs);
+  // 3. 说说
+  const diaries = runQuery("diaries", userWsWhere, userWsArgs);
+  // 4. 待办
+  const tasks = runQuery("tasks", userWsWhere, userWsArgs);
+  // 5. 标签
+  const tags = runQuery("tags", userWsWhere, userWsArgs);
+
+  // 6. 关联表 (从前面过滤出来的 id 过滤 mappings)
+  const noteIds = notes.map((n: any) => n.id);
+  const diaryIds = diaries.map((d: any) => d.id);
+  const taskIds = tasks.map((t: any) => t.id);
+
+  const noteTags = noteIds.length > 0
+    ? db.prepare(`SELECT * FROM note_tags WHERE noteId IN (${noteIds.map(() => "?").join(",")})`).all(...noteIds)
+    : [];
+  const diaryTags = diaryIds.length > 0
+    ? db.prepare(`SELECT * FROM diary_tags WHERE diaryId IN (${diaryIds.map(() => "?").join(",")})`).all(...diaryIds)
+    : [];
+  const taskTags = taskIds.length > 0
+    ? db.prepare(`SELECT * FROM task_tags WHERE taskId IN (${taskIds.map(() => "?").join(",")})`).all(...taskIds)
+    : [];
+
+  // 7. 附件元数据
+  const attachments = runQuery("attachments", userWsWhere, userWsArgs);
+  const diaryAttachments = runQuery("diary_attachments", userWsWhere, userWsArgs);
+  const taskAttachments = runQuery("task_attachments", userWsWhere, userWsArgs);
+
+  return c.json({
+    notebooks,
+    notes,
+    diaries,
+    tasks,
+    tags,
+    noteTags,
+    diaryTags,
+    taskTags,
+    attachments,
+    diaryAttachments,
+    taskAttachments
+  });
+});
+
+// 全量导入数据库元数据（支持 Upsert 并覆写 userId & workspaceId）
+app.post("/import/all", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const wsRaw = c.req.query("workspaceId") ?? undefined;
+
+  const ws = (wsRaw || "").trim();
+  const isPersonal = !ws || ws === "personal";
+  const targetWs = isPersonal ? null : ws;
+
+  // 闸门：个人空间导入
+  const denied = denyIfPersonalFeatureDisabled(
+    userId,
+    isPersonal,
+    "personalImportEnabled",
+  );
+  if (denied) return c.json(denied, 403);
+
+  // 工作区校验：必须是 editor 及以上
+  if (!isPersonal && targetWs) {
+    const role = getUserWorkspaceRole(targetWs, userId);
+    if (!hasRole(role, "editor")) {
+      return c.json({ error: "您在该工作区无导入/编辑权限" }, 403);
+    }
+  }
+
+  const body = await c.req.json();
+  const {
+    notebooks = [],
+    notes = [],
+    diaries = [],
+    tasks = [],
+    tags = [],
+    noteTags = [],
+    diaryTags = [],
+    taskTags = []
+  } = body;
+
+  const tx = db.transaction(() => {
+    // 1. Tags
+    const stmtTag = db.prepare(`
+      INSERT OR REPLACE INTO tags (id, userId, name, color, createdAt, workspaceId)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const item of tags) {
+      stmtTag.run(item.id, userId, item.name, item.color || "#58a6ff", item.createdAt || new Date().toISOString(), targetWs);
+    }
+
+    // 2. Notebooks
+    const stmtNb = db.prepare(`
+      INSERT OR REPLACE INTO notebooks (id, userId, parentId, name, description, icon, color, sortOrder, isExpanded, isDeleted, deletedAt, createdAt, updatedAt, workspaceId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const item of notebooks) {
+      stmtNb.run(
+        item.id,
+        userId,
+        item.parentId || null,
+        item.name,
+        item.description || "",
+        item.icon || "📒",
+        item.color || null,
+        item.sortOrder || 0,
+        item.isExpanded !== undefined ? item.isExpanded : 1,
+        item.isDeleted || 0,
+        item.deletedAt || null,
+        item.createdAt || new Date().toISOString(),
+        item.updatedAt || new Date().toISOString(),
+        targetWs
+      );
+    }
+
+    // 3. Notes
+    const stmtNote = db.prepare(`
+      INSERT OR REPLACE INTO notes (id, userId, notebookId, title, content, contentText, isPinned, isFavorite, isLocked, isArchived, isTrashed, trashedAt, version, sortOrder, createdAt, updatedAt, workspaceId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const item of notes) {
+      stmtNote.run(
+        item.id,
+        userId,
+        item.notebookId,
+        item.title || "无标题笔记",
+        item.content || "{}",
+        item.contentText || "",
+        item.isPinned || 0,
+        item.isFavorite || 0,
+        item.isLocked || 0,
+        item.isArchived || 0,
+        item.isTrashed || 0,
+        item.trashedAt || null,
+        item.version || 1,
+        item.sortOrder || 0,
+        item.createdAt || new Date().toISOString(),
+        item.updatedAt || new Date().toISOString(),
+        targetWs
+      );
+    }
+
+    // 4. Diaries
+    const stmtDiary = db.prepare(`
+      INSERT OR REPLACE INTO diaries (id, userId, contentText, mood, images, visibility, voice, createdAt, workspaceId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const item of diaries) {
+      stmtDiary.run(
+        item.id,
+        userId,
+        item.contentText || "",
+        item.mood || "",
+        item.images || "[]",
+        item.visibility || "PRIVATE",
+        item.voice || null,
+        item.createdAt || new Date().toISOString(),
+        targetWs
+      );
+    }
+
+    // 5. Tasks
+    const stmtTask = db.prepare(`
+      INSERT OR REPLACE INTO tasks (id, userId, title, isCompleted, priority, dueDate, remindAt, noteId, parentId, sortOrder, createdAt, updatedAt, workspaceId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const item of tasks) {
+      stmtTask.run(
+        item.id,
+        userId,
+        item.title,
+        item.isCompleted || 0,
+        item.priority || 2,
+        item.dueDate || null,
+        item.remindAt || null,
+        item.noteId || null,
+        item.parentId || null,
+        item.sortOrder || 0,
+        item.createdAt || new Date().toISOString(),
+        item.updatedAt || new Date().toISOString(),
+        targetWs
+      );
+    }
+
+    // 6. note_tags
+    const stmtNoteTag = db.prepare(`
+      INSERT OR REPLACE INTO note_tags (noteId, tagId) VALUES (?, ?)
+    `);
+    for (const item of noteTags) {
+      stmtNoteTag.run(item.noteId, item.tagId);
+    }
+
+    // 7. diary_tags
+    const stmtDiaryTag = db.prepare(`
+      INSERT OR REPLACE INTO diary_tags (diaryId, tagId) VALUES (?, ?)
+    `);
+    for (const item of diaryTags) {
+      stmtDiaryTag.run(item.diaryId, item.tagId);
+    }
+
+    // 8. task_tags
+    const stmtTaskTag = db.prepare(`
+      INSERT OR REPLACE INTO task_tags (taskId, tagId) VALUES (?, ?)
+    `);
+    for (const item of taskTags) {
+      stmtTaskTag.run(item.taskId, item.tagId);
+    }
+  });
+
+  try {
+    tx();
+  } catch (err: any) {
+    console.error("Structured database restore failed:", err);
+    return c.json({ error: `导入数据失败: ${err.message || err}` }, 500);
+  }
+
+  // 通知当前用户的所有 WebSocket 连接刷新数据
+  broadcastToUser(userId, {
+    type: "notes:imported" as any,
+    count: notes.length,
+    workspaceId: targetWs,
+  });
+
+  return c.json({ success: true, count: notes.length + diaries.length + tasks.length });
+});
+
+// 导入单个附件文件（物理文件写入 + 关联表行插入/更新）
+app.post("/import/attachment", async (c) => {
+  const userId = c.req.header("X-User-Id") || "";
+  const db = getDb();
+  const wsRaw = c.req.query("workspaceId") ?? undefined;
+
+  const ws = (wsRaw || "").trim();
+  const isPersonal = !ws || ws === "personal";
+  const targetWs = isPersonal ? null : ws;
+
+  const denied = denyIfPersonalFeatureDisabled(userId, isPersonal, "personalImportEnabled");
+  if (denied) return c.json(denied, 403);
+
+  if (!isPersonal && targetWs) {
+    const role = getUserWorkspaceRole(targetWs, userId);
+    if (!hasRole(role, "editor")) {
+      return c.json({ error: "您在该工作区无导入权限" }, 403);
+    }
+  }
+
+  let body: Record<string, any>;
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    return c.json({ error: "invalid multipart body" }, 400);
+  }
+
+  const file = body.file;
+  const id = typeof body.id === "string" ? body.id : "";
+  const type = typeof body.type === "string" ? body.type : ""; // "note_attachment" | "diary_attachment" | "task_attachment"
+
+  if (!(file instanceof File) || !id || !type) {
+    return c.json({ error: "参数缺失" }, 400);
+  }
+
+  const originalPath = typeof body.path === "string" ? body.path : "";
+  const filename = file.name || id;
+  const mime = file.type || "application/octet-stream";
+
+  ensureAttachmentsDir();
+  const saveFilename = originalPath || `${id}.${pickExt(filename, mime)}`;
+  const savePath = path.join(getAttachmentsDir(), saveFilename);
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    fs.writeFileSync(savePath, buffer);
+  } catch (err: any) {
+    return c.json({ error: `写入文件失败: ${err?.message || err}` }, 500);
+  }
+
+  try {
+    if (type === "note_attachment") {
+      const noteId = typeof body.noteId === "string" ? body.noteId : "";
+      const uploadSource = typeof body.uploadSource === "string" ? body.uploadSource : null;
+      const hash = typeof body.hash === "string" ? body.hash : null;
+
+      db.prepare(`
+        INSERT OR REPLACE INTO attachments (id, noteId, userId, filename, mimeType, size, path, workspaceId, hash, uploadSource)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, noteId, userId, filename, mime, file.size, saveFilename, targetWs, hash, uploadSource);
+    } else if (type === "diary_attachment") {
+      const diaryId = typeof body.diaryId === "string" && body.diaryId ? body.diaryId : null;
+
+      db.prepare(`
+        INSERT OR REPLACE INTO diary_attachments (id, diaryId, userId, mimeType, size, path, workspaceId)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, diaryId, userId, mime, file.size, saveFilename, targetWs);
+    } else if (type === "task_attachment") {
+      const taskId = typeof body.taskId === "string" && body.taskId ? body.taskId : null;
+
+      db.prepare(`
+        INSERT OR REPLACE INTO task_attachments (id, taskId, userId, filename, mimeType, size, path, workspaceId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, taskId, userId, filename, mime, file.size, saveFilename, targetWs);
+    } else {
+      throw new Error(`未知附件类型: ${type}`);
+    }
+  } catch (err: any) {
+    try { fs.unlinkSync(savePath); } catch { /* ignore */ }
+    return c.json({ error: `写入数据库失败: ${err?.message || err}` }, 500);
+  }
+
+  return c.json({ success: true });
 });
 
 export default app;

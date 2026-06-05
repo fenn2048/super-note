@@ -21,6 +21,7 @@ import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite } from "@/types";
+import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -64,7 +65,7 @@ function QuickStatCard({
 // ---------------------------------------------------------------------------
 // 条目组件
 // ---------------------------------------------------------------------------
-function DiaryEntry({ item }: { item: Diary }) {
+function DiaryEntry({ item, onClick }: { item: Diary; onClick: () => void }) {
   const moodEmoji: Record<string, string> = {
     happy: "😊", excited: "🥳", peaceful: "😌", thinking: "🤔",
     tired: "😴", sad: "😢", angry: "😤", sick: "🤒",
@@ -75,7 +76,10 @@ function DiaryEntry({ item }: { item: Diary }) {
   const hasVoice = item.voice && (typeof item.voice === 'object' ? (item.voice as any)?.id : true);
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors">
+    <button
+      onClick={onClick}
+      className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors cursor-pointer"
+    >
       <div className="text-base leading-none mt-0.5 shrink-0">{emoji || "📝"}</div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-tx-primary leading-relaxed line-clamp-2 break-words">
@@ -89,19 +93,31 @@ function DiaryEntry({ item }: { item: Diary }) {
         </div>
       </div>
       <ChevronRight size={14} className="text-tx-tertiary/40 mt-1 shrink-0" />
-    </div>
+    </button>
   );
 }
 
-function TaskItem({ item }: { item: Task }) {
+function TaskItem({
+  item,
+  onToggle,
+  onClick,
+}: {
+  item: Task;
+  onToggle: (id: string, e: React.MouseEvent) => void;
+  onClick: () => void;
+}) {
   const dueDate = item.dueDate ? new Date(item.dueDate).toLocaleDateString("zh-CN") : "";
   const isOverdue = item.dueDate && new Date(item.dueDate) < new Date() && !item.isCompleted;
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors">
+    <button
+      onClick={onClick}
+      className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors cursor-pointer"
+    >
       <div
+        onClick={(e) => onToggle(item.id, e)}
         className={cn(
-          "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0",
+          "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 transition-all active:scale-[0.9] hover:scale-110",
           item.isCompleted
             ? "border-green-500 bg-green-500 text-white"
             : isOverdue
@@ -112,7 +128,7 @@ function TaskItem({ item }: { item: Task }) {
         {item.isCompleted && <span className="text-[9px]">✓</span>}
       </div>
       <div className="flex-1 min-w-0">
-        <p className={cn("text-xs", item.isCompleted && "line-through text-tx-tertiary")}>
+        <p className={cn("text-xs text-tx-primary", item.isCompleted && "line-through text-tx-tertiary")}>
           {item.title}
         </p>
         {dueDate && (
@@ -121,15 +137,19 @@ function TaskItem({ item }: { item: Task }) {
           </span>
         )}
       </div>
-    </div>
+      <ChevronRight size={14} className="text-tx-tertiary/40 mt-1 shrink-0" />
+    </button>
   );
 }
 
-function NoteItem({ item }: { item: NoteListItem }) {
+function NoteItem({ item, onClick }: { item: NoteListItem; onClick: () => void }) {
   const date = item.updatedAt?.slice(0, 16).replace("T", " ") || item.createdAt?.slice(0, 16).replace("T", " ");
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors">
+    <button
+      onClick={onClick}
+      className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors cursor-pointer"
+    >
       <div className="w-5 h-5 rounded-lg bg-accent-primary/10 flex items-center justify-center text-accent-primary mt-0.5 shrink-0">
         <FileText size={12} />
       </div>
@@ -139,7 +159,8 @@ function NoteItem({ item }: { item: NoteListItem }) {
         </p>
         <p className="text-[10px] text-tx-tertiary mt-0.5">{date}</p>
       </div>
-    </div>
+      <ChevronRight size={14} className="text-tx-tertiary/40 mt-1 shrink-0" />
+    </button>
   );
 }
 
@@ -200,7 +221,7 @@ function BackupStatusCard() {
         </div>
       </div>
       <button
-        onClick={() => actions.setViewMode("all")}
+        onClick={() => window.dispatchEvent(new CustomEvent("nowen:open-settings", { detail: { tab: "data" } }))}
         className="text-[10px] text-accent-primary hover:underline shrink-0"
       >
         ＞ 设置
@@ -413,6 +434,101 @@ export default function Dashboard() {
     (t) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
   ).slice(0, 5);
 
+  const handleToggleTask = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止触发卡片点击跳转
+    haptic.light();
+    // 乐观更新
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isCompleted: t.isCompleted ? 0 : 1 } : t))
+    );
+    try {
+      const updated = await api.toggleTask(id);
+      syncTaskNotification(updated);
+      window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+      // 重新拉取待办统计以更新徽标
+      api.getTaskStats().then((s) => {
+        setStats((prev) => ({ ...prev, taskPending: s.activeReminders || 0 }));
+      }).catch(console.error);
+    } catch {
+      loadDashboard(); // 回滚
+    }
+  };
+
+  const handleDiaryClick = (diaryId: string) => {
+    haptic.light();
+    sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+      sourceType: "diary",
+      sourceId: diaryId,
+    }));
+    actions.setViewMode("diary");
+    window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+  };
+
+  const handleTaskClick = (taskId: string) => {
+    haptic.light();
+    sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+      sourceType: "task",
+      sourceId: taskId,
+    }));
+    actions.setViewMode("tasks");
+    window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+  };
+
+  const handleNoteClick = async (noteId: string) => {
+    haptic.light();
+    sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+      sourceType: "note",
+      sourceId: noteId,
+    }));
+    actions.setViewMode("all");
+    window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+  };
+
+  const handleQuickCreateNote = async () => {
+    haptic.light();
+    if (state.notebooks.length === 0) {
+      try {
+        const notebooks = await api.getNotebooks();
+        actions.setNotebooks(notebooks);
+        if (notebooks.length === 0) {
+          toast.warning("请先在侧边栏创建一个笔记本");
+          return;
+        }
+        await createNote(notebooks[0].id);
+      } catch (err) {
+        toast.warning("请先在侧边栏创建一个笔记本");
+        return;
+      }
+    } else {
+      const notebookId = state.selectedNotebookId || state.notebooks[0].id;
+      await createNote(notebookId);
+    }
+  };
+
+  const createNote = async (notebookId: string) => {
+    try {
+      const note = await api.createNote({ notebookId, title: "无标题笔记" });
+      actions.setActiveNote(note);
+      actions.setSelectedNotebook(notebookId);
+      actions.setViewMode("notebook");
+      actions.setMobileView("editor");
+      actions.refreshNotebooks();
+      toast.success("笔记已创建");
+    } catch (err: any) {
+      toast.error(err?.message || "创建笔记失败");
+    }
+  };
+
+  const handleQuickWriteSays = () => {
+    haptic.light();
+    actions.setViewMode("diary");
+  };
+
+  const handleQuickAddTask = () => {
+    haptic.light();
+    actions.setViewMode("tasks");
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
       <div className="flex-1 overflow-y-auto">
@@ -436,31 +552,55 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
+          </motion.div>
 
-            {/* 工作区存在时显示快捷导航 */}
-            {hasWorkspaces && (
-              <div className="flex flex-wrap gap-2 mt-4">
+          {/* ===== 快捷操作面板 ===== */}
+          {hasWorkspaces && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.05 }}
+              className="rounded-2xl border border-app-border/40 bg-app-surface/20 p-4"
+            >
+              <h2 className="text-[11px] font-semibold text-tx-tertiary uppercase tracking-wider mb-3 px-1">
+                快捷操作
+              </h2>
+              <div className="grid grid-cols-3 gap-3">
                 <button
-                  onClick={() => actions.setViewMode("diary")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-all"
+                  onClick={handleQuickCreateNote}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border/60 bg-app-surface/50 hover:bg-app-hover hover:border-app-border transition-all active:scale-[0.97] group cursor-pointer"
                 >
-                  <MessageCircle size={13} /> 写说说
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                    <FileText size={20} />
+                  </div>
+                  <span className="text-xs font-semibold text-tx-primary">记笔记</span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5">记录创意想法</span>
                 </button>
+
                 <button
-                  onClick={() => actions.setViewMode("tasks")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all"
+                  onClick={handleQuickWriteSays}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border/60 bg-app-surface/50 hover:bg-app-hover hover:border-app-border transition-all active:scale-[0.97] group cursor-pointer"
                 >
-                  <ListTodo size={13} /> 待办事项
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                    <MessageCircle size={20} />
+                  </div>
+                  <span className="text-xs font-semibold text-tx-primary">写说说</span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5">记录日常生活</span>
                 </button>
+
                 <button
-                  onClick={() => actions.setViewMode("all")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-all"
+                  onClick={handleQuickAddTask}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border/60 bg-app-surface/50 hover:bg-app-hover hover:border-app-border transition-all active:scale-[0.97] group cursor-pointer"
                 >
-                  <FileText size={13} /> 写笔记
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                    <ListTodo size={20} />
+                  </div>
+                  <span className="text-xs font-semibold text-tx-primary">加待办</span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5">管理计划日程</span>
                 </button>
               </div>
-            )}
-          </motion.div>
+            </motion.div>
+          )}
 
           {/* ===== 创建家庭空间（无工作区时展示） ===== */}
           {!hasWorkspaces && (
@@ -581,7 +721,13 @@ export default function Dashboard() {
                     还没有说说，去记录今天的生活吧
                   </div>
                 ) : (
-                  diaries.map((item) => <DiaryEntry key={item.id} item={item} />)
+                  diaries.map((item) => (
+                    <DiaryEntry
+                      key={item.id}
+                      item={item}
+                      onClick={() => handleDiaryClick(item.id)}
+                    />
+                  ))
                 )}
               </motion.div>
 
@@ -609,7 +755,14 @@ export default function Dashboard() {
                     最近 3 天没有到期的待办 ✨
                   </div>
                 ) : (
-                  upcomingTasks.map((item) => <TaskItem key={item.id} item={item} />)
+                  upcomingTasks.map((item) => (
+                    <TaskItem
+                      key={item.id}
+                      item={item}
+                      onToggle={handleToggleTask}
+                      onClick={() => handleTaskClick(item.id)}
+                    />
+                  ))
                 )}
               </motion.div>
 
@@ -637,7 +790,13 @@ export default function Dashboard() {
                     还没有笔记
                   </div>
                 ) : (
-                  notes.map((item) => <NoteItem key={item.id} item={item} />)
+                  notes.map((item) => (
+                    <NoteItem
+                      key={item.id}
+                      item={item}
+                      onClick={() => handleNoteClick(item.id)}
+                    />
+                  ))
                 )}
               </motion.div>
             </div>
