@@ -91,9 +91,9 @@ export function seedDatabase() {
       const s1Id = uuid();
       const s2Id = uuid();
       const s3Id = uuid();
-      db.prepare(`INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 0)`).run(s1Id, pId, "启动项目", 0);
-      db.prepare(`INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 1)`).run(s2Id, pId, "执行推进", 1);
-      db.prepare(`INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 2)`).run(s3Id, pId, "生产阶段", 2);
+      db.prepare(`INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 0)`).run(s1Id, pId, "启动项目");
+      db.prepare(`INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 1)`).run(s2Id, pId, "执行推进");
+      db.prepare(`INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 2)`).run(s3Id, pId, "生产阶段");
 
       // Create tasks for stage 1 (启动项目)
       const t1Id = uuid();
