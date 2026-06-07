@@ -207,6 +207,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
             onSaved={() => {
               setEditing(null);
               loadWorkspaces();
+              window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: current } }));
             }}
           />
         )}

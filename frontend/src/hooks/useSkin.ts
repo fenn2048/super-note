@@ -12,10 +12,10 @@ import { useCallback, useEffect, useState } from "react";
  * 存储在 localStorage("nowen-note-skin")；FOUC 防护由 index.html 里的同步内联脚本完成。
  */
 
-export type Skin = "default" | "macos";
+export type Skin = "obsidian" | "macos" | "notion" | "memos" | "flomo";
 
 export const SKIN_STORAGE_KEY = "nowen-note-skin";
-const ALL_SKINS: readonly Skin[] = ["default", "macos"] as const;
+const ALL_SKINS: readonly Skin[] = ["obsidian", "macos", "notion", "memos", "flomo"] as const;
 
 function readSkin(): Skin {
   try {
@@ -26,13 +26,13 @@ function readSkin(): Skin {
   } catch {
     /* localStorage 被禁：走默认 */
   }
-  return "default";
+  return "obsidian";
 }
 
 function applySkin(skin: Skin) {
   const root = document.documentElement;
-  if (skin === "default") {
-    // 默认皮肤 = 不写 data-skin，让原有 :root / .dark 变量生效
+  if (skin === "obsidian") {
+    // Obsidian 为默认底层风格，不写 data-skin，让原有 :root 变量生效
     root.removeAttribute("data-skin");
   } else {
     root.setAttribute("data-skin", skin);

@@ -14,6 +14,10 @@ import { TableRowWithHeight } from "@/components/extensions/TableRowResizable";
 import { common, createLowlight } from "lowlight";
 import { TextStyleKit } from "@/components/FontSizeExtension";
 import { Video as VideoExtension } from "@/components/VideoExtension";
+import TextAlign from "@tiptap/extension-text-align";
+import { MathInline, MathBlock } from "@/components/MathExtensions";
+import { FootnoteReference, FootnoteDefinition } from "@/components/FootnoteExtensions";
+import Mention from "@tiptap/extension-mention";
 
 const lowlight = createLowlight(common);
 
@@ -34,11 +38,17 @@ export const tiptapExtensions = [
   TableRowWithHeight,
   TableHeader,
   TableCell,
+  TextAlign.configure({ types: ["heading", "paragraph"] }),
+  MathInline,
+  MathBlock,
+  FootnoteReference,
+  FootnoteDefinition,
   // TextStyle + Color + FontSize：与编辑器保持一致，否则导入近来的
   // 带颜色/字号的 HTML 会被 generateJSON schema-filter 掉
   ...TextStyleKit,
   // 视频节点：与编辑器保持一致，否则导入/修复阶段 video 节点会被吃
   VideoExtension,
+  Mention,
 ];
 
 export interface ImportFileInfo {
@@ -78,6 +88,10 @@ export interface ImportOptions {
    * Tab 后，每个 Tab 各自传 scope，避免依赖侧边栏当前选中的 workspace。
    */
   workspaceId?: string;
+  /**
+   * nanown-note 自带备份包的结构化元数据（包含 diaries、tasks 等表数据）
+   */
+  meta?: ZipImportMeta | null;
 }
 
 export type ImportProgress = {
@@ -85,6 +99,8 @@ export type ImportProgress = {
   current: number;
   total: number;
   message: string;
+  failedItems?: Array<{ name: string; reason: string }>;
+  transcribingItems?: Array<{ name: string; status: "transcribing" | "success" | "failed" }>;
 };
 
 // 支持的文件扩展名
@@ -642,6 +658,21 @@ export interface ZipImportMeta {
   totalNotes?: number;
   notebooks?: Array<{ name: string; count: number }>;
   imageStats?: { ok: number; failed: number };
+  
+  // 完整备份数据字段
+  isFullBackup?: boolean;
+  notebooksData?: any[];
+  notesData?: any[];
+  diariesData?: any[];
+  tasksData?: any[];
+  tagsData?: any[];
+  noteTagsData?: any[];
+  diaryTagsData?: any[];
+  taskTagsData?: any[];
+  attachmentsData?: any[];
+  diaryAttachmentsData?: any[];
+  taskAttachmentsData?: any[];
+  zipObject?: any;
 }
 
 export async function readMarkdownFromZipWithMeta(
@@ -662,6 +693,31 @@ export async function readMarkdownFromZipWithMeta(
       // 中的同名文件误认（用户可能上传个包含 metadata.json 的项目压缩包）。
       if (parsed && parsed.app === "nowen-note") {
         meta = parsed;
+        meta.zipObject = zip;
+
+        // 如果是全量备份包，则一并把结构化 JSON 表读出来
+        if (parsed.isFullBackup) {
+          const loadJsonFile = async (name: string) => {
+            const entry = zip.file(name);
+            if (entry) {
+              const content = await entry.async("text");
+              return JSON.parse(content);
+            }
+            return [];
+          };
+
+          meta.notebooksData = await loadJsonFile("notebooks.json");
+          meta.notesData = await loadJsonFile("notes.json");
+          meta.diariesData = await loadJsonFile("diaries.json");
+          meta.tasksData = await loadJsonFile("tasks.json");
+          meta.tagsData = await loadJsonFile("tags.json");
+          meta.noteTagsData = await loadJsonFile("note_tags.json");
+          meta.diaryTagsData = await loadJsonFile("diary_tags.json");
+          meta.taskTagsData = await loadJsonFile("task_tags.json");
+          meta.attachmentsData = await loadJsonFile("attachments.json");
+          meta.diaryAttachmentsData = await loadJsonFile("diary_attachments.json");
+          meta.taskAttachmentsData = await loadJsonFile("task_attachments.json");
+        }
       }
     } catch (e) {
       // 解析失败不中断导入，仅告知调用方 meta=null
@@ -1227,6 +1283,103 @@ export async function importNotes(
   onProgress?: (p: ImportProgress) => void,
   options?: ImportOptions
 ): Promise<{ success: boolean; count: number }> {
+  // 1. 如果是全量备份包，走结构化全量恢复流程
+  if (options?.meta && options.meta.isFullBackup) {
+    const meta = options.meta;
+    const workspaceId = options.workspaceId;
+    const zip = meta.zipObject;
+
+    try {
+      onProgress?.({
+        phase: "uploading",
+        current: 0,
+        total: 100,
+        message: "正在恢复笔记本、笔记、说说及待办元数据..."
+      });
+
+      // 组装要导入的所有数据库表数据
+      const importData = {
+        notebooks: meta.notebooksData || [],
+        notes: meta.notesData || [],
+        diaries: meta.diariesData || [],
+        tasks: meta.tasksData || [],
+        tags: meta.tagsData || [],
+        noteTags: meta.noteTagsData || [],
+        diaryTags: meta.diaryTagsData || [],
+        taskTags: meta.taskTagsData || []
+      };
+
+      const bulkRes = await api.importAllData(importData, workspaceId);
+      if (!bulkRes.success) {
+        throw new Error("后端元数据导入失败");
+      }
+
+      // 恢复物理文件
+      const attachments = [
+        ...(meta.attachmentsData || []).map((a: any) => ({ ...a, type: "note_attachment" })),
+        ...(meta.diaryAttachmentsData || []).map((a: any) => ({ ...a, type: "diary_attachment" })),
+        ...(meta.taskAttachmentsData || []).map((a: any) => ({ ...a, type: "task_attachment" }))
+      ];
+
+      const totalFiles = attachments.length;
+      for (let i = 0; i < totalFiles; i++) {
+        const att = attachments[i];
+        onProgress?.({
+          phase: "uploading",
+          current: i + 1,
+          total: totalFiles,
+          message: `正在还原附件文件 (${i + 1}/${totalFiles}): ${att.filename || att.id}`
+        });
+
+        // 从 zip 包中提取物理文件
+        const zipEntry = zip.file(`assets/${att.path}`);
+        if (!zipEntry) {
+          console.warn(`[importNotes] File assets/${att.path} not found in zip package, skipping.`);
+          continue;
+        }
+
+        const arrayBuffer = await zipEntry.async("arraybuffer");
+        const blob = new Blob([arrayBuffer], { type: att.mimeType || "application/octet-stream" });
+        const fileObj = new File([blob], att.filename || att.id, { type: att.mimeType || "application/octet-stream" });
+
+        const formData = new FormData();
+        formData.append("file", fileObj);
+        formData.append("id", att.id);
+        formData.append("type", att.type);
+        if (att.noteId) formData.append("noteId", att.noteId);
+        if (att.diaryId) formData.append("diaryId", att.diaryId);
+        if (att.taskId) formData.append("taskId", att.taskId);
+        if (att.uploadSource) formData.append("uploadSource", att.uploadSource);
+        if (att.hash) formData.append("hash", att.hash);
+        if (att.path) formData.append("path", att.path);
+
+        const uploadRes = await api.importAttachment(formData, workspaceId);
+        if (!uploadRes.success) {
+          console.warn(`[importNotes] failed to restore attachment: ${att.filename || att.id}`);
+        }
+      }
+
+      onProgress?.({
+        phase: "done",
+        current: bulkRes.count,
+        total: bulkRes.count,
+        message: `已成功恢复全量备份（含 ${bulkRes.count} 条记录，${totalFiles} 个附件）`
+      });
+
+      return { success: true, count: bulkRes.count };
+    } catch (err: any) {
+      console.error("Structured data import failed:", err);
+      onProgress?.({
+        phase: "error",
+        current: 0,
+        total: 100,
+        message: `导入失败: ${err.message || err}`
+      });
+      return { success: false, count: 0 };
+    }
+  }
+
+  // 2. 原有的 Markdown 单文件/非全量备份导入流程
   const selected = fileInfos.filter((f) => f.selected);
 
   if (selected.length === 0) {
@@ -1299,11 +1452,16 @@ export async function importNotes(
     return { success: true, count: result.count };
   } catch (error) {
     console.error("导入失败:", error);
+    const failedItems = selected.map((f) => ({
+      name: f.name,
+      reason: (error as Error).message || "导入失败",
+    }));
     onProgress?.({
       phase: "error",
       current: 0,
       total: selected.length,
       message: i18n.t('dataManager.importFailed', { error: (error as Error).message }),
+      failedItems,
     });
     return { success: false, count: 0 };
   }
@@ -1373,4 +1531,469 @@ export async function importMarkdownAsNote(params: {
   } as Partial<import("@/types").Note>)) as import("@/types").Note;
 
   return { note: updated, previewText };
+}
+
+/**
+ * 导入 Memos 0.18.0 数据
+ */
+const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac", ".opus", ".webm"];
+function isAudioFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * 导入 Memos 0.18.0 数据
+ */
+export async function importMemos(
+  file: File,
+  targetType: "diaries" | "notes",
+  onProgress: (p: ImportProgress) => void,
+  options?: ImportOptions
+): Promise<{ success: boolean; count: number }> {
+  const isZip = file.name.toLowerCase().endsWith(".zip");
+  let jsonText = "";
+  let zip: any = null;
+  const failedItems: Array<{ name: string; reason: string }> = [];
+  const transcribingItems: Array<{ name: string; status: "transcribing" | "success" | "failed" }> = [];
+
+  try {
+    onProgress({ phase: "reading", current: 0, total: 100, message: "正在读取备份文件...", failedItems, transcribingItems });
+    if (isZip) {
+      const JSZip = (await import("jszip")).default;
+      zip = await JSZip.loadAsync(file);
+      // 查找 zip 中的 memos.json 或者 any json 文件
+      let memosJsonEntry = zip.file("memos.json");
+      if (!memosJsonEntry) {
+        const jsonFiles = Object.keys(zip.files).filter(
+          (f) => f.endsWith(".json") && !f.startsWith(".") && !f.includes("__MACOSX") && f !== "metadata.json"
+        );
+        if (jsonFiles.length > 0) {
+          memosJsonEntry = zip.file(jsonFiles[0]);
+        }
+      }
+      if (!memosJsonEntry) {
+        throw new Error("ZIP 压缩包中未找到 memos.json 或其他有效 JSON 数据文件");
+      }
+      jsonText = await memosJsonEntry.async("text");
+    } else {
+      jsonText = await file.text();
+    }
+  } catch (err: any) {
+    onProgress({ phase: "error", current: 0, total: 0, message: `解析备份文件失败: ${err.message || err}`, failedItems, transcribingItems });
+    return { success: false, count: 0 };
+  }
+
+  let memosList: any[] = [];
+  try {
+    const parsed = JSON.parse(jsonText);
+    if (Array.isArray(parsed)) {
+      memosList = parsed;
+    } else if (parsed && typeof parsed === "object") {
+      if (Array.isArray(parsed.memos)) {
+        memosList = parsed.memos;
+      } else if (Array.isArray(parsed.memo)) {
+        memosList = parsed.memo;
+      } else {
+        for (const key of Object.keys(parsed)) {
+          if (Array.isArray(parsed[key])) {
+            memosList = parsed[key];
+            break;
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    onProgress({ phase: "error", current: 0, total: 0, message: `解析 JSON 语法失败: ${e.message || e}`, failedItems, transcribingItems });
+    return { success: false, count: 0 };
+  }
+
+  if (memosList.length === 0) {
+    onProgress({ phase: "error", current: 0, total: 0, message: "备份数据中未找到任何 memo 记录", failedItems, transcribingItems });
+    return { success: false, count: 0 };
+  }
+
+  let successCount = 0;
+  const workspaceId = options?.workspaceId;
+
+  if (targetType === "diaries") {
+    onProgress({ phase: "uploading", current: 0, total: memosList.length, message: "准备开始导入说说...", failedItems, transcribingItems });
+
+    for (let i = 0; i < memosList.length; i++) {
+      const memo = memosList[i];
+      const content = memo.content || memo.contentText || "";
+      const visibility = memo.visibility === "PUBLIC" ? "PUBLIC" : "PRIVATE";
+      const createdTs = memo.createdTs || Math.floor(Date.now() / 1000);
+      const createdAt = formatSqlDatetime(createdTs);
+
+      // 上传附件
+      const imageIds: string[] = [];
+      const resourceList = memo.resourceList || memo.resources || [];
+      const voiceResources: Array<{ filename: string; uploadResId: string }> = [];
+
+      if (isZip && zip && Array.isArray(resourceList) && resourceList.length > 0) {
+        onProgress({
+          phase: "uploading",
+          current: i,
+          total: memosList.length,
+          message: `正在导入第 ${i + 1}/${memosList.length} 条说说，正在上传附件...`,
+          failedItems,
+          transcribingItems,
+        });
+
+        for (const resource of resourceList) {
+          const filename = resource.filename || resource.name;
+          const id = resource.id;
+          if (!filename) continue;
+
+          let zipEntry = zip.file(filename);
+          if (!zipEntry) zipEntry = zip.file(`resources/${filename}`);
+          if (!zipEntry) zipEntry = zip.file(`assets/${filename}`);
+          if (!zipEntry && id) {
+            zipEntry = zip.file(`${id}_${filename}`);
+            if (!zipEntry) zipEntry = zip.file(`resources/${id}_${filename}`);
+            if (!zipEntry) zipEntry = zip.file(`assets/${id}_${filename}`);
+          }
+          if (!zipEntry) {
+            const entryKeys = Object.keys(zip.files);
+            const foundKey = entryKeys.find((k) => k.endsWith(filename) || (id && k.includes(String(id))));
+            if (foundKey) {
+              zipEntry = zip.file(foundKey);
+            }
+          }
+
+          if (zipEntry) {
+            try {
+              const blob = await zipEntry.async("blob");
+              const fileObj = new File([blob], filename, { type: resource.type || "application/octet-stream" });
+              const uploadRes = await api.diaryImages.upload(fileObj, workspaceId);
+              if (uploadRes && uploadRes.id) {
+                imageIds.push(uploadRes.id);
+                if (isAudioFile(filename)) {
+                  voiceResources.push({ filename, uploadResId: uploadRes.id });
+                }
+              } else {
+                failedItems.push({ name: filename, reason: "上传失败：服务器未返回ID" });
+              }
+            } catch (err: any) {
+              console.warn(`Memos resource upload failed: ${filename}`, err);
+              failedItems.push({ name: filename, reason: err?.message || "上传失败" });
+            }
+          } else {
+            failedItems.push({ name: filename, reason: "ZIP 压缩包中未找到文件" });
+          }
+        }
+      }
+
+      // 发布说说
+      let postedDiary: any = null;
+      try {
+        postedDiary = await api.postDiary({
+          contentText: content,
+          images: imageIds,
+          visibility,
+          createdAt,
+        }, workspaceId);
+        successCount++;
+      } catch (err: any) {
+        console.error(`Post imported diary failed at index ${i}:`, err);
+        const excerpt = content.slice(0, 30) + (content.length > 30 ? "..." : "");
+        failedItems.push({ name: `说说 #${i + 1} (${excerpt})`, reason: err?.message || "发布说说失败" });
+      }
+
+      // 对该说说的语音文件进行转写
+      if (postedDiary && postedDiary.id && voiceResources.length > 0) {
+        for (const voice of voiceResources) {
+          const item: { name: string; status: "transcribing" | "success" | "failed" } = {
+            name: voice.filename,
+            status: "transcribing",
+          };
+          transcribingItems.push(item);
+          onProgress({
+            phase: "uploading",
+            current: i,
+            total: memosList.length,
+            message: `正在转写语音附件 ${voice.filename}...`,
+            failedItems,
+            transcribingItems,
+          });
+
+          try {
+            await api.transcribeDiaryVoice(postedDiary.id, voice.uploadResId);
+            item.status = "success";
+          } catch (err: any) {
+            console.warn(`Memos voice transcription failed: ${voice.filename}`, err);
+            item.status = "failed";
+            failedItems.push({ name: `转写语音 ${voice.filename}`, reason: err?.message || "转写失败" });
+          }
+        }
+      }
+
+      onProgress({
+        phase: "uploading",
+        current: i + 1,
+        total: memosList.length,
+        message: `正在导入说说...进度: ${i + 1}/${memosList.length}`,
+        failedItems,
+        transcribingItems,
+      });
+    }
+
+    onProgress({
+      phase: "done",
+      current: successCount,
+      total: memosList.length,
+      message: `成功导入了 ${successCount} 条说说`,
+      failedItems,
+      transcribingItems,
+    });
+
+    return { success: true, count: successCount };
+
+  } else {
+    onProgress({
+      phase: "uploading",
+      current: 0,
+      total: memosList.length,
+      message: "准备开始导入笔记...",
+      failedItems,
+      transcribingItems,
+    });
+
+    const notesPayload = memosList.map((memo, idx) => {
+      let content = memo.content || memo.contentText || "";
+      const createdTs = memo.createdTs || Math.floor(Date.now() / 1000);
+      const updatedTs = memo.updatedTs || createdTs;
+      const createdAtStr = formatSqlDatetime(createdTs);
+      const updatedAtStr = formatSqlDatetime(updatedTs);
+
+      // Append resource references if not already in content
+      const resourceList = memo.resourceList || memo.resources || [];
+      if (Array.isArray(resourceList) && resourceList.length > 0) {
+        let refs = "\n";
+        for (const res of resourceList) {
+          const filename = res.filename || res.name;
+          if (filename) {
+            if (!content.includes(filename)) {
+              if (isImageFile(filename)) {
+                refs += `\n![${filename}](${filename})`;
+              } else {
+                refs += `\n[📎 ${filename}](${filename})`;
+              }
+            }
+          }
+        }
+        if (refs.trim()) {
+          content += refs;
+        }
+      }
+
+      const markdownWithFrontmatter = `---\ncreated: ${createdAtStr}\nupdated: ${updatedAtStr}\n---\n${content}`;
+
+      let title = content.replace(/[#*_~`\[\]()>|-]/g, "").trim().split("\n")[0] || "";
+      if (title.length > 30) {
+        title = title.slice(0, 30) + "...";
+      }
+      if (!title) {
+        title = `Memo ${idx + 1}`;
+      }
+
+      // Build fake ImportFileInfo just to convert it to Tiptap JSON
+      const fakeFileInfo: ImportFileInfo = {
+        name: `memo_${idx + 1}.md`,
+        title,
+        content: markdownWithFrontmatter,
+        size: markdownWithFrontmatter.length,
+        selected: true,
+        source: "md",
+      };
+
+      return {
+        title,
+        content: convertToTiptapJson(fakeFileInfo),
+        contentText: extractPlainText(fakeFileInfo),
+        createdAt: createdAtStr,
+        updatedAt: updatedAtStr,
+        notebookName: "Memos",
+        notebookPath: ["Memos"],
+      };
+    });
+
+    let importRes: any;
+    try {
+      importRes = await api.importNotes(notesPayload, undefined, undefined, workspaceId);
+      if (!importRes.success || !importRes.notes) {
+        throw new Error("导入元数据接口返回失败");
+      }
+    } catch (err: any) {
+      console.error("Memos notes import failed at bulk-insert stage:", err);
+      onProgress({
+        phase: "error",
+        current: 0,
+        total: memosList.length,
+        message: `导入笔记元数据失败: ${err.message || err}`,
+        failedItems,
+        transcribingItems,
+      });
+      return { success: false, count: 0 };
+    }
+
+    const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // Loop notes to upload attachments and rewrite content
+    for (let i = 0; i < importRes.notes.length; i++) {
+      const note = importRes.notes[i];
+      const memo = memosList[i];
+      const resourceList = memo.resourceList || memo.resources || [];
+      const uploadMapping: Record<string, string> = {};
+
+      if (isZip && zip && Array.isArray(resourceList) && resourceList.length > 0) {
+        onProgress({
+          phase: "uploading",
+          current: i,
+          total: memosList.length,
+          message: `正在导入第 ${i + 1}/${memosList.length} 条笔记，正在上传附件...`,
+          failedItems,
+          transcribingItems,
+        });
+
+        for (const resource of resourceList) {
+          const filename = resource.filename || resource.name;
+          const id = resource.id;
+          if (!filename) continue;
+
+          let zipEntry = zip.file(filename);
+          if (!zipEntry) zipEntry = zip.file(`resources/${filename}`);
+          if (!zipEntry) zipEntry = zip.file(`assets/${filename}`);
+          if (!zipEntry && id) {
+            zipEntry = zip.file(`${id}_${filename}`);
+            if (!zipEntry) zipEntry = zip.file(`resources/${id}_${filename}`);
+            if (!zipEntry) zipEntry = zip.file(`assets/${id}_${filename}`);
+          }
+          if (!zipEntry) {
+            const entryKeys = Object.keys(zip.files);
+            const foundKey = entryKeys.find((k) => k.endsWith(filename) || (id && k.includes(String(id))));
+            if (foundKey) {
+              zipEntry = zip.file(foundKey);
+            }
+          }
+
+          if (zipEntry) {
+            try {
+              const blob = await zipEntry.async("blob");
+              const fileObj = new File([blob], filename, { type: resource.type || "application/octet-stream" });
+              const uploadRes = await api.attachments.upload(note.id, fileObj);
+              if (uploadRes && uploadRes.url) {
+                uploadMapping[filename] = uploadRes.url;
+              } else {
+                failedItems.push({ name: filename, reason: "上传失败：服务器未返回链接" });
+              }
+            } catch (err: any) {
+              console.warn(`Memos resource upload failed: ${filename}`, err);
+              failedItems.push({ name: filename, reason: err?.message || "上传失败" });
+            }
+          } else {
+            failedItems.push({ name: filename, reason: "ZIP 压缩包中未找到文件" });
+          }
+        }
+      }
+
+      // If any attachment was successfully uploaded, update the note content
+      if (Object.keys(uploadMapping).length > 0) {
+        let content = memo.content || memo.contentText || "";
+        const createdTs = memo.createdTs || Math.floor(Date.now() / 1000);
+        const updatedTs = memo.updatedTs || createdTs;
+        const createdAtStr = formatSqlDatetime(createdTs);
+        const updatedAtStr = formatSqlDatetime(updatedTs);
+
+        // Append resource references
+        let refs = "\n";
+        for (const res of resourceList) {
+          const filename = res.filename || res.name;
+          if (filename) {
+            if (!content.includes(filename)) {
+              if (isImageFile(filename)) {
+                refs += `\n![${filename}](${filename})`;
+              } else {
+                refs += `\n[📎 ${filename}](${filename})`;
+              }
+            }
+          }
+        }
+        if (refs.trim()) {
+          content += refs;
+        }
+
+        // Replace placeholders with real attachment URLs
+        let updatedContent = content;
+        for (const [filename, url] of Object.entries(uploadMapping)) {
+          const regex = new RegExp(`\\]\\((${escapeRegExp(filename)})([?\\s][^)]*)?\\)`, "g");
+          updatedContent = updatedContent.replace(regex, `](${url}$2)`);
+        }
+
+        const markdownWithFrontmatter = `---\ncreated: ${createdAtStr}\nupdated: ${updatedAtStr}\n---\n${updatedContent}`;
+
+        const fakeFileInfo: ImportFileInfo = {
+          name: `memo_${i + 1}.md`,
+          title: notesPayload[i].title,
+          content: markdownWithFrontmatter,
+          size: markdownWithFrontmatter.length,
+          selected: true,
+          source: "md",
+        };
+
+        const tiptapJson = convertToTiptapJson(fakeFileInfo);
+        const plainText = extractPlainText(fakeFileInfo);
+
+        try {
+          await api.updateNote(note.id, {
+            content: tiptapJson,
+            contentText: plainText,
+            version: note.version,
+          });
+          successCount++;
+        } catch (err: any) {
+          console.error(`Failed to update note content with attachments for note ${note.id}:`, err);
+          failedItems.push({ name: notesPayload[i].title, reason: `更新附件链接失败: ${err.message || err}` });
+        }
+      } else {
+        successCount++;
+      }
+
+      onProgress({
+        phase: "uploading",
+        current: i + 1,
+        total: memosList.length,
+        message: `正在导入笔记...进度: ${i + 1}/${memosList.length}`,
+        failedItems,
+        transcribingItems,
+      });
+    }
+
+    onProgress({
+      phase: "done",
+      current: successCount,
+      total: memosList.length,
+      message: `成功导入了 ${successCount} 条笔记`,
+      failedItems,
+      transcribingItems,
+    });
+
+    return { success: true, count: successCount };
+  }
+}
+
+/**
+ * 格式化时间戳为 SQLite datetime 字符串 "YYYY-MM-DD HH:MM:SS" (UTC)
+ */
+function formatSqlDatetime(unixTs: number): string {
+  const d = new Date(unixTs * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  const month = pad(d.getUTCMonth() + 1);
+  const day = pad(d.getUTCDate());
+  const hours = pad(d.getUTCHours());
+  const minutes = pad(d.getUTCMinutes());
+  const seconds = pad(d.getUTCSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield,
@@ -17,11 +17,42 @@ import {
   Lock,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import QRCode from "qrcode";
 import { api, broadcastLogout, withSudo } from "@/lib/api";
 import {
   confirm as confirmDialog,
   prompt as promptDialog,
 } from "@/components/ui/confirm";
+
+function QRCodeCanvas({ text }: { text: string }): JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      QRCode.toCanvas(
+        canvasRef.current,
+        text,
+        {
+          width: 160,
+          margin: 2,
+          color: {
+            dark: "#1e1b4b", // Indigo 950
+            light: "#ffffff",
+          },
+        },
+        (error) => {
+          if (error) console.error("[2fa] qr generation failed:", error);
+        }
+      );
+    }
+  }, [text]);
+
+  return (
+    <div className="flex justify-center p-2.5 bg-white rounded-2xl border border-zinc-200/80 shadow-inner w-fit mx-auto transition-all duration-300">
+      <canvas ref={canvasRef} className="rounded-lg" />
+    </div>
+  );
+}
 
 /**
  * 顶层组件：组合账号/密码修改 + 2FA + 会话管理三个区块。
@@ -491,6 +522,7 @@ function TwoFactorSection() {
               <div className="text-xs text-zinc-500 dark:text-zinc-400">
                 {t("securitySettings.twoFactor.setupHint")}
               </div>
+              <QRCodeCanvas text={ui.otpauthUri} />
               {/* otpauth URI（用户可点开自己用在线二维码生成器，或复制到密码管理器） */}
               <div>
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">{t("securitySettings.twoFactor.otpauthUri")}</div>

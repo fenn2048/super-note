@@ -49,6 +49,9 @@ export interface ClipRequest {
   /** 覆盖配置中的 notebook / tags（用户在 popup 里临时改） */
   overrideNotebook?: string;
   overrideTags?: string;
+  /** 当前选中的工作区 ID 和笔记本 ID */
+  workspaceId?: string;
+  notebookId?: string;
   /** 用户附加的评论 */
   comment?: string;
   /** 是否使用 AI 优化（覆盖默认配置） */

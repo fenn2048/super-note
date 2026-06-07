@@ -115,6 +115,12 @@ export function getDb(): Database.Database {
       db = undefined;
       throw e;
     }
+    // WAL 自动检查点：每小时执行一次，防止 WAL 日志无限增长
+    const WAL_CHECKPOINT_INTERVAL = 60 * 60 * 1000;
+    const walTimer = setInterval(() => {
+      try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch { /* ignore */ }
+    }, WAL_CHECKPOINT_INTERVAL);
+    walTimer.unref();
   }
   return db;
 }
@@ -228,6 +234,24 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
     );
 
+    -- 任务-标签 多对多关联表
+    CREATE TABLE IF NOT EXISTS task_tags (
+      taskId TEXT NOT NULL,
+      tagId TEXT NOT NULL,
+      PRIMARY KEY (taskId, tagId),
+      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
+    -- 说说-标签 多对多关联表
+    CREATE TABLE IF NOT EXISTS diary_tags (
+      diaryId TEXT NOT NULL,
+      tagId TEXT NOT NULL,
+      PRIMARY KEY (diaryId, tagId),
+      FOREIGN KEY (diaryId) REFERENCES diaries(id) ON DELETE CASCADE,
+      FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
     -- 附件表
     CREATE TABLE IF NOT EXISTS attachments (
       id TEXT PRIMARY KEY,
@@ -257,6 +281,7 @@ function initSchema(db: Database.Database) {
       isCompleted INTEGER DEFAULT 0,
       priority INTEGER DEFAULT 2,
       dueDate TEXT,
+      remindAt TEXT,
       noteId TEXT,
       parentId TEXT,
       sortOrder INTEGER DEFAULT 0,
@@ -286,6 +311,8 @@ function initSchema(db: Database.Database) {
       -- 图片：JSON 数组字符串，元素是 diary_attachments.id（uuid）。
       -- 默认 '[]' 而不是 NULL，方便 SQL/前端无脑 JSON.parse。
       images TEXT NOT NULL DEFAULT '[]',
+      visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+      voice TEXT DEFAULT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -634,6 +661,8 @@ function initSchema(db: Database.Database) {
         contentText TEXT DEFAULT '',
         mood TEXT DEFAULT '',
         images TEXT NOT NULL DEFAULT '[]',
+        visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+        voice TEXT DEFAULT NULL,
         createdAt TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -995,4 +1024,154 @@ function initSchema(db: Database.Database) {
     // 回填失败不影响主流程
     console.warn("[schema] backfill embedding_queue failed:", e);
   }
+
+  // ==============================================================
+  // 用户 @ 提及通知（mentions）
+  // ==============================================================
+  //
+  // 当用户在笔记/说说/任务中 @ 另一用户时创建一条 mention 记录。
+  // readAt 为 NULL 表示未读；权限在校验时决定。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mentions (
+      id TEXT PRIMARY KEY,
+      sourceType TEXT NOT NULL CHECK(sourceType IN ('note','diary','task')),
+      sourceId TEXT NOT NULL,
+      sourceTitle TEXT,
+      mentionedUserId TEXT NOT NULL,
+      mentionedByUserId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      readAt TEXT,
+      FOREIGN KEY (mentionedUserId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (mentionedByUserId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_mentions_user_read
+      ON mentions(mentionedUserId, readAt);
+    CREATE INDEX IF NOT EXISTS idx_mentions_source
+      ON mentions(sourceType, sourceId);
+  `);
+
+  // ==============================================================
+  // 项目管理系统模块 DDL
+  // ==============================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS project_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      workspaceId TEXT,
+      userId TEXT NOT NULL,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_groups_workspace ON project_groups(workspaceId);
+    CREATE INDEX IF NOT EXISTS idx_project_groups_user ON project_groups(userId);
+
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      cover TEXT DEFAULT '',
+      startDate TEXT,
+      endDate TEXT,
+      visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+      workspaceId TEXT,
+      groupId TEXT,
+      isArchived INTEGER DEFAULT 0,
+      isDeleted INTEGER DEFAULT 0,
+      ownerId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (groupId) REFERENCES project_groups(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_projects_workspace ON projects(workspaceId);
+    CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(groupId);
+    CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(ownerId);
+
+    CREATE TABLE IF NOT EXISTS project_stages (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_stages_project ON project_stages(projectId);
+
+    CREATE TABLE IF NOT EXISTS project_tasks (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      stageId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      isCompleted INTEGER DEFAULT 0,
+      assigneeId TEXT,
+      startDate TEXT,
+      endDate TEXT,
+      description TEXT DEFAULT '',
+      cover TEXT DEFAULT '',
+      sortOrder INTEGER DEFAULT 0,
+      creatorId TEXT NOT NULL,
+      modifierId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (stageId) REFERENCES project_stages(id) ON DELETE CASCADE,
+      FOREIGN KEY (assigneeId) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (creatorId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (modifierId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_tasks_project ON project_tasks(projectId);
+    CREATE INDEX IF NOT EXISTS idx_project_tasks_stage ON project_tasks(stageId);
+    CREATE INDEX IF NOT EXISTS idx_project_tasks_assignee ON project_tasks(assigneeId);
+
+    CREATE TABLE IF NOT EXISTS project_task_checklists (
+      id TEXT PRIMARY KEY,
+      taskId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      isCompleted INTEGER DEFAULT 0,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_task_checklists_task ON project_task_checklists(taskId);
+
+    CREATE TABLE IF NOT EXISTS project_task_members (
+      taskId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      PRIMARY KEY (taskId, userId),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_task_tags (
+      taskId TEXT NOT NULL,
+      tagId TEXT NOT NULL,
+      PRIMARY KEY (taskId, tagId),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_members (
+      projectId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      PRIMARY KEY (projectId, userId),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_discussions (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      content TEXT NOT NULL,
+      images TEXT NOT NULL DEFAULT '[]',
+      attachments TEXT NOT NULL DEFAULT '[]',
+      linkedCards TEXT NOT NULL DEFAULT '[]',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_discussions_project ON project_discussions(projectId);
+  `);
 }

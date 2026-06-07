@@ -206,13 +206,17 @@ export function buildContentBundle(params: {
   tags: string[];
   /** 用户附加的评论 */
   comment?: string;
+  /** 是否包含标题在正文中 */
+  includeTitle?: boolean;
 }): { content: string; contentText: string } {
-  const { title, html, sourceUrl, siteName, format, includeSource, tags, comment } = params;
+  const { title, html, sourceUrl, siteName, format, includeSource, tags, comment, includeTitle = false } = params;
 
   // 评论区块（放在标题后、正文前）
   const commentHtml = comment?.trim()
     ? `<blockquote><p>💬 ${escapeText(comment.trim())}</p></blockquote>\n`
     : "";
+
+  const titleHtml = includeTitle ? `<h1>${escapeText(title)}</h1>\n` : "";
 
   // 附录：来源 + 标签
   // 来源行设计：
@@ -254,14 +258,14 @@ export function buildContentBundle(params: {
   const footerMd = footerMdParts.join("\n\n");
 
   if (format === "html") {
-    const fullHtml = `<h1>${escapeText(title)}</h1>\n${commentHtml}${html}\n${footerHtml}`;
+    const fullHtml = `${titleHtml}${commentHtml}${html}\n${footerHtml}`;
     const text = fullHtml.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
     return { content: fullHtml, contentText: text };
   }
 
   // format === "markdown"
   // 关键：footer 不进 turndown，直接以 markdown 文本追加。
-  const bodyHtml = `<h1>${escapeText(title)}</h1>\n${commentHtml}${html}`;
+  const bodyHtml = `${titleHtml}${commentHtml}${html}`;
   const bodyMd = htmlToMarkdown(bodyHtml);
   const md = footerMd ? `${bodyMd}\n\n${footerMd}\n` : bodyMd;
   // 纯文本直接用去标签后的结果

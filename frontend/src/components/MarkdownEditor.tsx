@@ -430,7 +430,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     if (coords) {
       setAiPosition({
         top: Math.min(coords.top + 24, window.innerHeight - 500),
-        left: Math.min(coords.left, window.innerWidth - 420),
+        left: Math.min(coords.left, window.innerWidth - 380),
       });
     }
     setAiOpen(true);
@@ -1155,6 +1155,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
             "sticky top-0 z-20 flex items-center gap-0.5 px-4 py-2 border-b border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 md:flex-wrap overflow-x-auto hide-scrollbar touch-pan-x transition-colors",
           )}
         >
+          {/* Group 1: History */}
           <ToolbarButton
             onClick={() => withView((v) => undo(v))}
             title={tr("tiptap.undo") || "撤销"}
@@ -1170,6 +1171,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
 
           <ToolbarDivider />
 
+          {/* Group 2: Typography & Style */}
           <ToolbarButton
             onClick={() => withView((v) => toggleHeading(v, 1))}
             title={tr("tiptap.heading1") || "一级标题"}
@@ -1209,15 +1211,10 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           >
             <Strikethrough size={iconSize} />
           </ToolbarButton>
-          <ToolbarButton
-            onClick={() => withView((v) => toggleInlineCode(v))}
-            title={tr("tiptap.inlineCode") || "行内代码"}
-          >
-            <CodeIcon size={iconSize} />
-          </ToolbarButton>
 
           <ToolbarDivider />
 
+          {/* Group 3: Lists */}
           <ToolbarButton
             onClick={() => withView((v) => toggleBulletList(v))}
             title={tr("tiptap.bulletList") || "无序列表"}
@@ -1239,11 +1236,18 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
 
           <ToolbarDivider />
 
+          {/* Group 4: Insertions & Media */}
           <ToolbarButton
-            onClick={() => withView((v) => toggleBlockquote(v))}
-            title={tr("tiptap.blockquote") || "引用"}
+            onClick={() => withView((v) => insertLink(v))}
+            title={tr("tiptap.insertLink") || "插入链接"}
           >
-            <Quote size={iconSize} />
+            <LinkIcon size={iconSize} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleInlineCode(v))}
+            title={tr("tiptap.inlineCode") || "行内代码"}
+          >
+            <CodeIcon size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleCodeBlock(v))}
@@ -1252,16 +1256,16 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
             <FileCode size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
+            onClick={() => withView((v) => toggleBlockquote(v))}
+            title={tr("tiptap.blockquote") || "引用"}
+          >
+            <Quote size={iconSize} />
+          </ToolbarButton>
+          <ToolbarButton
             onClick={() => withView((v) => insertHorizontalRule(v))}
             title={tr("tiptap.horizontalRule") || "分割线"}
           >
             <Minus size={iconSize} />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => withView((v) => insertLink(v))}
-            title={tr("tiptap.insertLink") || "插入链接"}
-          >
-            <LinkIcon size={iconSize} />
           </ToolbarButton>
           <ToolbarButton onClick={triggerImagePicker} title={tr("tiptap.insertImage") || "插入图片"}>
             <ImagePlus size={iconSize} />
@@ -1276,6 +1280,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
             <Table2 size={iconSize} />
           </ToolbarButton>
 
+          {/* Group 5: AI Assistant */}
           {!isGuest && <ToolbarDivider />}
           {!isGuest && (
             <ToolbarButton onClick={openAIAssistant} title={tr("tiptap.aiAssistant") || "AI 助手"}>
