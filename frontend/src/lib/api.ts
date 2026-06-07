@@ -1120,8 +1120,8 @@ export const api = {
     return request<ProjectTask[]>(`/projects/my-tasks${qs}`);
   },
 
-  createProjectTask: (projectId: string, data: Partial<ProjectTask> & { participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(data) }),
-  updateProjectTask: (taskId: string, data: Partial<ProjectTask> & { checklists?: any[]; participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
+  createProjectTask: (projectId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags"> & { participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(data) }),
+  updateProjectTask: (taskId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags" | "checklists"> & { checklists?: any[]; participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteProjectTask: (taskId: string) => request<{ message: string }>(`/projects/tasks/${taskId}`, { method: "DELETE" }),
 
   getProjectDiscussions: (projectId: string) => request<ProjectDiscussion[]>(`/projects/${projectId}/discussions`),

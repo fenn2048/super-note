@@ -1422,6 +1422,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       // 清空选中状态避免跨空间残留
       actions.setSelectedNotebook(null);
       actions.setViewMode("all");
+      
+      // 重置项目模块的活动过滤器，避免过期过滤条件（如分组）跨空间残留导致项目不可见
+      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify({ type: "all" }));
+      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: { type: "all" } }));
+
       loadScopedData();
       loadFeatures();
       updateWorkspaceName();

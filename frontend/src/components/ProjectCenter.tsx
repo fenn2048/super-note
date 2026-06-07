@@ -7,7 +7,7 @@ import {
   Plus, Calendar, ListTodo, Briefcase, Star, Search, Filter, Loader2,
   ChevronRight, ChevronDown, ArrowLeft, MoreVertical, Edit2, Trash2, Eye, EyeOff, FolderOpen,
   CheckCircle2, Clock, Globe, Lock, Check, Grid, List as ListIcon, MessageSquare,
-  Bookmark, Award, Circle, Bell, X, User
+  Bookmark, Award, Circle, Bell, X, User, Maximize2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ import { toast } from "@/lib/toast";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
+import SleekDatePicker from "@/components/common/SleekDatePicker";
+import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 
 // Import sub-views
 import ProjectOverview from "./ProjectOverview";
@@ -276,7 +278,9 @@ const compressImageToBase64 = (file: File): Promise<string> => {
 export default function ProjectCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
-  const currentWs = getCurrentWorkspace();
+
+  // Make workspaceId a reactive state
+  const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
 
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -312,6 +316,37 @@ export default function ProjectCenter() {
   const [quickAddProjId, setQuickAddProjId] = useState("");
   const [quickAddAssigneeId, setQuickAddAssigneeId] = useState("");
   const [quickAddDueDate, setQuickAddDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
+
+  // Full Screen / Detailed Task Creation Modal State
+  const [showTaskCreateModal, setShowTaskCreateModal] = useState(false);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskProjId, setTaskProjId] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
+  const [taskPriority, setTaskPriority] = useState<number>(2);
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskRemindAt, setTaskRemindAt] = useState("");
+  const [taskDescription, setTaskDescription] = useState("");
+
+  // Autocomplete @mention cursors and states
+  const [titleCursorPos, setTitleCursorPos] = useState(0);
+  const [descCursorPos, setDescCursorPos] = useState(0);
+  const [quickAddCursorPos, setQuickAddCursorPos] = useState(0);
+
+  const titleMention = useMentionState(taskTitle, titleCursorPos);
+  const descMention = useMentionState(taskDescription, descCursorPos);
+  const quickAddMention = useMentionState(quickAddTitle, quickAddCursorPos);
+
+  const calculateDefaultReminderDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    try {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = new Date(year, month - 1, day);
+      date.setDate(date.getDate() - 1);
+      return format(date, "yyyy-MM-dd");
+    } catch {
+      return "";
+    }
+  };
 
   // Sections collapse state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -363,17 +398,17 @@ export default function ProjectCenter() {
       const favs = JSON.parse(localStorage.getItem("nowen-fav-projects") || "[]");
       setFavorites(favs);
 
-      const gs = await api.getProjectGroups(currentWs);
+      const gs = await api.getProjectGroups(workspaceId);
       setGroups(gs);
 
-      const ps = await api.getProjects(currentWs, "active");
+      const ps = await api.getProjects(workspaceId, "active");
       setProjects(ps);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [currentWs]);
+  }, [workspaceId]);
 
   useEffect(() => {
     fetchDashboard();
@@ -389,6 +424,17 @@ export default function ProjectCenter() {
     };
     window.addEventListener("nowen:project-filter-changed", handler);
     return () => window.removeEventListener("nowen:project-filter-changed", handler);
+  }, []);
+
+  // Listen to workspace change events to reload data reactively
+  useEffect(() => {
+    const handleWorkspaceChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const wsId = customEvent.detail?.workspaceId || getCurrentWorkspace();
+      setWorkspaceId(wsId);
+    };
+    window.addEventListener("nowen:workspace-changed", handleWorkspaceChange);
+    return () => window.removeEventListener("nowen:workspace-changed", handleWorkspaceChange);
   }, []);
 
   // Fetch Project Details when activeFilter changes or selection is made
@@ -419,8 +465,8 @@ export default function ProjectCenter() {
 
   // Load workspace members
   useEffect(() => {
-    if (currentWs && currentWs !== "personal") {
-      api.getWorkspaceMembers(currentWs)
+    if (workspaceId && workspaceId !== "personal") {
+      api.getWorkspaceMembers(workspaceId)
         .then((members) => {
           setWsMembers(members);
         })
@@ -428,13 +474,13 @@ export default function ProjectCenter() {
     } else {
       setWsMembers([]);
     }
-  }, [currentWs]);
+  }, [workspaceId]);
 
   const fetchMyTasks = useCallback(async () => {
     if (activeFilter.type === "my-tasks" && currentUserId) {
       setLoadingMyTasks(true);
       try {
-        const tasks = await api.getMyTasks(currentWs, roleFilter);
+        const tasks = await api.getMyTasks(workspaceId, roleFilter);
         setMyTasks(tasks);
       } catch (e) {
         console.error(e);
@@ -443,7 +489,7 @@ export default function ProjectCenter() {
         setLoadingMyTasks(false);
       }
     }
-  }, [activeFilter.type, currentUserId, currentWs, roleFilter]);
+  }, [activeFilter.type, currentUserId, workspaceId, roleFilter]);
 
   // Aggregate Workspace-wide "My Tasks"
   useEffect(() => {
@@ -453,14 +499,19 @@ export default function ProjectCenter() {
   // Set default project ID for quick add
   useEffect(() => {
     if (projects.length > 0) {
-      const todoProj = projects.find((p) => p.name === "个人TODO");
-      if (todoProj) {
-        setQuickAddProjId(todoProj.id);
-      } else {
-        setQuickAddProjId(projects[0].id);
+      const exists = projects.some((p) => p.id === quickAddProjId);
+      if (!exists || !quickAddProjId) {
+        const todoProj = projects.find((p) => p.name === "个人TODO");
+        if (todoProj) {
+          setQuickAddProjId(todoProj.id);
+        } else {
+          setQuickAddProjId(projects[0].id);
+        }
       }
+    } else {
+      setQuickAddProjId("");
     }
-  }, [projects]);
+  }, [projects, quickAddProjId]);
 
   // Set default assignee for quick add to current user
   useEffect(() => {
@@ -473,7 +524,7 @@ export default function ProjectCenter() {
   useEffect(() => {
     if (activeFilter.type === "calendar") {
       setLoadingWorkspaceStages(true);
-      api.getProjects(currentWs, "active")
+      api.getProjects(workspaceId, "active")
         .then(async (allProjs) => {
           const promises = allProjs.map(async (p) => {
             try {
@@ -495,7 +546,7 @@ export default function ProjectCenter() {
         .catch(console.error)
         .finally(() => setLoadingWorkspaceStages(false));
     }
-  }, [activeFilter, currentWs]);
+  }, [activeFilter, workspaceId]);
 
   const selectProject = (id: string) => {
     const filter = { type: "detail", projectId: id };
@@ -518,7 +569,11 @@ export default function ProjectCenter() {
     setProjStart("");
     setProjEnd("");
     setProjVisibility("PRIVATE");
-    setProjGroupId(groups[0]?.id || null);
+    if (activeFilter.type === "group" && activeFilter.groupId) {
+      setProjGroupId(activeFilter.groupId);
+    } else {
+      setProjGroupId(null);
+    }
     setShowCreateModal(true);
   };
 
@@ -644,12 +699,14 @@ export default function ProjectCenter() {
         stageId = stages[0].id;
       }
 
+      const defaultRemindAt = quickAddDueDate ? calculateDefaultReminderDate(quickAddDueDate) : null;
       const payload = {
         stageId,
         title: quickAddTitle.trim(),
         assigneeId: quickAddAssigneeId || null,
         endDate: quickAddDueDate ? new Date(quickAddDueDate).toISOString() : null,
         priority: 2,
+        remindAt: defaultRemindAt,
       };
 
       const newTask = await api.createProjectTask(quickAddProjId, payload);
@@ -657,15 +714,70 @@ export default function ProjectCenter() {
       setQuickAddTitle("");
       fetchMyTasks();
 
-      if (payload.endDate) {
-        syncTaskNotification({
-          id: newTask.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)),
-          title: payload.title,
-          dueDate: payload.endDate
-        } as any);
+      if (newTask.remindAt) {
+        syncTaskNotification(newTask as any);
       }
     } catch (err: any) {
       toast.error(err?.message || "快速创建任务失败");
+    }
+  };
+
+  const handleOpenTaskCreateModal = () => {
+    setTaskTitle(quickAddTitle);
+    setTaskProjId(quickAddProjId || (projects[0]?.id || ""));
+    setTaskAssigneeId(quickAddAssigneeId || currentUserId);
+    setTaskPriority(2);
+    setTaskDueDate(quickAddDueDate);
+    setTaskRemindAt(quickAddDueDate ? calculateDefaultReminderDate(quickAddDueDate) : "");
+    setTaskDescription("");
+    setShowTaskCreateModal(true);
+  };
+
+  const handleDetailedCreateTask = async (createAnother = false) => {
+    if (!taskTitle.trim()) return;
+    if (!taskProjId) {
+      toast.error("请选择一个项目");
+      return;
+    }
+    try {
+      const stages = await api.getProjectStages(taskProjId);
+      let stageId: string;
+      if (stages.length === 0) {
+        const newStage = await api.createProjectStage(taskProjId, { name: "进行中" });
+        stageId = newStage.id;
+      } else {
+        stageId = stages[0].id;
+      }
+
+      const payload = {
+        stageId,
+        title: taskTitle.trim(),
+        description: taskDescription.trim(),
+        assigneeId: taskAssigneeId || null,
+        endDate: taskDueDate ? new Date(taskDueDate).toISOString() : null,
+        priority: taskPriority,
+        remindAt: taskRemindAt || null,
+      };
+
+      const newTask = await api.createProjectTask(taskProjId, payload);
+      toast.success("创建任务成功");
+      fetchMyTasks();
+
+      if (newTask.remindAt) {
+        syncTaskNotification(newTask as any);
+      }
+
+      if (createAnother) {
+        setTaskTitle("");
+        setTaskDescription("");
+        setTaskDueDate("");
+        setTaskRemindAt("");
+      } else {
+        setShowTaskCreateModal(false);
+        setQuickAddTitle(""); // Clear quick add input too
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "创建任务失败");
     }
   };
 
@@ -954,18 +1066,46 @@ export default function ProjectCenter() {
               onSubmit={handleQuickAddTask}
               className="bg-app-sidebar/35 border border-app-border rounded-2xl p-4 space-y-3 shadow-sm max-w-4xl mx-auto"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 relative">
                 <div className="w-6 h-6 rounded-full border border-app-border flex items-center justify-center shrink-0">
                   <Plus size={14} className="text-tx-tertiary" />
                 </div>
                 <Input
                   type="text"
                   value={quickAddTitle}
-                  onChange={(e) => setQuickAddTitle(e.target.value)}
+                  onChange={(e) => {
+                    setQuickAddTitle(e.target.value);
+                    setQuickAddCursorPos(e.target.selectionStart || 0);
+                  }}
+                  onKeyUp={(e) => setQuickAddCursorPos(e.currentTarget.selectionStart || 0)}
+                  onClick={(e) => setQuickAddCursorPos(e.currentTarget.selectionStart || 0)}
                   placeholder={t("projects.quickAddTaskPlaceholder") || "快速添加任务（输入标题后按回车或点击右侧添加）..."}
-                  className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 text-sm placeholder:text-tx-tertiary text-tx-primary h-8"
+                  className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 text-sm placeholder:text-tx-tertiary text-tx-primary h-8 pr-8"
                 />
+                <button
+                  type="button"
+                  onClick={handleOpenTaskCreateModal}
+                  className="p-1.5 hover:bg-app-hover rounded text-tx-tertiary hover:text-tx-primary transition-colors absolute right-1"
+                  title="全屏创建任务"
+                >
+                  <Maximize2 size={14} />
+                </button>
               </div>
+
+              {quickAddMention && (
+                <div className="relative z-50">
+                  <MentionPicker
+                    search={quickAddMention.search}
+                    onSelect={(user) => {
+                      const newText = replaceMentionText(quickAddTitle, quickAddCursorPos, quickAddMention.startIndex, user.username);
+                      setQuickAddTitle(newText);
+                      setQuickAddCursorPos(quickAddMention.startIndex + user.username.length + 2);
+                      quickAddMention.clear();
+                    }}
+                    onClose={quickAddMention.clear}
+                  />
+                </div>
+              )}
 
               {/* Details and Actions selectors */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-app-border/40">
@@ -1004,15 +1144,11 @@ export default function ProjectCenter() {
                   </div>
 
                   {/* Due Date selector picker */}
-                  <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
-                    <Calendar size={12} className="text-tx-tertiary" />
-                    <input
-                      type="date"
-                      value={quickAddDueDate}
-                      onChange={(e) => setQuickAddDueDate(e.target.value)}
-                      className="bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
-                    />
-                  </div>
+                  <SleekDatePicker
+                    value={quickAddDueDate}
+                    onChange={setQuickAddDueDate}
+                    placeholder="截止日期"
+                  />
                 </div>
 
                 <Button
@@ -1412,21 +1548,21 @@ export default function ProjectCenter() {
               {/* Date fields row */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.startDate") || "开始时间"}</label>
-                  <Input
-                    type="date"
+                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">{t("projects.startDate") || "开始时间"}</label>
+                  <SleekDatePicker
                     value={projStart}
-                    onChange={(e) => setProjStart(e.target.value)}
-                    className="h-9 text-xs border-app-border"
+                    onChange={setProjStart}
+                    className="w-full"
+                    placeholder="选择开始时间"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.endDate") || "结束时间"}</label>
-                  <Input
-                    type="date"
+                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">{t("projects.endDate") || "结束时间"}</label>
+                  <SleekDatePicker
                     value={projEnd}
-                    onChange={(e) => setProjEnd(e.target.value)}
-                    className="h-9 text-xs border-app-border"
+                    onChange={setProjEnd}
+                    className="w-full"
+                    placeholder="选择结束时间"
                   />
                 </div>
               </div>
@@ -1485,6 +1621,219 @@ export default function ProjectCenter() {
               </Button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* 6. Detailed Task Create Modal */}
+      {showTaskCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-text">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
+          <div
+            className="relative bg-app-elevated w-full max-w-lg rounded-2xl border border-app-border shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in scale-in duration-200 text-sm text-tx-primary"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+              <h3 className="text-sm font-bold text-tx-primary">
+                新建任务
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowTaskCreateModal(false)}
+                className="p-1 hover:bg-app-hover rounded-lg text-tx-tertiary hover:text-tx-primary transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <ScrollArea className="flex-1 min-h-0 px-6 py-5 space-y-4">
+              {/* Title */}
+              <div className="space-y-1 relative">
+                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">任务标题</label>
+                <Input
+                  value={taskTitle}
+                  onChange={(e) => {
+                    setTaskTitle(e.target.value);
+                    setTitleCursorPos(e.target.selectionStart || 0);
+                  }}
+                  onKeyUp={(e) => setTitleCursorPos(e.currentTarget.selectionStart || 0)}
+                  onClick={(e) => setTitleCursorPos(e.currentTarget.selectionStart || 0)}
+                  placeholder="输入任务标题…"
+                  className="h-9 text-xs border-app-border w-full"
+                  required
+                  autoFocus
+                />
+                {titleMention && (
+                  <div className="relative z-50">
+                    <MentionPicker
+                      search={titleMention.search}
+                      onSelect={(user) => {
+                        const newText = replaceMentionText(taskTitle, titleCursorPos, titleMention.startIndex, user.username);
+                        setTaskTitle(newText);
+                        setTitleCursorPos(titleMention.startIndex + user.username.length + 2);
+                        titleMention.clear();
+                      }}
+                      onClose={titleMention.clear}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Project Selection */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">所属项目</label>
+                <select
+                  value={taskProjId}
+                  onChange={(e) => setTaskProjId(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-app-border bg-app-sidebar/45 text-xs text-tx-secondary focus:outline-none"
+                  required
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Assignee Selection */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">指派给</label>
+                <select
+                  value={taskAssigneeId}
+                  onChange={(e) => setTaskAssigneeId(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-app-border bg-app-sidebar/45 text-xs text-tx-secondary focus:outline-none"
+                >
+                  <option value={currentUserId}>我自己</option>
+                  {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.displayName || m.username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Priority Selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">优先级</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { level: 3, label: "高", color: "bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20" },
+                    { level: 2, label: "中", color: "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20" },
+                    { level: 1, label: "低", color: "bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20" },
+                    { level: 0, label: "无", color: "bg-zinc-500/10 border-zinc-500/30 text-tx-secondary hover:bg-zinc-500/20" }
+                  ].map((prio) => (
+                    <button
+                      key={prio.level}
+                      type="button"
+                      onClick={() => setTaskPriority(prio.level)}
+                      className={`py-1.5 rounded-lg border text-xs font-semibold transition-all ${prio.color} ${
+                        taskPriority === prio.level ? "ring-2 ring-accent-primary border-transparent" : "opacity-80"
+                      }`}
+                    >
+                      {prio.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline & Reminder Date Row */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Due Date */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">截止日期</label>
+                  <SleekDatePicker
+                    value={taskDueDate}
+                    onChange={(val) => {
+                      setTaskDueDate(val);
+                      // Auto calculate reminder date: due date - 24 hours (1 day)
+                      if (val) {
+                        const defaultReminder = calculateDefaultReminderDate(val);
+                        setTaskRemindAt(defaultReminder);
+                      } else {
+                        setTaskRemindAt("");
+                      }
+                    }}
+                    className="w-full"
+                    placeholder="选择截止日期"
+                  />
+                </div>
+
+                {/* Reminder Date */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">提醒日期</label>
+                  <SleekDatePicker
+                    value={taskRemindAt}
+                    onChange={setTaskRemindAt}
+                    className="w-full"
+                    placeholder="选择提醒日期"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1 relative">
+                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">详细描述</label>
+                <Textarea
+                  value={taskDescription}
+                  onChange={(e) => {
+                    setTaskDescription(e.target.value);
+                    setDescCursorPos(e.target.selectionStart || 0);
+                  }}
+                  onKeyUp={(e) => setDescCursorPos(e.currentTarget.selectionStart || 0)}
+                  onClick={(e) => setDescCursorPos(e.currentTarget.selectionStart || 0)}
+                  placeholder="输入任务描述信息（支持Markdown及@提及）…"
+                  className="text-xs leading-relaxed min-h-[100px] border-app-border rounded-xl w-full"
+                />
+                {descMention && (
+                  <div className="relative z-50">
+                    <MentionPicker
+                      search={descMention.search}
+                      onSelect={(user) => {
+                        const newText = replaceMentionText(taskDescription, descCursorPos, descMention.startIndex, user.username);
+                        setTaskDescription(newText);
+                        setDescCursorPos(descMention.startIndex + user.username.length + 2);
+                        descMention.clear();
+                      }}
+                      onClose={descMention.clear}
+                    />
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTaskCreateModal(false)}
+                className="text-xs"
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleDetailedCreateTask(true)}
+                disabled={!taskTitle.trim()}
+                variant="outline"
+                size="sm"
+                className="text-xs border-app-border text-tx-primary hover:bg-app-hover"
+              >
+                完成并创建下一个
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleDetailedCreateTask(false)}
+                disabled={!taskTitle.trim()}
+                size="sm"
+                className="text-xs bg-accent-primary hover:bg-accent-primary/95 text-white"
+              >
+                完成
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

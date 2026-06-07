@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ProjectCalendarProps {

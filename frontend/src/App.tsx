@@ -1008,6 +1008,11 @@ function MobileTabBar() {
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
     actions.setMobileView("list");
+    if (mode === "projects") {
+      const filter = { type: "my-tasks" };
+      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    }
   };
 
   const tabs = [

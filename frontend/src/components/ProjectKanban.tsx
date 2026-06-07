@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/lib/toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import SleekDatePicker from "@/components/common/SleekDatePicker";
 
 interface ProjectKanbanProps {
   project: Project;
@@ -244,7 +246,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
         ...prev,
         assigneeId: user ? user.userId : null,
         assigneeName: user ? user.username : undefined,
-        assigneeDisplayName: user ? user.displayName : undefined,
+        assigneeDisplayName: user ? (user.displayName ?? undefined) : undefined,
         assigneeAvatarUrl: user ? user.avatarUrl : null,
       };
     });
@@ -610,31 +612,31 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
 
                 {/* Timeline dates */}
                 <div className="flex items-center gap-3">
-                  <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5">
+                  <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 flex-shrink-0">
                     <Calendar size={13} />
                     <span>{t("projects.timeline") || "时间周期"}</span>
                   </div>
                   <div className="flex-1 flex items-center gap-2 font-mono text-[11px] text-tx-secondary">
-                    <Input
-                      type="date"
+                    <SleekDatePicker
                       value={activeTask.startDate ? activeTask.startDate.split("T")[0] : ""}
-                      onChange={(e) =>
+                      onChange={(val) =>
                         setActiveTask((prev) =>
-                          prev ? { ...prev, startDate: e.target.value || null } : null
+                          prev ? { ...prev, startDate: val || null } : null
                         )
                       }
-                      className="h-8 px-2 focus-visible:ring-1 border-app-border bg-app-sidebar/20"
+                      className="w-full"
+                      placeholder="开始日期"
                     />
                     <span className="text-tx-tertiary">~</span>
-                    <Input
-                      type="date"
+                    <SleekDatePicker
                       value={activeTask.endDate ? activeTask.endDate.split("T")[0] : ""}
-                      onChange={(e) =>
+                      onChange={(val) =>
                         setActiveTask((prev) =>
-                          prev ? { ...prev, endDate: e.target.value || null } : null
+                          prev ? { ...prev, endDate: val || null } : null
                         )
                       }
-                      className="h-8 px-2 focus-visible:ring-1 border-app-border bg-app-sidebar/20"
+                      className="w-full"
+                      placeholder="结束日期"
                     />
                   </div>
                 </div>

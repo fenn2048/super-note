@@ -169,9 +169,9 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
     
-    // 只要是笔记相关视图（所有笔记、收藏、回收站），中间栏默认显示；其他模块（如首页、说说、待办等）默认隐藏中间栏
-    const isNoteView = mode === "all" || mode === "favorites" || mode === "trash" || mode === "notebook" || mode === "tag" || mode === "search";
-    if (isNoteView) {
+    // 只要是笔记/项目相关视图（所有笔记、收藏、回收站、项目），中间栏默认显示；其他模块（如首页、说说等）默认隐藏中间栏
+    const isNoteOrProjectView = mode === "all" || mode === "favorites" || mode === "trash" || mode === "notebook" || mode === "tag" || mode === "search" || mode === "projects";
+    if (isNoteOrProjectView) {
       actions.setSidebarCollapsed(false);
     } else {
       actions.setSidebarCollapsed(true);
