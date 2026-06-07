@@ -32,7 +32,8 @@
     "selectNotebookHint": "Please choose which notebook this note belongs to",
     "createdBy": "by {{name}}",
     "unknownUser": "Unknown user",
-    "more": "More"
+    "more": "More",
+    "add": "Add"
   },
   "auth": {
     "verifying": "Verifying identity...",
@@ -1748,5 +1749,19 @@
     "confirmDeleteGroup": "Are you sure you want to delete this group? This cannot be undone.",
     "noGroups": "No Groups",
     "noFavorites": "No Favorites"
+  },
+  "calendar": {
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "overdue": "Overdue",
+    "clearDate": "Clear Date",
+    "clear": "Clear",
+    "sunday": "Sun",
+    "monday": "Mon",
+    "tuesday": "Tue",
+    "wednesday": "Wed",
+    "thursday": "Thu",
+    "friday": "Fri",
+    "saturday": "Sat"
   }
 }

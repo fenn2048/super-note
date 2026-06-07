@@ -768,7 +768,15 @@ function ProjectSidebar() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [groupsExpanded, setGroupsExpanded] = useState(true);
   const [favsExpanded, setFavsExpanded] = useState(true);
-  const currentWs = getCurrentWorkspace();
+  const [workspaceId, setWorkspaceId] = useState(getCurrentWorkspace());
+
+  useEffect(() => {
+    const handleWsChange = () => {
+      setWorkspaceId(getCurrentWorkspace());
+    };
+    window.addEventListener("nowen:workspace-changed", handleWsChange);
+    return () => window.removeEventListener("nowen:workspace-changed", handleWsChange);
+  }, []);
 
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
@@ -781,14 +789,14 @@ function ProjectSidebar() {
 
   const fetchGroupsAndProjects = useCallback(async () => {
     try {
-      const gs = await api.getProjectGroups(currentWs);
+      const gs = await api.getProjectGroups(workspaceId);
       setGroups(gs);
-      const ps = await api.getProjects(currentWs, "active");
+      const ps = await api.getProjects(workspaceId, "active");
       setProjects(ps);
     } catch (e) {
       console.error(e);
     }
-  }, [currentWs]);
+  }, [workspaceId]);
 
   useEffect(() => {
     fetchGroupsAndProjects();
@@ -845,8 +853,9 @@ function ProjectSidebar() {
     });
     if (!name) return;
     try {
-      await api.createProjectGroup({ name, workspaceId: currentWs === "personal" ? null : currentWs });
+      await api.createProjectGroup({ name, workspaceId: workspaceId === "personal" ? null : workspaceId });
       fetchGroupsAndProjects();
+      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
     } catch (e) {
       console.error(e);
     }
@@ -864,6 +873,7 @@ function ProjectSidebar() {
     try {
       await api.updateProjectGroup(groupId, { name });
       fetchGroupsAndProjects();
+      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
     } catch (e) {
       console.error(e);
     }
@@ -880,6 +890,7 @@ function ProjectSidebar() {
     try {
       await api.deleteProjectGroup(groupId);
       fetchGroupsAndProjects();
+      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
     } catch (e) {
       console.error(e);
     }

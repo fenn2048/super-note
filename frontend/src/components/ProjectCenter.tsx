@@ -401,7 +401,25 @@ export default function ProjectCenter() {
       const gs = await api.getProjectGroups(workspaceId);
       setGroups(gs);
 
-      const ps = await api.getProjects(workspaceId, "active");
+      let ps = await api.getProjects(workspaceId, "active");
+
+      // Auto-provision "个人TODO" if workspace is personal and it is missing
+      if (workspaceId === "personal") {
+        const hasPersonalTodo = ps.some((p) => p.name === "个人TODO");
+        if (!hasPersonalTodo) {
+          try {
+            await api.createProject({
+              name: "个人TODO",
+              description: "默认个人任务项目",
+              workspaceId: null
+            });
+            ps = await api.getProjects(workspaceId, "active");
+          } catch (createErr) {
+            console.error("Failed to auto-create 个人TODO:", createErr);
+          }
+        }
+      }
+
       setProjects(ps);
     } catch (e) {
       console.error(e);
@@ -436,6 +454,15 @@ export default function ProjectCenter() {
     window.addEventListener("nowen:workspace-changed", handleWorkspaceChange);
     return () => window.removeEventListener("nowen:workspace-changed", handleWorkspaceChange);
   }, []);
+
+  // Listen to projects-refreshed events to reload dashboard dynamically
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchDashboard();
+    };
+    window.addEventListener("nowen:projects-refreshed", handleRefresh);
+    return () => window.removeEventListener("nowen:projects-refreshed", handleRefresh);
+  }, [fetchDashboard]);
 
   // Fetch Project Details when activeFilter changes or selection is made
   useEffect(() => {
@@ -823,10 +850,11 @@ export default function ProjectCenter() {
 
   // Filter projects by group selected in Sidebar
   const filteredProjects = useMemo(() => {
+    const activeProjects = projects.filter((p) => p.name !== "个人TODO");
     if (activeFilter.type === "group" && activeFilter.groupId) {
-      return projects.filter((p) => p.groupId === activeFilter.groupId);
+      return activeProjects.filter((p) => p.groupId === activeFilter.groupId);
     }
-    return projects;
+    return activeProjects;
   }, [projects, activeFilter]);
 
   return (
@@ -1116,7 +1144,7 @@ export default function ProjectCenter() {
                     <select
                       value={quickAddProjId}
                       onChange={(e) => setQuickAddProjId(e.target.value)}
-                      className="bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
+                      className="sleek-select sleek-select-inline bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
                     >
                       {projects.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -1132,7 +1160,7 @@ export default function ProjectCenter() {
                     <select
                       value={quickAddAssigneeId}
                       onChange={(e) => setQuickAddAssigneeId(e.target.value)}
-                      className="bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
+                      className="sleek-select sleek-select-inline bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
                     >
                       <option value={currentUserId}>{t("projects.assigneeMe") || "指派给：我自己"}</option>
                       {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (
@@ -1575,7 +1603,7 @@ export default function ProjectCenter() {
                   <select
                     value={projGroupId || ""}
                     onChange={(e) => setProjGroupId(e.target.value || null)}
-                    className="w-full h-9 px-3 rounded-lg border border-app-border bg-app-sidebar/45 text-xs text-tx-secondary focus:outline-none"
+                    className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
                   >
                     <option value="">{t("projects.noGroup") || "不设分组"}</option>
                     {groups.map((g) => (
@@ -1592,7 +1620,7 @@ export default function ProjectCenter() {
                   <select
                     value={projVisibility}
                     onChange={(e) => setProjVisibility(e.target.value as any)}
-                    className="w-full h-9 px-3 rounded-lg border border-app-border bg-app-sidebar/45 text-xs text-tx-secondary focus:outline-none"
+                    className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
                   >
                     <option value="PRIVATE">{t("projects.private") || "私有：仅项目成员可见"}</option>
                     <option value="PUBLIC">{t("projects.public") || "公开：工作区全员可见"}</option>
@@ -1685,7 +1713,7 @@ export default function ProjectCenter() {
                 <select
                   value={taskProjId}
                   onChange={(e) => setTaskProjId(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-app-border bg-app-sidebar/45 text-xs text-tx-secondary focus:outline-none"
+                  className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
                   required
                 >
                   {projects.map((p) => (
@@ -1702,7 +1730,7 @@ export default function ProjectCenter() {
                 <select
                   value={taskAssigneeId}
                   onChange={(e) => setTaskAssigneeId(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-app-border bg-app-sidebar/45 text-xs text-tx-secondary focus:outline-none"
+                  className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
                 >
                   <option value={currentUserId}>我自己</option>
                   {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (

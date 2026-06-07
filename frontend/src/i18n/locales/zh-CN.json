@@ -32,7 +32,8 @@
     "selectNotebookHint": "请选择这篇笔记所属的笔记本",
     "createdBy": "由 {{name}} 创建",
     "unknownUser": "未知用户",
-    "more": "更多"
+    "more": "更多",
+    "add": "添加"
   },
   "auth": {
     "verifying": "正在验证身份...",
@@ -1757,5 +1758,19 @@
     "confirmDeleteGroup": "确定要删除该分组吗？此操作不可撤销。",
     "noGroups": "无分组",
     "noFavorites": "暂无收藏"
+  },
+  "calendar": {
+    "today": "今天",
+    "tomorrow": "明天",
+    "overdue": "逾期",
+    "clearDate": "清除日期",
+    "clear": "清除",
+    "sunday": "日",
+    "monday": "一",
+    "tuesday": "二",
+    "wednesday": "三",
+    "thursday": "四",
+    "friday": "五",
+    "saturday": "六"
   }
 }

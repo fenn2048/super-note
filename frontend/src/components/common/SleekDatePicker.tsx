@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   format,
   addMonths,
@@ -15,9 +16,10 @@ import {
   isPast,
   isTomorrow
 } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { zhCN, enUS } from "date-fns/locale";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface SleekDatePickerProps {
   value: string; // YYYY-MM-DD
@@ -34,9 +36,15 @@ export default function SleekDatePicker({
   className,
   align = "left"
 }: SleekDatePickerProps) {
+  const { t, i18n } = useTranslation();
+  const currentLocale = i18n.language.startsWith("zh") ? zhCN : enUS;
+  const headerFormat = i18n.language.startsWith("zh") ? "yyyy年 M月" : "MMMM yyyy";
+
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; showAbove: boolean } | null>(null);
 
   // Parse current value string into Date object, default to today if empty/invalid
   const selectedDate = value ? parse(value, "yyyy-MM-dd", new Date()) : null;
@@ -44,12 +52,12 @@ export default function SleekDatePicker({
   // Format label to show to user
   const getDisplayLabel = () => {
     if (!selectedDate) return placeholder;
-    if (isToday(selectedDate)) return "今天";
-    if (isTomorrow(selectedDate)) return "明天";
+    if (isToday(selectedDate)) return t("calendar.today");
+    if (isTomorrow(selectedDate)) return t("calendar.tomorrow", { defaultValue: "明天" });
     
     // Check if past (overdue)
     if (isPast(selectedDate)) {
-      return `逾期 ${format(selectedDate, "MM/dd")}`;
+      return `${t("calendar.overdue", { defaultValue: "逾期" })} ${format(selectedDate, "MM/dd")}`;
     }
     
     return format(selectedDate, "yyyy-MM-dd");
@@ -63,17 +71,66 @@ export default function SleekDatePicker({
     return "text-tx-secondary font-medium";
   };
 
+  const updateCoords = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const calendarWidth = 256;
+    const calendarHeight = popoverRef.current ? popoverRef.current.offsetHeight : 310;
+    
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const showAbove = spaceBelow < calendarHeight && rect.top > calendarHeight;
+    
+    let top = rect.bottom + 6;
+    if (showAbove) {
+      top = rect.top - calendarHeight - 6;
+    }
+    
+    let left = align === "right" ? rect.right - calendarWidth : rect.left;
+    if (left + calendarWidth > window.innerWidth) {
+      left = window.innerWidth - calendarWidth - 8;
+    }
+    if (left < 8) {
+      left = 8;
+    }
+    
+    setCoords({
+      top,
+      left,
+      showAbove
+    });
+  };
+
   // Click outside listener to close calendar
   useEffect(() => {
     if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const clickedTrigger = containerRef.current && containerRef.current.contains(target);
+      const clickedPopover = popoverRef.current && popoverRef.current.contains(target);
+      if (!clickedTrigger && !clickedPopover) {
         setIsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updateCoords();
+    
+    const timeoutId = setTimeout(updateCoords, 0);
+    const handleScrollOrResize = () => {
+      updateCoords();
+    };
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize, true);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize, true);
+    };
+  }, [isOpen, align]);
 
   // Adjust month viewing when opening calendar
   useEffect(() => {
@@ -113,7 +170,15 @@ export default function SleekDatePicker({
 
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const weekDays = ["一", "二", "三", "四", "五", "六", "日"];
+  const weekDays = [
+    t("calendar.monday", { defaultValue: "一" }),
+    t("calendar.tuesday", { defaultValue: "二" }),
+    t("calendar.wednesday", { defaultValue: "三" }),
+    t("calendar.thursday", { defaultValue: "四" }),
+    t("calendar.friday", { defaultValue: "五" }),
+    t("calendar.saturday", { defaultValue: "六" }),
+    t("calendar.sunday", { defaultValue: "日" })
+  ];
 
   return (
     <div ref={containerRef} className={cn("relative inline-block select-none", className)}>
@@ -133,7 +198,7 @@ export default function SleekDatePicker({
           <button
             onClick={handleClear}
             className="p-0.5 rounded-full hover:bg-app-active text-tx-tertiary hover:text-tx-primary shrink-0 ml-0.5"
-            title="清除日期"
+            title={t("calendar.clearDate", { defaultValue: "清除日期" })}
           >
             <X size={10} />
           </button>
@@ -141,26 +206,33 @@ export default function SleekDatePicker({
       </div>
 
       {/* Calendar Dropdown Popover */}
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className={cn(
-            "absolute mt-1.5 bg-app-elevated border border-app-border rounded-xl shadow-2xl z-[100] p-3 w-64 animate-in fade-in slide-in-from-top-1 duration-150",
-            align === "right" ? "right-0" : "left-0"
-          )}
+          ref={popoverRef}
+          style={{
+            position: "fixed",
+            top: coords ? `${coords.top}px` : "0px",
+            left: coords ? `${coords.left}px` : "0px",
+            opacity: coords ? 1 : 0,
+            pointerEvents: coords ? "auto" : "none",
+          }}
+          className="bg-app-elevated border border-app-border rounded-xl shadow-2xl z-[9999] p-3 w-64 animate-in fade-in slide-in-from-top-1 duration-150"
         >
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-3 px-1">
             <button
               onClick={prevMonth}
+              type="button"
               className="p-1 hover:bg-app-hover rounded-lg text-tx-secondary hover:text-tx-primary transition-colors"
             >
               <ChevronLeft size={14} />
             </button>
             <span className="text-xs font-bold text-tx-primary">
-              {format(currentMonth, "yyyy年 M月", { locale: zhCN })}
+              {format(currentMonth, headerFormat, { locale: currentLocale })}
             </span>
             <button
               onClick={nextMonth}
+              type="button"
               className="p-1 hover:bg-app-hover rounded-lg text-tx-secondary hover:text-tx-primary transition-colors"
             >
               <ChevronRight size={14} />
@@ -209,7 +281,7 @@ export default function SleekDatePicker({
               type="button"
               className="text-[10px] font-semibold text-accent-primary hover:underline transition-all"
             >
-              今天
+              {t("calendar.today")}
             </button>
             {selectedDate && (
               <button
@@ -217,11 +289,12 @@ export default function SleekDatePicker({
                 type="button"
                 className="text-[10px] font-semibold text-tx-tertiary hover:text-accent-danger transition-all"
               >
-                清除
+                {t("calendar.clear", { defaultValue: "清除" })}
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
