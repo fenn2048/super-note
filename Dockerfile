@@ -63,7 +63,7 @@ RUN if [ -n "$APK_MIRROR" ]; then \
 COPY package.json /app/package.json
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund --legacy-peer-deps
 
 # rollup 原生绑定按目标架构选 musl 版（alpine 必须 musl，不能用 gnu）
 RUN ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}") && \
@@ -104,7 +104,7 @@ RUN if [ -n "$APK_MIRROR" ]; then \
 RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers
 
 COPY backend/package.json backend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund --legacy-peer-deps
 COPY backend/ .
 RUN npx tsc
 
@@ -140,7 +140,7 @@ RUN apk add --no-cache tini docker-cli
 COPY package.json ./package.json
 COPY backend/package.json backend/package-lock.json ./backend/
 RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers \
-    && cd backend && npm ci --omit=dev --no-audit --no-fund \
+    && cd backend && npm install --omit=dev --no-audit --no-fund --legacy-peer-deps \
     && apk del .build-deps \
     && npm cache clean --force \
     && rm -rf /root/.npm /tmp/* /var/cache/apk/*
