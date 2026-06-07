@@ -48,52 +48,57 @@ export function getDb(): Database.Database {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    // ---- P1 加固 PRAGMA ----
-    // busy_timeout：极短时间窗口内允许 SQLite 内部重试，避免多连接 / 多进程
-    // 同时写时直接抛 SQLITE_BUSY。better-sqlite3 单例本身已串行化所有 SQL，
-    // 但当出现"主进程 + 备份子进程""主进程 + CLI 工具""Electron 主 + 子"
-    // 这类多连接场景时，没有 busy_timeout 会立刻报错；5s 是一个安全窗口。
-    db.pragma("busy_timeout = 5000");
-    // synchronous = NORMAL：WAL 模式下 NORMAL 已经能在断电时保证持久化，
-    // 性能比 FULL 好得多；这是 SQLite 官方对 WAL 的推荐值。
-    db.pragma("synchronous = NORMAL");
-    // cache_size：限定 20MB（-20000 单位为 KB），避免缓存暴涨占用主机内存
-    db.pragma("cache_size = -20000");
-    // auto_vacuum = INCREMENTAL：让 DELETE 产生的 free page 可以通过
-    //   PRAGMA incremental_vacuum(...) 真正归还给操作系统，用户看到的
-    //   .db 文件大小会随删除动作缩小。
-    // 老库首次迁移会做一次 VACUUM 以切换模式（一次性代价），之后每次
-    //   reclaimSpace() 的 incremental_vacuum 都是廉价的文件尾截断。
-    // 失败不致命：失败时退回到历史"占用只增不减"的行为，不影响数据正确性。
-    enableIncrementalAutoVacuum(db);
+
+    const formatDbError = (e: any, stage: string) => {
+      const message = e instanceof Error ? e.message : String(e);
+      const code = e?.code || "UNKNOWN";
+      return (
+        `[db] SQLite ${stage} 异常 (${code}): ${message}\n` +
+        `数据库文件可能已损坏或格式不正确：${DB_PATH}\n` +
+        `修复指引：\n` +
+        `  1) 立即停止服务，避免进一步写入；\n` +
+        `  2) 备份当前文件（含 -wal/-shm）到只读介质；\n` +
+        `  3) 优先使用 nowen-note 的备份恢复功能（POST /api/backups/<file>/restore?dryRun=1 预览）；\n` +
+        `  4) 若无可用备份，可尝试：\n` +
+        `       sqlite3 ${path.basename(DB_PATH)} ".recover" | sqlite3 recovered.db\n` +
+        `     再用 recovered.db 替换原文件。`
+      );
+    };
+
+    try {
+      db = new Database(DB_PATH);
+      db.pragma("journal_mode = WAL");
+      db.pragma("foreign_keys = ON");
+      // ---- P1 加固 PRAGMA ----
+      // busy_timeout：极短时间窗口内允许 SQLite 内部重试，避免多连接 / 多进程
+      // 同时写时直接抛 SQLITE_BUSY。better-sqlite3 单例本身已串行化所有 SQL，
+      // 但当出现"主进程 + 备份子进程""主进程 + CLI 工具""Electron 主 + 子"
+      // 这类多连接场景时，没有 busy_timeout 会立刻报错；5s 是一个安全窗口。
+      db.pragma("busy_timeout = 5000");
+      // synchronous = NORMAL：WAL 模式下 NORMAL 已经能在断电时保证持久化，
+      // 性能比 FULL 好得多；这是 SQLite 官方对 WAL 的推荐值。
+      db.pragma("synchronous = NORMAL");
+      // auto_vacuum = INCREMENTAL：让 DELETE 产生的 free page 可以通过
+      //   PRAGMA incremental_vacuum(...) 真正归还给操作系统，用户看到的
+      //   .db 文件大小会随删除动作缩小。
+      // 老库首次迁移会做一次 VACUUM 以切换模式（一次性代价），之后每次
+      //   reclaimSpace() 的 incremental_vacuum 都是廉价的文件尾截断。
+      // 失败不致命：失败时退回到历史"占用只增不减"的行为，不影响数据正确性。
+      enableIncrementalAutoVacuum(db);
+    } catch (e) {
+      throw new Error(formatDbError(e, "连接/配置"));
+    }
+
     // 完整性快速自检：5~50ms 量级，能发现绝大多数 page-level 损坏。
     // 损坏时直接抛错让进程拒绝启动——比"看似能跑、读到一半才报错"安全得多。
     try {
       const r = db.prepare("PRAGMA quick_check").get() as { quick_check: string } | undefined;
       const result = r?.quick_check;
       if (result && result !== "ok") {
-        throw new Error(
-          `[db] SQLite quick_check failed: ${result}\n` +
-          `数据库文件可能已损坏：${DB_PATH}\n` +
-          `修复指引：\n` +
-          `  1) 立即停止服务，避免进一步写入；\n` +
-          `  2) 备份当前文件（含 -wal/-shm）到只读介质；\n` +
-          `  3) 优先使用 nowen-note 的备份恢复功能（POST /api/backups/<file>/restore?dryRun=1 预览）；\n` +
-          `  4) 若无可用备份，可尝试：\n` +
-          `       sqlite3 ${path.basename(DB_PATH)} ".recover" | sqlite3 recovered.db\n` +
-          `     再用 recovered.db 替换原文件。`
-        );
+        throw new Error(`SQLite quick_check failed: ${result}`);
       }
     } catch (e) {
-      // quick_check 自身抛错（极端损坏）也让启动失败。
-      if (e instanceof Error && e.message.startsWith("[db]")) throw e;
-      throw new Error(
-        `[db] SQLite quick_check 执行异常: ${e instanceof Error ? e.message : String(e)}\n` +
-        `数据库文件可能已损坏：${DB_PATH}`
-      );
+      throw new Error(formatDbError(e, "quick_check"));
     }
     initSchema(db);
     // ---- D3：版本化迁移 ----
