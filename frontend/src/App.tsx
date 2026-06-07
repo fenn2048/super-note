@@ -896,17 +896,19 @@ function AppLayout() {
         />
       )}
 
-      <AnimatePresence>
-        {showDiaryComposer && (
-          <DiaryComposeModal
-            isOpen={showDiaryComposer}
-            onClose={() => setShowDiaryComposer(false)}
-            onPost={() => {
-              window.dispatchEvent(new CustomEvent("nowen:workspace-changed"));
-            }}
-          />
-        )}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showDiaryComposer && (
+            <DiaryComposeModal
+              isOpen={showDiaryComposer}
+              onClose={() => setShowDiaryComposer(false)}
+              onPost={() => {
+                window.dispatchEvent(new CustomEvent("nowen:workspace-changed"));
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
 
       {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
       <CommandPalette
@@ -921,27 +923,31 @@ function AppLayout() {
       <UpdateNotifier />
 
       {/* 全局设置弹窗 */}
-      <AnimatePresence>
-        {showSettings && (
-          <SettingsModal
-            defaultTab={settingsTab}
-            onClose={() => setShowSettings(false)}
-          />
-        )}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showSettings && (
+            <SettingsModal
+              defaultTab={settingsTab}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
 
       {/* 太空飞船休息提醒 */}
-      <AnimatePresence>
-        {showReminder && (
-          <SpaceshipReminder
-            isOpen={showReminder}
-            onClose={() => {
-              setShowReminder(false);
-              setReminderTrigger((prev) => prev + 1);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showReminder && (
+            <SpaceshipReminder
+              isOpen={showReminder}
+              onClose={() => {
+                setShowReminder(false);
+                setReminderTrigger((prev) => prev + 1);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
     </div>
   );
 }
@@ -1616,7 +1622,16 @@ function App() {
     return (
       <ThemeProvider>
         <ConfirmProvider>
-          <SharedNoteView shareToken={shareMatch[1]} />
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={24} className="animate-spin text-indigo-500" />
+                <p className="text-sm text-zinc-400 dark:text-zinc-500">正在加载分享页面...</p>
+              </div>
+            </div>
+          }>
+            <SharedNoteView shareToken={shareMatch[1]} />
+          </Suspense>
           <Toaster />
         </ConfirmProvider>
       </ThemeProvider>
