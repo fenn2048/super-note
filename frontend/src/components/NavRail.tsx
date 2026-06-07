@@ -30,7 +30,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   BookOpen, Star, Trash2, ListTodo, BrainCircuit,
-  Sparkles, NotebookPen, FolderOpen,
+  Sparkles, NotebookPen, FolderOpen, Briefcase,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
   Columns2, Columns3, Cloud, CloudOff, Bell, Home,
 } from "lucide-react";
@@ -68,8 +68,8 @@ const NAV_CONFIG: NavConfigItem[] = [
   { icon: <Trash2 size={RAIL_ICON_SIZE} />,      labelKey: "sidebar.trash",       mode: "trash",                            group: "workspace" },
   // ─── 内容模块 ───
   { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "modules" },
-  { icon: <ListTodo size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.tasks",       mode: "tasks",      feature: "tasks",     group: "modules" },
   { icon: <BrainCircuit size={RAIL_ICON_SIZE} />,labelKey: "sidebar.mindMaps",    mode: "mindmaps",   feature: "mindmaps",  group: "modules" },
+  { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "modules" },
   // ─── 工具 ───
   { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "tools" },
 ];
@@ -252,7 +252,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
           />
         )}
         {item.icon}
-        {item.mode === "tasks" && state.reminderActiveCount > 0 && (
+        {item.mode === "projects" && state.reminderActiveCount > 0 && (
           <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent-danger text-[9px] font-bold text-white flex items-center justify-center leading-none z-10">
             {state.reminderActiveCount}
           </span>

@@ -37,7 +37,7 @@ export interface SiteSettings {
 }
 
 const DEFAULTS: SiteSettings = {
-  site_title: "nowen-note",
+  site_title: "love-write",
   site_favicon: "",
   editor_font_family: "",
   // 仅作为"旧前端拿到的透传兜底值"存在；新前端忽略。

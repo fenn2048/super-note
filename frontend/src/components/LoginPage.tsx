@@ -913,13 +913,9 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
           </form>
 
           {/* 底部提示 */}
-          <p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-6">
-            {isRegister ? t("auth.registerHint") : t("auth.defaultCredentials")}
-          </p>
-
-          {!allowRegistration && !isRegister && (
-            <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-600 mt-1.5">
-              {t("auth.registerClosed")}
+          {isRegister && (
+            <p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-6">
+              {t("auth.registerHint")}
             </p>
           )}
 

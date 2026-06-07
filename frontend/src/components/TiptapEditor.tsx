@@ -1482,7 +1482,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
           allowSpaces: false,
           render: () => {
             return {
-              onStart: (props) => {
+              onStart: (props: any) => {
                 setTiptapMention({
                   query: props.query,
                   range: props.range,
@@ -1490,7 +1490,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
                   command: props.command,
                 });
               },
-              onUpdate: (props) => {
+              onUpdate: (props: any) => {
                 setTiptapMention((prev) => prev ? {
                   ...prev,
                   query: props.query,
@@ -1499,7 +1499,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
                   command: props.command,
                 } : null);
               },
-              onKeyDown: (props) => {
+              onKeyDown: (props: any) => {
                 if (props.event.key === 'ArrowUp' || props.event.key === 'ArrowDown' || props.event.key === 'Enter' || props.event.key === 'Escape') {
                   return true;
                 }

@@ -1,4 +1,4 @@
-import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef } from "@/types";
+import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion } from "@/types";
 import {
   shouldEnqueue as _shouldEnqueue,
   enqueue as _enqueue,
@@ -1065,6 +1065,70 @@ export const api = {
       `/tasks/calendar?${params.toString()}`,
     );
   },
+
+  // Projects API
+  getProjects: (workspaceId?: string, filter?: string, groupId?: string) => {
+    const params = new URLSearchParams();
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (filter) params.set("filter", filter);
+    if (groupId) params.set("groupId", groupId);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<Project[]>(`/projects${qs}`);
+  },
+  getProject: (id: string) => request<Project>(`/projects/${id}`),
+  createProject: (data: Partial<Project>) => {
+    const ws = getCurrentWorkspace();
+    const payload = {
+      workspaceId: ws && ws !== "personal" ? ws : null,
+      ...data
+    };
+    return request<Project>("/projects", { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateProject: (id: string, data: Partial<Project>) => request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteProject: (id: string) => request<{ message: string }>(`/projects/${id}`, { method: "DELETE" }),
+
+  getProjectGroups: (workspaceId?: string) => {
+    const params = new URLSearchParams();
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<ProjectGroup[]>(`/projects/groups${qs}`);
+  },
+  createProjectGroup: (data: { name: string; workspaceId?: string | null }) => {
+    const ws = getCurrentWorkspace();
+    const payload = {
+      workspaceId: data.workspaceId !== undefined ? data.workspaceId : (ws && ws !== "personal" ? ws : null),
+      ...data
+    };
+    return request<ProjectGroup>("/projects/groups", { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateProjectGroup: (groupId: string, data: { name?: string; sortOrder?: number }) => request<ProjectGroup>(`/projects/groups/${groupId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteProjectGroup: (groupId: string) => request<{ message: string }>(`/projects/groups/${groupId}`, { method: "DELETE" }),
+
+  getProjectStages: (projectId: string) => request<ProjectStage[]>(`/projects/${projectId}/stages`),
+  createProjectStage: (projectId: string, data: { name: string }) => request<ProjectStage>(`/projects/${projectId}/stages`, { method: "POST", body: JSON.stringify(data) }),
+  updateProjectStage: (stageId: string, data: { name?: string; sortOrder?: number }) => request<ProjectStage>(`/projects/stages/${stageId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteProjectStage: (stageId: string) => request<{ message: string }>(`/projects/stages/${stageId}`, { method: "DELETE" }),
+
+  getMyTasks: (workspaceId?: string, filter?: string) => {
+    const params = new URLSearchParams();
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (filter) params.set("filter", filter);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<ProjectTask[]>(`/projects/my-tasks${qs}`);
+  },
+
+  createProjectTask: (projectId: string, data: Partial<ProjectTask> & { participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(data) }),
+  updateProjectTask: (taskId: string, data: Partial<ProjectTask> & { checklists?: any[]; participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteProjectTask: (taskId: string) => request<{ message: string }>(`/projects/tasks/${taskId}`, { method: "DELETE" }),
+
+  getProjectDiscussions: (projectId: string) => request<ProjectDiscussion[]>(`/projects/${projectId}/discussions`),
+  createProjectDiscussion: (projectId: string, data: { content?: string; images?: string[]; attachments?: any[]; linkedCards?: any[] }) => request<ProjectDiscussion>(`/projects/${projectId}/discussions`, { method: "POST", body: JSON.stringify(data) }),
+
+  addProjectMember: (projectId: string, memberUserId: string, role?: string) => request<{ message: string }>(`/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ memberUserId, role }) }),
+  removeProjectMember: (projectId: string, memberUserId: string) => request<{ message: string }>(`/projects/${projectId}/members/${memberUserId}`, { method: "DELETE" }),
 
   // Security
   // 注意：后端在修改密码成功后会 bump tokenVersion，让其它端旧 token 立即失效，

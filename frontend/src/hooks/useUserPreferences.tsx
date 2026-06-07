@@ -45,6 +45,8 @@ export interface UserPreferences {
   lockOnOpen: boolean;
   /** 阅读密度（cozy/compact）。默认 cozy，即与历史一致的宽松排版。 */
   readingDensity: ReadingDensity;
+  /** 太空飞船健康提醒间隔（单位：分钟）。默认 30。 */
+  reminderInterval: number;
 }
 
 const DEFAULT_PREFS: UserPreferences = {
@@ -52,6 +54,7 @@ const DEFAULT_PREFS: UserPreferences = {
   outlineDefaultOpen: false,
   lockOnOpen: false,
   readingDensity: "cozy",
+  reminderInterval: 30,
 };
 
 function readFromStorage(): UserPreferences {
@@ -73,6 +76,9 @@ function readFromStorage(): UserPreferences {
       readingDensity: parsed.readingDensity === "compact" || parsed.readingDensity === "cozy"
         ? parsed.readingDensity
         : DEFAULT_PREFS.readingDensity,
+      reminderInterval: typeof parsed.reminderInterval === "number"
+        ? parsed.reminderInterval
+        : DEFAULT_PREFS.reminderInterval,
     };
   } catch {
     return DEFAULT_PREFS;

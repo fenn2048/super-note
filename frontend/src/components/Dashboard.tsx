@@ -6,6 +6,7 @@ import {
   FileText,
   Loader2,
   ChevronRight,
+  ChevronDown,
   Bell,
   Clock,
   Sparkles,
@@ -16,11 +17,11 @@ import {
   ShieldAlert,
   Link,
 } from "lucide-react";
-import { api, setCurrentWorkspace, getServerUrl } from "@/lib/api";
+import { api, setCurrentWorkspace, getServerUrl, getCurrentWorkspace } from "@/lib/api";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite } from "@/types";
+import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from "@/types";
 import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
 
 // ---------------------------------------------------------------------------
@@ -344,8 +345,15 @@ export default function Dashboard() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [creating, setCreating] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [showSpaceDropdown, setShowSpaceDropdown] = useState(false);
+
+  const currentWorkspaceId = getCurrentWorkspace();
+  const currentWorkspace = currentWorkspaceId === "personal"
+    ? { id: "personal", name: "个人空间", icon: "🏠" }
+    : workspaces.find(w => w.id === currentWorkspaceId) || { id: "personal", name: "个人空间", icon: "🏠" };
 
   const hasWorkspaces = workspaces.length > 0;
+  const hasFamilyGroup = workspaces.some(w => w.name === "我的家庭" || w.icon === "🏠" || w.name.includes("家庭"));
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -361,6 +369,15 @@ export default function Dashboard() {
   useEffect(() => {
     api.getWorkspaces()
       .then((list) => setWorkspaces(list))
+      .catch(() => {});
+  }, []);
+
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // 加载用户信息
+  useEffect(() => {
+    api.getMe()
+      .then((user) => setCurrentUser(user))
       .catch(() => {});
   }, []);
 
@@ -429,6 +446,21 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const handleWorkspaceChanged = () => {
+      api.getWorkspaces().then(setWorkspaces).catch(() => {});
+      loadDashboard();
+    };
+    window.addEventListener("nowen:workspace-changed", handleWorkspaceChanged);
+    return () => window.removeEventListener("nowen:workspace-changed", handleWorkspaceChanged);
+  }, [loadDashboard]);
+
+  const handleSwitchSpace = (id: string) => {
+    setCurrentWorkspace(id);
+    setShowSpaceDropdown(false);
+    window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: id } }));
+  };
 
   const upcomingTasks = tasks.filter(
     (t) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
@@ -531,6 +563,58 @@ export default function Dashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
+      {/* 首页顶栏 */}
+      <header className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/20 shrink-0 select-none" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
+        <span className="text-sm font-bold text-tx-primary">首页</span>
+        <div className="relative">
+          <button
+            onClick={() => setShowSpaceDropdown(!showSpaceDropdown)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-app-border bg-app-surface hover:bg-app-hover active:scale-95 transition-all text-xs font-semibold text-tx-primary"
+          >
+            <span>{currentWorkspace.icon} {currentWorkspace.name}</span>
+            <ChevronDown size={14} className={cn("transition-transform duration-200", showSpaceDropdown && "rotate-180")} />
+          </button>
+          
+          <AnimatePresence>
+            {showSpaceDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSpaceDropdown(false)} />
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  className="absolute right-0 mt-1 bg-app-elevated border border-app-border rounded-xl shadow-lg z-50 overflow-hidden w-[160px] py-1"
+                >
+                  <button
+                    onClick={() => handleSwitchSpace("personal")}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-app-hover transition-colors",
+                      currentWorkspaceId === "personal" && "text-accent-primary font-bold bg-accent-primary/5"
+                    )}
+                  >
+                    <span>🏠</span>
+                    <span>个人空间</span>
+                  </button>
+                  {workspaces.map((w) => (
+                    <button
+                      key={w.id}
+                      onClick={() => handleSwitchSpace(w.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-app-hover transition-colors",
+                        currentWorkspaceId === w.id && "text-accent-primary font-bold bg-accent-primary/5"
+                      )}
+                    >
+                      <span>{w.icon || "🏢"}</span>
+                      <span className="truncate">{w.name}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </header>
+
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 space-y-6">
           {/* ===== 欢迎区域 ===== */}
@@ -545,7 +629,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-tx-primary leading-tight">
-                  {greeting} 👋
+                  {greeting} {currentUser?.displayName || currentUser?.username || ""} 👋
                 </h1>
                 <p className="text-xs text-tx-tertiary mt-0.5">
                   {hasWorkspaces ? "选择一个空间开始协作" : "目前只有你一个人，创建家庭空间邀请家人吧"}
@@ -603,7 +687,7 @@ export default function Dashboard() {
           )}
 
           {/* ===== 创建家庭空间（无工作区时展示） ===== */}
-          {!hasWorkspaces && (
+          {!hasFamilyGroup && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}

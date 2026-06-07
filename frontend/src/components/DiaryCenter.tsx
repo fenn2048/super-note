@@ -2298,6 +2298,27 @@ export default function DiaryCenter() {
     return () => window.removeEventListener("nowen:workspace-changed", onWs);
   }, [loadTimeline, loadStats]);
 
+  useEffect(() => {
+    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+    
+    let lastScrollTop = 0;
+    const handleScroll = () => {
+      const scrollTop = viewport.scrollTop;
+      if (scrollTop <= 0) {
+        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+      } else if (scrollTop > lastScrollTop + 10) {
+        window.dispatchEvent(new CustomEvent("nowen:scroll-hide-bars"));
+      } else if (scrollTop < lastScrollTop - 10) {
+        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+      }
+      lastScrollTop = scrollTop;
+    };
+    
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [items]);
+
   const rangeKey = useMemo(() => JSON.stringify(activeRange), [activeRange]);
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -2507,7 +2528,11 @@ export default function DiaryCenter() {
           </div>
 
           {/* 发布框 — 列表模式下显示 */}
-          {viewMode === "list" && <ComposeBox onPost={handlePost} />}
+          {viewMode === "list" && (
+            <div className="hidden md:block">
+              <ComposeBox onPost={handlePost} />
+            </div>
+          )}
 
           {/* 日历视图 / 时间线 */}
           {viewMode === "calendar" ? (

@@ -865,6 +865,32 @@ export default function TaskCenter() {
   const [newTitle, setNewTitle] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (viewMode !== "list") {
+      window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+      return;
+    }
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    
+    let lastScrollTop = 0;
+    const handleScroll = () => {
+      const scrollTop = viewport.scrollTop;
+      if (scrollTop <= 0) {
+        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+      } else if (scrollTop > lastScrollTop + 10) {
+        window.dispatchEvent(new CustomEvent("nowen:scroll-hide-bars"));
+      } else if (scrollTop < lastScrollTop - 10) {
+        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+      }
+      lastScrollTop = scrollTop;
+    };
+    
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [viewMode, tasks]);
   // pendingOrphans 由 QuickAdd 在提交瞬间回传，主组件在 createTask 成功后
   // 把这些孤儿附件 bind 到新 task；提交失败时孤儿留在表里由清理脚本处理。
   const pendingOrphansRef = useRef<string[]>([]);
@@ -1241,7 +1267,7 @@ export default function TaskCenter() {
             </div>
 
             {/* Task List */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-3">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-3">
               {isLoading ? (
                 <div className="flex items-center justify-center h-32 text-tx-tertiary text-sm">
                   {t('common.loading')}

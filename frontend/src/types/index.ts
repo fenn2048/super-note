@@ -100,6 +100,7 @@ export interface WorkspaceFeatures {
   mindmaps: boolean;
   files: boolean;
   favorites: boolean;
+  projects: boolean;
 }
 
 /** 功能开关的稳定排序 + 展示元信息，UI 渲染列表用。 */
@@ -114,6 +115,7 @@ export const WORKSPACE_FEATURE_META: Array<{
   { key: "mindmaps", label: "思维导图", description: "节点式思维导图" },
   { key: "files", label: "文件", description: "独立文件管理" },
   { key: "favorites", label: "收藏", description: "快速收藏的笔记集合" },
+  { key: "projects", label: "项目", description: "项目管理、任务看板与协作" },
 ];
 
 export interface Notebook {
@@ -197,7 +199,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects";
 
 export type MobileView = "list" | "editor";
 
@@ -544,4 +546,106 @@ export interface ShareComment {
   isResolved: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ========== 项目管理系统 (Project Management System) ==========
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  cover: string;
+  startDate: string | null;
+  endDate: string | null;
+  visibility: "PRIVATE" | "PUBLIC";
+  workspaceId: string | null;
+  groupId: string | null;
+  isArchived: number;
+  isDeleted: number;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+  ownerName?: string;
+  ownerDisplayName?: string;
+  groupName?: string;
+  completedTasksCount?: number;
+  totalTasksCount?: number;
+  members?: ProjectMember[];
+}
+
+export interface ProjectMember {
+  userId: string;
+  role: "owner" | "member";
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+export interface ProjectGroup {
+  id: string;
+  name: string;
+  workspaceId: string | null;
+  userId: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface ProjectStage {
+  id: string;
+  projectId: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  tasks?: ProjectTask[];
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  stageId: string;
+  title: string;
+  isCompleted: number;
+  assigneeId: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  description: string;
+  cover: string;
+  sortOrder: number;
+  creatorId: string;
+  modifierId: string;
+  priority: number;
+  remindAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  assigneeName?: string;
+  assigneeDisplayName?: string;
+  assigneeAvatarUrl?: string | null;
+  checklistTotal?: number;
+  checklistCompleted?: number;
+  participants?: Array<{ userId: string; username: string; displayName: string | null; avatarUrl: string | null }>;
+  tags?: Array<{ id: string; name: string; color: string }>;
+  checklists?: ProjectTaskChecklist[];
+}
+
+export interface ProjectTaskChecklist {
+  id: string;
+  taskId: string;
+  title: string;
+  isCompleted: number;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface ProjectDiscussion {
+  id: string;
+  projectId: string;
+  userId: string;
+  content: string;
+  images: string[];
+  attachments: any[];
+  linkedCards: Array<{ type: "task" | "note"; id: string; title: string }>;
+  createdAt: string;
+  username?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
