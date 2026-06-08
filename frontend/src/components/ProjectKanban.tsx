@@ -6,6 +6,7 @@ import {
   Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus,
   Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal
 } from "lucide-react";
+import GenericTagInput from "@/components/GenericTagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,11 +37,9 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
 
   // Task Detail Modal State
   const [activeTask, setActiveTask] = useState<ProjectTask | null>(null);
-  const [workspaceTags, setWorkspaceTags] = useState<Tag[]>([]);
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
-  const [showTagDropdown, setShowTagDropdown] = useState(false);
 
   // Listen to open-task events from other components (like Calendar or Discussion)
   useEffect(() => {
@@ -63,13 +62,6 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
   }, [stages]);
 
   // Fetch workspace tags when Task Details opens
-  useEffect(() => {
-    if (activeTask) {
-      api.getTags()
-        .then((tags) => setWorkspaceTags(tags))
-        .catch(console.error);
-    }
-  }, [activeTask]);
 
   const handleAddStage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,7 +227,6 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
         tags: updated,
       };
     });
-    setShowTagDropdown(false);
   };
 
   const setAssignee = (user: { userId: string; username: string; displayName: string | null; avatarUrl: string | null } | null) => {
@@ -647,63 +638,15 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
                     <TagIcon size={13} />
                     <span>{t("projects.tags") || "标签"}</span>
                   </div>
-                  <div className="flex-1 flex items-center flex-wrap gap-1.5">
-                    {activeTask.tags?.map((tag) => (
-                      <span
-                        key={tag.id}
-                        style={{
-                          backgroundColor: `${tag.color}15`,
-                          borderColor: `${tag.color}35`,
-                          color: tag.color,
-                        }}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[9px] font-bold uppercase tracking-wider"
-                      >
-                        <span>{tag.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleTaskTag(tag as Tag)}
-                          className="hover:text-red-500 rounded p-0.5"
-                        >
-                          <X size={8} />
-                        </button>
-                      </span>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setShowTagDropdown(!showTagDropdown)}
-                      className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg border border-dashed border-app-border/80 hover:border-app-border text-tx-tertiary hover:text-tx-secondary font-semibold text-[10px]"
-                    >
-                      <Plus size={10} />
-                      <span>{t("projects.addTag") || "添加标签"}</span>
-                    </button>
+                  <div className="flex-1">
+                    <GenericTagInput
+                      selectedTags={activeTask.tags || []}
+                      onTagsChange={(newTags) =>
+                        setActiveTask((prev) => (prev ? { ...prev, tags: newTags } : null))
+                      }
+                      placeholder={t("projects.addTag") || "添加标签"}
+                    />
                   </div>
-
-                  {/* Tags Selector Dropdown */}
-                  {showTagDropdown && (
-                    <div className="absolute top-8 left-20 bg-app-elevated border border-app-border rounded-xl shadow-xl z-20 max-h-48 overflow-y-auto p-1.5 space-y-0.5 w-48">
-                      {workspaceTags.length === 0 ? (
-                        <p className="text-[10px] text-tx-tertiary p-2 text-center">空间暂无标签</p>
-                      ) : (
-                        workspaceTags.map((tag) => {
-                          const hasTag = activeTask.tags?.some((t) => t.id === tag.id);
-                          return (
-                            <button
-                              key={tag.id}
-                              type="button"
-                              onClick={() => toggleTaskTag(tag)}
-                              className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-app-hover text-left text-[11px] font-semibold text-tx-secondary hover:text-tx-primary"
-                            >
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
-                                <span className="truncate">{tag.name}</span>
-                              </div>
-                              {hasTag && <Check size={11} className="text-accent-primary" />}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* Participants */}

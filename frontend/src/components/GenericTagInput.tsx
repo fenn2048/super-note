@@ -7,19 +7,25 @@ import { api } from "@/lib/api";
 import { Tag } from "@/types";
 import TagColorPicker from "@/components/TagColorPicker";
 
-interface GenericTagInputProps {
-  selectedTags: Tag[];
-  onTagsChange: (tags: Tag[]) => void;
-  placeholder?: string;
-  className?: string;
+interface TagLike {
+  id: string;
+  name: string;
+  color: string;
 }
 
-export default function GenericTagInput({
+type GenericTagInputProps<T extends TagLike> = {
+  selectedTags: T[];
+  onTagsChange: (tags: T[]) => void;
+  placeholder?: string;
+  className?: string;
+};
+
+export default function GenericTagInput<T extends TagLike>({
   selectedTags,
   onTagsChange,
   placeholder,
   className,
-}: GenericTagInputProps) {
+}: GenericTagInputProps<T>) {
   const { t } = useTranslation();
   const { state } = useApp();
   const actions = useAppActions();
@@ -71,7 +77,7 @@ export default function GenericTagInput({
         actions.setTags(allTags);
       }
 
-      const newTags = [...selectedTags, tag];
+      const newTags = [...selectedTags, tag] as T[];
       onTagsChange(newTags);
     } catch (err) {
       console.error("Failed to add tag:", err);

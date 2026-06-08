@@ -191,6 +191,102 @@ projectsRouter.get("/my-tasks", (c) => {
   return c.json(tasks);
 });
 
+// 2. Project Groups
+// List groups
+projectsRouter.get("/groups", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const workspaceId = c.req.query("workspaceId") || null;
+
+  if (workspaceId) {
+    const role = getUserWorkspaceRole(workspaceId, userId);
+    if (!role) return c.json({ error: "无权访问该工作区", code: "FORBIDDEN" }, 403);
+  }
+
+  let sql = "SELECT * FROM project_groups WHERE ";
+  const params: any[] = [];
+  if (workspaceId) {
+    sql += "workspaceId = ? ";
+    params.push(workspaceId);
+  } else {
+    sql += "workspaceId IS NULL AND userId = ? ";
+    params.push(userId);
+  }
+  sql += "ORDER BY sortOrder ASC, name ASC";
+
+  const rows = db.prepare(sql).all(params);
+  return c.json(rows);
+});
+
+// Create group
+projectsRouter.post("/groups", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const body = await c.req.json();
+  const { name, workspaceId = null } = body;
+
+  if (!name) return c.json({ error: "分组名称不能为空" }, 400);
+
+  if (workspaceId) {
+    const role = getUserWorkspaceRole(workspaceId, userId);
+    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
+  }
+
+  const id = uuid();
+  db.prepare("INSERT INTO project_groups (id, name, workspaceId, userId) VALUES (?, ?, ?, ?)").run(id, name, workspaceId, userId);
+  const newGroup = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(id);
+  return c.json(newGroup);
+});
+
+// Update group
+projectsRouter.put("/groups/:groupId", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const groupId = c.req.param("groupId");
+  const body = await c.req.json();
+  const { name, sortOrder } = body;
+
+  const group = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId) as any;
+  if (!group) return c.json({ error: "分组不存在" }, 404);
+
+  if (group.workspaceId) {
+    const role = getUserWorkspaceRole(group.workspaceId, userId);
+    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
+  } else {
+    if (group.userId !== userId) return c.json({ error: "权限不足", code: "FORBIDDEN" }, 403);
+  }
+
+  if (name !== undefined) {
+    db.prepare("UPDATE project_groups SET name = ? WHERE id = ?").run(name, groupId);
+  }
+  if (sortOrder !== undefined) {
+    db.prepare("UPDATE project_groups SET sortOrder = ? WHERE id = ?").run(sortOrder, groupId);
+  }
+
+  const updatedGroup = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId);
+  return c.json(updatedGroup);
+});
+
+// Delete group
+projectsRouter.delete("/groups/:groupId", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const groupId = c.req.param("groupId");
+
+  const group = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId) as any;
+  if (!group) return c.json({ error: "分组不存在" }, 404);
+
+  if (group.workspaceId) {
+    const role = getUserWorkspaceRole(group.workspaceId, userId);
+    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
+  } else {
+    if (group.userId !== userId) return c.json({ error: "权限不足", code: "FORBIDDEN" }, 403);
+  }
+
+  db.prepare("DELETE FROM project_groups WHERE id = ?").run(groupId);
+  return c.json({ message: "分组已删除" });
+});
+
 // Get single project
 projectsRouter.get("/:id", (c) => {
   const userId = c.req.header("X-User-Id")!;
@@ -303,102 +399,6 @@ projectsRouter.delete("/:id", (c) => {
   }
 });
 
-// 2. Project Groups
-// List groups
-projectsRouter.get("/groups", (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const workspaceId = c.req.query("workspaceId") || null;
-
-  if (workspaceId) {
-    const role = getUserWorkspaceRole(workspaceId, userId);
-    if (!role) return c.json({ error: "无权访问该工作区", code: "FORBIDDEN" }, 403);
-  }
-
-  let sql = "SELECT * FROM project_groups WHERE ";
-  const params: any[] = [];
-  if (workspaceId) {
-    sql += "workspaceId = ? ";
-    params.push(workspaceId);
-  } else {
-    sql += "workspaceId IS NULL AND userId = ? ";
-    params.push(userId);
-  }
-  sql += "ORDER BY sortOrder ASC, name ASC";
-
-  const rows = db.prepare(sql).all(params);
-  return c.json(rows);
-});
-
-// Create group
-projectsRouter.post("/groups", async (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const body = await c.req.json();
-  const { name, workspaceId = null } = body;
-
-  if (!name) return c.json({ error: "分组名称不能为空" }, 400);
-
-  if (workspaceId) {
-    const role = getUserWorkspaceRole(workspaceId, userId);
-    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
-  }
-
-  const id = uuid();
-  db.prepare("INSERT INTO project_groups (id, name, workspaceId, userId) VALUES (?, ?, ?, ?)").run(id, name, workspaceId, userId);
-  const newGroup = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(id);
-  return c.json(newGroup);
-});
-
-// Update group
-projectsRouter.put("/groups/:groupId", async (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const groupId = c.req.param("groupId");
-  const body = await c.req.json();
-  const { name, sortOrder } = body;
-
-  const group = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId) as any;
-  if (!group) return c.json({ error: "分组不存在" }, 404);
-
-  if (group.workspaceId) {
-    const role = getUserWorkspaceRole(group.workspaceId, userId);
-    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
-  } else {
-    if (group.userId !== userId) return c.json({ error: "权限不足", code: "FORBIDDEN" }, 403);
-  }
-
-  if (name !== undefined) {
-    db.prepare("UPDATE project_groups SET name = ? WHERE id = ?").run(name, groupId);
-  }
-  if (sortOrder !== undefined) {
-    db.prepare("UPDATE project_groups SET sortOrder = ? WHERE id = ?").run(sortOrder, groupId);
-  }
-
-  const updatedGroup = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId);
-  return c.json(updatedGroup);
-});
-
-// Delete group
-projectsRouter.delete("/groups/:groupId", (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const groupId = c.req.param("groupId");
-
-  const group = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId) as any;
-  if (!group) return c.json({ error: "分组不存在" }, 404);
-
-  if (group.workspaceId) {
-    const role = getUserWorkspaceRole(group.workspaceId, userId);
-    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
-  } else {
-    if (group.userId !== userId) return c.json({ error: "权限不足", code: "FORBIDDEN" }, 403);
-  }
-
-  db.prepare("DELETE FROM project_groups WHERE id = ?").run(groupId);
-  return c.json({ message: "分组已删除" });
-});
-
 // 3. Project Stages & Tasks
 // Get stages with nested tasks
 projectsRouter.get("/:id/stages", (c) => {
@@ -432,7 +432,7 @@ projectsRouter.get("/:id/stages", (c) => {
       task.participants = participants;
 
       const tags = db.prepare(`
-        SELECT t.id, t.name, t.color
+        SELECT t.id, t.userId, t.name, t.color, t.createdAt
         FROM project_task_tags ptt
         JOIN tags t ON ptt.tagId = t.id
         WHERE ptt.taskId = ?
