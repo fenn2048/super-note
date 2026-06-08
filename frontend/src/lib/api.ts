@@ -1044,10 +1044,11 @@ export const api = {
     return request<Task[]>(`/tasks${qs}`);
   },
   getTask: (id: string) => request<Task>(`/tasks/${id}`),
-  createTask: (data: Partial<Task> & { tagIds?: string[] }) => {
-    const ws = getCurrentWorkspace();
+  createTask: (data: Partial<Task>) => {
+    const { workspaceId, ...rest } = data;
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
     const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
-    return request<Task>(`/tasks${qs}`, { method: "POST", body: JSON.stringify(data) });
+    return request<Task>(`/tasks${qs}`, { method: "POST", body: JSON.stringify(rest) });
   },
   updateTask: (id: string, data: Partial<Task> & { tagIds?: string[] }) => request<Task>(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   toggleTask: (id: string) => request<Task>(`/tasks/${id}/toggle`, { method: "PATCH" }),

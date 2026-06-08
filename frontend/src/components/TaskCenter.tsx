@@ -4,13 +4,13 @@ import {
   CheckCircle2, Circle, Flag, Calendar, Plus, ListTodo,
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
   Trash2, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
-  User as UserIcon
+  User as UserIcon, CheckSquare, Square, ChevronDown
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { Task, TaskFilter, TaskPriority, TaskStats, Tag } from "@/types";
+import { Task, TaskFilter, TaskPriority, TaskStats, Workspace } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useApp } from "@/store/AppContext";
@@ -603,12 +603,14 @@ function QuickAdd({
   onSubmit,
   onUploaded,
   inputRef,
+  workspaces,
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSubmit: () => void;
+  onSubmit: (workspaceId?: string) => void;
   onUploaded: (orphanIds: string[]) => void;
   inputRef: React.RefObject<HTMLInputElement>;
+  workspaces: Workspace[];
 }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -671,10 +673,29 @@ function QuickAdd({
     }
   }, [t, value]);
 
+  const [isPersonal, setIsPersonal] = useState(true);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [showWsSelector, setShowWsSelector] = useState(false);
+  const wsSelectorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wsSelectorRef.current && !wsSelectorRef.current.contains(e.target as Node)) {
+        setShowWsSelector(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // 提交：交还给父组件创建任务；父组件创建成功后会把 orphans 列表 bind 回去
   const handleSubmit = () => {
     if (!value.trim()) return;
-    onSubmit();
+    if (!isPersonal && !selectedWorkspaceId) {
+      toast.error(t('tasks.emptyProjectWarning'));
+      return;
+    }
+    onSubmit(isPersonal ? "personal" : (selectedWorkspaceId || undefined));
     // 把孤儿列表交给父组件处理 bind，本地清掉
     onUploaded(orphans.map((o) => o.id));
     setOrphans([]);
@@ -755,7 +776,84 @@ function QuickAdd({
       }}
     >
       <div className="flex items-center gap-3">
-        <Plus size={16} className="text-tx-tertiary flex-shrink-0" />
+        {/* Project Selector (2) */}
+        <div className="relative" ref={wsSelectorRef}>
+          <button
+            type="button"
+            onClick={() => setShowWsSelector(!showWsSelector)}
+            className="flex items-center gap-1 px-2 py-1 rounded border border-app-border bg-app-bg text-xs text-tx-secondary hover:bg-app-hover transition-colors"
+          >
+            <span className="truncate max-w-[100px]">
+              {isPersonal
+                ? t('tasks.personalTodo')
+                : workspaces.find(w => w.id === selectedWorkspaceId)?.name || t('tasks.emptyProject')}
+            </span>
+            <ChevronDown size={12} />
+          </button>
+
+          <AnimatePresence>
+            {showWsSelector && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="absolute bottom-full left-0 mb-2 w-48 bg-app-elevated border border-app-border rounded-lg shadow-xl z-50 py-1"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPersonal(true);
+                    setSelectedWorkspaceId(null);
+                    setShowWsSelector(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs hover:bg-app-hover transition-colors",
+                    isPersonal && "text-accent-primary bg-accent-primary/5"
+                  )}
+                >
+                  {t('tasks.personalTodo')}
+                </button>
+                {workspaces.length > 0 && <div className="h-px bg-app-border my-1" />}
+                {workspaces.map(ws => (
+                  <button
+                    key={ws.id}
+                    type="button"
+                    onClick={() => {
+                      setIsPersonal(false);
+                      setSelectedWorkspaceId(ws.id);
+                      setShowWsSelector(false);
+                    }}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-xs hover:bg-app-hover transition-colors truncate",
+                      !isPersonal && selectedWorkspaceId === ws.id && "text-accent-primary bg-accent-primary/5"
+                    )}
+                  >
+                    {ws.name}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Checkbox (1) */}
+        <button
+          type="button"
+          onClick={() => {
+            const nextPersonal = !isPersonal;
+            setIsPersonal(nextPersonal);
+            if (nextPersonal) {
+              setSelectedWorkspaceId(null);
+            } else {
+              setSelectedWorkspaceId(workspaces[0]?.id || null);
+            }
+          }}
+          className="text-tx-tertiary hover:text-accent-primary transition-colors flex-shrink-0"
+          title={t('tasks.personalTodo')}
+        >
+          {isPersonal ? <CheckSquare size={18} /> : <Square size={18} />}
+        </button>
+
         <input
           ref={inputRef}
           value={value}
@@ -857,6 +955,7 @@ export default function TaskCenter() {
   const { state } = useApp();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<TaskStats | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -897,12 +996,15 @@ export default function TaskCenter() {
 
   const loadTasks = useCallback(async () => {
     try {
+
       const [data, statsData] = await Promise.all([
         api.getTasks(filter, undefined, searchQuery || undefined, selectedTagId || undefined),
         api.getTaskStats(),
+        api.getWorkspaces(),
       ]);
       setTasks(data);
       setStats(statsData);
+      setWorkspaces(wsData);
       
       syncAllTaskNotifications(data);
     } catch (err) {
@@ -987,13 +1089,16 @@ export default function TaskCenter() {
     }
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (workspaceId?: string) => {
     if (!newTitle.trim()) return;
     const titleToCreate = newTitle.trim();
     const orphanIds = pendingOrphansRef.current;
     pendingOrphansRef.current = [];
     try {
-      const task = await api.createTask({ title: titleToCreate });
+      const task = await api.createTask({
+        title: titleToCreate,
+        workspaceId: workspaceId || undefined,
+      });
       setTasks((prev) => [task, ...prev]);
       setNewTitle("");
       inputRef.current?.focus();
@@ -1204,47 +1309,16 @@ export default function TaskCenter() {
           </div>
         )}
 
-        {/* Search & Header (Desktop & Mobile) */}
-        <div className="px-4 md:px-6 py-3 border-b border-app-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-app-surface/10">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base md:text-lg font-bold text-tx-primary whitespace-nowrap">
-              {viewMode === "calendar" ? "日历视图" : (FILTERS.find((f) => f.key === filter)?.label || t('tasks.allTasks'))}
-              {selectedTagId && viewMode === "list" && (
-                <span className="text-xs font-normal text-tx-tertiary ml-2">
-                  (#{state.tags.find(t => t.id === selectedTagId)?.name})
-                </span>
-              )}
-            </h1>
-            <button
-              onClick={() => setViewMode((v) => (v === "list" ? "calendar" : "list"))}
-              className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
-                viewMode === "calendar"
-                  ? "bg-accent-primary/10 text-accent-primary"
-                  : "text-tx-tertiary hover:bg-app-hover",
-              )}
-              title={viewMode === "calendar" ? "列表视图" : "日历视图"}
-            >
-              {viewMode === "calendar" ? <ListTodo size={16} /> : <CalendarDays size={16} />}
-            </button>
-          </div>
-          <div className="relative w-full sm:w-64 shrink-0">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('tasks.searchPlaceholder', '搜索任务...')}
-              className="w-full px-3 py-1.5 text-xs rounded-md bg-app-bg border border-app-border text-tx-primary placeholder:text-tx-tertiary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/20 transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-tx-tertiary hover:text-tx-primary"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
+        {/* Quick Add —— 注意 min-w-0：input 粘贴超长 URL 时默认会把 flex 容器撑破 */}
+        <div className="px-4 md:px-6 py-3 border-b border-app-border">
+          <QuickAdd
+            value={newTitle}
+            onChange={setNewTitle}
+            onSubmit={handleCreate}
+            onUploaded={(ids) => { pendingOrphansRef.current = ids; }}
+            inputRef={inputRef}
+            workspaces={workspaces}
+          />
         </div>
 
         {viewMode === "calendar" ? (
