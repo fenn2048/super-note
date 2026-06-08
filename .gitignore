@@ -30,6 +30,7 @@ ugnas-*.html
 # 本地导入测试样本（用户私人数据，不应入库）
 docs/samples/
 *.note.attach/
+nowen-note-data/
 
 # 临时调试/排查输出（不应入库）
 _td_test.js
