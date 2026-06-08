@@ -830,7 +830,7 @@ function QuickAdd({
                 type="button"
                 onClick={() => removeOrphan(o.id)}
                 className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-app-bg border border-app-border text-tx-secondary hover:text-accent-danger hover:border-accent-danger flex items-center justify-center transition-colors"
-                title={t('common.delete') || 'Remove'}
+          title={t('common.delete')}
               >
                 <X size={10} />
               </button>

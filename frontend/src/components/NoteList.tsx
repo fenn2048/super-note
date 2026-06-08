@@ -243,20 +243,17 @@ function CreateMenu({
 
   if (!pos) return null;
 
-  // 文案直接硬编码：项目当前 i18n 资源是空的（src/i18n 目录里没条目），
-  // 走 t() 会拿到 key 本身（如 "noteList.createNormalNote"），
-  // 由于 key 本身是 truthy 字符串，`||` 兜底永远不生效，UI 就会显示原始 key。
   const items = [
     {
       id: "normal" as const,
-      label: "新建笔记",
-      desc: "富文本 / Markdown",
+      label: t("noteList.createNormalNote"),
+      desc: t("noteList.createNormalNoteDesc"),
       icon: <FileText size={14} />,
     },
     {
       id: "word" as const,
-      label: "导入 Word 文档",
-      desc: "选择 .docx 转为可编辑笔记",
+      label: t("noteList.createWordNote"),
+      desc: t("noteList.createWordNoteDesc"),
       icon: <FileType2 size={14} />,
     },
   ];
@@ -541,11 +538,10 @@ function AiClassifyConfirmModal({
           <Sparkles size={16} className="text-violet-500" />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-tx-primary">
-              {t('noteList.bulkAiClassifyConfirmTitle') || "AI 归类建议确认"}
+              {t('noteList.bulkAiClassifyConfirmTitle')}
             </div>
             <div className="text-[11px] text-tx-tertiary mt-0.5">
-              {t('noteList.bulkAiClassifyConfirmSubtitle', { count: plan.length })
-                || `共 ${plan.length} 条建议，取消勾选即可跳过，点击确认后才会移动`}
+              {t('noteList.bulkAiClassifyConfirmSubtitle', { count: plan.length })}
             </div>
           </div>
           <button
@@ -568,8 +564,8 @@ function AiClassifyConfirmModal({
           />
           <span className="text-xs text-tx-secondary">
             {allChecked
-              ? (t('noteList.bulkAiClassifyUnselectAll') || "取消全选")
-              : (t('noteList.bulkAiClassifySelectAll') || "全选")}
+              ? t('noteList.bulkAiClassifyUnselectAll')
+              : t('noteList.bulkAiClassifySelectAll')}
           </span>
           <span className="ml-auto text-[11px] text-tx-tertiary tabular-nums">
             {checkedCount}/{plan.length}
@@ -614,15 +610,14 @@ function AiClassifyConfirmModal({
             className="px-3 py-1.5 text-xs rounded-md text-tx-secondary hover:bg-app-hover"
             onClick={onCancel}
           >
-            {t('common.cancel') || "取消"}
+            {t('common.cancel')}
           </button>
           <button
             className="px-3 py-1.5 text-xs font-medium rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             onClick={onConfirm}
             disabled={checkedCount === 0}
           >
-            {t('noteList.bulkAiClassifyConfirmMove', { count: checkedCount })
-              || `确认移动 (${checkedCount})`}
+            {t('noteList.bulkAiClassifyConfirmMove', { count: checkedCount })}
           </button>
         </div>
       </motion.div>
@@ -971,10 +966,10 @@ function PullToRefresh({
           />
           <span className="text-xs">
             {refreshing
-              ? t("noteList.refreshing") || "刷新中..."
+              ? t("noteList.refreshing")
               : pullDistance >= THRESHOLD
-              ? t("noteList.releaseToRefresh") || "释放刷新"
-              : t("noteList.pullToRefresh") || "下拉刷新"}
+              ? t("noteList.releaseToRefresh")
+              : t("noteList.pullToRefresh")}
           </span>
         </div>
       </div>
@@ -1139,7 +1134,7 @@ const NoteCard = React.memo(function NoteCard({
             </span>
           ) : wordCount > 0 ? (
             <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity tabular-nums">
-              {wordCount > 999 ? `${(wordCount / 1000).toFixed(1)}k` : wordCount} {t('common.chars') || '字'}
+              {wordCount > 999 ? `${(wordCount / 1000).toFixed(1)}k` : wordCount} {t('common.chars')}
             </span>
           ) : null}
         </div>
@@ -1705,10 +1700,10 @@ export default function NoteList() {
         const { pickDocxFile, importDocxAsNote } = await import("@/lib/wordNoteService");
         const file = await pickDocxFile();
         if (!file) return; // 用户取消
-        toast.info("正在导入 Word 文档…");
+        toast.info(t('noteList.importing'));
         const result = await importDocxAsNote({ notebookId, file });
         note = result.note;
-        toast.success("导入成功");
+        toast.success(t('export.exportComplete'));
       } else {
         note = await api.createNote({ notebookId, title: t('common.untitledNote') });
       }
@@ -1789,11 +1784,11 @@ export default function NoteList() {
       return n && !n.isLocked && n.contentText;
     });
     if (ids.length === 0) {
-      toast.warning(t('noteList.bulkAiNoEligible') || "没有可处理的笔记（空白或已锁定的不参与）");
+      toast.warning(t('noteList.bulkAiNoEligible'));
       return;
     }
     if (ids.length > BULK_AI_HARD_LIMIT) {
-      toast.warning(t('noteList.bulkAiTooMany', { limit: BULK_AI_HARD_LIMIT }) || `单次最多处理 ${BULK_AI_HARD_LIMIT} 条，请分批操作`);
+      toast.warning(t('noteList.bulkAiTooMany', { limit: BULK_AI_HARD_LIMIT }));
       return;
     }
 
@@ -1836,9 +1831,9 @@ export default function NoteList() {
     api.getTags().then(actions.setTags).catch(() => { /* ignore */ });
     actions.refreshNotes();
     if (failCount === 0) {
-      toast.success(t('noteList.bulkAiTagsDone', { count: okCount }) || `已为 ${okCount} 条笔记生成标签`);
+      toast.success(t('noteList.bulkAiTagsDone', { count: okCount }));
     } else {
-      toast.warning(t('noteList.bulkAiTagsPartial', { ok: okCount, fail: failCount }) || `完成 ${okCount} 条，失败 ${failCount} 条`);
+      toast.warning(t('noteList.bulkAiTagsPartial', { ok: okCount, fail: failCount }));
     }
   }, [bulkAiRunning, selectedIds, state.notes, state.tags, actions, t]);
 
@@ -1872,11 +1867,11 @@ export default function NoteList() {
       return n && !n.isLocked;
     });
     if (ids.length === 0) {
-      toast.warning(t('noteList.bulkAiNoEligible') || "没有可处理的笔记（已锁定的不参与）");
+      toast.warning(t('noteList.bulkAiNoEligible'));
       return;
     }
     if (ids.length > BULK_AI_HARD_LIMIT) {
-      toast.warning(t('noteList.bulkAiTooMany', { limit: BULK_AI_HARD_LIMIT }) || `单次最多处理 ${BULK_AI_HARD_LIMIT} 条，请分批操作`);
+      toast.warning(t('noteList.bulkAiTooMany', { limit: BULK_AI_HARD_LIMIT }));
       return;
     }
     // 跨工作区的笔记不允许批量归类——候选集是单 scope 的，
@@ -1888,7 +1883,7 @@ export default function NoteList() {
       }),
     );
     if (wsSet.size > 1) {
-      toast.warning(t('noteList.bulkAiCrossWs') || "所选笔记跨多个工作区，请分别操作");
+      toast.warning(t('noteList.bulkAiCrossWs'));
       return;
     }
 
@@ -1911,7 +1906,7 @@ export default function NoteList() {
         const fromNb = state.notebooks.find((n) => n.id === note.notebookId);
         plan.push({
           noteId: id,
-          noteTitle: note.title || (t('noteList.untitled') as string) || "未命名",
+          noteTitle: note.title || t('editor.untitled'),
           fromNotebookId: note.notebookId,
           fromNotebookName: fromNb?.name || "—",
           toNotebookId: top.notebookId,
@@ -1932,8 +1927,7 @@ export default function NoteList() {
     if (plan.length === 0) {
       // 全部没建议 / 相同 / 失败——不弹窗，直接汇总
       toast.info(
-        t('noteList.bulkAiClassifyNoPlan', { skipped: skippedCount, failed: failCount })
-          || `AI 未给出可移动的建议（跳过 ${skippedCount} 条，失败 ${failCount} 条）`,
+        t('noteList.bulkAiClassifyNoPlan', { skipped: skippedCount, failed: failCount }),
       );
       return;
     }
@@ -1943,8 +1937,7 @@ export default function NoteList() {
     if (skippedCount > 0 || failCount > 0) {
       // 侧附提示：有部分条目跳过/失败，避免用户疑惑
       toast.info(
-        t('noteList.bulkAiClassifyPartial', { matched: plan.length, skipped: skippedCount, failed: failCount })
-          || `AI 给出 ${plan.length} 条建议，另有 ${skippedCount} 条跳过、${failCount} 条失败`,
+        t('noteList.bulkAiClassifyPartial', { matched: plan.length, skipped: skippedCount, failed: failCount }),
       );
     }
   }, [bulkAiRunning, classifyScanning, selectedIds, state.notes, state.notebooks, t]);
@@ -1978,8 +1971,7 @@ export default function NoteList() {
     actions.refreshNotebooks();
     actions.refreshNotes();
     toast.success(
-      t('noteList.bulkAiClassifyDone2', { moved: movedCount, failed: failCount })
-        || `批量归类完成：已移动 ${movedCount} 条，失败 ${failCount} 条`,
+      t('noteList.bulkAiClassifyDone2', { moved: movedCount, failed: failCount }),
     );
   }, [pendingClassify, bulkAiRunning, actions, t]);
 
@@ -2165,8 +2157,8 @@ export default function NoteList() {
           // 右键菜单只持有 noteId，需要先拉一次完整笔记拿到 content
           const fresh = await api.getNote(targetId);
           const { exportNoteAsDocx, downloadDocxBlob } = await import("@/lib/wordNoteService");
-          const blob = await exportNoteAsDocx(fresh.content || "", fresh.title || "未命名笔记");
-          downloadDocxBlob(blob, fresh.title || "未命名笔记");
+          const blob = await exportNoteAsDocx(fresh.content || "", fresh.title || t("common.untitledNote"));
+          downloadDocxBlob(blob, fresh.title || t("common.untitledNote"));
           toast.dismiss(toastId);
           toast.success(t('export.exportComplete'));
         } catch (err: any) {
@@ -2235,7 +2227,7 @@ export default function NoteList() {
             }),
           );
           if (wsSet.size > 1) {
-            toast.warning("所选笔记跨多个工作区，请分别移动");
+            toast.warning(t("noteList.bulkAiCrossWs"));
             break;
           }
           const [sourceWs] = Array.from(wsSet);
@@ -2271,8 +2263,7 @@ export default function NoteList() {
             if (err?.code === "NOTEBOOK_TRASHED") {
               toast.warning(
                 err?.message ||
-                  t("noteList.restoreNotebookTrashed") ||
-                  "原笔记本已删除，请先在「所有笔记」选择一个新的笔记本作为还原位置",
+                  t("noteList.restoreNotebookTrashed"),
               );
               actions.refreshNotes();
               return;
@@ -2330,7 +2321,7 @@ export default function NoteList() {
     if (ids.length === 1) {
       if (failed) {
         if (crossWsRejected > 0) {
-          toast.error("不能跨工作区移动，目标笔记本与源笔记不在同一空间");
+          toast.error(t("noteList.crossWorkspaceMoveForbidden"));
         } else {
           toast.error(t('noteList.bulkMoveFailed', { error: '' }));
         }
@@ -2339,7 +2330,7 @@ export default function NoteList() {
       toast.success(t('noteList.bulkMoveSuccess', { count: success }));
     } else if (success === 0) {
       if (crossWsRejected === failed) {
-        toast.error("不能跨工作区移动，目标笔记本与源笔记不在同一空间");
+        toast.error(t("noteList.crossWorkspaceMoveForbidden"));
       } else {
         toast.error(t('noteList.bulkMoveFailed', { error: '' }));
       }
@@ -2380,7 +2371,7 @@ export default function NoteList() {
       if (state.notebooks.length === 1) {
         notebookId = state.notebooks[0].id;
       } else {
-        toast.warning("请先选择一个笔记本，再拖入文件");
+        toast.warning(t("common.selectNotebookHint"));
         return;
       }
     }
@@ -2403,7 +2394,7 @@ export default function NoteList() {
 
     if (unsupported.length > 0) {
       toast.warning(
-        `已忽略 ${unsupported.length} 个不支持的文件（仅支持 .md / .markdown / .txt / .docx）`,
+        t("noteList.importUnsupportedFiles", { count: unsupported.length, defaultValue: `已忽略 ${unsupported.length} 个不支持的文件（仅支持 .md / .markdown / .txt / .docx）` }),
       );
     }
     if (supported.length === 0) return;
@@ -2417,9 +2408,9 @@ export default function NoteList() {
     let failCount = 0;
 
     if (supported.length > 1) {
-      toast.info(`正在导入 ${supported.length} 个文件…`);
+      toast.info(t("noteList.importing"));
     } else {
-      toast.info("正在导入文件…");
+      toast.info(t("noteList.importing"));
     }
 
     for (const f of supported) {
@@ -2462,11 +2453,11 @@ export default function NoteList() {
     actions.refreshNotebooks();
 
     if (okCount > 0 && failCount === 0) {
-      toast.success(`导入成功 ${okCount} 个文件`);
+      toast.success(t("noteList.bulkMoveSuccess", { count: okCount }));
     } else if (okCount > 0 && failCount > 0) {
-      toast.warning(`导入完成：成功 ${okCount} 个，失败 ${failCount} 个`);
+      toast.warning(t("noteList.bulkMovePartial", { success: okCount, failed: failCount }));
     } else {
-      toast.error("导入失败");
+      toast.error(t("noteList.bulkMoveFailed", { error: "" }));
     }
   }, [state.selectedNotebookId, state.notebooks, actions]);
 
@@ -2881,7 +2872,7 @@ export default function NoteList() {
                       }),
                     );
                     if (wsSet.size > 1) {
-                      toast.warning("所选笔记跨多个工作区，请分别移动");
+                      toast.warning(t("noteList.bulkAiCrossWs"));
                       return;
                     }
                     const [sourceWs] = Array.from(wsSet);
@@ -2904,7 +2895,7 @@ export default function NoteList() {
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
                   onClick={bulkAiGenerateTags}
                   disabled={!!bulkAiRunning}
-                  title={t('noteList.bulkAiTagsTip') || "为所选笔记批量生成标签"}
+                  title={t('noteList.bulkAiTagsTip')}
                 >
                   {bulkAiRunning?.kind === "tags" ? (
                     <Loader2 size={12} className="animate-spin" />
@@ -2914,14 +2905,14 @@ export default function NoteList() {
                   <span>
                     {bulkAiRunning?.kind === "tags"
                       ? `${bulkAiRunning.done}/${bulkAiRunning.total}`
-                      : (t('noteList.bulkAiTags') || "AI 标签")}
+                      : (t('noteList.bulkAiTags'))}
                   </span>
                 </button>
                 <button
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
                   onClick={bulkAiClassify}
                   disabled={!!bulkAiRunning || !!classifyScanning}
-                  title={t('noteList.bulkAiClassifyTip') || "AI 自动归类（先扫描，再人工确认是否移动）"}
+                  title={t('noteList.bulkAiClassifyTip')}
                 >
                   {(bulkAiRunning?.kind === "classify" || classifyScanning) ? (
                     <Loader2 size={12} className="animate-spin" />
@@ -2930,10 +2921,10 @@ export default function NoteList() {
                   )}
                   <span>
                     {classifyScanning
-                      ? `${t('noteList.bulkAiClassifyScanning') || 'AI 扫描中'} ${classifyScanning.done}/${classifyScanning.total}`
+                      ? `${t('noteList.bulkAiClassifyScanning')} ${classifyScanning.done}/${classifyScanning.total}`
                       : bulkAiRunning?.kind === "classify"
                       ? `${bulkAiRunning.done}/${bulkAiRunning.total}`
-                      : (t('noteList.bulkAiClassify') || "AI 归类")}
+                      : (t('noteList.bulkAiClassify'))}
                   </span>
                 </button>
                 <button
@@ -3036,13 +3027,12 @@ export default function NoteList() {
                 <FileUp size={20} className="text-accent-primary" />
               </div>
               <p className="text-sm font-medium text-tx-primary">
-                {t('noteList.dropToImportTitle', { defaultValue: '释放以导入' })}
+                {t('noteList.dropToImportTitle')}
               </p>
               <p className="text-xs text-tx-tertiary leading-relaxed">
                 {t('noteList.dropToImportHint', {
-                  defaultValue: '导入到《{{name}}》・支持 .md / .docx / .txt',
                   name: state.notebooks.find((n) => n.id === state.selectedNotebookId)?.name
-                    || t('noteList.notebook', { defaultValue: '当前笔记本' }),
+                    || t('noteList.notebook'),
                 })}
               </p>
             </div>

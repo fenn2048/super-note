@@ -640,7 +640,7 @@ function NotebookItem({
                 onClick={(e) => { e.stopPropagation(); onCreateNote(notebook.id); }}
               >
                 <Plus size={12} />
-                <span>{"\u65b0\u5efa\u7b14\u8bb0"}</span>
+                <span>{t("common.newNote")}</span>
               </button>
             )}
           </motion.div>
@@ -685,12 +685,14 @@ function NoteNoteItem({
   const timeAgo = useMemo(() => {
     const d = new Date(note.updatedAt);
     const diff = Date.now() - d.getTime();
-    if (diff < 60000) return "\u521a\u521a";
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}\u5206\u949f\u524d`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}\u5c0f\u65f6\u524d`;
-    if (diff < 604800000) return `${Math.floor(diff / 86400000)}\u5929\u524d`;
+    
+    if (diff < 60000) return t("common.justNow");
+    if (diff < 3600000) return t("common.minutesAgo", { count: Math.floor(diff / 60000) });
+    if (diff < 86400000) return t("common.hoursAgo", { count: Math.floor(diff / 3600000) });
+    if (diff < 604800000) return t("common.daysAgo", { count: Math.floor(diff / 86400000) });
+
     return d.toLocaleDateString();
-  }, [note.updatedAt]);
+  }, [note.updatedAt, t]);
 
   return (
     <>
@@ -736,20 +738,20 @@ function NoteNoteItem({
         >
           <button className="w-full px-3 py-1.5 text-xs text-left hover:bg-app-hover flex items-center gap-2"
             onClick={() => { setShowMenu(false); onTogglePin(note.id); }}>
-            {note.isPinned ? "\u53d6\u6d88\u7f6e\u9876" : String.fromCodePoint(0x1F4CC) + " \u7f6e\u9876"}
+            {note.isPinned ? t("noteList.unpin") : String.fromCodePoint(0x1F4CC) + " " + t("noteList.pin")}
           </button>
           <button className="w-full px-3 py-1.5 text-xs text-left hover:bg-app-hover flex items-center gap-2"
             onClick={() => { setShowMenu(false); onToggleFavorite(note.id); }}>
-            {note.isFavorite ? "\u53d6\u6d88\u6536\u85cf" : String.fromCodePoint(0x2B50) + " \u6536\u85cf"}
+            {note.isFavorite ? t("noteList.unfavorite") : String.fromCodePoint(0x2B50) + " " + t("noteList.favorite")}
           </button>
           <button className="w-full px-3 py-1.5 text-xs text-left hover:bg-app-hover flex items-center gap-2"
             onClick={() => { setShowMenu(false); setIsEditing(true); setEditValue(note.title); }}>
-            <Edit2 size={12} /> {"\u91cd\u547d\u540d"}
+            <Edit2 size={12} /> {t("common.rename")}
           </button>
           <div className="my-1 border-t border-app-border/50" />
           <button className="w-full px-3 py-1.5 text-xs text-left hover:bg-app-hover flex items-center gap-2 text-accent-danger"
             onClick={() => { setShowMenu(false); onDelete(note.id); }}>
-            <Trash2 size={12} /> {"\u5220\u9664"}
+            <Trash2 size={12} /> {t("common.delete")}
           </button>
         </div>
       )}
@@ -1336,8 +1338,8 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     const showExport = !isPersonal || isAdmin || personalExportAllowed;
     const items: ContextMenuItem[] = [
       { id: "new_note", label: t('sidebar.newNote'), icon: <FilePlus size={14} /> },
-      { id: "new_word_note", label: t('sidebar.importWordNote') || "导入 Word 文档", icon: <FileType2 size={14} /> },
-      { id: "new_url_note", label: t('sidebar.importUrlNote') || "导入公众号文章", icon: <Link2 size={14} /> },
+      { id: "new_word_note", label: t('sidebar.importWordNote'), icon: <FileType2 size={14} /> },
+      { id: "new_url_note", label: t('sidebar.importUrlNote'), icon: <Link2 size={14} /> },
       { id: "new_sub", label: t('sidebar.newSubNotebook'), icon: <FolderPlus size={14} /> },
       { id: "sep1", label: "", separator: true },
       { id: "change_icon", label: t('sidebar.changeIcon'), icon: <Smile size={14} /> },
@@ -1658,7 +1660,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
           const { toast } = await import("@/lib/toast");
           const file = await pickDocxFile();
           if (!file) break; // 用户取消
-          toast.info("正在导入 Word 文档…");
+          toast.info(t("noteList.importing"));
           const { note } = await importDocxAsNote({ notebookId: targetId, file });
           actions.setActiveNote(note as any);
           actions.setSelectedNotebook(targetId);
@@ -1680,10 +1682,10 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             createdAt: note.createdAt,
           } as any);
           actions.refreshNotebooks();
-          toast.success("导入成功");
+          toast.success(t("noteList.bulkMoveSuccess", { count: 1 }));
         } catch (err: any) {
           const { toast } = await import("@/lib/toast");
-          toast.error(err?.message || "导入 Word 文档失败");
+          toast.error(err?.message || t("noteList.bulkMoveFailed", { error: "" }));
         }
         break;
       }
@@ -1692,23 +1694,23 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         // - validate 内联做格式校验：错误信息直接展示在弹窗里，避免关闭后再 toast 报错
         // - 后端会抓取 HTML、下载图片到附件库、并把笔记落到 targetId 笔记本
         const raw = await appPrompt({
-          title: t('sidebar.importUrlNote') || "导入公众号文章",
-          description: t('sidebar.importUrlPrompt') || "请输入微信公众号文章链接（https://mp.weixin.qq.com/s/...）",
+          title: t('sidebar.importUrlNote'),
+          description: t('sidebar.importUrlPrompt'),
           placeholder: "https://mp.weixin.qq.com/s/...",
-          confirmText: t('common.confirm') || "导入",
-          cancelText: t('common.cancel') || "取消",
+          confirmText: t('common.confirm'),
+          cancelText: t('common.cancel'),
           validate: (v) => {
             const s = (v || "").trim();
-            if (!s) return t('urlImport.emptyUrl') || "请输入文章链接";
+            if (!s) return t('urlImport.urlRequired');
             if (!/^https:\/\/mp\.weixin\.qq\.com\/s[\/?]/.test(s)) {
-              return t('urlImport.unsupportedUrl') || "暂只支持微信公众号文章链接";
+              return t('urlImport.unsupportedUrl');
             }
             return null;
           },
         });
         if (raw == null) break; // 用户取消
         const url = raw.trim();
-        const toastId = toast.info(t('urlImport.importing') || "正在导入文章…", 0);
+        const toastId = toast.info(t('urlImport.importing'), 0);
         try {
           const result = await api.urlImport(url, targetId);
           // urlImport 只返回 noteId+title，需要再取完整 note 推到 store
@@ -1735,14 +1737,14 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
           actions.refreshNotebooks();
           toast.dismiss(toastId);
           const failedTip = result.images.failed > 0
-            ? `（${result.images.failed} 张图片下载失败）`
+            ? ` (${t('urlImport.imagesFailed', { count: result.images.failed })})`
             : "";
           toast.success(
-            (t('urlImport.importSuccess', { title: result.title }) || `已导入：${result.title}`) + failedTip
+            t('urlImport.importSuccess', { title: result.title }) + failedTip
           );
         } catch (err: any) {
           toast.dismiss(toastId);
-          toast.error(err?.message || t('urlImport.importFailed') || "导入失败");
+          toast.error(err?.message || t('urlImport.importFailed'));
         }
         break;
       }
@@ -1936,7 +1938,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       setTrashCount(removable);
       setEmptyTrashOpen(true);
     } catch (err: any) {
-      console.error("获取回收站笔记失败:", err);
+      console.error("Failed to fetch trash notes:", err);
       toast.error(err?.message || t('sidebar.emptyTrashFailed'));
     }
   };
@@ -1964,7 +1966,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       // 友好提示用户可以手动压缩一次。阈值按"估算释放量 >= 10MB"判定。
       if (!res.vacuumed && (res.freedBytesEstimate || 0) >= 10 * 1024 * 1024) {
         toast.info(
-          "占用较大但数据库未自动压缩。可在「数据管理」里点击「压缩数据库」进一步回收磁盘空间。",
+          t("sidebar.emptyTrashVacuumHint", { defaultValue: "Large database detected. You can vacuum the database in Data Management to reclaim space." }),
         );
       }
       // 通知其他视图（FileManager / DataManager）刷新空间占用统计
