@@ -32,16 +32,16 @@ type SkinDescriptor = {
 
 const SKINS: SkinDescriptor[] = [
   {
-    key: "default",
-    titleKey: "appearance.skinDefault",
-    titleDefault: "默认",
-    descKey: "appearance.skinDefaultDesc",
-    descDefault: "现代简约风格，跨平台一致",
+    key: "obsidian",
+    titleKey: "appearance.skinObsidian",
+    titleDefault: "Obsidian",
+    descKey: "appearance.skinObsidianDesc",
+    descDefault: "Obsidian 安静深色模式与极简无干扰编辑，几何硬朗圆角",
     swatch: {
-      bg: "#ffffff",
-      sidebar: "#f3f4f6",
-      accent: "#3b82f6",
-      text: "#111827",
+      bg: "#1e1e1e",
+      sidebar: "#161616",
+      accent: "#7a52f4",
+      text: "#dadada",
     },
   },
   {
@@ -49,12 +49,51 @@ const SKINS: SkinDescriptor[] = [
     titleKey: "appearance.skinMacos",
     titleDefault: "macOS",
     descKey: "appearance.skinMacosDesc",
-    descDefault: "Apple 设计语言，毛玻璃与系统蓝",
+    descDefault: "Apple 设计语言，精致毛玻璃、柔和阴影与系统蓝",
     swatch: {
       bg: "#ECECEC",
       sidebar: "rgba(246,246,246,0.85)",
       accent: "#007AFF",
       text: "#000000",
+    },
+  },
+  {
+    key: "notion",
+    titleKey: "appearance.skinNotion",
+    titleDefault: "Notion",
+    descKey: "appearance.skinNotionDesc",
+    descDefault: "Notion 风格，奶油灰侧栏与极细分隔线，经典知性蓝",
+    swatch: {
+      bg: "#ffffff",
+      sidebar: "#f1f1ef",
+      accent: "#2383e2",
+      text: "#37352f",
+    },
+  },
+  {
+    key: "memos",
+    titleKey: "appearance.skinMemos",
+    titleDefault: "Memos",
+    descKey: "appearance.skinMemosDesc",
+    descDefault: "Memos 风格，舒适灰底与独立卡片布局，生机翡翠绿",
+    swatch: {
+      bg: "#f3f4f6",
+      sidebar: "#ffffff",
+      accent: "#10b981",
+      text: "#1f2937",
+    },
+  },
+  {
+    key: "flomo",
+    titleKey: "appearance.skinFlomo",
+    titleDefault: "flomo",
+    descKey: "appearance.skinFlomoDesc",
+    descDefault: "flomo 风格，标志性暖沙绿水洗色，极简无压力输入",
+    swatch: {
+      bg: "#f4f4f0",
+      sidebar: "#f4f4f0",
+      accent: "#32b67a",
+      text: "#2c3e50",
     },
   },
 ];
@@ -64,7 +103,7 @@ export default function SkinSwitcher() {
   const { skin, setSkin } = useSkin();
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
       {SKINS.map((item) => {
         const selected = skin === item.key;
         return (

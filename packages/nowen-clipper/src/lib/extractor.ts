@@ -182,10 +182,120 @@ export function extractSimplified(): ExtractResult | null {
 }
 
 /**
+ * 针对特定主流网站进行深度净化与正文锁定
+ */
+function applySiteSpecificClean(doc: Document): void {
+  const host = location.hostname;
+
+  // 1. 微信公众号 mp.weixin.qq.com
+  if (host.includes("mp.weixin.qq.com")) {
+    const jsContent = doc.getElementById("js_content");
+    if (jsContent) {
+      // 专属优化：精准锁定 js_content 正文容器
+      const body = doc.body;
+      if (body) {
+        body.innerHTML = "";
+        body.appendChild(jsContent);
+      }
+    }
+
+    // 微信图片懒加载兼容：自动补全图片真实地址
+    const imgs = doc.querySelectorAll("img");
+    for (const img of Array.from(imgs)) {
+      const dataSrc = img.getAttribute("data-src") || img.getAttribute("data-original-src");
+      if (dataSrc) {
+        img.setAttribute("src", dataSrc);
+      }
+    }
+
+    // 移除微信特有的干扰元素：文中流量主广告、打赏、关注引导、版权声明等
+    const weixinRemoves = [
+      ".reward_area", // 赞赏卡片
+      ".js_ad_area", // 文中广告
+      ".qr_code_pc_outer", // PC 端的关注二维码
+      ".qr_code_pc",
+      "#meta_content", // 顶部作者信息
+      "#js_profile_qrcode", // 底部关注公众号卡片
+      ".rich_media_area_extra", // 底部相关推荐和评论区
+      "#js_pc_qr_code",
+      ".rich_media_meta_list",
+      ".copyright_area", // 版权声明
+      "div.rich_media_btn_group", // 赞、在看、分享等组件
+    ].join(",");
+    for (const el of Array.from(doc.querySelectorAll(weixinRemoves))) {
+      el.parentNode?.removeChild(el);
+    }
+  }
+
+  // 2. 知乎 zhihu.com
+  if (host.includes("zhihu.com")) {
+    const zhihuRemoves = [
+      ".ContentItem-actions", // 底部分享、点赞按钮栏
+      ".Reward", // 付费打赏
+      ".Comments-container", // 评论区
+      ".Question-sideColumn", // 右侧栏推荐
+      ".QuestionHeader-side", // 顶部右侧关注问题按钮栏
+      ".Question-mainColumnLoginSource", // 登录引导卡片
+      ".AuthorInfo-followStatus", // 关注作者按钮
+      ".Modal-wrapper", // 登录弹窗
+      ".signFlowModal",
+      ".Adouter", // 各种信息流广告
+      ".RichContent-actions",
+      ".ContentItem-action",
+      ".AuthorInfo-badge",
+    ].join(",");
+    for (const el of Array.from(doc.querySelectorAll(zhihuRemoves))) {
+      el.parentNode?.removeChild(el);
+    }
+  }
+
+  // 3. CSDN csdn.net
+  if (host.includes("csdn.net")) {
+    const csdnRemoves = [
+      "aside", // 侧边栏所有组件（作者、推荐、分类）
+      ".csdn-side-toolbar", // 侧边悬浮工具栏
+      ".recommend-box", // 文末相关文章推荐
+      ".template-box", // 各种模板/广告栏
+      ".comment-box", // 评论区
+      "#comment_title",
+      "#comment_list",
+      ".pulldown-nav", // 顶部导航/广告
+      ".login-mark", // 登录弹窗
+      ".hide-article-box", // 展开全文引导
+      ".adsbygoogle", // 谷歌广告
+      ".opt-box", // 各种操作按钮
+    ].join(",");
+    for (const el of Array.from(doc.querySelectorAll(csdnRemoves))) {
+      el.parentNode?.removeChild(el);
+    }
+  }
+
+  // 4. 掘金 juejin.cn
+  if (host.includes("juejin.cn")) {
+    const juejinRemoves = [
+      ".sidebar", // 右侧栏作者、相关文章等
+      ".article-suspended-panel", // 左侧点赞、评论悬浮面板
+      ".comment-list-box", // 评论区
+      ".recommended-area", // 底部相关推荐
+      ".author-block", // 作者推荐卡片
+      ".tag-list-box",
+      ".juejin-active-ad", // 掘金自身的广告/推广卡片
+      ".banner", // 顶部/底部 banner
+    ].join(",");
+    for (const el of Array.from(doc.querySelectorAll(juejinRemoves))) {
+      el.parentNode?.removeChild(el);
+    }
+  }
+}
+
+/**
  * 在 Readability 解析之前预清理 DOM，移除导航栏、侧边栏、页脚、广告等
  * 显而易见的非正文元素。这能显著提升 Readability 对 SPA / 复杂页面的抽取精度。
  */
 function preCleanDom(doc: Document): void {
+  // 先应用站点特有净化规则
+  applySiteSpecificClean(doc);
+
   // 1. 移除语义化的非正文元素
   const semanticRemove = [
     "nav",

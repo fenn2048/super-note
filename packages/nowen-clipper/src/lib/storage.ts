@@ -23,6 +23,8 @@ export interface NowenClipperConfig {
   defaultTags: string;
   /** 图片处理模式：skip=不处理，link=保留原始 URL，inline=下载为 base64 内联 */
   imageMode: "skip" | "link" | "inline";
+  /** 图片本地化开关：是否自动上传至服务器并替换外链 */
+  imageLocalization: boolean;
   /** 是否自动在正文末尾插入"来源 URL"行 */
   includeSource: boolean;
   /** 输出格式：markdown（默认，体积小）|  html（保留更多样式） */
@@ -48,6 +50,8 @@ export interface NowenClipperConfig {
   aiMaxInputChars: number;
   /** AI 失败时的策略：fallback=降级保存原文（默认），fail=整体失败 */
   aiFailureStrategy: "fallback" | "fail";
+  lastWorkspaceId?: string;
+  lastNotebookId?: string;
 }
 
 const DEFAULTS: NowenClipperConfig = {
@@ -58,6 +62,7 @@ const DEFAULTS: NowenClipperConfig = {
   defaultNotebook: "Web 剪藏",
   defaultTags: "",
   imageMode: "inline",
+  imageLocalization: true,
   includeSource: true,
   outputFormat: "markdown",
   quickCapture: false,
@@ -78,6 +83,8 @@ const DEFAULTS: NowenClipperConfig = {
   aiCustomInstruction: "",
   aiMaxInputChars: 6000,
   aiFailureStrategy: "fallback",
+  lastWorkspaceId: "personal",
+  lastNotebookId: "__default__",
 };
 
 const CONFIG_KEY = "nowenClipperConfig";

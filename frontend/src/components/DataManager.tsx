@@ -25,6 +25,7 @@ import OppoCloudImport from "@/components/OppoCloudImport";
 import ICloudImport from "@/components/iCloudImport";
 import YoudaoImport from "@/components/YoudaoImport";
 import UrlImport from "@/components/UrlImport";
+import { MemosImport } from "@/components/MemosImport";
 import type { Workspace } from "@/types";
 
 // ============================================================================
@@ -173,6 +174,7 @@ export default function DataManager() {
   const [duplicateStrategy, setDuplicateStrategy] = useState<"merge" | "unique">("merge");
   // 当前导入批次是否包含 zip（zip 本身按目录派生笔记本，不需要 perFile 开关）
   const [hasZip, setHasZip] = useState(false);
+  const [zipMeta, setZipMeta] = useState<any | null>(null);
   // P1-2：nanowen-note 自家导出 zip 在 metadata.json 中会携带 rootNotebookId；
   // 如果当前工作区中仍有同 id 的笔记本，则自动预选，避免用户手动找一遍。
   // 未命中时也给个提示（例如“该备份来自另一个实例/工作区，仍会导入但不会自动选目标本”）。
@@ -235,6 +237,7 @@ export default function DataManager() {
         const r = await readMarkdownFromZipWithMeta(zipFile);
         result = r.files;
         setHasZip(true);
+        setZipMeta(r.meta || null);
         // zip 由其内部目录/zip 文件名派生笔记本，关闭 per-file
         setPerFileNotebook(false);
 
@@ -258,6 +261,7 @@ export default function DataManager() {
         result = await readMarkdownFiles(files);
         setHasZip(false);
         setZipMetaHint(null);
+        setZipMeta(null);
         // 散文件默认开启 per-file：以文件名作为笔记本名，而非统一落到「导入的笔记」
         setPerFileNotebook(true);
       }
@@ -284,6 +288,7 @@ export default function DataManager() {
         );
       }
       setImportFiles([]);
+      setZipMeta(null);
       // 重置文件选择器，以便重选同名文件能触发 onChange
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
@@ -321,6 +326,7 @@ export default function DataManager() {
         perFileNotebook: usePerFile,
         duplicateStrategy,
         workspaceId: effectiveWorkspaceId,
+        meta: zipMeta,
       }
     );
     setIsImporting(false);
@@ -380,6 +386,7 @@ export default function DataManager() {
     setImportFiles([]);
     setImportProgress(null);
     setHasZip(false);
+    setZipMeta(null);
     setNotesImportError("");
   };
 
@@ -1016,6 +1023,9 @@ export default function DataManager() {
           还能用"的绕过漏洞；对普通用户 lock 时直接整体隐藏。 */}
       {!personalImportLocked && (
         <>
+          {/* ===== Memos 0.18.0 导入 ===== */}
+          <MemosImport workspaceId={effectiveWorkspaceId} />
+
           {/* ===== URL 导入（微信公众号文章） ===== */}
           <UrlImport />
 

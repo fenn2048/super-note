@@ -38,6 +38,8 @@
  */
 
 import type Database from "better-sqlite3";
+import { randomUUID } from "crypto";
+
 
 /** 单条迁移声明 */
 export interface Migration {
@@ -1221,6 +1223,367 @@ export const MIGRATIONS: Migration[] = [
         db.prepare(
           "ALTER TABLE users ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0",
         ).run();
+      }
+    },
+  },
+  {
+    version: 16,
+    name: "diaries-add-visibility-and-voice",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(diaries)").all() as { name: string }[];
+      if (cols.length === 0) return;
+      if (!cols.some((c) => c.name === "visibility")) {
+        db.prepare(
+          "ALTER TABLE diaries ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PRIVATE'",
+        ).run();
+      }
+      if (!cols.some((c) => c.name === "voice")) {
+        db.prepare(
+          "ALTER TABLE diaries ADD COLUMN voice TEXT DEFAULT NULL",
+        ).run();
+      }
+    },
+  },
+  {
+    version: 17,
+    name: "tasks-and-diaries-add-tags-and-reminders",
+    up: (db) => {
+      const taskCols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      if (taskCols.length > 0 && !taskCols.some((c) => c.name === "remindAt")) {
+        db.prepare(
+          "ALTER TABLE tasks ADD COLUMN remindAt TEXT DEFAULT NULL",
+        ).run();
+      }
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_tags (
+          taskId TEXT NOT NULL,
+          tagId TEXT NOT NULL,
+          PRIMARY KEY (taskId, tagId),
+          FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS diary_tags (
+          diaryId TEXT NOT NULL,
+          tagId TEXT NOT NULL,
+          PRIMARY KEY (diaryId, tagId),
+          FOREIGN KEY (diaryId) REFERENCES diaries(id) ON DELETE CASCADE,
+          FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
+  {
+    version: 18,
+    name: "mentions-add-type-and-notifications-table",
+    up: (db) => {
+      // 添加 type 字段到 mentions（默认为 'mention'，兼容已有行）
+      const mentionCols = db.prepare("PRAGMA table_info(mentions)").all() as { name: string }[];
+      if (mentionCols.length > 0 && !mentionCols.some((c) => c.name === "type")) {
+        db.prepare("ALTER TABLE mentions ADD COLUMN type TEXT NOT NULL DEFAULT 'mention'").run();
+      }
+      // 创建通用通知表
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'mention',
+          sourceType TEXT,
+          sourceId TEXT,
+          sourceTitle TEXT,
+          actorId TEXT,
+          actorName TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          readAt TEXT,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (actorId) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+          ON notifications(userId, createdAt DESC);
+        CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+          ON notifications(userId, readAt);
+      `);
+      // 迁移已有 mentions 到 notifications（仅一次）
+      const existing = db.prepare("SELECT COUNT(*) as c FROM notifications").get() as { c: number };
+      if (existing.c === 0) {
+        db.exec(`
+          INSERT OR IGNORE INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, createdAt, readAt)
+          SELECT id, mentionedUserId, 'mention', sourceType, sourceId, sourceTitle, mentionedByUserId, createdAt, readAt
+          FROM mentions
+        `);
+      }
+    },
+  },
+  {
+    version: 19,
+    name: "project-management-system",
+    up: (db) => {
+      // Create project_groups table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_groups (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          workspaceId TEXT,
+          userId TEXT NOT NULL,
+          sortOrder INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_groups_workspace ON project_groups(workspaceId);
+        CREATE INDEX IF NOT EXISTS idx_project_groups_user ON project_groups(userId);
+      `);
+
+      // Create projects table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          cover TEXT DEFAULT '',
+          startDate TEXT,
+          endDate TEXT,
+          visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+          workspaceId TEXT,
+          groupId TEXT,
+          isArchived INTEGER DEFAULT 0,
+          isDeleted INTEGER DEFAULT 0,
+          ownerId TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (groupId) REFERENCES project_groups(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_projects_workspace ON projects(workspaceId);
+        CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(groupId);
+        CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(ownerId);
+      `);
+
+      // Create project_stages table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_stages (
+          id TEXT PRIMARY KEY,
+          projectId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          sortOrder INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_stages_project ON project_stages(projectId);
+      `);
+
+      // Create project_tasks table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_tasks (
+          id TEXT PRIMARY KEY,
+          projectId TEXT NOT NULL,
+          stageId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          isCompleted INTEGER DEFAULT 0,
+          assigneeId TEXT,
+          startDate TEXT,
+          endDate TEXT,
+          description TEXT DEFAULT '',
+          cover TEXT DEFAULT '',
+          sortOrder INTEGER DEFAULT 0,
+          creatorId TEXT NOT NULL,
+          modifierId TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (stageId) REFERENCES project_stages(id) ON DELETE CASCADE,
+          FOREIGN KEY (assigneeId) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (creatorId) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (modifierId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_project ON project_tasks(projectId);
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_stage ON project_tasks(stageId);
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_assignee ON project_tasks(assigneeId);
+      `);
+
+      // Create project_task_checklists table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_task_checklists (
+          id TEXT PRIMARY KEY,
+          taskId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          isCompleted INTEGER DEFAULT 0,
+          sortOrder INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_task_checklists_task ON project_task_checklists(taskId);
+      `);
+
+      // Create project_task_members table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_task_members (
+          taskId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          PRIMARY KEY (taskId, userId),
+          FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+
+      // Create project_task_tags table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_task_tags (
+          taskId TEXT NOT NULL,
+          tagId TEXT NOT NULL,
+          PRIMARY KEY (taskId, tagId),
+          FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+        );
+      `);
+
+      // Create project_members table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_members (
+          projectId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member',
+          PRIMARY KEY (projectId, userId),
+          FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+
+      // Create project_discussions table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_discussions (
+          id TEXT PRIMARY KEY,
+          projectId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          content TEXT NOT NULL,
+          images TEXT NOT NULL DEFAULT '[]',
+          attachments TEXT NOT NULL DEFAULT '[]',
+          linkedCards TEXT NOT NULL DEFAULT '[]',
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_discussions_project ON project_discussions(projectId);
+      `);
+    },
+  },
+  {
+    version: 20,
+    name: "merge-todo-into-projects",
+    up: (db) => {
+      // 1. Add priority and remindAt columns to project_tasks
+      const cols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!cols.some((c) => c.name === "priority")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN priority INTEGER DEFAULT 2");
+      }
+      if (!cols.some((c) => c.name === "remindAt")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN remindAt TEXT");
+      }
+
+      // 2. Recreate task_attachments to link with project_tasks
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_attachments_new (
+          id TEXT PRIMARY KEY,
+          taskId TEXT,
+          userId TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          mimeType TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          path TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+      try {
+        db.exec("INSERT OR IGNORE INTO task_attachments_new SELECT id, taskId, userId, filename, mimeType, size, path, createdAt FROM task_attachments");
+        db.exec("DROP TABLE IF EXISTS task_attachments");
+        db.exec("ALTER TABLE task_attachments_new RENAME TO task_attachments");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(taskId);");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_user_created ON task_attachments(userId, createdAt);");
+      } catch (e) {
+        console.warn("Recreating task_attachments failed in migration 20:", e);
+      }
+
+      // 3. Migrate user tasks to project tasks
+      const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
+      for (const user of users) {
+        // Find if user has "个人TODO" project
+        let project = db.prepare("SELECT id FROM projects WHERE ownerId = ? AND name = ? AND workspaceId IS NULL AND isDeleted = 0").get(user.id, "个人TODO") as { id: string } | undefined;
+        let projectId: string;
+        if (!project) {
+          projectId = randomUUID();
+          db.prepare(`
+            INSERT INTO projects (id, name, description, cover, startDate, endDate, visibility, workspaceId, groupId, ownerId)
+            VALUES (?, ?, ?, ?, NULL, NULL, 'PRIVATE', NULL, NULL, ?)
+          `).run(projectId, "个人TODO", "个人待办事项项目", "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", user.id);
+          
+          db.prepare("INSERT OR IGNORE INTO project_members (projectId, userId, role) VALUES (?, ?, 'owner')").run(projectId, user.id);
+        } else {
+          projectId = project.id;
+        }
+
+        // Find or create stages: "进行中" and "已完成"
+        let stageOngoing = db.prepare("SELECT id FROM project_stages WHERE projectId = ? AND name = ?").get(projectId, "进行中") as { id: string } | undefined;
+        let stageOngoingId: string;
+        if (!stageOngoing) {
+          stageOngoingId = randomUUID();
+          db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 0)").run(stageOngoingId, projectId, "进行中");
+        } else {
+          stageOngoingId = stageOngoing.id;
+        }
+
+        let stageCompleted = db.prepare("SELECT id FROM project_stages WHERE projectId = ? AND name = ?").get(projectId, "已完成") as { id: string } | undefined;
+        let stageCompletedId: string;
+        if (!stageCompleted) {
+          stageCompletedId = randomUUID();
+          db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, 1)").run(stageCompletedId, projectId, "已完成");
+        } else {
+          stageCompletedId = stageCompleted.id;
+        }
+
+        // Fetch user tasks from the old tasks table
+        // We only migrate tasks that are NOT already in project_tasks
+        let oldTasks: any[] = [];
+        try {
+          oldTasks = db.prepare("SELECT * FROM tasks WHERE userId = ?").all(user.id) as any[];
+        } catch (e) {
+          console.warn("Reading old tasks failed (might not exist yet):", e);
+        }
+
+        for (const task of oldTasks) {
+          const exists = db.prepare("SELECT 1 FROM project_tasks WHERE id = ?").get(task.id);
+          if (exists) continue;
+
+          const targetStageId = task.isCompleted === 1 ? stageCompletedId : stageOngoingId;
+          db.prepare(`
+            INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, NULL, ?, '', '', ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            task.id,
+            projectId,
+            targetStageId,
+            task.title,
+            task.isCompleted,
+            user.id,
+            task.dueDate, // map old dueDate to endDate
+            task.sortOrder || 0,
+            user.id,
+            user.id,
+            task.priority || 2,
+            task.remindAt || null,
+            task.createdAt,
+            task.updatedAt
+          );
+
+          // Migrate tags from task_tags to project_task_tags
+          try {
+            const tags = db.prepare("SELECT tagId FROM task_tags WHERE taskId = ?").all(task.id) as { tagId: string }[];
+            for (const t of tags) {
+              db.prepare("INSERT OR IGNORE INTO project_task_tags (taskId, tagId) VALUES (?, ?)").run(task.id, t.tagId);
+            }
+          } catch (e) {
+            console.warn(`Migrating tags for task ${task.id} failed:`, e);
+          }
+        }
       }
     },
   },

@@ -32,7 +32,7 @@ import type { NoteEditorHandle, NoteEditorProps } from "@/components/editors/typ
  * DOMPurify 配置：保留常见剪藏标签 & 属性（图片、链接、样式），
  * 但移除 <script>、<iframe>、onXxx 事件属性等。
  */
-const PURIFY_CONFIG: DOMPurify.Config = {
+const PURIFY_CONFIG: any = {
   ALLOWED_TAGS: [
     // 文本 & 格式
     "h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr",

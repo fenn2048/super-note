@@ -48,50 +48,57 @@ export function getDb(): Database.Database {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    // ---- P1 加固 PRAGMA ----
-    // busy_timeout：极短时间窗口内允许 SQLite 内部重试，避免多连接 / 多进程
-    // 同时写时直接抛 SQLITE_BUSY。better-sqlite3 单例本身已串行化所有 SQL，
-    // 但当出现"主进程 + 备份子进程""主进程 + CLI 工具""Electron 主 + 子"
-    // 这类多连接场景时，没有 busy_timeout 会立刻报错；5s 是一个安全窗口。
-    db.pragma("busy_timeout = 5000");
-    // synchronous = NORMAL：WAL 模式下 NORMAL 已经能在断电时保证持久化，
-    // 性能比 FULL 好得多；这是 SQLite 官方对 WAL 的推荐值。
-    db.pragma("synchronous = NORMAL");
-    // auto_vacuum = INCREMENTAL：让 DELETE 产生的 free page 可以通过
-    //   PRAGMA incremental_vacuum(...) 真正归还给操作系统，用户看到的
-    //   .db 文件大小会随删除动作缩小。
-    // 老库首次迁移会做一次 VACUUM 以切换模式（一次性代价），之后每次
-    //   reclaimSpace() 的 incremental_vacuum 都是廉价的文件尾截断。
-    // 失败不致命：失败时退回到历史"占用只增不减"的行为，不影响数据正确性。
-    enableIncrementalAutoVacuum(db);
+
+    const formatDbError = (e: any, stage: string) => {
+      const message = e instanceof Error ? e.message : String(e);
+      const code = e?.code || "UNKNOWN";
+      return (
+        `[db] SQLite ${stage} 异常 (${code}): ${message}\n` +
+        `数据库文件可能已损坏或格式不正确：${DB_PATH}\n` +
+        `修复指引：\n` +
+        `  1) 立即停止服务，避免进一步写入；\n` +
+        `  2) 备份当前文件（含 -wal/-shm）到只读介质；\n` +
+        `  3) 优先使用 nowen-note 的备份恢复功能（POST /api/backups/<file>/restore?dryRun=1 预览）；\n` +
+        `  4) 若无可用备份，可尝试：\n` +
+        `       sqlite3 ${path.basename(DB_PATH)} ".recover" | sqlite3 recovered.db\n` +
+        `     再用 recovered.db 替换原文件。`
+      );
+    };
+
+    try {
+      db = new Database(DB_PATH);
+      db.pragma("journal_mode = WAL");
+      db.pragma("foreign_keys = ON");
+      // ---- P1 加固 PRAGMA ----
+      // busy_timeout：极短时间窗口内允许 SQLite 内部重试，避免多连接 / 多进程
+      // 同时写时直接抛 SQLITE_BUSY。better-sqlite3 单例本身已串行化所有 SQL，
+      // 但当出现"主进程 + 备份子进程""主进程 + CLI 工具""Electron 主 + 子"
+      // 这类多连接场景时，没有 busy_timeout 会立刻报错；5s 是一个安全窗口。
+      db.pragma("busy_timeout = 5000");
+      // synchronous = NORMAL：WAL 模式下 NORMAL 已经能在断电时保证持久化，
+      // 性能比 FULL 好得多；这是 SQLite 官方对 WAL 的推荐值。
+      db.pragma("synchronous = NORMAL");
+      // auto_vacuum = INCREMENTAL：让 DELETE 产生的 free page 可以通过
+      //   PRAGMA incremental_vacuum(...) 真正归还给操作系统，用户看到的
+      //   .db 文件大小会随删除动作缩小。
+      // 老库首次迁移会做一次 VACUUM 以切换模式（一次性代价），之后每次
+      //   reclaimSpace() 的 incremental_vacuum 都是廉价的文件尾截断。
+      // 失败不致命：失败时退回到历史"占用只增不减"的行为，不影响数据正确性。
+      enableIncrementalAutoVacuum(db);
+    } catch (e) {
+      throw new Error(formatDbError(e, "连接/配置"));
+    }
+
     // 完整性快速自检：5~50ms 量级，能发现绝大多数 page-level 损坏。
     // 损坏时直接抛错让进程拒绝启动——比"看似能跑、读到一半才报错"安全得多。
     try {
       const r = db.prepare("PRAGMA quick_check").get() as { quick_check: string } | undefined;
       const result = r?.quick_check;
       if (result && result !== "ok") {
-        throw new Error(
-          `[db] SQLite quick_check failed: ${result}\n` +
-          `数据库文件可能已损坏：${DB_PATH}\n` +
-          `修复指引：\n` +
-          `  1) 立即停止服务，避免进一步写入；\n` +
-          `  2) 备份当前文件（含 -wal/-shm）到只读介质；\n` +
-          `  3) 优先使用 nowen-note 的备份恢复功能（POST /api/backups/<file>/restore?dryRun=1 预览）；\n` +
-          `  4) 若无可用备份，可尝试：\n` +
-          `       sqlite3 ${path.basename(DB_PATH)} ".recover" | sqlite3 recovered.db\n` +
-          `     再用 recovered.db 替换原文件。`
-        );
+        throw new Error(`SQLite quick_check failed: ${result}`);
       }
     } catch (e) {
-      // quick_check 自身抛错（极端损坏）也让启动失败。
-      if (e instanceof Error && e.message.startsWith("[db]")) throw e;
-      throw new Error(
-        `[db] SQLite quick_check 执行异常: ${e instanceof Error ? e.message : String(e)}\n` +
-        `数据库文件可能已损坏：${DB_PATH}`
-      );
+      throw new Error(formatDbError(e, "quick_check"));
     }
     initSchema(db);
     // ---- D3：版本化迁移 ----
@@ -108,6 +115,12 @@ export function getDb(): Database.Database {
       db = undefined;
       throw e;
     }
+    // WAL 自动检查点：每小时执行一次，防止 WAL 日志无限增长
+    const WAL_CHECKPOINT_INTERVAL = 60 * 60 * 1000;
+    const walTimer = setInterval(() => {
+      try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch { /* ignore */ }
+    }, WAL_CHECKPOINT_INTERVAL);
+    walTimer.unref();
   }
   return db;
 }
@@ -221,6 +234,24 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
     );
 
+    -- 任务-标签 多对多关联表
+    CREATE TABLE IF NOT EXISTS task_tags (
+      taskId TEXT NOT NULL,
+      tagId TEXT NOT NULL,
+      PRIMARY KEY (taskId, tagId),
+      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
+    -- 说说-标签 多对多关联表
+    CREATE TABLE IF NOT EXISTS diary_tags (
+      diaryId TEXT NOT NULL,
+      tagId TEXT NOT NULL,
+      PRIMARY KEY (diaryId, tagId),
+      FOREIGN KEY (diaryId) REFERENCES diaries(id) ON DELETE CASCADE,
+      FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
     -- 附件表
     CREATE TABLE IF NOT EXISTS attachments (
       id TEXT PRIMARY KEY,
@@ -250,6 +281,7 @@ function initSchema(db: Database.Database) {
       isCompleted INTEGER DEFAULT 0,
       priority INTEGER DEFAULT 2,
       dueDate TEXT,
+      remindAt TEXT,
       noteId TEXT,
       parentId TEXT,
       sortOrder INTEGER DEFAULT 0,
@@ -279,6 +311,8 @@ function initSchema(db: Database.Database) {
       -- 图片：JSON 数组字符串，元素是 diary_attachments.id（uuid）。
       -- 默认 '[]' 而不是 NULL，方便 SQL/前端无脑 JSON.parse。
       images TEXT NOT NULL DEFAULT '[]',
+      visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+      voice TEXT DEFAULT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -627,6 +661,8 @@ function initSchema(db: Database.Database) {
         contentText TEXT DEFAULT '',
         mood TEXT DEFAULT '',
         images TEXT NOT NULL DEFAULT '[]',
+        visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+        voice TEXT DEFAULT NULL,
         createdAt TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -988,4 +1024,154 @@ function initSchema(db: Database.Database) {
     // 回填失败不影响主流程
     console.warn("[schema] backfill embedding_queue failed:", e);
   }
+
+  // ==============================================================
+  // 用户 @ 提及通知（mentions）
+  // ==============================================================
+  //
+  // 当用户在笔记/说说/任务中 @ 另一用户时创建一条 mention 记录。
+  // readAt 为 NULL 表示未读；权限在校验时决定。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mentions (
+      id TEXT PRIMARY KEY,
+      sourceType TEXT NOT NULL CHECK(sourceType IN ('note','diary','task')),
+      sourceId TEXT NOT NULL,
+      sourceTitle TEXT,
+      mentionedUserId TEXT NOT NULL,
+      mentionedByUserId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      readAt TEXT,
+      FOREIGN KEY (mentionedUserId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (mentionedByUserId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_mentions_user_read
+      ON mentions(mentionedUserId, readAt);
+    CREATE INDEX IF NOT EXISTS idx_mentions_source
+      ON mentions(sourceType, sourceId);
+  `);
+
+  // ==============================================================
+  // 项目管理系统模块 DDL
+  // ==============================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS project_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      workspaceId TEXT,
+      userId TEXT NOT NULL,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_groups_workspace ON project_groups(workspaceId);
+    CREATE INDEX IF NOT EXISTS idx_project_groups_user ON project_groups(userId);
+
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      cover TEXT DEFAULT '',
+      startDate TEXT,
+      endDate TEXT,
+      visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+      workspaceId TEXT,
+      groupId TEXT,
+      isArchived INTEGER DEFAULT 0,
+      isDeleted INTEGER DEFAULT 0,
+      ownerId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (groupId) REFERENCES project_groups(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_projects_workspace ON projects(workspaceId);
+    CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(groupId);
+    CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(ownerId);
+
+    CREATE TABLE IF NOT EXISTS project_stages (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_stages_project ON project_stages(projectId);
+
+    CREATE TABLE IF NOT EXISTS project_tasks (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      stageId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      isCompleted INTEGER DEFAULT 0,
+      assigneeId TEXT,
+      startDate TEXT,
+      endDate TEXT,
+      description TEXT DEFAULT '',
+      cover TEXT DEFAULT '',
+      sortOrder INTEGER DEFAULT 0,
+      creatorId TEXT NOT NULL,
+      modifierId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (stageId) REFERENCES project_stages(id) ON DELETE CASCADE,
+      FOREIGN KEY (assigneeId) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (creatorId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (modifierId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_tasks_project ON project_tasks(projectId);
+    CREATE INDEX IF NOT EXISTS idx_project_tasks_stage ON project_tasks(stageId);
+    CREATE INDEX IF NOT EXISTS idx_project_tasks_assignee ON project_tasks(assigneeId);
+
+    CREATE TABLE IF NOT EXISTS project_task_checklists (
+      id TEXT PRIMARY KEY,
+      taskId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      isCompleted INTEGER DEFAULT 0,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_task_checklists_task ON project_task_checklists(taskId);
+
+    CREATE TABLE IF NOT EXISTS project_task_members (
+      taskId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      PRIMARY KEY (taskId, userId),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_task_tags (
+      taskId TEXT NOT NULL,
+      tagId TEXT NOT NULL,
+      PRIMARY KEY (taskId, tagId),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_members (
+      projectId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      PRIMARY KEY (projectId, userId),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_discussions (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      content TEXT NOT NULL,
+      images TEXT NOT NULL DEFAULT '[]',
+      attachments TEXT NOT NULL DEFAULT '[]',
+      linkedCards TEXT NOT NULL DEFAULT '[]',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_discussions_project ON project_discussions(projectId);
+  `);
 }

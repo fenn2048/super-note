@@ -7,11 +7,11 @@ import {
   Sparkles, NotebookPen, Smile, GripVertical,
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2,
+  Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import SettingsModal from "@/components/SettingsModal";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import TagColorPopover from "@/components/TagColorPopover";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
@@ -21,11 +21,11 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useRailMode, nextRailMode } from "@/hooks/useRailMode";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import { exportNotebook } from "@/lib/exportService";
-import { Notebook, NoteListItem, ViewMode, WorkspaceFeatures } from "@/types";
+import { Notebook, NoteListItem, ViewMode, WorkspaceFeatures, Project, ProjectGroup } from "@/types";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { prompt as appPrompt } from "@/components/ui/confirm";
+import { prompt as appPrompt, confirm as confirmDialog } from "@/components/ui/confirm";
 
 /* ===== Emoji 图标选择器 ===== */
 const EMOJI_GROUPS = [
@@ -384,6 +384,7 @@ function NotebookItem({
   editingId, editValue, onEditChange, onEditSubmit, onEditCancel,
   onIconChange,
   draggable, onDragStart, onDragOver, onDragEnd, onDrop, dragOverId, dragOverZone,
+  notebookNotes, activeNoteId, onCreateNote, onDeleteNote, onRenameNote, onToggleFavorite, onTogglePin,
 }: {
   notebook: Notebook; depth: number; onSelect: (id: string) => void;
   selectedId: string | null; onToggle: (id: string) => void;
@@ -404,8 +405,16 @@ function NotebookItem({
   onDrop?: (e: React.DragEvent, id: string) => void;
   dragOverId?: string | null;
   dragOverZone?: "before" | "inside" | null;
+  notebookNotes?: Map<string, NoteListItem[]>;
+  activeNoteId?: string | null;
+  onCreateNote?: (notebookId: string) => void;
+  onDeleteNote?: (noteId: string, notebookId: string) => void;
+  onRenameNote?: (noteId: string, notebookId: string, newTitle: string) => void;
+  onToggleFavorite?: (noteId: string, notebookId: string) => void;
+  onTogglePin?: (noteId: string, notebookId: string) => void;
 }) {
   const { t } = useTranslation();
+  const notes = notebookNotes?.get(notebook.id);
   const isSelected = selectedId === notebook.id;
   const hasChildren = notebook.children && notebook.children.length > 0;
   const isExpanded = notebook.isExpanded === 1;
@@ -590,7 +599,7 @@ function NotebookItem({
                 onDrop={onDrop}
                 dragOverId={dragOverId}
                                 dragOverZone={dragOverZone}
-                notes={notes}
+                notebookNotes={notebookNotes}
                 activeNoteId={activeNoteId}
                 onCreateNote={onCreateNote}
                 onDeleteNote={onDeleteNote}
@@ -615,10 +624,10 @@ function NotebookItem({
                         });
                       });
                     }}
-                    onDelete={(noteId) => onDeleteNote?.(noteId)}
-                    onRename={(noteId, newTitle) => onRenameNote?.(noteId, newTitle)}
-                    onToggleFavorite={(noteId) => onToggleFavorite?.(noteId)}
-                    onTogglePin={(noteId) => onTogglePin?.(noteId)}
+                    onDelete={(noteId) => onDeleteNote?.(noteId, notebook.id)}
+                    onRename={(noteId, newTitle) => onRenameNote?.(noteId, notebook.id, newTitle)}
+                    onToggleFavorite={(noteId) => onToggleFavorite?.(noteId, notebook.id)}
+                    onTogglePin={(noteId) => onTogglePin?.(noteId, notebook.id)}
                   />
                 ))}
               </div>
@@ -639,7 +648,6 @@ function NotebookItem({
       </AnimatePresence>
     </>
   );
-}
 }
 
 /** Inline note item - rendered inside expanded notebook tree */
@@ -677,10 +685,12 @@ function NoteNoteItem({
   const timeAgo = useMemo(() => {
     const d = new Date(note.updatedAt);
     const diff = Date.now() - d.getTime();
+    
     if (diff < 60000) return t("common.justNow");
     if (diff < 3600000) return t("common.minutesAgo", { count: Math.floor(diff / 60000) });
     if (diff < 86400000) return t("common.hoursAgo", { count: Math.floor(diff / 3600000) });
     if (diff < 604800000) return t("common.daysAgo", { count: Math.floor(diff / 86400000) });
+
     return d.toLocaleDateString();
   }, [note.updatedAt, t]);
 
@@ -751,6 +761,304 @@ function NoteNoteItem({
 
 // 笔记本右键菜单项 - 在组件内使用 t() 动态生成
 
+function ProjectSidebar() {
+  const { state } = useApp();
+  const actions = useAppActions();
+  const { t } = useTranslation();
+  const [groups, setGroups] = useState<ProjectGroup[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [groupsExpanded, setGroupsExpanded] = useState(true);
+  const [favsExpanded, setFavsExpanded] = useState(true);
+  const [workspaceId, setWorkspaceId] = useState(getCurrentWorkspace());
+
+  useEffect(() => {
+    const handleWsChange = () => {
+      setWorkspaceId(getCurrentWorkspace());
+    };
+    window.addEventListener("nowen:workspace-changed", handleWsChange);
+    return () => window.removeEventListener("nowen:workspace-changed", handleWsChange);
+  }, []);
+
+  const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
+    try {
+      const val = sessionStorage.getItem("nowen-active-project-filter");
+      return val ? JSON.parse(val) : { type: "all" };
+    } catch {
+      return { type: "all" };
+    }
+  });
+
+  const fetchGroupsAndProjects = useCallback(async () => {
+    try {
+      const gs = await api.getProjectGroups(workspaceId);
+      setGroups(gs);
+      const ps = await api.getProjects(workspaceId, "active");
+      setProjects(ps);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchGroupsAndProjects();
+  }, [fetchGroupsAndProjects]);
+
+  // Listen to refresh events
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchGroupsAndProjects();
+    };
+    window.addEventListener("nowen:projects-refreshed", handleRefresh);
+    return () => window.removeEventListener("nowen:projects-refreshed", handleRefresh);
+  }, [fetchGroupsAndProjects]);
+
+  useEffect(() => {
+    const favs = JSON.parse(localStorage.getItem("nowen-fav-projects") || "[]");
+    setFavorites(favs);
+  }, []);
+
+  // Listen to favorite toggles
+  useEffect(() => {
+    const handleFavToggle = () => {
+      const favs = JSON.parse(localStorage.getItem("nowen-fav-projects") || "[]");
+      setFavorites(favs);
+    };
+    window.addEventListener("nowen:project-favorite-toggled", handleFavToggle);
+    return () => window.removeEventListener("nowen:project-favorite-toggled", handleFavToggle);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setActiveFilter(customEvent.detail);
+      }
+    };
+    window.addEventListener("nowen:project-filter-changed", handler);
+    return () => window.removeEventListener("nowen:project-filter-changed", handler);
+  }, []);
+
+  const selectFilter = (filter: typeof activeFilter) => {
+    setActiveFilter(filter);
+    sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+    window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    actions.setMobileSidebar(false);
+  };
+
+  const handleCreateGroup = async () => {
+    const name = await appPrompt({
+      title: t("projects.createGroup") || "新建分组",
+      placeholder: t("projects.groupName") || "分组名称",
+      confirmText: t("common.confirm") || "确认",
+      cancelText: t("common.cancel") || "取消",
+    });
+    if (!name) return;
+    try {
+      await api.createProjectGroup({ name, workspaceId: workspaceId === "personal" ? null : workspaceId });
+      fetchGroupsAndProjects();
+      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRenameGroup = async (groupId: string, oldName: string) => {
+    const name = await appPrompt({
+      title: t("projects.renameGroup") || "重命名分组",
+      placeholder: t("projects.groupName") || "分组名称",
+      defaultValue: oldName,
+      confirmText: t("common.confirm") || "确认",
+      cancelText: t("common.cancel") || "取消",
+    });
+    if (!name) return;
+    try {
+      await api.updateProjectGroup(groupId, { name });
+      fetchGroupsAndProjects();
+      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    const ok = await confirmDialog({
+      title: t("projects.deleteGroup") || "删除分组",
+      description: t("projects.confirmDeleteGroup") || "确定要删除该分组吗？此操作不可撤销。",
+      confirmText: t("common.confirm") || "确认",
+      cancelText: t("common.cancel") || "取消",
+    });
+    if (!ok) return;
+    try {
+      await api.deleteProjectGroup(groupId);
+      fetchGroupsAndProjects();
+      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const favoriteProjects = projects.filter(p => favorites.includes(p.id));
+
+  return (
+    <ScrollArea className="flex-1 min-h-0 px-2 space-y-4">
+      {/* Top Section */}
+      <div className="space-y-0.5 py-2">
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            activeFilter.type === "all"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={() => selectFilter({ type: "all" })}
+        >
+          <Briefcase size={16} />
+          <span>{t("projects.myProjects") || "我的项目"}</span>
+        </div>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            activeFilter.type === "my-tasks"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={() => selectFilter({ type: "my-tasks" })}
+        >
+          <ListTodo size={16} />
+          <span>{t("projects.myTasks") || "我的任务"}</span>
+        </div>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            activeFilter.type === "calendar"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={() => selectFilter({ type: "calendar" })}
+        >
+          <Calendar size={16} />
+          <span>{t("projects.calendar") || "日历"}</span>
+        </div>
+      </div>
+
+      {/* Project Groups */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between px-3 py-1 group/groups-header">
+          <button
+            onClick={() => setGroupsExpanded(!groupsExpanded)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-tx-tertiary hover:text-tx-secondary transition-colors uppercase tracking-wider"
+          >
+            <ChevronDown
+              size={12}
+              className={cn("transition-transform duration-200", !groupsExpanded && "-rotate-90")}
+            />
+            <span>{t("projects.groups") || "项目分组"}</span>
+          </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 opacity-0 group-hover/groups-header:opacity-100 transition-opacity"
+            onClick={handleCreateGroup}
+          >
+            <Plus size={12} />
+          </Button>
+        </div>
+        {groupsExpanded && (
+          <div className="space-y-0.5 pl-1.5 animate-in fade-in duration-200">
+            {groups.length === 0 ? (
+              <p className="text-[11px] text-tx-tertiary px-3 py-1">{t("projects.noGroups") || "无分组"}</p>
+            ) : (
+              groups.map((group) => {
+                const isActive = activeFilter.type === "group" && activeFilter.groupId === group.id;
+                return (
+                  <div
+                    key={group.id}
+                    className={cn(
+                      "flex items-center justify-between group/group px-3 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
+                      isActive
+                        ? "bg-app-active text-tx-primary font-medium"
+                        : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                    )}
+                    onClick={() => selectFilter({ type: "group", groupId: group.id })}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Folder size={14} className="text-tx-tertiary" />
+                      <span className="truncate">{group.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover/group:opacity-100 transition-opacity">
+                      <button
+                        className="p-0.5 hover:text-tx-primary text-tx-tertiary transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRenameGroup(group.id, group.name);
+                        }}
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                      <button
+                        className="p-0.5 hover:text-accent-danger text-tx-tertiary transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteGroup(group.id);
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Favorites */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between px-3 py-1">
+          <button
+            onClick={() => setFavsExpanded(!favsExpanded)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-tx-tertiary hover:text-tx-secondary transition-colors uppercase tracking-wider"
+          >
+            <ChevronDown
+              size={12}
+              className={cn("transition-transform duration-200", !favsExpanded && "-rotate-90")}
+            />
+            <span>{t("projects.favorites") || "我的收藏"}</span>
+          </button>
+        </div>
+        {favsExpanded && (
+          <div className="space-y-0.5 pl-1.5 animate-in fade-in duration-200">
+            {favoriteProjects.length === 0 ? (
+              <p className="text-[11px] text-tx-tertiary px-3 py-1">{t("projects.noFavorites") || "暂无收藏"}</p>
+            ) : (
+              favoriteProjects.map((p) => {
+                const isActive = activeFilter.type === "detail" && activeFilter.projectId === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors cursor-pointer truncate",
+                      isActive
+                        ? "bg-app-active text-tx-primary font-medium"
+                        : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                    )}
+                    onClick={() => selectFilter({ type: "detail", projectId: p.id })}
+                  >
+                    <Bookmark size={14} className="text-accent-primary shrink-0" />
+                    <span className="truncate">{p.name}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+    </ScrollArea>
+  );
+}
+
 /**
  * Sidebar
  *
@@ -777,7 +1085,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   // 避免用户陷入"完全无侧栏入口"的死局——本组件不需要关心这个边界。
   const [railMode, setRailMode] = useRailMode();
   const [searchInput, setSearchInput] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
+  const [currentWorkspaceName, setCurrentWorkspaceName] = useState("个人空间");
   // Y4: 当前工作区的功能开关。null = 个人空间（不受限），对象 = 工作区 normalized 配置。
   //     由 workspace-changed / workspace-features-changed 两个事件驱动刷新。
   const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
@@ -891,7 +1199,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
 
         const existing = next.get(notebookId) || [];
 
-        next.set(notebookId, [...existing, { id: note.id, userId: note.userId, title: note.title, contentText: note.contentText || "", notebookId: note.notebookId, isPinned: note.isPinned || 0, isFavorite: note.isFavorite || 0, isLocked: note.isLocked || 0, isArchived: note.isArchived || 0, isTrashed: note.isTrashed || 0, version: note.version || 1, sortOrder: note.sortOrder || 0, updatedAt: note.updatedAt, createdAt: note.createdAt } as NoteListItem]);
+        next.set(notebookId, [...existing, { id: note.id, userId: note.userId, title: note.title, contentText: note.contentText || "", notebookId: note.notebookId, isPinned: note.isPinned || 0, isFavorite: note.isFavorite || 0, isLocked: note.isLocked || 0, isArchived: note.isArchived || 0, isTrashed: note.isTrashed || 0, version: note.version || 1, sortOrder: note.sortOrder || 0, updatedAt: note.updatedAt, createdAt: note.createdAt, workspaceId: note.workspaceId ?? null } as NoteListItem]);
 
         return next;
 
@@ -1105,16 +1413,36 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         .then(setFeatures)
         .catch(() => setFeatures(null));
     };
+    const updateWorkspaceName = () => {
+      const ws = getCurrentWorkspace();
+      if (!ws || ws === "personal") {
+        setCurrentWorkspaceName("个人空间");
+        return;
+      }
+      api.getWorkspaces()
+        .then((list) => {
+          const found = list.find((w) => w.id === ws);
+          setCurrentWorkspaceName(found?.name || "未知空间");
+        })
+        .catch(() => setCurrentWorkspaceName("未知空间"));
+    };
     loadScopedData();
     loadFeatures();
+    updateWorkspaceName();
 
     // Phase 1: 工作区切换时重载数据
     const onWorkspaceChange = () => {
       // 清空选中状态避免跨空间残留
       actions.setSelectedNotebook(null);
       actions.setViewMode("all");
+      
+      // 重置项目模块的活动过滤器，避免过期过滤条件（如分组）跨空间残留导致项目不可见
+      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify({ type: "all" }));
+      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: { type: "all" } }));
+
       loadScopedData();
       loadFeatures();
+      updateWorkspaceName();
       // 触发 NoteList 重新拉取
       actions.refreshNotes();
     };
@@ -1747,7 +2075,10 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
 
       {/* Workspace Switcher + Search（v15：合并垂直 padding，
           原来 pt-2 + py-2 共占 ~16px 间隙，现在压到 ~8px） */}
-      <div className="px-3 pt-1.5 pb-1">
+      <div className="px-3 pt-2 pb-1">
+        <div className="text-xl font-bold text-tx-primary px-1 mb-2 truncate" title={currentWorkspaceName}>
+          {currentWorkspaceName}
+        </div>
         <WorkspaceSwitcher />
       </div>
 
@@ -1785,226 +2116,229 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       {/* Separator——已移除：移动端导航迁出后无需在主区上方加分隔；
           WorkspaceSwitcher + 搜索 与笔记本的视觉间距已经足够。 */}
 
-      {/* Notebooks */}
-      <div className="px-3 flex items-center justify-between mb-1">
-        <button
-          onClick={() => toggleNotebooksExpanded()}
-          className="flex items-center gap-1 hover:text-tx-secondary transition-colors"
-        >
-          <ChevronDown
-            size={12}
-            className={cn(
-              "text-tx-tertiary transition-transform duration-200",
-              !notebooksExpanded && "-rotate-90"
-            )}
-          />
-          <span className="text-xs font-medium text-tx-tertiary uppercase tracking-wider">{t('sidebar.notebooks')}</span>
-        </button>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCreateNotebook}>
-          <Plus size={14} />
-        </Button>
-      </div>
-
-      <AnimatePresence initial={false}>
-        {notebooksExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0, overflow: "hidden" }}
-            animate={{ height: "auto", opacity: 1, overflow: "visible", transitionEnd: { overflow: "visible" } }}
-            exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-            transition={{ duration: 0.2 }}
-            className="flex-1 min-h-0 flex flex-col"
-          >
-      <ScrollArea className="flex-1 min-h-0 px-1">
-        <div className="space-y-0.5 pb-2">
-          {tree.map((nb) => (
-            <NotebookItem
-              key={nb.id}
-              notebook={nb}
-              depth={0}
-              onSelect={handleNotebookSelect}
-              selectedId={state.selectedNotebookId}
-              onToggle={handleToggle}
-              onContextMenu={(e, id) => openMenu(e, id, "notebook")}
-              onLongPress={(x, y, id) => openMenuAt(x, y, id, "notebook")}
-              editingId={editingId}
-              editValue={editValue}
-              onEditChange={setEditValue}
-              onEditSubmit={handleEditSubmit}
-              onEditCancel={handleEditCancel}
-              onIconChange={handleIconChange}
-              draggable={true}
-              onDragStart={handleNbDragStart}
-              onDragOver={handleNbDragOver}
-              onDragEnd={handleNbDragEnd}
-              onDrop={handleNbDrop}
-              dragOverId={dragOverNbId}
-              dragOverZone={dragOverNbZone}
-              notes={notebookNotes.get(nb.id)}
-              activeNoteId={state.activeNote?.id}
-              onCreateNote={handleCreateNote}
-              onDeleteNote={(noteId) => handleDeleteNote(noteId, nb.id)}
-              onRenameNote={(noteId, newTitle) => handleRenameNote(noteId, nb.id, newTitle)}
-              onToggleFavorite={(noteId) => handleToggleFavorite(noteId, nb.id)}
-              onTogglePin={(noteId) => handleTogglePin(noteId, nb.id)}
-            />
-          ))}
-        </div>
-      </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Tags —— 使用 shrink-0 + 内部 max-height + scroll，避免在小屏（如 1366x768）挤压上方 Notebooks 或与 Footer 交叠 */}
-      <div className="border-t border-app-border shrink-0">
-        <button
-          onClick={() => toggleTagsExpanded()}
-          className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
-        >
-          <span className="text-xs font-medium text-tx-tertiary uppercase tracking-wider">{t('sidebar.tags')}</span>
-          <ChevronDown
-            size={14}
-            className={cn(
-              "text-tx-tertiary transition-transform duration-200",
-              !tagsExpanded && "-rotate-90"
-            )}
-          />
-        </button>
-        <AnimatePresence initial={false}>
-          {tagsExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, overflow: "hidden" }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-              transition={{ duration: 0.2 }}
-              style={{ overflow: "hidden" }}
+      {state.viewMode === "projects" ? (
+        <ProjectSidebar />
+      ) : (
+        <>
+          {/* Notebooks */}
+          <div className="px-3 flex items-center justify-between mb-1">
+            <button
+              onClick={() => toggleNotebooksExpanded()}
+              className="flex items-center gap-1 hover:text-tx-secondary transition-colors"
             >
-              {/* 限制标签区最大高度，超出可滚动 —— 避免与 Notebooks / Footer 重叠 */}
-              <div
-                className="px-2 pb-2 space-y-0.5 overflow-y-auto"
-                style={{ maxHeight: "min(35vh, 260px)" }}
+              <ChevronDown
+                size={12}
+                className={cn(
+                  "text-tx-tertiary transition-transform duration-200",
+                  !notebooksExpanded && "-rotate-90"
+                )}
+              />
+              <span className="text-xs font-medium text-tx-tertiary uppercase tracking-wider">{t('sidebar.notebooks')}</span>
+            </button>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCreateNotebook}>
+              <Plus size={14} />
+            </Button>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {notebooksExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                animate={{ height: "auto", opacity: 1, overflow: "visible", transitionEnd: { overflow: "visible" } }}
+                exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+                transition={{ duration: 0.2 }}
+                className="flex-1 min-h-0 flex flex-col"
               >
-                {state.tags.length === 0 ? (
-                  <p className="text-[10px] text-tx-tertiary px-2 py-1">{t('sidebar.noTags')}</p>
-                ) : (
-                  state.tags.map((tag) => {
-                    const isActive = state.viewMode === "tag" && state.selectedTagId === tag.id;
-                    return (
-                      <div
-                        key={tag.id}
-                        className={cn(
-                          "flex items-center gap-1.5 sm:gap-2 w-full px-1.5 sm:px-2 py-1 sm:py-1.5 rounded sm:rounded-md text-[11px] sm:text-xs transition-colors group/tag cursor-pointer",
-                          isActive
-                            ? "bg-app-active text-tx-primary"
-                            : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-                        )}
-                        onClick={() => {
-                          // 长按已触发颜色选择时，跳过本次点击导航
-                          if (tagLongPressFired.current) {
-                            tagLongPressFired.current = false;
-                            return;
-                          }
-                          actions.setSelectedTag(tag.id);
-                          actions.setSelectedNotebook(null);
-                          actions.setViewMode("tag");
-                          actions.setMobileSidebar(false);
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setTagColorPopover({
-                            tagId: tag.id,
-                            tagName: tag.name,
-                            color: tag.color,
-                            x: e.clientX,
-                            y: e.clientY,
-                          });
-                        }}
-                        onTouchStart={(e) => {
-                          const touch = e.touches[0];
-                          if (!touch) return;
-                          const startX = touch.clientX;
-                          const startY = touch.clientY;
-                          tagLongPressFired.current = false;
-                          if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
-                          tagLongPressTimer.current = setTimeout(() => {
-                            tagLongPressFired.current = true;
-                            setTagColorPopover({
-                              tagId: tag.id,
-                              tagName: tag.name,
-                              color: tag.color,
-                              x: startX,
-                              y: startY,
-                            });
-                          }, 500);
-                        }}
-                        onTouchMove={(e) => {
-                          // 移动超过阈值则取消长按
-                          if (tagLongPressTimer.current) {
-                            const touch = e.touches[0];
-                            if (!touch) return;
-                            // 简单判断：直接清除（用户已开始滚动）
-                            clearTimeout(tagLongPressTimer.current);
-                            tagLongPressTimer.current = null;
-                          }
-                        }}
-                        onTouchEnd={() => {
-                          if (tagLongPressTimer.current) {
-                            clearTimeout(tagLongPressTimer.current);
-                            tagLongPressTimer.current = null;
-                          }
-                        }}
-                        onTouchCancel={() => {
-                          if (tagLongPressTimer.current) {
-                            clearTimeout(tagLongPressTimer.current);
-                            tagLongPressTimer.current = null;
-                          }
-                        }}
-                      >
-                        <span
-                          className="shrink-0 inline-block rounded-full"
-                          style={{
-                            width: 6,
-                            height: 6,
-                            backgroundColor: tag.color,
-                          }}
-                        />
-                        <span className="flex-1 truncate text-left">{tag.name}</span>
-                        {/* 右侧尾部：固定宽度容器，内部用绝对定位叠放数字与删除按钮，避免 hover 时宽度变化引发抖动 */}
-                        <span className="relative shrink-0 w-4 h-4 flex items-center justify-center">
-                          {tag.noteCount !== undefined && tag.noteCount > 0 && (
-                            <span className="absolute inset-0 flex items-center justify-center text-[10px] text-tx-tertiary tabular-nums [@media(hover:hover)]:group-hover/tag:opacity-0 transition-opacity">
-                              {tag.noteCount}
-                            </span>
-                          )}
-                          {/* 仅支持真 hover 的设备（鼠标）显示删除按钮，避免触屏 sticky hover */}
-                          <button
-                            className="absolute inset-0 hidden [@media(hover:hover)]:group-hover/tag:flex items-center justify-center text-tx-tertiary hover:text-red-500 transition-colors"
-                            title={t('common.delete')}
-                            onClick={(e) => {
+          <ScrollArea className="flex-1 min-h-0 px-1">
+            <div className="space-y-0.5 pb-2">
+              {tree.map((nb) => (
+                <NotebookItem
+                  key={nb.id}
+                  notebook={nb}
+                  depth={0}
+                  onSelect={handleNotebookSelect}
+                  selectedId={state.selectedNotebookId}
+                  onToggle={handleToggle}
+                  onContextMenu={(e, id) => openMenu(e, id, "notebook")}
+                  onLongPress={(x, y, id) => openMenuAt(x, y, id, "notebook")}
+                  editingId={editingId}
+                  editValue={editValue}
+                  onEditChange={setEditValue}
+                  onEditSubmit={handleEditSubmit}
+                  onEditCancel={handleEditCancel}
+                  onIconChange={handleIconChange}
+                  draggable={true}
+                  onDragStart={handleNbDragStart}
+                  onDragOver={handleNbDragOver}
+                  onDragEnd={handleNbDragEnd}
+                  onDrop={handleNbDrop}
+                  dragOverId={dragOverNbId}
+                  dragOverZone={dragOverNbZone}
+                  notebookNotes={notebookNotes}
+                  activeNoteId={state.activeNote?.id}
+                  onCreateNote={handleCreateNote}
+                  onDeleteNote={handleDeleteNote}
+                  onRenameNote={handleRenameNote}
+                  onToggleFavorite={handleToggleFavorite}
+                  onTogglePin={handleTogglePin}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Tags —— 使用 shrink-0 + 内部 max-height + scroll，避免在小屏（如 1366x768）挤压上方 Notebooks 或与 Footer 交叠 */}
+          <div className="border-t border-app-border shrink-0">
+            <button
+              onClick={() => toggleTagsExpanded()}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
+            >
+              <span className="text-xs font-medium text-tx-tertiary uppercase tracking-wider">{t('sidebar.tags')}</span>
+              <ChevronDown
+                size={14}
+                className={cn(
+                  "text-tx-tertiary transition-transform duration-200",
+                  !tagsExpanded && "-rotate-90"
+                )}
+              />
+            </button>
+            <AnimatePresence initial={false}>
+              {tagsExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+                  transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  {/* 限制标签区最大高度，超出可滚动 —— 避免与 Notebooks / Footer 重叠 */}
+                  <div
+                    className="px-2 pb-2 space-y-0.5 overflow-y-auto"
+                    style={{ maxHeight: "min(35vh, 260px)" }}
+                  >
+                    {state.tags.length === 0 ? (
+                      <p className="text-[10px] text-tx-tertiary px-2 py-1">{t('sidebar.noTags')}</p>
+                    ) : (
+                      state.tags.map((tag) => {
+                        const isActive = state.viewMode === "tag" && state.selectedTagId === tag.id;
+                        return (
+                          <div
+                            key={tag.id}
+                            className={cn(
+                              "flex items-center gap-1.5 sm:gap-2 w-full px-1.5 sm:px-2 py-1 sm:py-1.5 rounded sm:rounded-md text-[11px] sm:text-xs transition-colors group/tag cursor-pointer",
+                              isActive
+                                ? "bg-app-active text-tx-primary"
+                                : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                            )}
+                            onClick={() => {
+                              // 长按已触发颜色选择时，跳过本次点击导航
+                              if (tagLongPressFired.current) {
+                                tagLongPressFired.current = false;
+                                return;
+                              }
+                              actions.setSelectedTag(tag.id);
+                              actions.setSelectedNotebook(null);
+                              actions.setViewMode("tag");
+                              actions.setMobileSidebar(false);
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
                               e.stopPropagation();
-                              setDeleteTagTarget({ id: tag.id, name: tag.name, color: tag.color });
+                              setTagColorPopover({
+                                tagId: tag.id,
+                                tagName: tag.name,
+                                color: tag.color,
+                                x: e.clientX,
+                                y: e.clientY,
+                              });
+                            }}
+                            onTouchStart={(e) => {
+                              const touch = e.touches[0];
+                              if (!touch) return;
+                              const startX = touch.clientX;
+                              const startY = touch.clientY;
+                              tagLongPressFired.current = false;
+                              if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
+                              tagLongPressTimer.current = setTimeout(() => {
+                                tagLongPressFired.current = true;
+                                setTagColorPopover({
+                                  tagId: tag.id,
+                                  tagName: tag.name,
+                                  color: tag.color,
+                                  x: startX,
+                                  y: startY,
+                                });
+                              }, 500);
+                            }}
+                            onTouchMove={(e) => {
+                              // 移动超过阈值则取消长按
+                              if (tagLongPressTimer.current) {
+                                const touch = e.touches[0];
+                                if (!touch) return;
+                                // 简单判断：直接清除（用户已开始滚动）
+                                clearTimeout(tagLongPressTimer.current);
+                                tagLongPressTimer.current = null;
+                              }
+                            }}
+                            onTouchEnd={() => {
+                              if (tagLongPressTimer.current) {
+                                clearTimeout(tagLongPressTimer.current);
+                                tagLongPressTimer.current = null;
+                              }
+                            }}
+                            onTouchCancel={() => {
+                              if (tagLongPressTimer.current) {
+                                clearTimeout(tagLongPressTimer.current);
+                                tagLongPressTimer.current = null;
+                              }
                             }}
                           >
-                            <X size={12} strokeWidth={2.5} />
-                          </button>
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                            <span
+                              className="shrink-0 inline-block rounded-full"
+                              style={{
+                                width: 6,
+                                height: 6,
+                                backgroundColor: tag.color,
+                              }}
+                            />
+                            <span className="flex-1 truncate text-left">{tag.name}</span>
+                            {/* 右侧尾部：固定宽度容器，内部用绝对定位叠放数字与删除按钮，避免 hover 时宽度变化引发抖动 */}
+                            <span className="relative shrink-0 w-4 h-4 flex items-center justify-center">
+                              {tag.noteCount !== undefined && tag.noteCount > 0 && (
+                                <span className="absolute inset-0 flex items-center justify-center text-[10px] text-tx-tertiary tabular-nums [@media(hover:hover)]:group-hover/tag:opacity-0 transition-opacity">
+                                  {tag.noteCount}
+                                </span>
+                              )}
+                              {/* 仅支持真 hover 的设备（鼠标）显示删除按钮，避免触屏 sticky hover */}
+                              <button
+                                className="absolute inset-0 hidden [@media(hover:hover)]:group-hover/tag:flex items-center justify-center text-tx-tertiary hover:text-red-500 transition-colors"
+                                title={t('common.delete')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTagTarget({ id: tag.id, name: tag.name, color: tag.color });
+                                }}
+                              >
+                                <X size={12} strokeWidth={2.5} />
+                              </button>
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </>
+      )}
 
       {/* Footer：v16 桌面端 / v16 P3 后续移动端，设置 + 登出 都迁到 NavRail。
           本组件不再渲染任何 Footer。 */}
 
-      {/* Settings Modal */}
-      <AnimatePresence>
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      </AnimatePresence>
+
 
       {/* Notebook Context Menu */}
       <ContextMenu

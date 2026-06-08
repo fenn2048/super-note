@@ -34,84 +34,84 @@
   }
 }
 
-/* ===== Light Theme (默认) ===== */
+/* ===== Light Theme (默认：Obsidian Light) ===== */
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --editor-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
   --color-bg: #ffffff;
-  --color-surface: #f9fafb;
-  --color-sidebar: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-sidebar: #f5f5f5;
   --color-elevated: #ffffff;
-  --color-border: #e5e7eb;
-  --color-hover: #f3f4f6;
-  --color-active: #e0e7ff;
+  --color-border: #e3e3e3;
+  --color-hover: rgba(0, 0, 0, 0.04);
+  --color-active: rgba(72, 54, 153, 0.08);
 
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-tertiary: #9ca3af;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #5a5a5a;
+  --color-text-tertiary: #8a8a8a;
   --color-text-inverse: #ffffff;
 
-  --color-accent-primary: #3b82f6;
-  --color-accent-secondary: #22c55e;
-  --color-accent-warning: #f59e0b;
-  --color-accent-danger: #ef4444;
-  --color-accent-muted: #9ca3af;
+  --color-accent-primary: #483699;
+  --color-accent-secondary: #2a7b4c;
+  --color-accent-warning: #e67e22;
+  --color-accent-danger: #c0392b;
+  --color-accent-muted: rgba(0, 0, 0, 0.3);
 
   /* ProseMirror 编辑器色值 */
-  --pm-text: #374151;
-  --pm-heading: #111827;
-  --pm-code-bg: #f3f4f6;
-  --pm-code-text: #dc2626;
-  --pm-pre-bg: #f9fafb;
-  --pm-pre-border: #e5e7eb;
-  --pm-pre-text: #374151;
-  --pm-blockquote-border: #3b82f6;
-  --pm-blockquote-text: #6b7280;
-  --pm-hr: #e5e7eb;
-  --pm-placeholder: #9ca3af;
-  --pm-task-done: #9ca3af;
-  --pm-scrollbar: #d1d5db;
-  --pm-scrollbar-hover: #9ca3af;
-  --pm-selection: rgba(59, 130, 246, 0.2);
+  --pm-text: #2e2e2e;
+  --pm-heading: #1a1a1a;
+  --pm-code-bg: #f5f5f5;
+  --pm-code-text: #c92a2a;
+  --pm-pre-bg: #f8f8f8;
+  --pm-pre-border: #e3e3e3;
+  --pm-pre-text: #2e2e2e;
+  --pm-blockquote-border: #483699;
+  --pm-blockquote-text: #5c5c5c;
+  --pm-hr: #e3e3e3;
+  --pm-placeholder: #b3b3b3;
+  --pm-task-done: #b3b3b3;
+  --pm-scrollbar: #e5e5e5;
+  --pm-scrollbar-hover: #cccccc;
+  --pm-selection: rgba(72, 54, 153, 0.15);
 }
 
-/* ===== Dark Theme ===== */
+/* ===== Dark Theme (默认：Obsidian Dark) ===== */
 .dark {
-  --color-bg: #0d1117;
-  --color-surface: #161b22;
-  --color-sidebar: #1c2128;
-  --color-elevated: #1c2333;
-  --color-border: #30363d;
-  --color-hover: #1f2937;
-  --color-active: #253040;
+  --color-bg: #1e1e1e;
+  --color-surface: #1e1e1e;
+  --color-sidebar: #161616;
+  --color-elevated: #242424;
+  --color-border: #2e2e2e;
+  --color-hover: rgba(255, 255, 255, 0.04);
+  --color-active: rgba(122, 82, 244, 0.15);
 
-  --color-text-primary: #e6edf3;
-  --color-text-secondary: #8b949e;
-  --color-text-tertiary: #6e7681;
-  --color-text-inverse: #0d1117;
+  --color-text-primary: #dadada;
+  --color-text-secondary: #a6a6a6;
+  --color-text-tertiary: #7c7c7c;
+  --color-text-inverse: #1e1e1e;
 
-  --color-accent-primary: #58a6ff;
-  --color-accent-secondary: #7ee787;
-  --color-accent-warning: #f0883e;
-  --color-accent-danger: #f85149;
-  --color-accent-muted: #8b949e;
+  --color-accent-primary: #7a52f4;
+  --color-accent-secondary: #2ecc71;
+  --color-accent-warning: #f39c12;
+  --color-accent-danger: #e74c3c;
+  --color-accent-muted: rgba(255, 255, 255, 0.3);
 
-  --pm-text: #c9d1d9;
-  --pm-heading: #e6edf3;
-  --pm-code-bg: #1c2333;
-  --pm-code-text: #f0883e;
-  --pm-pre-bg: #161b22;
-  --pm-pre-border: #30363d;
-  --pm-pre-text: #c9d1d9;
-  --pm-blockquote-border: #58a6ff;
-  --pm-blockquote-text: #8b949e;
-  --pm-hr: #30363d;
-  --pm-placeholder: #6e7681;
-  --pm-task-done: #6e7681;
-  --pm-scrollbar: #30363d;
-  --pm-scrollbar-hover: #484f58;
-  --pm-selection: rgba(88, 166, 255, 0.25);
+  --pm-text: #dadada;
+  --pm-heading: #ffffff;
+  --pm-code-bg: #272727;
+  --pm-code-text: #ff7e7e;
+  --pm-pre-bg: #181818;
+  --pm-pre-border: #2e2e2e;
+  --pm-pre-text: #dadada;
+  --pm-blockquote-border: #7a52f4;
+  --pm-blockquote-text: #a6a6a6;
+  --pm-hr: #2e2e2e;
+  --pm-placeholder: #505050;
+  --pm-task-done: #505050;
+  --pm-scrollbar: #363636;
+  --pm-scrollbar-hover: #4c4c4c;
+  --pm-selection: rgba(122, 82, 244, 0.25);
 }
 
 html, body, #root {
@@ -1972,24 +1972,24 @@ body.density-compact {
  * ========================================================================= */
 
 :root {
-  /* 默认皮肤的圆角令牌（补齐，便于组件无差别使用） */
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 6px;
+  /* 默认底色风格（Obsidian）的圆角令牌 */
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
 
-  /* 默认皮肤的第四级文字色（禁用态） */
-  --color-text-quaternary: #d1d5db;
+  /* 默认底色风格的第四级文字色（禁用态） */
+  --color-text-quaternary: #b8b8b8;
 
-  /* 毛玻璃降级时使用的不透明底色（默认皮肤） */
-  --color-sidebar-solid: #f3f4f6;
+  /* 毛玻璃降级时使用的不透明底色（默认风格） */
+  --color-sidebar-solid: #f5f5f5;
   --color-elevated-solid: #ffffff;
 }
 
 .dark {
-  --color-text-quaternary: #4b5563;
-  --color-sidebar-solid: #1c2128;
-  --color-elevated-solid: #1c2333;
+  --color-text-quaternary: #505050;
+  --color-sidebar-solid: #161616;
+  --color-elevated-solid: #242424;
 }
 
 /* ---------- macOS Light ---------- */
@@ -2422,5 +2422,417 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   margin: 0.4em 0;
 }
 
+/* ===== 说说渲染内容中 iframe (音视频嵌套) 样式 ===== */
+.diary-rendered-content iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  background-color: #000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.dark .diary-rendered-content iframe {
+  border-color: var(--color-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== 编辑器媒体渲染响应式适配 ===== */
+.ProseMirror iframe,
+.ProseMirror video {
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  margin: 12px auto;
+  display: block;
+}
+
+.ProseMirror audio {
+  max-width: 100% !important;
+  margin: 12px auto;
+  display: block;
+}
 
 
+/* ============================================================================
+ * Notion 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：Notion.so（奶油灰侧边栏、知性蓝强调色、精细分隔线、极小圆角）。
+ * ========================================================================= */
+
+/* ---------- Notion Light ---------- */
+:root[data-skin="notion"] {
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-sidebar: #f1f1ef;
+  --color-sidebar-solid: #f1f1ef;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: rgba(55, 53, 47, 0.09);
+  --color-hover: rgba(55, 53, 47, 0.04);
+  --color-active: rgba(55, 53, 47, 0.08);
+
+  --color-text-primary: #37352f;
+  --color-text-secondary: rgba(55, 53, 47, 0.65);
+  --color-text-tertiary: rgba(55, 53, 47, 0.45);
+  --color-text-quaternary: rgba(55, 53, 47, 0.20);
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #2383e2;
+  --color-accent-secondary: #0f7b6c;
+  --color-accent-warning: #dfab01;
+  --color-accent-danger: #e03e3e;
+  --color-accent-muted: rgba(55, 53, 47, 0.45);
+
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
+
+  /* 编辑器样式 */
+  --pm-text: #37352f;
+  --pm-heading: #1f1f1f;
+  --pm-code-bg: rgba(135, 131, 120, 0.15);
+  --pm-code-text: #eb5757;
+  --pm-pre-bg: #f7f7f5;
+  --pm-pre-border: rgba(55, 53, 47, 0.09);
+  --pm-pre-text: #37352f;
+  --pm-blockquote-border: #37352f;
+  --pm-blockquote-text: rgba(55, 53, 47, 0.6);
+  --pm-hr: rgba(55, 53, 47, 0.09);
+  --pm-placeholder: rgba(55, 53, 47, 0.3);
+  --pm-task-done: rgba(55, 53, 47, 0.4);
+  --pm-scrollbar: rgba(55, 53, 47, 0.15);
+  --pm-scrollbar-hover: rgba(55, 53, 47, 0.3);
+  --pm-selection: rgba(35, 131, 226, 0.15);
+}
+
+/* ---------- Notion Dark ---------- */
+:root[data-skin="notion"].dark {
+  --color-bg: #191919;
+  --color-surface: #191919;
+  --color-sidebar: #202020;
+  --color-sidebar-solid: #202020;
+  --color-elevated: #252525;
+  --color-elevated-solid: #252525;
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-hover: rgba(255, 255, 255, 0.055);
+  --color-active: rgba(255, 255, 255, 0.1);
+
+  --color-text-primary: rgba(255, 255, 255, 0.9);
+  --color-text-secondary: rgba(255, 255, 255, 0.6);
+  --color-text-tertiary: rgba(255, 255, 255, 0.4);
+  --color-text-quaternary: rgba(255, 255, 255, 0.2);
+  --color-text-inverse: #191919;
+
+  --color-accent-primary: #2eaadc;
+  --color-accent-secondary: #34d158;
+  --color-accent-warning: #eab308;
+  --color-accent-danger: #ef4444;
+  --color-accent-muted: rgba(255, 255, 255, 0.4);
+
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
+
+  /* 编辑器样式 */
+  --pm-text: rgba(255, 255, 255, 0.9);
+  --pm-heading: #ffffff;
+  --pm-code-bg: rgba(255, 255, 255, 0.1);
+  --pm-code-text: #ff7373;
+  --pm-pre-bg: #202020;
+  --pm-pre-border: rgba(255, 255, 255, 0.09);
+  --pm-pre-text: rgba(255, 255, 255, 0.9);
+  --pm-blockquote-border: rgba(255, 255, 255, 0.8);
+  --pm-blockquote-text: rgba(255, 255, 255, 0.6);
+  --pm-hr: rgba(255, 255, 255, 0.09);
+  --pm-placeholder: rgba(255, 255, 255, 0.3);
+  --pm-task-done: rgba(255, 255, 255, 0.4);
+  --pm-scrollbar: rgba(255, 255, 255, 0.15);
+  --pm-scrollbar-hover: rgba(255, 255, 255, 0.3);
+  --pm-selection: rgba(46, 170, 220, 0.25);
+}
+
+
+/* ============================================================================
+ * Memos 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：usememos（清爽翡翠绿强调色、灰色大背景、高亮独立的白色卡片容器）。
+ * ========================================================================= */
+
+/* ---------- Memos Light ---------- */
+:root[data-skin="memos"] {
+  --color-bg: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-sidebar-solid: #ffffff;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: #e5e7eb;
+  --color-hover: #f4f4f5;
+  --color-active: rgba(16, 185, 129, 0.08);
+
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #4b5563;
+  --color-text-tertiary: #9ca3af;
+  --color-text-quaternary: #d1d5db;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #10b981;
+  --color-accent-secondary: #06b6d4;
+  --color-accent-warning: #f59e0b;
+  --color-accent-danger: #ef4444;
+  --color-accent-muted: #9ca3af;
+
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+
+  /* 编辑器样式 */
+  --pm-text: #1f2937;
+  --pm-heading: #111827;
+  --pm-code-bg: #f3f4f6;
+  --pm-code-text: #047857;
+  --pm-pre-bg: #f9fafb;
+  --pm-pre-border: #e5e7eb;
+  --pm-pre-text: #1f2937;
+  --pm-blockquote-border: #10b981;
+  --pm-blockquote-text: #4b5563;
+  --pm-hr: #e5e7eb;
+  --pm-placeholder: #9ca3af;
+  --pm-task-done: #9ca3af;
+  --pm-scrollbar: #d1d5db;
+  --pm-scrollbar-hover: #9ca3af;
+  --pm-selection: rgba(16, 185, 129, 0.2);
+}
+
+/* ---------- Memos Dark ---------- */
+:root[data-skin="memos"].dark {
+  --color-bg: #121214;
+  --color-surface: #1e1e24;
+  --color-sidebar: #121214;
+  --color-sidebar-solid: #121214;
+  --color-elevated: #1e1e24;
+  --color-elevated-solid: #1e1e24;
+  --color-border: #2e2e33;
+  --color-hover: #27272a;
+  --color-active: rgba(16, 185, 129, 0.15);
+
+  --color-text-primary: #e4e4e7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-text-quaternary: #3f3f46;
+  --color-text-inverse: #121214;
+
+  --color-accent-primary: #10b981;
+  --color-accent-secondary: #06b6d4;
+  --color-accent-warning: #f59e0b;
+  --color-accent-danger: #ef4444;
+  --color-accent-muted: #71717a;
+
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+
+  /* 编辑器样式 */
+  --pm-text: #e4e4e7;
+  --pm-heading: #ffffff;
+  --pm-code-bg: #27272a;
+  --pm-code-text: #34d399;
+  --pm-pre-bg: #1e1e24;
+  --pm-pre-border: #2e2e33;
+  --pm-pre-text: #e4e4e7;
+  --pm-blockquote-border: #10b981;
+  --pm-blockquote-text: #a1a1aa;
+  --pm-hr: #2e2e33;
+  --pm-placeholder: #71717a;
+  --pm-task-done: #71717a;
+  --pm-scrollbar: #27272a;
+  --pm-scrollbar-hover: #3f3f46;
+  --pm-selection: rgba(16, 185, 129, 0.25);
+}
+
+
+/* ============================================================================
+ * flomo 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：flomoapp.com（标志性暖沙绿水洗色、草绿强调色、无压力输入）。
+ * ========================================================================= */
+
+/* ---------- flomo Light ---------- */
+:root[data-skin="flomo"] {
+  --color-bg: #f4f4f0;
+  --color-surface: #ffffff;
+  --color-sidebar: #f4f4f0;
+  --color-sidebar-solid: #f4f4f0;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: #e1e1db;
+  --color-hover: #eaeae5;
+  --color-active: rgba(50, 182, 122, 0.08);
+
+  --color-text-primary: #2c3e50;
+  --color-text-secondary: #5d6d7e;
+  --color-text-tertiary: #85929e;
+  --color-text-quaternary: #bdc3c7;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #32b67a;
+  --color-accent-secondary: #2e9d68;
+  --color-accent-warning: #f39c12;
+  --color-accent-danger: #e74c3c;
+  --color-accent-muted: #85929e;
+
+  --radius-window: 12px;
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+
+  /* 编辑器样式 */
+  --pm-text: #2c3e50;
+  --pm-heading: #2c3e50;
+  --pm-code-bg: #f4f4f0;
+  --pm-code-text: #27ae60;
+  --pm-pre-bg: #fafaf8;
+  --pm-pre-border: #e1e1db;
+  --pm-pre-text: #2c3e50;
+  --pm-blockquote-border: #32b67a;
+  --pm-blockquote-text: #5d6d7e;
+  --pm-hr: #e1e1db;
+  --pm-placeholder: #bdc3c7;
+  --pm-task-done: #bdc3c7;
+  --pm-scrollbar: #eaeae5;
+  --pm-scrollbar-hover: #d5d5cd;
+  --pm-selection: rgba(50, 182, 122, 0.15);
+}
+
+/* ---------- flomo Dark ---------- */
+:root[data-skin="flomo"].dark {
+  --color-bg: #181816;
+  --color-surface: #252522;
+  --color-sidebar: #181816;
+  --color-sidebar-solid: #181816;
+  --color-elevated: #2b2b28;
+  --color-elevated-solid: #2b2b28;
+  --color-border: #363632;
+  --color-hover: rgba(255, 255, 255, 0.04);
+  --color-active: rgba(50, 182, 122, 0.15);
+
+  --color-text-primary: #e0e0d8;
+  --color-text-secondary: #a5a59e;
+  --color-text-tertiary: #787873;
+  --color-text-quaternary: #454542;
+  --color-text-inverse: #181816;
+
+  --color-accent-primary: #3cd08c;
+  --color-accent-secondary: #32b67a;
+  --color-accent-warning: #f39c12;
+  --color-accent-danger: #e74c3c;
+  --color-accent-muted: #787873;
+
+  --radius-window: 12px;
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+
+  /* 编辑器样式 */
+  --pm-text: #e0e0d8;
+  --pm-heading: #ffffff;
+  --pm-code-bg: #363632;
+  --pm-code-text: #3cd08c;
+  --pm-pre-bg: #252522;
+  --pm-pre-border: #363632;
+  --pm-pre-text: #e0e0d8;
+  --pm-blockquote-border: #3cd08c;
+  --pm-blockquote-text: #a5a59e;
+  --pm-hr: #363632;
+  --pm-placeholder: #787873;
+  --pm-task-done: #787873;
+  --pm-scrollbar: #363632;
+  --pm-scrollbar-hover: #454542;
+  --pm-selection: rgba(60, 208, 140, 0.25);
+}
+
+
+/* ============================================================================
+ * macOS 外观风格重设计与圆角阴影微调
+ * ========================================================================= */
+:root[data-skin="macos"] {
+  --radius-window: 12px;
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 6px;
+}
+:root[data-skin="macos"] *:focus-visible {
+  outline: 2px solid var(--color-accent-primary) !important;
+  outline-offset: -1px !important;
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.4) !important;
+}
+
+/* 弱化 flomo 和 notion 皮肤下的卡片立体虚饰投影 */
+:root[data-skin="flomo"] .shadow-sm,
+:root[data-skin="flomo"] .shadow,
+:root[data-skin="flomo"] .shadow-md,
+:root[data-skin="flomo"] .shadow-lg,
+:root[data-skin="flomo"] .shadow-xl,
+:root[data-skin="notion"] .shadow-sm,
+:root[data-skin="notion"] .shadow,
+:root[data-skin="notion"] .shadow-md,
+:root[data-skin="notion"] .shadow-lg,
+:root[data-skin="notion"] .shadow-xl {
+  box-shadow: none !important;
+}
+
+/* 弱化 flomo 和 notion 皮肤下卡片边框 */
+:root[data-skin="flomo"] .border-zinc-200,
+:root[data-skin="flomo"] .border-zinc-300,
+:root[data-skin="notion"] .border-zinc-200,
+:root[data-skin="notion"] .border-zinc-300 {
+  border-color: var(--color-border) !important;
+}
+
+/* Sleek custom select dropdown styles */
+.sleek-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: 1px solid var(--color-border) !important;
+  background-color: var(--color-bg) !important;
+  color: var(--color-text-secondary) !important;
+  border-radius: var(--radius-input, 6px) !important;
+  padding-right: 28px !important;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a5a59e' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 12px !important;
+  cursor: pointer !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease !important;
+}
+
+.sleek-select:hover {
+  border-color: var(--color-accent-primary, #3b82f6) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.sleek-select:focus {
+  border-color: var(--color-accent-primary, #3b82f6) !important;
+  box-shadow: 0 0 0 1px var(--color-accent-primary, #3b82f6) !important;
+}
+
+/* For inline transparent/minimal selects */
+.sleek-select-inline {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  padding-right: 20px !important;
+  background-position: right 2px center !important;
+}
+.sleek-select-inline:hover {
+  background-color: var(--color-hover) !important;
+}

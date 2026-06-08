@@ -975,7 +975,7 @@ export default function SharedNoteView({ shareToken }: SharedNoteViewProps) {
       <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 text-center">
         <p className="text-xs text-zinc-400">
           <Globe size={12} className="inline mr-1" />
-          通过 Nowen Note 分享
+          通过 Love Write 分享
         </p>
       </footer>
 

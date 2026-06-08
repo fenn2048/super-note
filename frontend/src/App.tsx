@@ -1,21 +1,33 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
 import NavRail from "@/components/NavRail";
 import { useRailMode } from "@/hooks/useRailMode";
-import EditorPane from "@/components/EditorPane";
-import TaskCenter from "@/components/TaskCenter";
-import MindMapCenter from "@/components/MindMapEditor";
-import AIChatPanel from "@/components/AIChatPanel";
-import DiaryCenter from "@/components/DiaryCenter";
-import FileManager from "@/components/FileManager";
-import SharedNoteView from "@/components/SharedNoteView";
-import LoginPage from "@/components/LoginPage";
-import QuickLoginGate from "@/components/QuickLoginGate";
-import QuickLoginEnrollDialog from "@/components/QuickLoginEnrollDialog";
-import WhatsNewModal, { useWhatsNew } from "@/components/WhatsNewModal";
+import NoteList from "@/components/NoteList";
+import Dashboard from "@/components/Dashboard";
+import type { TabId } from "@/components/SettingsModal";
+
+// 延时加载的重型组件
+const TaskCenter = React.lazy(() => import("@/components/TaskCenter"));
+const DiaryCenter = React.lazy(() => import("@/components/DiaryCenter"));
+const FileManager = React.lazy(() => import("@/components/FileManager"));
+const MentionList = React.lazy(() => import("@/components/MentionList"));
+const SharedNoteView = React.lazy(() => import("@/components/SharedNoteView"));
+const LoginPage = React.lazy(() => import("@/components/LoginPage"));
+const QuickLoginGate = React.lazy(() => import("@/components/QuickLoginGate"));
+const QuickLoginEnrollDialog = React.lazy(() => import("@/components/QuickLoginEnrollDialog"));
+const WhatsNewModal = React.lazy(() => import("@/components/WhatsNewModal"));
+const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
+const SpaceshipReminder = React.lazy(() => import("@/components/SpaceshipReminder"));
+const MobileMorePage = React.lazy(() => import("@/components/MobileMorePage"));
+const DiaryComposeModal = React.lazy(() => import("@/components/DiaryComposeModal"));
+const EditorPane = React.lazy(() => import("@/components/EditorPane"));
+const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
+const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
+const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 import { AppProvider, useApp, useAppActions, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from "@/store/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SiteSettingsProvider, useSiteSettings } from "@/hooks/useSiteSettings";
@@ -23,14 +35,18 @@ import { UserPreferencesProvider, useUserPreferences } from "@/hooks/useUserPref
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmProvider } from "@/components/ui/confirm";
 import Toaster from "@/components/Toaster";
-import { User } from "@/types";
-import { getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
+import { User, ViewMode } from "@/types";
+import { api, getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform } from "@/hooks/useCapacitor";
+import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification } from "@/hooks/useCapacitor";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import CommandPalette from "@/components/common/CommandPalette";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
+import { realtime } from "@/lib/realtime";
+
+import { App as CapApp } from "@capacitor/app";
 
 const AUTH_USER_CACHE_PREFIX = "nowen-auth-user:";
 
@@ -143,7 +159,7 @@ function WebUiDisabledPage() {
       <main className="max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-zinc-900 mb-3">网页端已被管理员关闭</h1>
         <p className="text-sm leading-7">
-          当前服务器仅提供 API 服务。请使用 Nowen Note 桌面客户端连接该服务器。
+          当前服务器仅提供 API 服务。请使用 Love Write 桌面客户端连接该服务器。
         </p>
       </main>
     </div>
@@ -287,17 +303,64 @@ function useSwipeGesture({
 function AppLayout() {
   const { state } = useApp();
   const actions = useAppActions();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<TabId>("appearance");
+  const [barsVisible, setBarsVisible] = useState(true);
+  const [showDiaryComposer, setShowDiaryComposer] = useState(false);
+
+  useEffect(() => {
+    const show = () => setBarsVisible(true);
+    const hide = () => setBarsVisible(false);
+    window.addEventListener("nowen:scroll-show-bars", show);
+    window.addEventListener("nowen:scroll-hide-bars", hide);
+    return () => {
+      window.removeEventListener("nowen:scroll-show-bars", show);
+      window.removeEventListener("nowen:scroll-hide-bars", hide);
+    };
+  }, []);
+
+  // 太空飞船健康提醒
+  const { prefs: userPrefs } = useUserPreferences();
+  const [showReminder, setShowReminder] = useState(false);
+  const [reminderTrigger, setReminderTrigger] = useState(0);
+
+  useEffect(() => {
+    if (showReminder) return;
+    const intervalMs = userPrefs.reminderInterval * 60 * 1000;
+    const timer = setTimeout(() => {
+      setShowReminder(true);
+    }, intervalMs);
+    return () => clearTimeout(timer);
+  }, [userPrefs.reminderInterval, showReminder, reminderTrigger]);
+
+  // Listen to custom open-settings event
+  useEffect(() => {
+    const onOpenSettings = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab?: TabId }>;
+      const tab = customEvent.detail?.tab || "appearance";
+      setSettingsTab(tab);
+      setShowSettings(true);
+    };
+    window.addEventListener("nowen:open-settings", onOpenSettings);
+    return () => {
+      window.removeEventListener("nowen:open-settings", onOpenSettings);
+    };
+  }, []);
   // v16 P3 后续：Rail 视觉模式三档（icon / label / hidden）。
   // 约束：主侧栏折叠时强制显示 Rail（即便偏好是 hidden），
   // 否则用户会陷入"既无 Rail 又无主侧栏"的死局，找不到任何导航入口。
   const [railMode] = useRailMode();
   const railVisible = railMode !== "hidden" || state.sidebarCollapsed;
-  const isTaskView = state.viewMode === "tasks";
   const isMindMapView = state.viewMode === "mindmaps";
   const isAIChatView = state.viewMode === "ai-chat";
+  const isHomeView = state.viewMode === "home";
   const isDiaryView = state.viewMode === "diary";
+  const isProjectsView = state.viewMode === "projects";
+  const isNotesView = ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode);
   const isFilesView = state.viewMode === "files";
+  const isMentionsView = state.viewMode === "mentions";
 
   /**
    * Cmd-K 全局搜索面板开关
@@ -322,6 +385,151 @@ function AppLayout() {
     };
     window.addEventListener("nowen:offline-queued", onQueued);
     return () => window.removeEventListener("nowen:offline-queued", onQueued);
+  }, [actions]);
+
+  // 获取待办任务提醒统计与消息未读数（红点）
+  useEffect(() => {
+    let timer: any = null;
+    const fetchStats = async () => {
+      try {
+        const stats = await api.getTaskStats();
+        actions.setReminderActiveCount(stats.activeReminders || 0);
+        // 初始与周期性刷新消息未读数
+        actions.refreshMentionCount();
+      } catch (err) {
+        console.error("Fetch task stats for reminder badge failed:", err);
+      }
+    };
+
+    fetchStats();
+
+    // 周期性拉取（60s）
+    timer = setInterval(fetchStats, 60000);
+
+    const onStatsChanged = () => {
+      fetchStats();
+    };
+
+    window.addEventListener("nowen:task-stats-changed", onStatsChanged);
+    window.addEventListener("nowen:workspace-changed", onStatsChanged);
+
+    return () => {
+      if (timer) clearInterval(timer);
+      window.removeEventListener("nowen:task-stats-changed", onStatsChanged);
+      window.removeEventListener("nowen:workspace-changed", onStatsChanged);
+    };
+  }, [actions]);
+
+  // 监听 WebSocket 的实时通知，收到后立即刷新或更新未读数红点，并在原生平台展示本地通知
+  useEffect(() => {
+    const offNotification = realtime.on("notification:received", (msg: any) => {
+      if (msg && typeof msg.unreadCount === "number") {
+        actions.setUnreadMentionCount(msg.unreadCount);
+      }
+      if (msg && msg.notification && isNativePlatform()) {
+        const notif = msg.notification;
+        const isZh = i18n.language?.startsWith("zh");
+        let title = isZh ? "新消息" : "New Message";
+        let body = notif.sourceTitle || (isZh ? "你收到了一条新消息" : "You received a new message");
+        const actor = notif.actorName || (isZh ? "某人" : "Someone");
+        const targetTitle = notif.sourceTitle || "";
+
+        switch (notif.type) {
+          case "mention":
+            title = isZh ? "有人提到你" : "Mentioned You";
+            body = isZh
+              ? `${actor} 在「${targetTitle || "内容"}」中提到了你`
+              : `${actor} mentioned you in "${targetTitle || "content"}"`;
+            break;
+          case "task_completed":
+            title = isZh ? "任务完成" : "Task Completed";
+            body = isZh
+              ? `${actor} 完成了任务: ${targetTitle}`
+              : `${actor} completed task: ${targetTitle}`;
+            break;
+          case "diary_posted":
+            title = isZh ? "新说说" : "New Diary Entry";
+            body = isZh
+              ? `${actor} 发表了说说: ${targetTitle}`
+              : `${actor} posted a new diary entry: ${targetTitle}`;
+            break;
+          case "note_updated":
+            title = isZh ? "笔记更新" : "Note Updated";
+            body = isZh
+              ? `${actor} 更新了笔记: ${targetTitle}`
+              : `${actor} updated note: ${targetTitle}`;
+            break;
+        }
+
+        showLocalNotification(title, body, {
+          sourceType: notif.sourceType,
+          sourceId: notif.sourceId,
+        });
+      }
+    });
+    return () => {
+      offNotification();
+    };
+  }, [actions, i18n.language]);
+
+  // 监听通知点击/仪表盘点击的快捷跳转事件
+  useEffect(() => {
+    const handleNavigateTrigger = async () => {
+      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      if (!pendingRaw) return;
+      try {
+        const pending = JSON.parse(pendingRaw);
+        if (!pending.sourceType || !pending.sourceId) return;
+
+        const { sourceType, sourceId } = pending;
+        if (sourceType === "note") {
+          actions.setViewMode("all");
+          actions.setNoteLoading(true);
+          actions.setMobileView("editor");
+          try {
+            const note = await api.getNote(sourceId);
+            if (note) {
+              actions.setActiveNote(note);
+            }
+          } catch (err) {
+            console.error("Failed to load navigated note:", err);
+            const { toast } = await import("@/lib/toast");
+            toast.error("加载笔记失败");
+          } finally {
+            actions.setNoteLoading(false);
+          }
+          sessionStorage.removeItem("nowen:pending-navigate");
+        } else if (sourceType === "diary") {
+          actions.setViewMode("diary");
+          actions.setMobileView("list");
+        } else if (sourceType === "task") {
+          actions.setViewMode("tasks");
+          actions.setMobileView("list");
+        }
+      } catch (e) {
+        console.error("Failed to parse pending navigate:", e);
+      }
+    };
+
+    window.addEventListener("nowen:navigate-to-item-trigger", handleNavigateTrigger);
+
+    // 延迟少许检查挂起的导航，等待组件及状态初始化完成
+    const timer = setTimeout(handleNavigateTrigger, 200);
+
+    return () => {
+      window.removeEventListener("nowen:navigate-to-item-trigger", handleNavigateTrigger);
+      clearTimeout(timer);
+    };
+  }, [actions]);
+
+  // 监听旧待办快捷跳转事件
+  useEffect(() => {
+    const onNavigateToTasks = () => {
+      actions.setViewMode("tasks");
+      actions.setMobileView("list");
+    };
+    window.addEventListener("nowen:navigate-to-tasks", onNavigateToTasks);
+    return () => window.removeEventListener("nowen:navigate-to-tasks", onNavigateToTasks);
   }, [actions]);
 
 
@@ -350,9 +558,8 @@ function AppLayout() {
   // AppContext.activeNote，而 AppContext 是在 AuthGate → AppProvider 之后才挂的，
   // useSiteSettings 是分享页/登录页等更外层场景也会用到的更基础 Provider。
   const { siteConfig } = useSiteSettings();
-  const { prefs: userPrefs } = useUserPreferences();
   useEffect(() => {
-    const baseTitle = siteConfig.title || "nowen-note";
+    const baseTitle = siteConfig.title || "love-write";
     if (userPrefs.noteTitleAsAppTitle) {
       const noteTitle = (state.activeNote?.title || "").trim();
       document.title = noteTitle ? `${noteTitle} - ${baseTitle}` : baseTitle;
@@ -455,6 +662,62 @@ function AppLayout() {
     return () => window.removeEventListener("nowen:workspace-changed", onWorkspaceChanged);
   }, [actions]);
 
+  // 微信公众号文章保存自动导入与跳转
+  useEffect(() => {
+    let active = true;
+    const handlePendingImport = async () => {
+      const url = sessionStorage.getItem("nowen:pending-import-url");
+      if (!url) return;
+
+      // 马上清除，避免重复触发
+      sessionStorage.removeItem("nowen:pending-import-url");
+
+      const { toast } = await import("@/lib/toast");
+      const loadingToastId = toast.info("正在抓取并保存文章到剪藏笔记本...", 0);
+
+      try {
+        const { api } = await import("@/lib/api");
+        const result = await api.urlImport(url);
+
+        if (!active) return;
+
+        toast.dismiss(loadingToastId);
+        toast.success("已成功保存至「剪藏笔记本」");
+
+        // 刷新列表和笔记本
+        actions.refreshNotebooks();
+        actions.refreshNotes();
+
+        // 自动进入该笔记页面进行查看
+        setTimeout(() => {
+          if (!active) return;
+          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+            sourceType: "note",
+            sourceId: result.noteId
+          }));
+          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+        }, 500);
+      } catch (err: any) {
+        if (!active) return;
+        toast.dismiss(loadingToastId);
+        toast.error(`保存失败：${err?.message || err}`);
+      }
+    };
+
+    // 1) 挂载时立即尝试处理一次（针对从非活跃状态启动的情况）
+    // 延迟 800ms 等主界面和同步初始化完毕，防止列表还未加载导致导航失败
+    const timer = setTimeout(handlePendingImport, 800);
+
+    // 2) 监听后续新接收到的链接事件（针对应用在后台运行，用户再次点击分享的情况）
+    window.addEventListener("nowen:pending-import-url-trigger", handlePendingImport);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      window.removeEventListener("nowen:pending-import-url-trigger", handlePendingImport);
+    };
+  }, [actions]);
+
   // Electron 桌面端：菜单 / 托盘动作 IPC 桥
   useDesktopMenuBridge({
     onNewNote: () => void quickCreateNote(),
@@ -467,6 +730,9 @@ function AppLayout() {
     onOpenSearch: () => setCommandPaletteOpen(true),
   });
 
+  const { visible: keyboardVisible } = useKeyboardVisible();
+  const showMobileTabBar = !(isNotesView && state.mobileView === "editor") && !keyboardVisible;
+
   return (
     <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
       {/* ===== 移动端：抽屉式侧边栏 =====
@@ -474,7 +740,7 @@ function AppLayout() {
           - NavRail variant="mobile"：48/64px，顶部含关闭 X 与图标/文字模式切换；
                                        不接受 hidden 模式（抽屉里没意义）。
           - Sidebar variant="mobile"：主区只渲染 WorkspaceSwitcher + 搜索 + 笔记本 + 标签。
-          抽屉总宽 max-w 从 340 → 380：Rail 约占 48-64px，主区保持 ~320px 与改造前持平。 */}
+          抽屉总宽 max-w 从 340 → 380: Rail 约占 48-64px，主区保持 ~320px 与改造前持平。 */}
       <AnimatePresence>
         {state.mobileSidebarOpen && (
           <>
@@ -524,59 +790,125 @@ function AppLayout() {
       <SidebarResizeHandle />
 
       {/* ===== 主内容区 ===== */}
-      {isTaskView ? (
-        <div className="flex-1 flex flex-col">
-          {/* 移动端顶栏 */}
-          <MobileTopBar />
-          <TaskCenter />
-        </div>
-      ) : isMindMapView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <MindMapCenter />
-        </div>
-      ) : isAIChatView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <AIChatPanel
-            onClose={() => actions.setViewMode("all")}
-            onNavigateToNote={async (noteId) => {
-              try {
-                const { api } = await import("@/lib/api");
-                const note = await api.getNote(noteId);
-                if (note) {
-                  actions.setActiveNote(note);
-                  actions.setViewMode("all");
-                  actions.setMobileView("editor");
-                }
-              } catch (err) {
-                console.error("Navigate to note failed:", err);
-              }
-            }}
-          />
-        </div>
-      ) : isDiaryView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <DiaryCenter />
-        </div>
-      ) : isFilesView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <FileManager />
-        </div>
-      ) : (
-        <div className="flex-1 flex relative overflow-hidden">
-
-          {/* 编辑器 — 移动端全屏覆盖 */}
-          <div className={`
-            absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0
-            ${state.mobileView === "editor" ? "flex" : "hidden md:flex"}
-          `}>
-            <EditorPane />
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
+        showMobileTabBar && barsVisible ? "pb-[calc(56px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
+      )}>
+        {isMindMapView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <MindMapCenter />
+            </Suspense>
           </div>
-        </div>
+        ) : isAIChatView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <AIChatPanel
+                onClose={() => actions.setViewMode("all")}
+                onNavigateToNote={async (noteId) => {
+                  try {
+                    const { api } = await import("@/lib/api");
+                    const note = await api.getNote(noteId);
+                    if (note) {
+                      actions.setActiveNote(note);
+                      actions.setViewMode("all");
+                      actions.setMobileView("editor");
+                    }
+                  } catch (err) {
+                    console.error("Navigate to note failed:", err);
+                  }
+                }}
+              />
+            </Suspense>
+          </div>
+        ) : isDiaryView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <DiaryCenter />
+            </Suspense>
+          </div>
+        ) : isProjectsView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <ProjectCenter />
+            </Suspense>
+          </div>
+        ) : isFilesView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <FileManager />
+            </Suspense>
+          </div>
+        ) : state.viewMode === "more" ? (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+            <MobileMorePage />
+          </Suspense>
+        ) : isHomeView ? (
+          <Dashboard />
+        ) : isMentionsView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <MentionList />
+            </Suspense>
+          </div>
+        ) : (
+          <div className="flex-1 flex relative overflow-hidden">
+            {/* 笔记列表（仅笔记相关视图展示） */}
+            {isNotesView && (
+              <div
+                className={cn(
+                  state.mobileView === "list" ? "flex" : "hidden md:flex",
+                  "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)]"
+                )}
+                style={{
+                  "--note-list-width": `${state.noteListWidth}px`,
+                } as React.CSSProperties}
+              >
+                <NoteList />
+              </div>
+            )}
+
+            {/* 编辑器 — 移动端全屏覆盖 */}
+            <div className={cn(
+              "absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0",
+              state.mobileView === "editor" ? "flex" : "hidden md:flex"
+            )}>
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                <EditorPane />
+              </Suspense>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showMobileTabBar && <MobileTabBar />}
+
+      {showMobileTabBar && barsVisible && (
+        <MobileFAB
+          onNewNote={quickCreateNote}
+          onNewDiary={() => setShowDiaryComposer(true)}
+        />
       )}
+
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showDiaryComposer && (
+            <DiaryComposeModal
+              isOpen={showDiaryComposer}
+              onClose={() => setShowDiaryComposer(false)}
+              onPost={() => {
+                window.dispatchEvent(new CustomEvent("nowen:workspace-changed"));
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
 
       {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
       <CommandPalette
@@ -589,6 +921,33 @@ function AppLayout() {
 
       {/* 服务端版本升级提示（前端 bundle 与服务端不一致时） */}
       <UpdateNotifier />
+
+      {/* 全局设置弹窗 */}
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showSettings && (
+            <SettingsModal
+              defaultTab={settingsTab}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
+
+      {/* 太空飞船休息提醒 */}
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showReminder && (
+            <SpaceshipReminder
+              isOpen={showReminder}
+              onClose={() => {
+                setShowReminder(false);
+                setReminderTrigger((prev) => prev + 1);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
     </div>
   );
 }
@@ -596,8 +955,27 @@ function AppLayout() {
 function MobileTopBar() {
   const actions = useAppActions();
   const { siteConfig } = useSiteSettings();
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const show = () => setVisible(true);
+    const hide = () => setVisible(false);
+    window.addEventListener("nowen:scroll-show-bars", show);
+    window.addEventListener("nowen:scroll-hide-bars", hide);
+    return () => {
+      window.removeEventListener("nowen:scroll-show-bars", show);
+      window.removeEventListener("nowen:scroll-hide-bars", hide);
+    };
+  }, []);
+
   return (
-    <header className="flex items-center px-4 py-3 border-b border-app-border bg-app-surface/50 md:hidden" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
+    <header
+      className={cn(
+        "flex items-center px-4 py-3 border-b border-app-border bg-app-surface/50 md:hidden transition-all duration-300 ease-in-out overflow-hidden shrink-0",
+        visible ? "h-[56px] opacity-100 mt-0" : "h-0 opacity-0 -mt-14 pointer-events-none"
+      )}
+      style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}
+    >
       <button
         onClick={() => actions.setMobileSidebar(true)}
         className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active"
@@ -606,6 +984,174 @@ function MobileTopBar() {
       </button>
       <span className="ml-3 text-sm font-semibold text-tx-primary">{siteConfig.title}</span>
     </header>
+  );
+}
+
+function MobileTabBar() {
+  const { state } = useApp();
+  const actions = useAppActions();
+  const { t } = useTranslation();
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const show = () => setVisible(true);
+    const hide = () => setVisible(false);
+    window.addEventListener("nowen:scroll-show-bars", show);
+    window.addEventListener("nowen:scroll-hide-bars", hide);
+    return () => {
+      window.removeEventListener("nowen:scroll-show-bars", show);
+      window.removeEventListener("nowen:scroll-hide-bars", hide);
+    };
+  }, []);
+
+  const handleTabClick = (mode: ViewMode) => {
+    actions.setViewMode(mode);
+    actions.setSelectedNotebook(null);
+    actions.setMobileView("list");
+    if (mode === "projects") {
+      const filter = { type: "my-tasks" };
+      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    }
+  };
+
+  const tabs = [
+    {
+      id: "home",
+      label: t("sidebar.home") || "首页",
+      icon: <Home size={20} />,
+      active: state.viewMode === "home",
+    },
+    {
+      id: "all",
+      label: t("sidebar.allNotes") || "笔记",
+      icon: <BookOpen size={20} />,
+      active: ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode),
+    },
+    {
+      id: "diary",
+      label: t("sidebar.diary") || "说说",
+      icon: <NotebookPen size={20} />,
+      active: state.viewMode === "diary",
+    },
+    {
+      id: "projects",
+      label: t("sidebar.projects") || "项目",
+      icon: <Briefcase size={20} />,
+      active: state.viewMode === "projects",
+    },
+    {
+      id: "more",
+      label: t("common.more") || "更多",
+      icon: <MoreHorizontal size={20} />,
+      active: state.viewMode === "more",
+    },
+  ];
+
+  return (
+    <div 
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-35 md:hidden bg-app-surface/80 backdrop-blur-md border-t border-app-border flex items-center justify-around transition-all duration-300 ease-in-out",
+        visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
+      )}
+      style={{ 
+        paddingBottom: "var(--safe-area-bottom)",
+        height: "calc(56px + var(--safe-area-bottom))"
+      }}
+    >
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => {
+            if (tab.id === "more") {
+              handleTabClick("more");
+            } else {
+              handleTabClick(tab.id as ViewMode);
+            }
+          }}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 h-14 relative transition-colors duration-150 active:scale-95",
+            tab.active ? "text-accent-primary" : "text-tx-secondary hover:text-tx-primary"
+          )}
+        >
+          <div className={cn(
+            "p-1 rounded-md transition-transform duration-200",
+            tab.active ? "scale-110" : ""
+          )}>
+            {tab.icon}
+          </div>
+          <span className="text-[10px] font-medium tracking-wide mt-0.5">{tab.label}</span>
+          {tab.active && (
+            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent-primary" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MobileFAB({ onNewNote, onNewDiary }: { onNewNote: () => void; onNewDiary: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="fixed bottom-20 right-4 z-40 md:hidden flex flex-col items-end gap-2">
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpen(false)}
+              className="fixed inset-0 z-30 bg-black/10 backdrop-blur-[1px]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 10 }}
+              className="flex flex-col gap-2 z-40 items-end mb-1"
+            >
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onNewNote();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+              >
+                <span>新建笔记</span>
+                <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                  <BookOpen size={16} />
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onNewDiary();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+              >
+                <span>新建说说</span>
+                <div className="w-8 h-8 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center">
+                  <NotebookPen size={16} />
+                </div>
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-xl z-40 hover:scale-105 active:scale-95 transition-all duration-200"
+      >
+        <motion.div
+          animate={{ rotate: open ? 45 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Plus size={28} />
+        </motion.div>
+      </button>
+    </div>
   );
 }
 
@@ -863,7 +1409,8 @@ function AuthGate() {
   //   - 仅在已登录分支生效（enable=!!user），未登录态不打扰；
   //   - useWhatsNew 内部对比 localStorage.nowen-seen-version 与 __APP_VERSION__，
   //     不一致才返回 shouldShow=true，关闭后立即写回，下一次升级才再弹。
-  const [showWhatsNew, markWhatsNewSeen] = useWhatsNew(!!user);
+  const showWhatsNew = false;
+  const markWhatsNewSeen = () => {};
 
   const handleDisconnect = () => {
     clearServerUrl();
@@ -936,25 +1483,43 @@ function AuthGate() {
     //   - 成功：onSettled(true, payload) 直接走 handleLogin 进主界面
     if (isClientMode && quickLoginState === "pending") {
       return (
-        <QuickLoginGate
-          isClientMode={isClientMode}
-          onSettled={(used, payload) => {
-            if (used && payload) {
-              handleLogin(payload.token, payload.user);
-            } else {
-              setQuickLoginState("skipped");
-            }
-          }}
-        />
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+            </div>
+          </div>
+        }>
+          <QuickLoginGate
+            isClientMode={isClientMode}
+            onSettled={(used, payload) => {
+              if (used && payload) {
+                handleLogin(payload.token, payload.user);
+              } else {
+                setQuickLoginState("skipped");
+              }
+            }}
+          />
+        </Suspense>
       );
     }
 
     return (
-      <LoginPage
-        onLogin={handlePasswordLogin}
-        isClientMode={isClientMode}
-        onDisconnect={isClientMode ? handleDisconnect : undefined}
-      />
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+          </div>
+        </div>
+      }>
+        <LoginPage
+          onLogin={handlePasswordLogin}
+          isClientMode={isClientMode}
+          onDisconnect={isClientMode ? handleDisconnect : undefined}
+        />
+      </Suspense>
     );
   }
 
@@ -963,24 +1528,28 @@ function AuthGate() {
     <AppProvider>
       <TooltipProvider>
         <AppLayout />
-        {/* Phase 7: 客户端模式下，密码登录成功后引导启用快速登录。
-            QuickLoginEnrollDialog 内部会判断"是否已问过 / 设备是否支持"，
-            不需要展示时会立即调 onClose 自我隐身。 */}
-        {justPasswordLogin && isClientMode && user && activeToken && (
-          <QuickLoginEnrollDialog
-            username={user.username}
-            token={activeToken}
-            onClose={() => setJustPasswordLogin(false)}
-          />
-        )}
-        {/* 首次升级到新版本自动弹「更新日志」。
-            useWhatsNew 决定是否该弹；onClose 调 markSeen 写回 localStorage，
-            下一次升版前都不会再弹。 */}
-        <WhatsNewModal
-          open={showWhatsNew}
-          onClose={markWhatsNewSeen}
-          highlightVersion={__APP_VERSION__}
-        />
+        <Suspense fallback={null}>
+          {/* Phase 7: 客户端模式下，密码登录成功后引导启用快速登录。
+              QuickLoginEnrollDialog 内部会判断"是否已问过 / 设备是否支持"，
+              不需要展示时会立即调 onClose 自我隐身。 */}
+          {justPasswordLogin && isClientMode && user && activeToken && (
+            <QuickLoginEnrollDialog
+              username={user.username}
+              token={activeToken}
+              onClose={() => setJustPasswordLogin(false)}
+            />
+          )}
+          {/* 首次升级到新版本自动弹「更新日志」。
+              useWhatsNew 决定是否该弹；onClose 调 markSeen 写回 localStorage，
+              下一次升版前都不会再弹。 */}
+          {showWhatsNew && (
+            <WhatsNewModal
+              open={showWhatsNew}
+              onClose={markWhatsNewSeen}
+              highlightVersion={__APP_VERSION__}
+            />
+          )}
+        </Suspense>
       </TooltipProvider>
     </AppProvider>
   );
@@ -990,7 +1559,7 @@ function App() {
   const [webUiAllowed, setWebUiAllowed] = useState<boolean | null>(() => isNativeClientRuntime() ? true : null);
 
   useEffect(() => {
-    if (isNativeClientRuntime()) {
+    if (isNativePlatform()) {
       setWebUiAllowed(true);
       return;
     }
@@ -999,6 +1568,36 @@ function App() {
       if (!cancelled) setWebUiAllowed(enabled);
     });
     return () => { cancelled = true; };
+  }, []);
+
+  // 监听原生 App 打开 URL 事件 (Capacitor)
+  useEffect(() => {
+    if (typeof window === "undefined" || !isNativePlatform()) return;
+
+    let isAttached = true;
+    const registerListener = async () => {
+      try {
+        const handler = await CapApp.addListener("appUrlOpen", (event) => {
+          if (!isAttached) return;
+          const url = event.url;
+          if (url && /^https?:\/\/mp\.weixin\.qq\.com\/s[\/?]/.test(url)) {
+            sessionStorage.setItem("nowen:pending-import-url", url);
+            window.dispatchEvent(new CustomEvent("nowen:pending-import-url-trigger"));
+          }
+        });
+        return handler;
+      } catch (err) {
+        console.warn("Failed to register appUrlOpen listener:", err);
+      }
+    };
+
+    const handlerPromise = registerListener();
+    return () => {
+      isAttached = false;
+      handlerPromise.then((h) => {
+        if (h) h.remove();
+      });
+    };
   }, []);
 
   if (webUiAllowed === null) {
@@ -1028,7 +1627,16 @@ function App() {
     return (
       <ThemeProvider>
         <ConfirmProvider>
-          <SharedNoteView shareToken={shareMatch[1]} />
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={24} className="animate-spin text-indigo-500" />
+                <p className="text-sm text-zinc-400 dark:text-zinc-500">正在加载分享页面...</p>
+              </div>
+            </div>
+          }>
+            <SharedNoteView shareToken={shareMatch[1]} />
+          </Suspense>
           <Toaster />
         </ConfirmProvider>
       </ThemeProvider>

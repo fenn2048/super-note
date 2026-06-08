@@ -19,6 +19,8 @@ import Highlight from "@tiptap/extension-highlight";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Table, TableHeader, TableCell } from "@tiptap/extension-table";
+import Mention from "@tiptap/extension-mention";
+import MentionPicker from "@/components/MentionPicker";
 // 自定义 TableRow：在原扩展基础上加 height 持久化 attribute + 行高拖拽手柄。
 // 之所以从 @tiptap/extension-table 解构里去掉 TableRow，是因为下面要用扩展过的版本，
 // 同名导出会冲突。行高语义为"min-height"——内容超出仍会撑开。
@@ -1110,7 +1112,7 @@ function ColorPopover({ editor, iconSize = 15, compact = false }: ColorPopoverPr
           <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
-              onClick={() => { const el = document.querySelector('input[type="color"]'); el?.click(); }}
+              onClick={() => { const el = document.querySelector('input[type="color"]') as HTMLInputElement | null; el?.click(); }}
               className="flex items-center gap-1.5 px-2 py-1 text-xs rounded border border-app-border hover:bg-app-hover"
             >
               <input
@@ -1181,6 +1183,14 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
   const [showAI, setShowAI] = useState(false);
   const [aiSelectedText, setAiSelectedText] = useState("");
   const [aiPosition, setAiPosition] = useState<{ top: number; left: number } | undefined>();
+
+  // Tiptap @提及选择器状态
+  const [tiptapMention, setTiptapMention] = useState<{
+    query: string;
+    range: any;
+    rect: DOMRect | null;
+    command: (props: any) => void;
+  } | null>(null);
   // 内嵌附件预览：点编辑器里 📎 附件链接 → 右侧抽屉显示附件详情。
   // 采用 attachmentId 走 api.files.get 拿完整详情（包含外链分享 / 重命名 / 引用列表），
   // 与文件管理抽屉体验一致。
@@ -1463,6 +1473,45 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
       // atom + block + draggable，NodeView 用透明遮罩防 iframe 抢焦点。
       // parseHTML 同时识别 <iframe> / <video>，让剪藏过来的视频内容也能落到此节点。
       VideoExtension,
+      Mention.configure({
+        HTMLAttributes: {
+          class: 'mention text-accent-primary bg-accent-primary/10 px-1.5 py-0.5 rounded font-medium',
+        },
+        suggestion: {
+          char: '@',
+          allowSpaces: false,
+          render: () => {
+            return {
+              onStart: (props: any) => {
+                setTiptapMention({
+                  query: props.query,
+                  range: props.range,
+                  rect: props.clientRect ? (props.clientRect() as DOMRect) : null,
+                  command: props.command,
+                });
+              },
+              onUpdate: (props: any) => {
+                setTiptapMention((prev) => prev ? {
+                  ...prev,
+                  query: props.query,
+                  range: props.range,
+                  rect: props.clientRect ? (props.clientRect() as DOMRect) : null,
+                  command: props.command,
+                } : null);
+              },
+              onKeyDown: (props: any) => {
+                if (props.event.key === 'ArrowUp' || props.event.key === 'ArrowDown' || props.event.key === 'Enter' || props.event.key === 'Escape') {
+                  return true;
+                }
+                return false;
+              },
+              onExit: () => {
+                setTiptapMention(null);
+              },
+            };
+          },
+        },
+      }),
     ],
     content: parseContent(note.content),
     editable,
@@ -3112,7 +3161,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
     const editorRect = editor.view.dom.getBoundingClientRect();
     setAiPosition({
       top: Math.min(coords.top + 28, window.innerHeight - 500),
-      left: Math.min(coords.left, window.innerWidth - 420),
+      left: Math.min(coords.left, window.innerWidth - 380),
     });
     setShowAI(true);
   }, [editor]);
@@ -3244,6 +3293,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
           toolbarShadow && "shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4)]",
         )}
       >
+        {/* Group 1: History */}
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title={t('tiptap.undo')}>
           <Undo size={iconSize} />
         </ToolbarButton>
@@ -3253,6 +3303,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
 
         <ToolbarDivider />
 
+        {/* Group 2: Typography & Style */}
         <ToolbarButton
           onClick={() => toggleHeadingSmart(editor, 1)}
           isActive={editor.isActive("heading", { level: 1 })}
@@ -3305,29 +3356,59 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         >
           <Strikethrough size={iconSize} />
         </ToolbarButton>
-        {/* 字号 / 颜色：基于 TextStyle + Color + FontSize 三件套，
-            实际渲染为 <span style="font-size:..;color:..">；
-            背景色复用 Highlight multicolor，由 ColorPopover 的「背景」Tab 暴露。
-            原先单独的 Highlighter 切换按钮被 ColorPopover 覆盖，移除以避免重复。 */}
         <FontSizePopover editor={editor} iconSize={iconSize} />
         <ColorPopover editor={editor} iconSize={iconSize} />
         <ToolbarButton
-          onClick={openLinkEditor}
-          isActive={editor.isActive("link")}
-          title={t('tiptap.link')}
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          isActive={editor.isActive({ textAlign: 'left' })}
+          title={t('tiptap.alignLeft')}
         >
-          <LinkIcon size={iconSize} />
+          <AlignLeft size={iconSize} />
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          isActive={editor.isActive("code")}
-          title={t('tiptap.inlineCode')}
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          isActive={editor.isActive({ textAlign: 'center' })}
+          title={t('tiptap.alignCenter')}
         >
-          <Code size={iconSize} />
+          <AlignCenter size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          isActive={editor.isActive({ textAlign: 'right' })}
+          title={t('tiptap.alignRight')}
+        >
+          <AlignRight size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => {
+            if (editor.isActive("taskList")) {
+              if (editor.chain().focus().sinkListItem("taskItem").run()) return;
+            } else if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
+              if (editor.chain().focus().sinkListItem("listItem").run()) return;
+            }
+            (editor.chain().focus() as any).changeIndent(1).run();
+          }}
+          title={t('tiptap.indent')}
+        >
+          <Indent size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => {
+            if (editor.isActive("taskList")) {
+              if (editor.chain().focus().liftListItem("taskItem").run()) return;
+            } else if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
+              if (editor.chain().focus().liftListItem("listItem").run()) return;
+            }
+            (editor.chain().focus() as any).changeIndent(-1).run();
+          }}
+          title={t('tiptap.outdent')}
+        >
+          <Outdent size={iconSize} />
         </ToolbarButton>
 
         <ToolbarDivider />
 
+        {/* Group 3: Lists */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           isActive={editor.isActive("bulletList")}
@@ -3352,12 +3433,20 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
 
         <ToolbarDivider />
 
+        {/* Group 4: Insertions & Media */}
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          isActive={editor.isActive("blockquote")}
-          title={t('tiptap.blockquote')}
+          onClick={openLinkEditor}
+          isActive={editor.isActive("link")}
+          title={t('tiptap.link')}
         >
-          <Quote size={iconSize} />
+          <LinkIcon size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          isActive={editor.isActive("code")}
+          title={t('tiptap.inlineCode')}
+        >
+          <Code size={iconSize} />
         </ToolbarButton>
         <ToolbarButton
           onClick={toggleCodeBlockStrict}
@@ -3365,6 +3454,13 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
           title={t('tiptap.codeBlock')}
         >
           <FileCode size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          isActive={editor.isActive("blockquote")}
+          title={t('tiptap.blockquote')}
+        >
+          <Quote size={iconSize} />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
@@ -3377,8 +3473,6 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         </ToolbarButton>
         <ToolbarButton
           onClick={async () => {
-            // 弹窗输入视频 URL；setVideo 会做 URL 解析，失败给 toast 提示。
-            // 支持：直链 mp4/webm/ogg + B 站 / YouTube / 腾讯视频 / Vimeo。
             const url = await promptDialog({
               title: t('tiptap.insertVideo') || '插入视频',
               placeholder: 'https://www.bilibili.com/video/BV...  或 .mp4 直链',
@@ -3410,7 +3504,6 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
               .run()
           }
         />
-        {/* Mermaid 图表：插入空的 mermaid 代码块（lang=mermaid 由 CodeBlockView 渲染图形） */}
         <ToolbarButton
           onClick={() => {
             editor
@@ -3427,7 +3520,6 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         >
           <Workflow size={iconSize} />
         </ToolbarButton>
-        {/* LaTeX 数学公式：块级 mathBlock，空 latex 让 NodeView 自动进入编辑态 */}
         <ToolbarButton
           onClick={() => {
             editor
@@ -3443,7 +3535,6 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         >
           <Sigma size={iconSize} />
         </ToolbarButton>
-        {/* 脚注：光标处插 ref + 文档末尾追加配对 def，identifier 自动取下一个未占用数字 */}
         <ToolbarButton
           onClick={() => {
             const id = nextFootnoteIdentifier(editor);
@@ -3509,63 +3600,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
 
         <ToolbarDivider />
 
-        {/* 缩进控制 —— 逻辑与 Tab/Shift-Tab 键盘快捷键完全一致 */}
-        <ToolbarButton
-          onClick={() => {
-            if (editor.isActive("taskList")) {
-              if (editor.chain().focus().sinkListItem("taskItem").run()) return;
-            } else if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
-              if (editor.chain().focus().sinkListItem("listItem").run()) return;
-            }
-            (editor.chain().focus() as any).changeIndent(1).run();
-          }}
-          title={t('tiptap.indent')}
-        >
-          <Indent size={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => {
-            if (editor.isActive("taskList")) {
-              if (editor.chain().focus().liftListItem("taskItem").run()) return;
-            } else if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
-              if (editor.chain().focus().liftListItem("listItem").run()) return;
-            }
-            (editor.chain().focus() as any).changeIndent(-1).run();
-          }}
-          title={t('tiptap.outdent')}
-        >
-          <Outdent size={iconSize} />
-        </ToolbarButton>
-
-        <ToolbarDivider />
-
-        {/* 段落对齐 */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign('left').run()}
-          isActive={editor.isActive({ textAlign: 'left' })}
-          title={t('tiptap.alignLeft')}
-        >
-          <AlignLeft size={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign('center').run()}
-          isActive={editor.isActive({ textAlign: 'center' })}
-          title={t('tiptap.alignCenter')}
-        >
-          <AlignCenter size={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign('right').run()}
-          isActive={editor.isActive({ textAlign: 'right' })}
-          title={t('tiptap.alignRight')}
-        >
-          <AlignRight size={iconSize} />
-        </ToolbarButton>
-
-        {!isGuest && <ToolbarDivider />}
-
-        {/* 查找替换：Ctrl/Cmd+F 也可唤起；访客只读下面板会隐藏替换输入框
-            移动端 EditorPane header 已提供独立搜索按钮，这里隐藏避免重复（仅桌面端 md+ 显示） */}
+        {/* Group 5: Search & AI Assistant */}
         <span className="hidden md:inline-flex">
           <ToolbarButton
             onClick={() => setSearchOpen((v) => !v)}
@@ -3984,6 +4019,17 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         style={{ paddingBottom: "calc(3rem + var(--keyboard-height, 0px))" }}
       >
         <EditorContent editor={editor} />
+        {tiptapMention && (
+          <MentionPicker
+            search={tiptapMention.query}
+            anchorRect={tiptapMention.rect}
+            onSelect={(user) => {
+              tiptapMention.command({ id: user.username, label: user.displayName || user.username });
+              setTiptapMention(null);
+            }}
+            onClose={() => setTiptapMention(null)}
+          />
+        )}
       </div>
 
       {/* 附件内嵌预览：复用 AttachmentDetailDrawer
@@ -4210,7 +4256,63 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         )}
       </AnimatePresence>
 
-      {/* 移动端工具栏已迁移到主 Toolbar 之后，参考下方 mobileToolbarItems 渲染处 */}
+      {/* 移动端底部工具栏：固定在最下方，仅手机端可见 */}
+      <div className="md:hidden sticky bottom-0 z-20 flex items-center justify-center gap-1 px-2 py-1.5 border-t border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 overflow-x-auto hide-scrollbar">
+        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="撤销">
+          <Undo size={14} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="重做">
+          <Redo size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => toggleHeadingSmart(editor, 2)}
+          isActive={editor.isActive("heading", { level: 2 })}
+          title="标题"
+          compact
+        >
+          <Heading2 size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          isActive={editor.isActive("bold")}
+          title="加粗"
+          compact
+        >
+          <Bold size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          isActive={editor.isActive("italic")}
+          title="斜体"
+          compact
+        >
+          <Italic size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          isActive={editor.isActive("underline")}
+          title="下划线"
+          compact
+        >
+          <UnderlineIcon size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          isActive={editor.isActive("bulletList")}
+          title="无序列表"
+          compact
+        >
+          <List size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          isActive={editor.isActive("orderedList")}
+          title="有序列表"
+          compact
+        >
+          <ListOrdered size={14} />
+        </ToolbarButton>
+      </div>
     </div>
   );
 });
