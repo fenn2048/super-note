@@ -20,14 +20,7 @@ import { Modal } from "@/components/WorkspaceSwitcher";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
-
-const ROLE_LABEL: Record<WorkspaceRole, string> = {
-  owner: "所有者",
-  admin: "管理员",
-  editor: "编辑者",
-  commenter: "评论者",
-  viewer: "查看者",
-};
+import { useTranslation } from "react-i18next";
 
 const ROLE_BADGE_CLASS: Record<WorkspaceRole, string> = {
   owner: "bg-amber-500/20 text-amber-600 dark:text-amber-400",
@@ -43,6 +36,16 @@ interface Props {
 }
 
 export default function MembersPanel({ workspaceId, onClose }: Props) {
+  const { t } = useTranslation();
+
+  const ROLE_LABEL: Record<WorkspaceRole, string> = {
+    owner: t("workspace.roles.owner"),
+    admin: t("workspace.roles.admin"),
+    editor: t("workspace.roles.editor"),
+    commenter: t("workspace.roles.commenter"),
+    viewer: t("workspace.roles.viewer"),
+  };
+
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
@@ -81,7 +84,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
         }
       }
     } catch (e: any) {
-      toast.error(e.message || "加载失败");
+      toast.error(e.message || t("common.loadingFailed", { defaultValue: "加载失败" }));
     } finally {
       setLoading(false);
     }
@@ -94,42 +97,42 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
   const handleRoleChange = async (userId: string, role: WorkspaceRole) => {
     try {
       await api.updateWorkspaceMember(workspaceId, userId, role);
-      toast.success("角色已更新");
+      toast.success(t("workspace.members.roleUpdated"));
       loadAll();
     } catch (e: any) {
-      toast.error(e.message || "更新失败");
+      toast.error(e.message || t("settings.saveFailed"));
     }
   };
 
   const handleRemove = async (userId: string, username: string) => {
     const ok = await confirmDialog({
-      title: `确定要移除成员「${username}」吗？`,
-      confirmText: "移除",
+      title: t("workspace.members.removeConfirm", { name: username }),
+      confirmText: t("workspace.members.remove"),
       danger: true,
     });
     if (!ok) return;
     try {
       await api.removeWorkspaceMember(workspaceId, userId);
-      toast.success("已移除");
+      toast.success(t("workspace.members.removed"));
       loadAll();
     } catch (e: any) {
-      toast.error(e.message || "移除失败");
+      toast.error(e.message || t("workspace.members.removeFailed"));
     }
   };
 
   const handleDeleteInvite = async (inviteId: string) => {
     const ok = await confirmDialog({
-      title: "确定要撤销这个邀请码吗？",
-      confirmText: "撤销",
+      title: t("workspace.members.inviteRevokeConfirm"),
+      confirmText: t("common.confirm"),
       danger: true,
     });
     if (!ok) return;
     try {
       await api.deleteWorkspaceInvite(workspaceId, inviteId);
-      toast.success("邀请码已撤销");
+      toast.success(t("workspace.members.inviteRevoked"));
       loadAll();
     } catch (e: any) {
-      toast.error(e.message || "操作失败");
+      toast.error(e.message || t("settings.saveFailed"));
     }
   };
 
@@ -159,13 +162,13 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
 
   return (
     <Modal
-      title={workspace ? `${workspace.icon} ${workspace.name}` : "工作区"}
+      title={workspace ? `${workspace.icon} ${workspace.name}` : t("sidebar.navigation")}
       onClose={onClose}
       widthClass="max-w-2xl"
       heightClass="h-[80vh]"
     >
       {loading ? (
-        <div className="py-8 text-center text-muted-foreground">加载中...</div>
+        <div className="py-8 text-center text-muted-foreground">{t("common.loading")}</div>
       ) : (
         // 纵向填满 Modal body：tab 条固定在顶，面板区 flex-1 内部滚动，
         // 让弹窗整体高度稳定在 80vh，不再随 tab 内容伸缩。
@@ -173,16 +176,16 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
           {/* Tab */}
           <div className="flex gap-1 mb-4 border-b border-border shrink-0">
             <TabBtn active={tab === "members"} onClick={() => setTab("members")}>
-              成员 ({members.length})
+              {t("workspace.members.title")} ({members.length})
             </TabBtn>
             {isManager && (
               <TabBtn active={tab === "invites"} onClick={() => setTab("invites")}>
-                邀请码 ({invites.length})
+                {t("workspace.members.invites")} ({invites.length})
               </TabBtn>
             )}
             {isManager && (
               <TabBtn active={tab === "features"} onClick={() => setTab("features")}>
-                功能模块
+                {t("workspace.members.features")}
               </TabBtn>
             )}
           </div>
@@ -200,7 +203,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{m.username}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {m.email || "无邮箱"} · 加入于 {new Date(m.joinedAt).toLocaleDateString()}
+                      {m.email || t("workspace.members.noEmail")} · {t("workspace.members.joinedAt", { date: new Date(m.joinedAt).toLocaleDateString() })}
                     </div>
                   </div>
                   {isManager && m.role !== "owner" ? (
@@ -237,13 +240,13 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
               <div className="flex justify-end shrink-0">
                 <Button size="sm" onClick={() => setShowCreateInvite(true)}>
                   <Plus className="w-4 h-4 mr-1" />
-                  创建邀请码
+                  {t("workspace.members.createInvite")}
                 </Button>
               </div>
               <div className="space-y-2 flex-1 min-h-0 overflow-auto">
                 {invites.length === 0 && (
                   <div className="text-center text-sm text-muted-foreground py-8">
-                    暂无邀请码
+                    {t("workspace.members.noInvites")}
                   </div>
                 )}
                 {invites.map((inv) => (
@@ -261,15 +264,15 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
             <div className="space-y-3 flex-1 min-h-0 overflow-auto">
               {!features ? (
                 <div className="text-center text-sm text-muted-foreground py-8">
-                  功能开关暂不可用
+                  {t("workspace.members.featureUnavailable")}
                 </div>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    关闭的模块对所有成员隐藏入口，且无法读取/写入对应数据。
+                    {t("workspace.members.featureHint")}
                     {!isOwner && (
                       <span className="ml-1 text-amber-600 dark:text-amber-400">
-                        仅所有者可修改。
+                        {t("workspace.members.onlyOwnerCanEdit")}
                       </span>
                     )}
                   </p>
@@ -333,9 +336,11 @@ function TabBtn({
 function RoleSelect({
   value,
   onChange,
+  ROLE_LABEL,
 }: {
   value: WorkspaceRole;
   onChange: (v: WorkspaceRole) => void;
+  ROLE_LABEL: Record<WorkspaceRole, string>;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<
@@ -450,10 +455,13 @@ function RoleSelect({
 function InviteItem({
   invite,
   onDelete,
+  ROLE_LABEL,
 }: {
   invite: WorkspaceInvite;
   onDelete: () => void;
+  ROLE_LABEL: Record<WorkspaceRole, string>;
 }) {
+  const { t } = useTranslation();
   const expired =
     !!invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now();
   const exhausted = invite.maxUses > 0 && invite.useCount >= invite.maxUses;
@@ -461,7 +469,7 @@ function InviteItem({
 
   const copyCode = () => {
     navigator.clipboard.writeText(invite.code);
-    toast.success("邀请码已复制");
+    toast.success(t("securitySettings.twoFactor.copied"));
   };
 
   return (
@@ -476,22 +484,22 @@ function InviteItem({
           "px-2 py-1 rounded font-mono text-sm cursor-pointer bg-muted hover:bg-accent",
         )}
         onClick={copyCode}
-        title="点击复制"
+        title={t("tokens.created.tokenHint")}
       >
         {invite.code}
       </code>
       <div className="flex-1 min-w-0 text-xs text-muted-foreground">
         <div>
-          角色：<span className="font-medium text-foreground">{ROLE_LABEL[invite.role]}</span>
+          {t("userManagement.fieldRole")}: <span className="font-medium text-foreground">{ROLE_LABEL[invite.role]}</span>
           {" · "}
-          使用 {invite.useCount}/{invite.maxUses || "∞"}
+          {t("workspaceManagement.colMembers")}: {invite.useCount}/{invite.maxUses || "∞"}
         </div>
         <div>
           {invite.expiresAt
-            ? `有效期至 ${new Date(invite.expiresAt).toLocaleString()}`
-            : "永久有效"}
-          {expired && <span className="text-destructive ml-2">已过期</span>}
-          {exhausted && <span className="text-destructive ml-2">已用尽</span>}
+            ? t("tokens.row.expires") + ": " + new Date(invite.expiresAt).toLocaleString()
+            : t("tokens.neverExpires")}
+          {expired && <span className="text-destructive ml-2">{t("tokens.status.expired")}</span>}
+          {exhausted && <span className="text-destructive ml-2">{t("tokens.status.expired")}</span>}
         </div>
       </div>
       <button
@@ -572,6 +580,16 @@ function CreateInviteDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
+
+  const ROLE_LABEL: Record<WorkspaceRole, string> = {
+    owner: t("workspace.roles.owner"),
+    admin: t("workspace.roles.admin"),
+    editor: t("workspace.roles.editor"),
+    commenter: t("workspace.roles.commenter"),
+    viewer: t("workspace.roles.viewer"),
+  };
+
   const [role, setRole] = useState<WorkspaceRole>("editor");
   const [maxUses, setMaxUses] = useState(10);
   const [expireDays, setExpireDays] = useState(7);
@@ -589,10 +607,10 @@ function CreateInviteDialog({
         maxUses: maxUses || 10,
         expiresAt,
       });
-      toast.success("邀请码已生成");
+      toast.success(t("workspace.members.inviteGenerated"));
       onCreated();
     } catch (e: any) {
-      toast.error(e.message || "创建失败");
+      toast.error(e.message || t("userManagement.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -601,10 +619,10 @@ function CreateInviteDialog({
   const roleOptions: WorkspaceRole[] = ["admin", "editor", "commenter", "viewer"];
 
   return (
-    <Modal title="创建邀请码" onClose={onClose}>
+    <Modal title={t("workspace.members.createInvite")} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm mb-1 block">角色</label>
+          <label className="text-sm mb-1 block">{t("userManagement.colRole")}</label>
           <div className="flex gap-2 flex-wrap">
             {roleOptions.map((r) => (
               <button
@@ -623,7 +641,7 @@ function CreateInviteDialog({
           </div>
         </div>
         <div>
-          <label className="text-sm mb-1 block">最大使用次数</label>
+          <label className="text-sm mb-1 block">{t("workspace.members.maxUses")}</label>
           <Input
             type="number"
             min={1}
@@ -632,22 +650,22 @@ function CreateInviteDialog({
           />
         </div>
         <div>
-          <label className="text-sm mb-1 block">有效期（天）</label>
+          <label className="text-sm mb-1 block">{t("workspace.members.expireDays")}</label>
           <Input
             type="number"
             min={0}
             value={expireDays}
             onChange={(e) => setExpireDays(parseInt(e.target.value) || 0)}
-            placeholder="0 表示永久"
+            placeholder={t("workspace.members.expireHint")}
           />
-          <p className="text-xs text-muted-foreground mt-1">0 表示永久有效</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("workspace.members.expireHint")}</p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={loading}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleCreate} disabled={loading}>
-            {loading ? "创建中..." : "生成邀请码"}
+            {loading ? t("common.saving") : t("workspace.members.generateInvite")}
           </Button>
         </div>
       </div>
