@@ -316,7 +316,7 @@ export default function ProjectCenter() {
   const [quickAddProjId, setQuickAddProjId] = useState("");
   const [quickAddAssigneeId, setQuickAddAssigneeId] = useState("");
   const [quickAddDueDate, setQuickAddDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [quickAddTarget, setQuickAddTarget] = useState<"personal" | "project">("project");
+  const [quickAddIsPersonal, setQuickAddIsPersonal] = useState(true);
 
   const personalTodoProject = useMemo(
     () => projects.find((p) => p.name === "个人TODO"),
@@ -532,25 +532,23 @@ export default function ProjectCenter() {
   // Set default project ID for quick add
   useEffect(() => {
     if (projects.length > 0) {
-      const exists = projects.some((p) => p.id === quickAddProjId);
-      if (!exists || !quickAddProjId) {
-        if (workspaceId === "personal" && personalTodoProject) {
-          setQuickAddTarget("personal");
-          setQuickAddProjId(personalTodoProject.id);
-        } else {
-          setQuickAddProjId(projects[0].id);
+      if (quickAddIsPersonal && personalTodoProject) {
+        setQuickAddProjId(personalTodoProject.id);
+      } else {
+        const exists = projects.some((p) => p.id === quickAddProjId);
+        if (!exists || !quickAddProjId) {
+          const nonPersonalProjects = projects.filter((p) => p.id !== personalTodoProject?.id);
+          if (nonPersonalProjects.length > 0) {
+            setQuickAddProjId(nonPersonalProjects[0].id);
+          } else {
+            setQuickAddProjId("");
+          }
         }
       }
     } else {
       setQuickAddProjId("");
     }
-  }, [projects, quickAddProjId, workspaceId, personalTodoProject]);
-
-  useEffect(() => {
-    if (workspaceId === "personal" && personalTodoProject && quickAddTarget === "personal") {
-      setQuickAddProjId(personalTodoProject.id);
-    }
-  }, [workspaceId, personalTodoProject, quickAddTarget]);
+  }, [projects, quickAddIsPersonal, personalTodoProject]);
 
   // Set default assignee for quick add to current user
   useEffect(() => {
@@ -724,9 +722,9 @@ export default function ProjectCenter() {
   const handleQuickAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickAddTitle.trim()) return;
-    const targetProjectId = quickAddTarget === "personal" && personalTodoProject ? personalTodoProject.id : quickAddProjId;
+    const targetProjectId = quickAddIsPersonal && personalTodoProject ? personalTodoProject.id : quickAddProjId;
     if (!targetProjectId) {
-      toast.error("请选择一个项目");
+      toast.error(t("projects.noProjectSelected") || "请选择一个项目");
       return;
     }
     try {
@@ -750,7 +748,7 @@ export default function ProjectCenter() {
       };
 
       const newTask = await api.createProjectTask(targetProjectId, payload);
-      toast.success("创建任务成功");
+      toast.success(t("projects.createTaskSuccess") || "创建任务成功");
       setQuickAddTitle("");
       fetchMyTasks();
 
@@ -764,7 +762,7 @@ export default function ProjectCenter() {
 
   const handleOpenTaskCreateModal = () => {
     setTaskTitle(quickAddTitle);
-    const targetProjectId = quickAddTarget === "personal" && personalTodoProject ? personalTodoProject.id : quickAddProjId || (projects[0]?.id || "");
+    const targetProjectId = quickAddIsPersonal && personalTodoProject ? personalTodoProject.id : quickAddProjId || (projects[0]?.id || "");
     setTaskProjId(targetProjectId);
     setTaskAssigneeId(quickAddAssigneeId || currentUserId);
     setTaskPriority(2);
@@ -1152,54 +1150,62 @@ export default function ProjectCenter() {
               {/* Details and Actions selectors */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-app-border/40">
                 <div className="flex flex-wrap items-center gap-2">
-                  {workspaceId === "personal" && personalTodoProject ? (
-                    <div className="flex items-center gap-2 text-xs text-tx-secondary">
-                      <button
-                        type="button"
-                        onClick={() => setQuickAddTarget("personal")}
-                        className={`px-2 py-1 rounded-lg border transition ${
-                          quickAddTarget === "personal"
-                            ? "bg-accent-primary text-white border-accent-primary"
-                            : "bg-app-sidebar/80 border-app-border text-tx-secondary hover:bg-app-hover"
-                        }`}
-                      >
-                        个人TODO
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickAddTarget("project")}
-                        className={`px-2 py-1 rounded-lg border transition ${
-                          quickAddTarget === "project"
-                            ? "bg-accent-primary text-white border-accent-primary"
-                            : "bg-app-sidebar/80 border-app-border text-tx-secondary hover:bg-app-hover"
-                        }`}
-                      >
-                        项目任务
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {quickAddTarget === "project" ? (
-                    <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
-                      <Briefcase size={12} className="text-tx-tertiary" />
-                      <select
-                        value={quickAddProjId}
-                        onChange={(e) => setQuickAddProjId(e.target.value)}
-                        className="sleek-select sleek-select-inline bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
-                      >
-                        {projects.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : quickAddTarget === "personal" && personalTodoProject ? (
-                    <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
-                      <Briefcase size={12} className="text-tx-tertiary" />
-                      <span className="font-medium text-tx-primary">{personalTodoProject.name}</span>
-                    </div>
-                  ) : null}
+                  {/* Personal TODO Checkbox + Target Display */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={quickAddIsPersonal}
+                      onChange={(e) => {
+                        const isPersonal = e.target.checked;
+                        setQuickAddIsPersonal(isPersonal);
+                        if (isPersonal && personalTodoProject) {
+                          setQuickAddProjId(personalTodoProject.id);
+                        } else {
+                          // When unchecked, switch to first non-personal project
+                          const nonPersonalProjects = projects.filter((p) => p.id !== personalTodoProject?.id);
+                          if (nonPersonalProjects.length > 0) {
+                            setQuickAddProjId(nonPersonalProjects[0].id);
+                          }
+                        }
+                      }}
+                      className="w-4 h-4 rounded cursor-pointer accent-accent-primary"
+                    />
+                    {/* Display project based on checkbox state */}
+                    {quickAddIsPersonal && personalTodoProject ? (
+                      <div className="flex items-center gap-1.5 bg-accent-primary/10 border border-accent-primary/20 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
+                        <Briefcase size={12} className="text-accent-primary" />
+                        <span className="font-medium text-tx-primary">{personalTodoProject.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
+                        <Briefcase size={12} className="text-tx-tertiary" />
+                        <select
+                          value={quickAddProjId}
+                          onChange={(e) => {
+                            const newProjId = e.target.value;
+                            setQuickAddProjId(newProjId);
+                            if (newProjId && newProjId !== personalTodoProject?.id) {
+                              // Ensure checkbox is unchecked if non-personal project is selected
+                              setQuickAddIsPersonal(false);
+                            }
+                          }}
+                          className="sleek-select sleek-select-inline bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
+                        >
+                          {projects.filter((p) => p.id !== personalTodoProject?.id).length > 0 ? (
+                            projects.filter((p) => p.id !== personalTodoProject?.id).map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>
+                              {t("projects.noProjectAvailable") || "无可用项目"}
+                            </option>
+                          )}
+                        </select>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Assignee selector dropdown */}
                   <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
@@ -1222,13 +1228,13 @@ export default function ProjectCenter() {
                   <SleekDatePicker
                     value={quickAddDueDate}
                     onChange={setQuickAddDueDate}
-                    placeholder="截止日期"
+                    placeholder={t("projects.dueDate") || "截止日期"}
                   />
                 </div>
 
                 <Button
                   type="submit"
-                  disabled={!quickAddTitle.trim()}
+                  disabled={!quickAddTitle.trim() || (!quickAddIsPersonal && !quickAddProjId)}
                   className="h-8 text-xs font-semibold px-4 rounded-lg bg-accent-primary hover:bg-accent-primary/95 text-white disabled:opacity-40 disabled:pointer-events-none transition-all"
                 >
                   {t("common.add") || "添加"}
