@@ -240,3 +240,79 @@ export async function enhanceClip(
   // 200 同时可能携带 ok:false（AI 服务自身的逻辑失败，例如超时、JSON 解析失败）
   return (await res.json()) as AIEnhanceResult;
 }
+
+export interface SaveClipPayload {
+  type: "note" | "diary";
+  title?: string;
+  content?: string;
+  contentText?: string;
+  workspaceId?: string | null;
+  notebookId?: string | null;
+  tags?: string[] | string;
+  images?: string[];
+  mood?: string;
+  visibility?: string;
+}
+
+export async function getClipWorkspaces(cfg: NowenClipperConfig): Promise<any[]> {
+  const base = normalizeBaseUrl(cfg.serverUrl);
+  const res = await fetch(`${base}/api/clip/workspaces`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+    },
+  });
+  if (!res.ok) throw await parseErr(res);
+  return (await res.json()) as any[];
+}
+
+export async function getClipNotebooks(cfg: NowenClipperConfig, workspaceId?: string): Promise<any[]> {
+  const base = normalizeBaseUrl(cfg.serverUrl);
+  const url = workspaceId
+    ? `${base}/api/clip/notebooks?workspaceId=${encodeURIComponent(workspaceId)}`
+    : `${base}/api/clip/notebooks`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+    },
+  });
+  if (!res.ok) throw await parseErr(res);
+  return (await res.json()) as any[];
+}
+
+export async function uploadClipImage(
+  cfg: NowenClipperConfig,
+  file: File | Blob,
+  workspaceId?: string | null,
+): Promise<{ id: string; url: string; mimeType: string; size: number }> {
+  const base = normalizeBaseUrl(cfg.serverUrl);
+  const url = workspaceId
+    ? `${base}/api/clip/upload-img?workspaceId=${encodeURIComponent(workspaceId)}`
+    : `${base}/api/clip/upload-img`;
+  
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+    },
+    body: formData,
+  });
+  if (!res.ok) throw await parseErr(res);
+  return (await res.json()) as { id: string; url: string; mimeType: string; size: number };
+}
+
+export async function saveClip(cfg: NowenClipperConfig, payload: SaveClipPayload): Promise<{ success: boolean; id: string }> {
+  const base = normalizeBaseUrl(cfg.serverUrl);
+  const res = await fetch(`${base}/api/clip/save`, {
+    method: "POST",
+    headers: authHeaders(cfg),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await parseErr(res);
+  return (await res.json()) as { success: boolean; id: string };
+}
+

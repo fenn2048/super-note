@@ -47,6 +47,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="mp.weixin.qq.com" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -63,6 +72,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- 局域网服务发现（mDNS / NSD）相关：
          - ACCESS_NETWORK_STATE：检测是否已联网，避免在无网时空跑发现
          - ACCESS_WIFI_STATE：取 Wi-Fi 信息 / 申请 multicast lock 必备

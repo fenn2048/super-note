@@ -14,6 +14,7 @@ import WorkspaceManagement from "@/components/WorkspaceManagement";
 import WhatsNewModal from "@/components/WhatsNewModal";
 import AuthorStoryModal from "@/components/AuthorStoryModal";
 import DownloadPanel from "@/components/DownloadPanel";
+import ManualPanel from "@/components/ManualPanel";
 import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { api } from "@/lib/api";
@@ -21,7 +22,7 @@ import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPorta
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
 
-type TabId = "appearance" | "switches" | "ai" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about";
+export type TabId = "appearance" | "switches" | "ai" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about" | "manual";
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -792,6 +793,29 @@ function SwitchesPanel() {
           </label>
         ))}
 
+        <div className="flex items-center justify-between px-3 py-2.5 hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-none">
+              健康休息提醒间隔
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
+              设置太空飞船健康提醒的触发间隔，连续浏览达此时间后将提醒喝水、活动和休息眼睛。
+            </p>
+          </div>
+          <select
+            value={userPrefs.reminderInterval}
+            onChange={(e) => setUserPref("reminderInterval", Number(e.target.value))}
+            className="text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+          >
+            <option value={15}>15 分钟</option>
+            <option value={30}>30 分钟 (默认)</option>
+            <option value={45}>45 分钟</option>
+            <option value={60}>1 小时</option>
+            <option value={90}>1.5 小时</option>
+            <option value={120}>2 小时</option>
+          </select>
+        </div>
+
         {supportsDesktopMenuBarToggle && (
           <label className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
             <input
@@ -1333,11 +1357,11 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
   const SETTING_TABS = [
     { id: "appearance" as const, label: t('settings.appearance'), icon: Palette },
     { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
+    { id: "manual" as const, label: t('settings.userManual'), icon: BookOpen },
     { id: "ai" as const, label: t('settings.ai'), icon: Bot },
     { id: "security" as const, label: t('settings.security'), icon: Shield },
-    // 【个人访问令牌】任意登录用户都可管理自己的 token；与 security 同为"账号安全"类别，
-    // 不需要 isAdmin 判定。
-    { id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key },
+    // 【个人访问令牌】家庭场景用不到，仅管理员可见
+    ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
     ...(isAdmin ? [{ id: "workspaces" as const, label: t('settings.workspaces'), icon: Building2 }] : []),
     // 「数据管理」面板：
@@ -1351,12 +1375,6 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     // 「开发者」面板：仅管理员可见，承载运行时调试开关（如 files-list 查询日志）。
     // 普通用户根本看不到这一项，与后端的 admin-only 写入闸门双层防御。
     ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench }] : []),
-    // 「下载客户端」面板：面向所有用户（含未登录、本地、云端）。需求背景：
-    //   用户主要在中国大陆，GitHub Releases 下载体验差，这里按平台列出产物并提供
-    //   「GitHub 直连 + 多个公共加速代理」的换源能力。与 about 的「前往下载页」区别：后者只能调起
-    //   GitHub 。该面板本身不调用任何需要鉴权的接口（releases/latest 未鉴权）。
-    { id: "download" as const, label: t('settings.download', { defaultValue: '下载客户端' }), icon: Download },
-    { id: "about" as const, label: t('about.title'), icon: Info },
   ];
 
   // 用 Portal 挂载到 body：
@@ -1527,6 +1545,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                 >
             {activeTab === "appearance" && <AppearancePanel />}
             {activeTab === "switches" && <SwitchesPanel />}
+            {activeTab === "manual" && <ManualPanel />}
             {activeTab === "ai" && <AISettingsPanel />}
             {activeTab === "security" && <SecuritySettings />}
             {activeTab === "tokens" && <TokenManagement />}
@@ -1536,8 +1555,6 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                        —— 管理员看到完整三 scope；普通用户只看"个人空间"的导出/导入。 */}
                   {activeTab === "data" && <DataManager />}
                   {activeTab === "developer" && isAdmin && <DeveloperPanel />}
-                  {activeTab === "download" && <DownloadPanel />}
-                  {activeTab === "about" && <AboutPanel />}
                 </PanelErrorBoundary>
               </motion.div>
             </AnimatePresence>

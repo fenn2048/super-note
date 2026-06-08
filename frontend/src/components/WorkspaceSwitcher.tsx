@@ -104,8 +104,19 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
   };
 
   const currentWs = workspaces.find((w) => w.id === current);
-  const displayName = current === "personal" ? "个人空间" : currentWs?.name || "个人空间";
+  const displayName = current === "personal" ? t("workspace.personal") : currentWs?.name || t("workspace.personal");
   const displayIcon = current === "personal" ? "🏠" : currentWs?.icon || "🏢";
+
+  const getRoleLabel = (role: string) => {
+    const roles: Record<string, string> = {
+      owner: t("workspace.roles.owner"),
+      admin: t("workspace.roles.admin"),
+      editor: t("workspace.roles.editor"),
+      commenter: t("workspace.roles.commenter"),
+      viewer: t("workspace.roles.viewer"),
+    };
+    return roles[role] || role;
+  };
 
   // 在入口按钮（展开/收起态）上右键当前工作区时，直接弹出对应右键菜单。
   // 个人空间没有可管理选项，不弹菜单（避免空菜单）。
@@ -207,6 +218,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
             onSaved={() => {
               setEditing(null);
               loadWorkspaces();
+              window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: current } }));
             }}
           />
         )}
@@ -251,7 +263,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
             <div className="font-medium truncate">{displayName}</div>
             {currentWs && (
               <div className="text-xs text-muted-foreground">
-                {currentWs.role} · {currentWs.memberCount} 位成员
+                {getRoleLabel(currentWs.role)} · {t("workspaceManagement.members", { count: currentWs.memberCount })}
               </div>
             )}
           </div>
@@ -271,8 +283,8 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
                 {/* 个人空间 */}
                 <WorkspaceItem
                   icon="🏠"
-                  name="个人空间"
-                  subtitle="仅自己可见"
+                  name={t("workspace.personal")}
+                  subtitle={t("workspace.personalSubtitle")}
                   active={current === "personal"}
                   onClick={() => switchTo("personal")}
                 />
@@ -284,7 +296,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
                     key={w.id}
                     icon={w.icon || "🏢"}
                     name={w.name}
-                    subtitle={`${w.role} · ${w.memberCount} 位成员`}
+                    subtitle={`${getRoleLabel(w.role)} · ${t("workspaceManagement.members", { count: w.memberCount })}`}
                     active={current === w.id}
                     onClick={() => switchTo(w.id)}
                     onManage={
@@ -318,7 +330,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
                   }}
                 >
                   <Plus className="w-4 h-4" />
-                  创建工作区
+                  {t("workspace.create")}
                 </button>
                 <button
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent"
@@ -328,7 +340,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
                   }}
                 >
                   <LogIn className="w-4 h-4" />
-                  使用邀请码加入
+                  {t("workspace.join")}
                 </button>
               </div>
             </motion.div>
@@ -419,6 +431,7 @@ function CreateWorkspaceDialog({
   onClose: () => void;
   onCreated: (ws: Workspace) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [icon, setIcon] = useState("🏢");
@@ -426,26 +439,26 @@ function CreateWorkspaceDialog({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      toast.error("请输入工作区名称");
+      toast.error(t("workspace.enterName"));
       return;
     }
     setLoading(true);
     try {
       const ws = await api.createWorkspace({ name: name.trim(), description, icon });
-      toast.success("工作区创建成功");
+      toast.success(t("workspace.createSuccess"));
       onCreated(ws);
     } catch (e: any) {
-      toast.error(e.message || "创建失败");
+      toast.error(e.message || t("userManagement.createFailed"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal title="创建工作区" onClose={onClose}>
+    <Modal title={t("workspace.create")} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm mb-1 block">图标</label>
+          <label className="text-sm mb-1 block">{t("workspaceManagement.fieldIcon")}</label>
           <Input
             value={icon}
             maxLength={4}
@@ -456,29 +469,29 @@ function CreateWorkspaceDialog({
         </div>
         <div>
           <label className="text-sm mb-1 block">
-            名称 <span className="text-destructive">*</span>
+            {t("workspaceManagement.fieldName")} <span className="text-destructive">*</span>
           </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="例如：研发团队"
+            placeholder={t("workspaceManagement.fieldName")}
             autoFocus
           />
         </div>
         <div>
-          <label className="text-sm mb-1 block">描述（可选）</label>
+          <label className="text-sm mb-1 block">{t("workspaceManagement.fieldDescription")}</label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="简短说明"
+            placeholder={t("workspaceManagement.fieldDescription")}
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={loading}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleCreate} disabled={loading}>
-            {loading ? "创建中..." : "创建"}
+            {loading ? t("common.saving") : t("workspaceManagement.save")}
           </Button>
         </div>
       </div>
@@ -494,51 +507,52 @@ function JoinWorkspaceDialog({
   onClose: () => void;
   onJoined: (workspaceId: string) => void;
 }) {
+  const { t } = useTranslation();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleJoin = async () => {
     if (!code.trim()) {
-      toast.error("请输入邀请码");
+      toast.error(t("workspace.enterInviteCode"));
       return;
     }
     setLoading(true);
     try {
       const res = await api.joinWorkspace(code.trim());
       if (res.alreadyMember) {
-        toast.info("您已是该工作区成员");
+        toast.info(t("workspace.alreadyMember"));
         onJoined(res.workspaceId!);
       } else {
-        toast.success(`已加入工作区：${res.workspace?.name}`);
+        toast.success(t("workspace.joinSuccess", { name: res.workspace?.name }));
         onJoined(res.workspace!.id);
       }
     } catch (e: any) {
-      toast.error(e.message || "加入失败");
+      toast.error(e.message || t("workspace.joinFailed", { defaultValue: "加入失败" }));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal title="使用邀请码加入工作区" onClose={onClose}>
+    <Modal title={t("workspace.join")} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm mb-1 block">邀请码</label>
+          <label className="text-sm mb-1 block">{t("workspace.members.invites")}</label>
           <Input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="ABCDEF1234"
+            placeholder={t("workspace.joinPlaceholder")}
             autoFocus
             className="font-mono"
           />
-          <p className="text-xs text-muted-foreground mt-1">向工作区管理员索要邀请码</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("workspace.joinHint")}</p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={loading}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleJoin} disabled={loading}>
-            {loading ? "加入中..." : "加入"}
+            {loading ? t("common.loading") : t("workspace.members.generateInvite")}
           </Button>
         </div>
       </div>
@@ -565,7 +579,7 @@ function EditWorkspaceDialog({
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error(t("workspaceManagement.fieldName", "名称"));
+      toast.error(t("workspace.enterName"));
       return;
     }
     const payload: { name?: string; description?: string; icon?: string } = {};
@@ -653,10 +667,10 @@ function DeleteWorkspaceDialog({
     setLoading(true);
     try {
       await api.deleteWorkspace(workspace.id);
-      toast.success(t("workspaceManagement.deleteSuccess", "已删除"));
+      toast.success(t("workspaceManagement.deleteSuccess"));
       onDeleted();
     } catch (e: any) {
-      toast.error(e?.message || t("workspaceManagement.deleteFailed", "删除失败"));
+      toast.error(e?.message || t("workspaceManagement.deleteFailed"));
       setLoading(false);
     }
   };
@@ -665,7 +679,6 @@ function DeleteWorkspaceDialog({
     <Modal
       title={t("workspaceManagement.deleteTitle", {
         name: workspace.name,
-        defaultValue: `删除：${workspace.name}`,
       })}
       onClose={() => !loading && onClose()}
     >
@@ -673,10 +686,7 @@ function DeleteWorkspaceDialog({
         <div className="p-3 rounded-lg bg-red-50/60 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
           <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
-            {t(
-              "workspaceManagement.deleteConfirmHintNoOwner",
-              "删除后该工作区下的笔记本将归还到所有者的个人空间，邀请码、成员关系会被清除，此操作不可撤销。",
-            )}
+            {t("workspaceManagement.deleteConfirmHintNoOwner")}
           </p>
         </div>
 
@@ -747,7 +757,7 @@ export function Modal({
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-accent"
-            aria-label="关闭"
+            aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </button>

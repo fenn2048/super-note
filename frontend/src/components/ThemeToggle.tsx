@@ -20,14 +20,20 @@ export default function ThemeToggle() {
   if (!mounted) return null;
 
   return (
-    <div className="flex items-center gap-1 p-1 rounded-lg bg-app-hover">
+    <div
+      role="group"
+      aria-label={t('theme.toggle', { defaultValue: 'Theme toggle' })}
+      className="flex items-center gap-1 p-1 rounded-lg bg-app-hover"
+    >
       {themes.map(({ key, icon: Icon, label }) => (
         <button
           key={key}
           onClick={() => setTheme(key)}
           title={label}
+          aria-label={label}
+          aria-pressed={theme === key}
           className={cn(
-            "relative p-1.5 rounded-md transition-colors",
+            "relative p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-1 focus-visible:ring-offset-app-bg",
             theme === key
               ? "text-accent-primary"
               : "text-tx-tertiary hover:text-tx-secondary"

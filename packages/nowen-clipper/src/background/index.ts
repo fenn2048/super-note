@@ -13,7 +13,7 @@
 import "../lib/sw-polyfill";
 
 import { getConfig, isConfigured, normalizeBaseUrl } from "../lib/storage";
-import { importNote, enhanceClip, NowenApiError, type AIEnhanceResult } from "../lib/api";
+import { enhanceClip, NowenApiError, type AIEnhanceResult, saveClip, uploadClipImage, type SaveClipPayload } from "../lib/api";
 import { buildContentBundle, inlineImages } from "../lib/transform";
 import type {
   AIEnhanceMode,
@@ -32,7 +32,12 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.removeAll(() => {
       chrome.contextMenus.create({
         id: "nowen-clip-selection",
-        title: "剪藏选中内容到 Nowen Note",
+        title: "剪藏选中内容到笔记",
+        contexts: ["selection"],
+      });
+      chrome.contextMenus.create({
+        id: "nowen-clip-selection-diary",
+        title: "剪藏选中内容到说说",
         contexts: ["selection"],
       });
       chrome.contextMenus.create({
@@ -75,6 +80,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.id) return;
   if (info.menuItemId === "nowen-clip-selection") {
     void runClip({ type: "CLIP_REQUEST", mode: "selection", tabId: tab.id });
+  } else if (info.menuItemId === "nowen-clip-selection-diary") {
+    void runClip({ type: "CLIP_REQUEST", mode: "selection", tabId: tab.id, notebookId: "__diary__" });
   } else if (info.menuItemId === "nowen-clip-page") {
     void runClip({ type: "CLIP_REQUEST", mode: "article", tabId: tab.id });
   } else if (info.menuItemId === "nowen-clip-simplified") {
@@ -170,12 +177,9 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
   // fullpage 模式：完整克隆的自包含 HTML 文档，跳过图片内联和格式转换，直接上传
   if (req.mode === "fullpage") {
     sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传完整页面到 Nowen Note..." });
-    const notebookName = (req.overrideNotebook ?? cfg.defaultNotebook).trim() || "Web 剪藏";
     const tags = parseTags(req.overrideTags ?? cfg.defaultTags);
 
-    // 构建附加信息（评论 + 来源）注入到 <head> 内部，
-    // 不能放在文档最前面，否则 <!DOCTYPE html> 不在开头，
-    // 前端 detectFormat / isFullHtmlDocument 会识别失败。
+    // 构建附加信息（评论 + 来源）注入到 <head> 内部
     const metaParts: string[] = [];
     if (req.comment?.trim()) metaParts.push(`<!-- clipper-comment: ${req.comment.trim()} -->`);
     if (tags.length) metaParts.push(`<!-- clipper-tags: ${tags.join(",")} -->`);
@@ -183,40 +187,41 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
     let content = html;
     if (metaParts.length > 0) {
       const metaBlock = "\n" + metaParts.join("\n") + "\n";
-      // 注入到 <head> 后面（在 <head> 标签与其内容之间）
       if (content.includes("<head>")) {
         content = content.replace("<head>", "<head>" + metaBlock);
       } else if (content.includes("<HEAD>")) {
         content = content.replace("<HEAD>", "<HEAD>" + metaBlock);
       } else {
-        // 兜底：如果没有 <head> 标签，放在 <!DOCTYPE html> 之后
         const dtMatch = content.match(/<!DOCTYPE[^>]*>/i);
         if (dtMatch) {
           const idx = (dtMatch.index ?? 0) + dtMatch[0].length;
           content = content.slice(0, idx) + metaBlock + content.slice(idx);
         } else {
-          // 最后兜底：直接追加到末尾
           content = content + metaBlock;
         }
       }
     }
     const contentText = data.text.slice(0, 5000);
+    const isDiary = req.notebookId === "__diary__";
 
     try {
-      const resp = await importNote(cfg, {
+      const resp = await saveClip(cfg, {
+        type: isDiary ? "diary" : "note",
         title: data.title,
         content,
         contentText,
-        notebookName,
+        workspaceId: req.workspaceId || null,
+        notebookId: isDiary ? null : (req.notebookId || "default"),
+        tags,
       });
-      const noteId = resp.notes?.[0]?.id;
+      const noteId = resp.id;
       sendProgress({
         type: "CLIP_PROGRESS",
         phase: "done",
-        message: `已保存到「${notebookName}」`,
+        message: isDiary ? "已保存为说说" : "已保存为笔记",
         noteId,
       });
-      notify("剪藏成功", `完整页面已保存到「${notebookName}」`);
+      notify("剪藏成功", isDiary ? "已保存为说说" : "已保存为笔记");
       return { ok: true, noteId, noteTitle: data.title };
     } catch (e) {
       const msg = describeError(e);
@@ -226,19 +231,30 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
     }
   }
 
-  // 图片处理（简化模式不需要内联图片，因为已经移除了）
+  // 图片处理（简化模式不需要处理图片，因为已经移除了）
   let images = { ok: 0, failed: 0, skipped: 0 };
-  if (req.mode !== "simplified" && cfg.imageMode === "inline") {
-    sendProgress({
-      type: "CLIP_PROGRESS",
-      phase: "download-images",
-      message: "正在下载并内联图片...",
-    });
-    const result = await inlineImages(html);
-    html = result.html;
-    images = { ok: result.ok, failed: result.failed, skipped: result.skipped };
-  } else if (cfg.imageMode === "skip") {
-    html = html.replace(/<img\b[^>]*>/gi, "");
+  if (req.mode !== "simplified") {
+    if (cfg.imageLocalization) {
+      sendProgress({
+        type: "CLIP_PROGRESS",
+        phase: "download-images",
+        message: "正在下载并本地化图片...",
+      });
+      const result = await localizeImages(html, cfg, req.workspaceId);
+      html = result.html;
+      images = { ok: result.ok, failed: result.failed, skipped: result.skipped };
+    } else if (cfg.imageMode === "inline") {
+      sendProgress({
+        type: "CLIP_PROGRESS",
+        phase: "download-images",
+        message: "正在下载并内联图片...",
+      });
+      const result = await inlineImages(html);
+      html = result.html;
+      images = { ok: result.ok, failed: result.failed, skipped: result.skipped };
+    } else if (cfg.imageMode === "skip") {
+      html = html.replace(/<img\b[^>]*>/gi, "");
+    }
   }
 
   // 构建 content bundle
@@ -350,7 +366,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
       // markdown 模式下，buildContentBundle 会把 <pre data-nowen-md> 转成代码块——
       // 这不是我们要的；改成直接拼字符串。
       if (cfg.outputFormat === "markdown") {
-        content = `# ${pageTitle}\n\n${aiBlock}\n\n${buildFooterMd(cfg.includeSource, data.url, data.siteName, tags)}`;
+        content = `${aiBlock}\n\n${buildFooterMd(cfg.includeSource, data.url, data.siteName, tags)}`;
         contentText = content.replace(/[#*`>\-|_\[\]()]/g, "").replace(/\s+/g, " ").trim();
       } else {
         content = rebuilt.content;
@@ -368,19 +384,33 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
 
   // 上传
   sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传到 Nowen Note..." });
-  const notebookName = (req.overrideNotebook ?? cfg.defaultNotebook).trim() || "Web 剪藏";
+  const isDiary = req.notebookId === "__diary__";
   try {
-    const resp = await importNote(cfg, {
+    const savePayload: any = {
+      type: isDiary ? "diary" : "note",
       title: pageTitle,
       content,
       contentText,
-      notebookName,
-    });
-    const noteId = resp.notes?.[0]?.id;
+      workspaceId: req.workspaceId || null,
+      notebookId: isDiary ? null : (req.notebookId || "default"),
+      tags,
+    };
+
+    if (isDiary) {
+      const matches = Array.from(content.matchAll(/\/api\/diary\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi));
+      savePayload.images = Array.from(new Set(matches.map(m => m[1])));
+      savePayload.mood = "";
+      savePayload.visibility = "PRIVATE";
+    }
+
+    const resp = await saveClip(cfg, savePayload);
+    const noteId = resp.id;
+
+    const targetDesc = isDiary ? "说说" : "笔记";
     sendProgress({
       type: "CLIP_PROGRESS",
       phase: "done",
-      message: `已保存到「${notebookName}」`,
+      message: `已保存为${targetDesc}`,
       noteId,
       images,
       aiInfo,
@@ -392,7 +422,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
       : "";
     notify(
       "剪藏成功",
-      `已保存到「${notebookName}」${images.failed ? `（${images.failed} 张图片下载失败）` : ""}${aiTip}`,
+      `已保存为${targetDesc}${images.failed ? `（${images.failed} 张图片下载失败）` : ""}${aiTip}`,
     );
     return { ok: true, noteId, noteTitle: pageTitle, images };
   } catch (e) {
@@ -738,9 +768,6 @@ async function uploadScreenshot(
     /* ignore */
   }
 
-  const notebookName = (req.overrideNotebook ?? cfg.defaultNotebook).trim() || "Web 剪藏";
-  const tags = parseTags(req.overrideTags ?? cfg.defaultTags);
-
   // 构建包含截图的 HTML
   let pageUrl = "";
   try {
@@ -750,7 +777,20 @@ async function uploadScreenshot(
     /* ignore */
   }
 
-  const imgHtml = `<img src="${dataUrl}" alt="${escapeHtml(titleSuffix)}" />`;
+  let imgHtml = "";
+  if (cfg.imageLocalization) {
+    try {
+      const blob = dataURLtoBlob(dataUrl);
+      const uploadRes = await uploadClipImage(cfg, blob, req.workspaceId);
+      imgHtml = `<img src="${uploadRes.url}" alt="${escapeHtml(titleSuffix)}" />`;
+    } catch (err) {
+      console.warn("[uploadScreenshot] Upload screenshot attachment failed, falling back to inline dataUrl:", err);
+      imgHtml = `<img src="${dataUrl}" alt="${escapeHtml(titleSuffix)}" />`;
+    }
+  } else {
+    imgHtml = `<img src="${dataUrl}" alt="${escapeHtml(titleSuffix)}" />`;
+  }
+
   const { content, contentText } = buildContentBundle({
     title: pageTitle,
     html: imgHtml,
@@ -762,21 +802,36 @@ async function uploadScreenshot(
     comment: req.comment,
   });
 
+  const isDiary = req.notebookId === "__diary__";
   try {
-    const resp = await importNote(cfg, {
+    const savePayload: any = {
+      type: isDiary ? "diary" : "note",
       title: pageTitle,
       content,
       contentText,
-      notebookName,
-    });
-    const noteId = resp.notes?.[0]?.id;
+      workspaceId: req.workspaceId || null,
+      notebookId: isDiary ? null : (req.notebookId || "default"),
+      tags,
+    };
+
+    if (isDiary) {
+      const matches = Array.from(content.matchAll(/\/api\/diary\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi));
+      savePayload.images = Array.from(new Set(matches.map(m => m[1])));
+      savePayload.mood = "";
+      savePayload.visibility = "PRIVATE";
+    }
+
+    const resp = await saveClip(cfg, savePayload);
+    const noteId = resp.id;
+
+    const targetDesc = isDiary ? "说说" : "笔记";
     sendProgress({
       type: "CLIP_PROGRESS",
       phase: "done",
-      message: `截图已保存到「${notebookName}」`,
+      message: `截图已保存为${targetDesc}`,
       noteId,
     });
-    notify("截图剪藏成功", `已保存到「${notebookName}」`);
+    notify("截图剪藏成功", `已保存为${targetDesc}`);
     return { ok: true, noteId, noteTitle: pageTitle };
   } catch (e) {
     const msg = describeError(e);
@@ -847,11 +902,14 @@ async function clipLinkOnly(url: string, tab: chrome.tabs.Tab) {
     tags: parseTags(cfg.defaultTags),
   });
   try {
-    await importNote(cfg, {
+    await saveClip(cfg, {
+      type: "note",
       title,
       content: bundle.content,
       contentText: bundle.contentText,
-      notebookName: cfg.defaultNotebook || "Web 剪藏",
+      workspaceId: null,
+      notebookId: "default",
+      tags: parseTags(cfg.defaultTags),
     });
     notify("链接已保存", title);
   } catch (e) {
@@ -1070,6 +1128,111 @@ function buildFooterMd(
     parts.push(tags.map((t) => `#${t}`).join(" "));
   }
   return parts.join("\n\n");
+}
+
+// ========== 图片本地化下载与上传辅助函数 ==========
+
+async function localizeImages(
+  html: string,
+  cfg: any,
+  workspaceId?: string | null,
+  timeoutMs = 8000,
+  concurrency = 4,
+): Promise<{ html: string; ok: number; failed: number; skipped: number }> {
+  // 用正则提取 <img> 标签的 src
+  const imgRegex = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')([^>]*)>/gi;
+  const imgEntries: Array<{ fullMatch: string; src: string }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = imgRegex.exec(html)) !== null) {
+    const src = match[1] ?? match[2] ?? "";
+    imgEntries.push({ fullMatch: match[0], src });
+  }
+
+  // 唯一 http/https URLs
+  const queue: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of imgEntries) {
+    if (/^https?:\/\//i.test(entry.src) && !seen.has(entry.src)) {
+      seen.add(entry.src);
+      queue.push(entry.src);
+    }
+  }
+
+  const downloadAndUploadOne = async (src: string): Promise<string | null> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      // 1. Fetch image
+      const res = await fetch(src, {
+        credentials: "omit",
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      
+      // 2. Upload to private server
+      const uploadRes = await uploadClipImage(cfg, blob, workspaceId);
+      return uploadRes.url; // /api/diary/attachments/<id>
+    } catch (err) {
+      console.warn(`[localizeImages] Failed to localize image: ${src}`, err);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // 并发上传
+  const results = new Map<string, string | null>();
+  let idx = 0;
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < concurrency; i++) {
+    workers.push(
+      (async () => {
+        while (idx < queue.length) {
+          const my = idx++;
+          const src = queue[my];
+          const localUrl = await downloadAndUploadOne(src);
+          results.set(src, localUrl);
+        }
+      })(),
+    );
+  }
+  await Promise.all(workers);
+
+  // 替换 URL 并统计
+  let ok = 0;
+  let failed = 0;
+  let skipped = 0;
+  let resultHtml = html;
+
+  for (const entry of imgEntries) {
+    if (!/^https?:\/\//i.test(entry.src)) {
+      skipped++;
+      continue;
+    }
+    const localUrl = results.get(entry.src);
+    if (localUrl) {
+      const newTag = entry.fullMatch.replace(entry.src, localUrl);
+      resultHtml = resultHtml.replace(entry.fullMatch, newTag);
+      ok++;
+    } else {
+      failed++;
+    }
+  }
+
+  return { html: resultHtml, ok, failed, skipped };
+}
+
+function dataURLtoBlob(dataurl: string): Blob {
+  const arr = dataurl.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
 }
 
 // ========== keepalive：避免剪藏中途 service worker 被回收 ==========
