@@ -107,7 +107,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
   const displayName = current === "personal" ? t("workspace.personal") : currentWs?.name || t("workspace.personal");
   const displayIcon = current === "personal" ? "🏠" : currentWs?.icon || "🏢";
 
-  const getRoleLabel = (role: string) => {
+  const getRoleLabel = (role?: string) => {
     const roles: Record<string, string> = {
       owner: t("workspace.roles.owner"),
       admin: t("workspace.roles.admin"),
@@ -115,7 +115,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
       commenter: t("workspace.roles.commenter"),
       viewer: t("workspace.roles.viewer"),
     };
-    return roles[role] || role;
+    return role ? (roles[role] || role) : "";
   };
 
   // 在入口按钮（展开/收起态）上右键当前工作区时，直接弹出对应右键菜单。
@@ -727,6 +727,7 @@ export function Modal({
    */
   heightClass?: string;
 }) {
+  const { t } = useTranslation();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();

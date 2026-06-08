@@ -339,6 +339,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [diaries, setDiaries] = useState<Diary[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [projectTasks, setProjectTasks] = useState<any[]>([]);
   const [notes, setNotes] = useState<NoteListItem[]>([]);
   const [stats, setStats] = useState({ diaryCount: 0, taskPending: 0, noteCount: 0 });
   const [greeting, setGreeting] = useState("");
@@ -415,25 +416,30 @@ export default function Dashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [diaryData, tasksData, notesData] = await Promise.all([
+      const [diaryData, tasksData, notesData, myProjectTasks] = await Promise.all([
         api.getDiaryTimeline(undefined, 5).catch(() => ({ items: [] as Diary[], hasMore: false, nextCursor: null })),
         api.getTasks("all").catch(() => [] as Task[]),
         api.getNotes({ sortBy: "updatedAt", sortOrder: "desc", limit: "5", isTrashed: "0" }).catch(() => [] as NoteListItem[]),
+        api.getMyTasks().catch(() => [] as any[]),
       ]);
 
       const diaryItems = diaryData.items || [];
       setDiaries(diaryItems);
       setTasks(tasksData || []);
+      setProjectTasks(myProjectTasks || []);
       setNotes(notesData || []);
 
-      // 计算统计
-      const pendingTasks = (tasksData || []).filter(
+      // 计算统计（合并普通任务与项目任务）
+      const pendingTasksFromTasks = (tasksData || []).filter(
         (t: Task) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
+      );
+      const pendingFromProject = (myProjectTasks || []).filter(
+        (pt: any) => pt.isCompleted === 0 && pt.endDate && new Date(pt.endDate) <= new Date(Date.now() + 3 * 86400000),
       );
 
       setStats({
         diaryCount: diaryItems.length,
-        taskPending: pendingTasks.length,
+        taskPending: pendingTasksFromTasks.length + pendingFromProject.length,
         noteCount: (notesData || []).length,
       });
     } catch (e) {
@@ -462,27 +468,54 @@ export default function Dashboard() {
     window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: id } }));
   };
 
-  const upcomingTasks = tasks.filter(
-    (t) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
-  ).slice(0, 5);
+  // Combine simple tasks and project tasks for upcoming display
+  const upcomingTasks = (() => {
+    const soon = (tasks || []).filter(
+      (t) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
+    ).map((t) => ({ ...t, __source: "task" }));
 
-  const handleToggleTask = async (id: string, e: React.MouseEvent) => {
+    const projSoon = (projectTasks || []).filter(
+      (pt) => pt.isCompleted === 0 && pt.endDate && new Date(pt.endDate) <= new Date(Date.now() + 3 * 86400000),
+    ).map((pt) => ({
+      id: pt.id,
+      title: pt.title,
+      isCompleted: pt.isCompleted,
+      dueDate: pt.endDate || null,
+      creatorName: pt.assigneeName || pt.assigneeDisplayName || pt.creatorId,
+      __source: "project",
+    } as Task & { __source: string }));
+
+    return [...soon, ...projSoon].slice(0, 5);
+  })();
+
+  const handleToggleTask = async (id: string, e: React.MouseEvent, source: "task" | "project" = "task") => {
     e.stopPropagation(); // 阻止触发卡片点击跳转
     haptic.light();
-    // 乐观更新
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isCompleted: t.isCompleted ? 0 : 1 } : t))
-    );
-    try {
-      const updated = await api.toggleTask(id);
-      syncTaskNotification(updated);
-      window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
-      // 重新拉取待办统计以更新徽标
-      api.getTaskStats().then((s) => {
-        setStats((prev) => ({ ...prev, taskPending: s.activeReminders || 0 }));
-      }).catch(console.error);
-    } catch {
-      loadDashboard(); // 回滚
+    if (source === "task") {
+      // 乐观更新
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, isCompleted: t.isCompleted ? 0 : 1 } : t)));
+      try {
+        const updated = await api.toggleTask(id);
+        syncTaskNotification(updated);
+        window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+        api.getTaskStats().then((s) => {
+          setStats((prev) => ({ ...prev, taskPending: s.activeReminders || prev.taskPending }));
+        }).catch(console.error);
+      } catch {
+        loadDashboard(); // 回滚
+      }
+    } else {
+      // project task
+      setProjectTasks((prev) => prev.map((pt) => (pt.id === id ? { ...pt, isCompleted: pt.isCompleted === 1 ? 0 : 1 } : pt)));
+      try {
+        const prev = projectTasks.find((p) => p.id === id);
+        const currentCompleted = prev ? prev.isCompleted : 0;
+        await api.updateProjectTask(id, { isCompleted: currentCompleted === 1 ? 0 : 1 });
+        window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+        loadDashboard();
+      } catch {
+        loadDashboard();
+      }
     }
   };
 
@@ -558,7 +591,10 @@ export default function Dashboard() {
 
   const handleQuickAddTask = () => {
     haptic.light();
-    actions.setViewMode("tasks");
+    actions.setViewMode("projects");
+    const filter = { type: "my-tasks" };
+    sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+    window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
   };
 
   return (
@@ -749,14 +785,26 @@ export default function Dashboard() {
               label="近期待办"
               value={stats.taskPending}
               color="#8b5cf6"
-              onClick={() => actions.setViewMode("tasks")}
+              onClick={() => {
+                haptic.light();
+                actions.setViewMode("projects");
+                const filter = { type: "my-tasks", status: "pending" };
+                sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+                window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+              }}
             />
             <QuickStatCard
               icon={<ListTodo size={18} />}
               label="全部待办"
-              value={tasks.length}
+              value={tasks.length + projectTasks.length}
               color="#10b981"
-              onClick={() => actions.setViewMode("tasks")}
+              onClick={() => {
+                haptic.light();
+                actions.setViewMode("projects");
+                const filter = { type: "my-tasks" };
+                sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+                window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+              }}
             />
             <QuickStatCard
               icon={<FileText size={18} />}
@@ -828,7 +876,13 @@ export default function Dashboard() {
                     即将到期
                   </h2>
                   <button
-                    onClick={() => actions.setViewMode("tasks")}
+                    onClick={() => {
+                      haptic.light();
+                      actions.setViewMode("projects");
+                      const filter = { type: "my-tasks", status: "pending" };
+                      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
+                      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+                    }}
                     className="text-[10px] text-accent-primary hover:underline"
                   >
                     查看全部
@@ -838,13 +892,20 @@ export default function Dashboard() {
                   <div className="px-4 py-8 text-center text-xs text-tx-tertiary">
                     最近 3 天没有到期的待办 ✨
                   </div>
-                ) : (
-                  upcomingTasks.map((item) => (
+                  ) : (
+                  upcomingTasks.map((item: any) => (
                     <TaskItem
                       key={item.id}
                       item={item}
-                      onToggle={handleToggleTask}
-                      onClick={() => handleTaskClick(item.id)}
+                      onToggle={(id, e) => handleToggleTask(id, e, item.__source === "project" ? "project" : "task")}
+                      onClick={() => {
+                        if (item.__source === "project") {
+                          actions.setViewMode("projects");
+                          window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: item.id }));
+                        } else {
+                          handleTaskClick(item.id);
+                        }
+                      }}
                     />
                   ))
                 )}

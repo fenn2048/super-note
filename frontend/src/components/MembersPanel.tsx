@@ -210,6 +210,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
                     <RoleSelect
                       value={m.role}
                       onChange={(role) => handleRoleChange(m.userId, role)}
+                      ROLE_LABEL={ROLE_LABEL}
                     />
                   ) : (
                     <span
@@ -254,6 +255,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
                     key={inv.id}
                     invite={inv}
                     onDelete={() => handleDeleteInvite(inv.id)}
+                    ROLE_LABEL={ROLE_LABEL}
                   />
                 ))}
               </div>

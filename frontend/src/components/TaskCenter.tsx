@@ -10,7 +10,7 @@ import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from
 import { zhCN, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { Task, TaskFilter, TaskPriority, TaskStats, Workspace } from "@/types";
+import { Task, TaskFilter, TaskPriority, TaskStats, Workspace, Tag } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useApp } from "@/store/AppContext";
@@ -997,7 +997,7 @@ export default function TaskCenter() {
   const loadTasks = useCallback(async () => {
     try {
 
-      const [data, statsData] = await Promise.all([
+      const [data, statsData, wsData] = await Promise.all([
         api.getTasks(filter, undefined, searchQuery || undefined, selectedTagId || undefined),
         api.getTaskStats(),
         api.getWorkspaces(),
@@ -1337,6 +1337,7 @@ export default function TaskCenter() {
                 onSubmit={handleCreate}
                 onUploaded={(ids) => { pendingOrphansRef.current = ids; }}
                 inputRef={inputRef}
+                workspaces={workspaces}
               />
             </div>
 
