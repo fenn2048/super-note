@@ -99,7 +99,7 @@ export function seedDatabase() {
       const t1Id = uuid();
       db.prepare(`
         INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, creatorId, modifierId)
-        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         t1Id,
         pId,
@@ -120,7 +120,7 @@ export function seedDatabase() {
       const t2Id = uuid();
       db.prepare(`
         INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, creatorId, modifierId)
-        VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         t2Id,
         pId,
@@ -139,7 +139,7 @@ export function seedDatabase() {
       const t3Id = uuid();
       db.prepare(`
         INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, creatorId, modifierId)
-        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         t3Id,
         pId,
@@ -157,7 +157,7 @@ export function seedDatabase() {
       const t4Id = uuid();
       db.prepare(`
         INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, creatorId, modifierId)
-        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         t4Id,
         pId,
@@ -176,7 +176,7 @@ export function seedDatabase() {
       const t5Id = uuid();
       db.prepare(`
         INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, creatorId, modifierId)
-        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         t5Id,
         pId,
