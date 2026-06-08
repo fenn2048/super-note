@@ -640,7 +640,6 @@ function NotebookItem({
     </>
   );
 }
-}
 
 /** Inline note item - rendered inside expanded notebook tree */
 function NoteNoteItem({
@@ -678,9 +677,9 @@ function NoteNoteItem({
     const d = new Date(note.updatedAt);
     const diff = Date.now() - d.getTime();
     if (diff < 60000) return "\u521a\u521a";
-    if (diff < 3600000) return ${Math.floor(diff / 60000)}\u5206\u949f\u524d;
-    if (diff < 86400000) return ${Math.floor(diff / 3600000)}\u5c0f\u65f6\u524d;
-    if (diff < 604800000) return ${Math.floor(diff / 86400000)}\u5929\u524d;
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}\u5206\u949f\u524d`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}\u5c0f\u65f6\u524d`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)}\u5929\u524d`;
     return d.toLocaleDateString();
   }, [note.updatedAt]);
 

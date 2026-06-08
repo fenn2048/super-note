@@ -1060,7 +1060,10 @@
     "uploadFailed": "Image upload failed",
     "imageTooLarge": "Image too large (max 50MB)",
     "imageInvalidType": "Unsupported image format",
-    "openLink": "Open link"
+    "openLink": "Open link",
+    "personalTodo": "Personal TODO",
+    "emptyProject": "Empty Project",
+    "emptyProjectWarning": "The selected project is empty, task cannot be created."
   },
   "tags": {
     "addTagPlaceholder": "Add tag...",
