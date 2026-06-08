@@ -1023,6 +1023,12 @@ function MobileTabBar() {
       active: state.viewMode === "home",
     },
     {
+      id: "projects",
+      label: t("sidebar.projects") || "项目",
+      icon: <Briefcase size={20} />,
+      active: state.viewMode === "projects",
+    },
+    {
       id: "all",
       label: t("sidebar.allNotes") || "笔记",
       icon: <BookOpen size={20} />,
@@ -1033,12 +1039,6 @@ function MobileTabBar() {
       label: t("sidebar.diary") || "说说",
       icon: <NotebookPen size={20} />,
       active: state.viewMode === "diary",
-    },
-    {
-      id: "projects",
-      label: t("sidebar.projects") || "项目",
-      icon: <Briefcase size={20} />,
-      active: state.viewMode === "projects",
     },
     {
       id: "more",

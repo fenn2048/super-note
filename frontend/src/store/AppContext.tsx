@@ -97,6 +97,22 @@ function getSavedNoteListCollapsed(): boolean {
   }
 }
 
+function getSavedViewMode(): ViewMode {
+  try {
+    const saved = localStorage.getItem("nowen-view-mode");
+    const validModes: ViewMode[] = [
+      "home", "notebook", "favorites", "trash", "all", "search", "tasks", "tag",
+      "mindmaps", "ai-chat", "diary", "files", "mentions", "more", "projects",
+    ];
+    if (saved && validModes.includes(saved as ViewMode)) {
+      return saved as ViewMode;
+    }
+  } catch {
+    // ignore
+  }
+  return "home";
+}
+
 const initialState: AppState = {
   notebooks: [],
   notes: [],
@@ -104,7 +120,7 @@ const initialState: AppState = {
   tags: [],
   selectedNotebookId: null,
   selectedTagId: null,
-  viewMode: "home",
+  viewMode: getSavedViewMode(),
   searchQuery: "",
   sidebarCollapsed: false,
   sidebarWidth: getSavedSidebarWidth(),
@@ -137,8 +153,14 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, selectedNotebookId: action.payload };
     case "SET_SELECTED_TAG":
       return { ...state, selectedTagId: action.payload };
-    case "SET_VIEW_MODE":
+    case "SET_VIEW_MODE": {
+      try {
+        localStorage.setItem("nowen-view-mode", action.payload);
+      } catch {
+        // ignore
+      }
       return { ...state, viewMode: action.payload };
+    }
     case "SET_SEARCH_QUERY":
       return { ...state, searchQuery: action.payload };
     case "TOGGLE_SIDEBAR":

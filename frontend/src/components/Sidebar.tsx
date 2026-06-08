@@ -21,7 +21,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useRailMode, nextRailMode } from "@/hooks/useRailMode";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import { exportNotebook } from "@/lib/exportService";
-import { Notebook, NoteListItem, ViewMode, WorkspaceFeatures, Project, ProjectGroup } from "@/types";
+import { Notebook, NoteListItem, ViewMode, WorkspaceFeatures, Project, ProjectGroup, Tag } from "@/types";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
@@ -768,6 +768,15 @@ function ProjectSidebar() {
   const [groups, setGroups] = useState<ProjectGroup[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [projectTags, setProjectTags] = useState<Tag[]>([]);
+  const [selectedProjectTagId, setSelectedProjectTagId] = useState<string | null>(() => {
+    try {
+      const raw = sessionStorage.getItem("nowen-active-project-tag-filter");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
   const [groupsExpanded, setGroupsExpanded] = useState(true);
   const [favsExpanded, setFavsExpanded] = useState(true);
   const [workspaceId, setWorkspaceId] = useState(getCurrentWorkspace());
@@ -779,6 +788,12 @@ function ProjectSidebar() {
     window.addEventListener("nowen:workspace-changed", handleWsChange);
     return () => window.removeEventListener("nowen:workspace-changed", handleWsChange);
   }, []);
+
+  useEffect(() => {
+    api.getTags(workspaceId)
+      .then(setProjectTags)
+      .catch(() => setProjectTags([]));
+  }, [workspaceId]);
 
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
@@ -843,6 +858,15 @@ function ProjectSidebar() {
     setActiveFilter(filter);
     sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
     window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    actions.setMobileSidebar(false);
+  };
+
+  const selectTagFilter = (tagId: string | null) => {
+    setSelectedProjectTagId(tagId);
+    try {
+      sessionStorage.setItem("nowen-active-project-tag-filter", JSON.stringify(tagId));
+    } catch {}
+    window.dispatchEvent(new CustomEvent("nowen:project-tag-filter-changed", { detail: { tagId } }));
     actions.setMobileSidebar(false);
   };
 
@@ -1054,6 +1078,48 @@ function ProjectSidebar() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Project Tag Filter */}
+      <div className="space-y-2 border-t border-app-border/50 pt-3">
+        <div className="px-3 text-xs font-semibold uppercase tracking-wider text-tx-tertiary">
+          {t("projects.tagFilter") || "标签筛选"}
+        </div>
+        <div className="flex flex-wrap gap-2 px-3 pb-3">
+          <button
+            onClick={() => selectTagFilter(null)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs font-medium transition-all",
+              !selectedProjectTagId
+                ? "bg-accent-primary text-white border-accent-primary"
+                : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+            )}
+          >
+            {t("projects.allTags") || "全部"}
+          </button>
+          {projectTags.length === 0 ? (
+            <span className="text-[11px] text-tx-tertiary">{t("projects.noTags") || "暂无标签"}</span>
+          ) : (
+            projectTags.map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => selectTagFilter(tag.id)}
+                className={cn(
+                  "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-all",
+                  selectedProjectTagId === tag.id
+                    ? "bg-accent-primary text-white border-accent-primary"
+                    : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+                )}
+              >
+                <span
+                  className="inline-block rounded-full"
+                  style={{ width: 10, height: 10, backgroundColor: tag.color || "#8b5cf6" }}
+                />
+                {tag.name}
+              </button>
+            ))
+          )}
+        </div>
       </div>
     </ScrollArea>
   );

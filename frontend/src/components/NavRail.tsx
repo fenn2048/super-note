@@ -62,6 +62,7 @@ const RAIL_ICON_SIZE = 18;
 const NAV_CONFIG: NavConfigItem[] = [
   // ─── 工作台 ───
   { icon: <Home size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.home",       mode: "home",                                 group: "workspace" },
+  { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "workspace" },
   { icon: <BookOpen size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.allNotes",    mode: "all",        feature: "notes",     group: "workspace" },
   { icon: <Star size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.favorites",   mode: "favorites",  feature: "favorites", group: "workspace" },
   { icon: <FolderOpen size={RAIL_ICON_SIZE} />,  labelKey: "sidebar.fileManager", mode: "files",      feature: "files",     group: "workspace" },
@@ -69,7 +70,6 @@ const NAV_CONFIG: NavConfigItem[] = [
   // ─── 内容模块 ───
   { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "modules" },
   { icon: <BrainCircuit size={RAIL_ICON_SIZE} />,labelKey: "sidebar.mindMaps",    mode: "mindmaps",   feature: "mindmaps",  group: "modules" },
-  { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "modules" },
   // ─── 工具 ───
   { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "tools" },
 ];

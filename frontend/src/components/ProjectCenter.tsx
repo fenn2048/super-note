@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Project, ProjectGroup, ProjectStage, ProjectTask } from "@/types";
+import { Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/store/AppContext";
 import {
@@ -310,6 +311,8 @@ export default function ProjectCenter() {
   const [roleFilter, setRoleFilter] = useState<"assigned" | "created" | "participating">("assigned");
   const [statusFilter, setStatusFilter] = useState<"pending" | "today" | "overdue" | "completed">("pending");
   const [wsMembers, setWsMembers] = useState<any[]>([]);
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
+  const [selectedProjectTagId, setSelectedProjectTagId] = useState<string | null>(null);
 
   // Quick Add task state
   const [quickAddTitle, setQuickAddTitle] = useState("");
@@ -450,6 +453,15 @@ export default function ProjectCenter() {
     return () => window.removeEventListener("nowen:project-filter-changed", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tagId?: string | null }>;
+      setSelectedProjectTagId(customEvent.detail?.tagId ?? null);
+    };
+    window.addEventListener("nowen:project-tag-filter-changed", handler);
+    return () => window.removeEventListener("nowen:project-tag-filter-changed", handler);
+  }, []);
+
   // Listen to workspace change events to reload data reactively
   useEffect(() => {
     const handleWorkspaceChange = (e: Event) => {
@@ -584,6 +596,57 @@ export default function ProjectCenter() {
         .finally(() => setLoadingWorkspaceStages(false));
     }
   }, [activeFilter, workspaceId]);
+
+  const taskMatchesProjectFilters = (task: ProjectTask) => {
+    const query = projectSearchQuery.trim().toLowerCase();
+    if (query) {
+      const title = task.title?.toLowerCase() || "";
+      const description = task.description?.toLowerCase() || "";
+      const projectName = ((task as any).projectName || "").toLowerCase();
+      if (!title.includes(query) && !description.includes(query) && !projectName.includes(query)) {
+        return false;
+      }
+    }
+    if (selectedProjectTagId) {
+      if (!task.tags?.some((tag) => tag.id === selectedProjectTagId)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const availableProjectTags = useMemo(() => {
+    const tagsMap = new Map<string, { id: string; name: string; color: string }>();
+    const sourceTasks = activeFilter.type === "calendar"
+      ? workspaceStages.flatMap((stage) => stage.tasks || [])
+      : myTasks;
+
+    sourceTasks.forEach((task) => {
+      task.tags?.forEach((tag) => {
+        if (!tagsMap.has(tag.id)) {
+          tagsMap.set(tag.id, tag);
+        }
+      });
+    });
+
+    return Array.from(tagsMap.values());
+  }, [myTasks, workspaceStages, activeFilter.type]);
+
+  const filteredMyTasks = useMemo(() => {
+    return myTasks.filter(taskMatchesProjectFilters);
+  }, [myTasks, projectSearchQuery, selectedProjectTagId]);
+
+  const filteredWorkspaceStages = useMemo(() => {
+    if (!projectSearchQuery && !selectedProjectTagId) {
+      return workspaceStages;
+    }
+    return workspaceStages
+      .map((stage) => ({
+        ...stage,
+        tasks: stage.tasks?.filter(taskMatchesProjectFilters),
+      }))
+      .filter((stage) => (stage.tasks?.length || 0) > 0);
+  }, [workspaceStages, projectSearchQuery, selectedProjectTagId]);
 
   const selectProject = (id: string) => {
     const filter = { type: "detail", projectId: id };
@@ -839,7 +902,7 @@ export default function ProjectCenter() {
       return isPast(date) && !isToday(date);
     };
 
-    myTasks.forEach((t) => {
+    filteredMyTasks.forEach((t) => {
       if (t.isCompleted === 1) {
         completed.push(t);
       } else {
@@ -858,7 +921,7 @@ export default function ProjectCenter() {
     });
 
     return { overdue, today, pending, completed };
-  }, [myTasks]);
+  }, [filteredMyTasks]);
 
   // Filter projects by group selected in Sidebar
   const filteredProjects = useMemo(() => {
@@ -1043,7 +1106,63 @@ export default function ProjectCenter() {
 
           {/* Scrollable Container */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-            
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
+                  <Input
+                    placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
+                    className="pl-9 h-10 text-sm"
+                    value={projectSearchQuery}
+                    onChange={(e) => setProjectSearchQuery(e.target.value)}
+                  />
+                </div>
+                {selectedProjectTagId ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedProjectTagId(null)}
+                    className="shrink-0"
+                  >
+                    {t("projects.clearTagFilter") || "清除标签"}
+                  </Button>
+                ) : null}
+              </div>
+              {availableProjectTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedProjectTagId(null)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-medium transition-all border",
+                      !selectedProjectTagId
+                        ? "bg-accent-primary text-white border-accent-primary"
+                        : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+                    )}
+                  >
+                    {t("projects.allTags") || "全部标签"}
+                  </button>
+                  {availableProjectTags.map((tag) => (
+                    <button
+                      key={tag.id}
+                      onClick={() => setSelectedProjectTagId(tag.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                        selectedProjectTagId === tag.id
+                          ? "bg-accent-primary text-white border-accent-primary"
+                          : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+                      )}
+                    >
+                      <span
+                        className="inline-block rounded-full"
+                        style={{ width: 10, height: 10, backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Stats Cards Row */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Card 1: 今日到期 */}
@@ -1409,13 +1528,66 @@ export default function ProjectCenter() {
       ) : activeFilter.type === "calendar" ? (
         /* 3. Global "Calendar" aggregated view */
         <div className="flex-1 flex flex-col h-full overflow-hidden">
+          <div className="px-6 py-4 border-b border-app-border bg-app-sidebar shrink-0 space-y-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar size={18} className="text-accent-primary" />
+                <div>
+                  <h1 className="text-base font-bold text-tx-primary">{t("projects.calendar") || "日历"}</h1>
+                  <p className="text-xs text-tx-tertiary">{t("projects.calendarDesc") || "按标签与标题搜索任务"}</p>
+                </div>
+              </div>
+              <div className="relative w-full lg:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
+                <Input
+                  placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
+                  className="pl-9 h-10 text-sm"
+                  value={projectSearchQuery}
+                  onChange={(e) => setProjectSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            {availableProjectTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedProjectTagId(null)}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-xs font-medium transition-all border",
+                    !selectedProjectTagId
+                      ? "bg-accent-primary text-white border-accent-primary"
+                      : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+                  )}
+                >
+                  {t("projects.allTags") || "全部标签"}
+                </button>
+                {availableProjectTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => setSelectedProjectTagId(tag.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                      selectedProjectTagId === tag.id
+                        ? "bg-accent-primary text-white border-accent-primary"
+                        : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+                    )}
+                  >
+                    <span
+                      className="inline-block rounded-full"
+                      style={{ width: 10, height: 10, backgroundColor: tag.color }}
+                    />
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {loadingWorkspaceStages ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 size={24} className="animate-spin text-accent-primary" />
             </div>
           ) : (
             <ProjectCalendar
-              stages={workspaceStages}
+              stages={filteredWorkspaceStages}
               onTaskClick={(task) => {
                 selectProject(task.projectId);
                 setTimeout(() => {
