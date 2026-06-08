@@ -925,11 +925,10 @@ export default function ProjectCenter() {
 
   // Filter projects by group selected in Sidebar
   const filteredProjects = useMemo(() => {
-    const activeProjects = projects.filter((p) => p.name !== "个人TODO");
     if (activeFilter.type === "group" && activeFilter.groupId) {
-      return activeProjects.filter((p) => p.groupId === activeFilter.groupId);
+      return projects.filter((p) => p.groupId === activeFilter.groupId);
     }
-    return activeProjects;
+    return projects;
   }, [projects, activeFilter]);
 
   return (
@@ -1129,11 +1128,11 @@ export default function ProjectCenter() {
                 ) : null}
               </div>
               {availableProjectTags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-2">
                   <button
                     onClick={() => setSelectedProjectTagId(null)}
                     className={cn(
-                      "px-3 py-1 rounded-full text-xs font-medium transition-all border",
+                      "w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all border",
                       !selectedProjectTagId
                         ? "bg-accent-primary text-white border-accent-primary"
                         : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
@@ -1146,7 +1145,7 @@ export default function ProjectCenter() {
                       key={tag.id}
                       onClick={() => setSelectedProjectTagId(tag.id)}
                       className={cn(
-                        "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                        "flex w-full items-center gap-2 text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all",
                         selectedProjectTagId === tag.id
                           ? "bg-accent-primary text-white border-accent-primary"
                           : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
@@ -1548,11 +1547,11 @@ export default function ProjectCenter() {
               </div>
             </div>
             {availableProjectTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2">
                 <button
                   onClick={() => setSelectedProjectTagId(null)}
                   className={cn(
-                    "px-3 py-1 rounded-full text-xs font-medium transition-all border",
+                    "w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all border",
                     !selectedProjectTagId
                       ? "bg-accent-primary text-white border-accent-primary"
                       : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
@@ -1565,7 +1564,7 @@ export default function ProjectCenter() {
                     key={tag.id}
                     onClick={() => setSelectedProjectTagId(tag.id)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                      "flex w-full items-center gap-2 text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all",
                       selectedProjectTagId === tag.id
                         ? "bg-accent-primary text-white border-accent-primary"
                         : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
