@@ -10,10 +10,8 @@ import {
   ImagePlus,
   X,
   Calendar,
-  CalendarDays,
   User as UserIcon,
   Edit2,
-  Check,
   Mic,
   Play,
   Pause,
@@ -39,6 +37,7 @@ import GenericTagInput from "@/components/GenericTagInput";
 import DiaryCalendar from "@/components/DiaryCalendar";
 import DiaryHeatMap from "@/components/DiaryHeatMap";
 import MentionPicker, { parseMentionTrigger, replaceMentionText } from "@/components/MentionPicker";
+import RecordingPanel from "@/components/RecordingPanel";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
 
@@ -184,14 +183,120 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   const mentionRaw = parseMentionTrigger(text, cursorPos);
   const mentionTrigger = mentionRaw ? { ...mentionRaw, clear: () => {} } : null;
 
-  // 录音相关状态与 Ref
+  // 录音相关状态
   const [recording, setRecording] = useState(false);
-  const [recordingPaused, setRecordingPaused] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
+  const [recordingWaveform, setRecordingWaveform] = useState<number[]>(new Array(20).fill(0.1));
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const recordTimerRef = useRef<any>(null);
+  const recordingStartTimeRef = useRef(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval>>();
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const waveformAnimRef = useRef<number>(0);
 
+  const cleanupRecording = useCallback(() => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = undefined;
+    }
+    if (waveformAnimRef.current) {
+      cancelAnimationFrame(waveformAnimRef.current);
+      waveformAnimRef.current = 0;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setRecordDuration(0);
+    setRecordingWaveform(new Array(20).fill(0.1));
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // 创建 AudioContext + AnalyserNode 用于波形可视化
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      // 启动波形动画循环
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const waveformValues = new Array(20).fill(0.1);
+      const loop = () => {
+        analyser.getByteFrequencyData(dataArray);
+        for (let i = 0; i < 20; i++) {
+          waveformValues[i] = dataArray[i] / 255;
+        }
+        setRecordingWaveform([...waveformValues]);
+        waveformAnimRef.current = requestAnimationFrame(loop);
+      };
+      loop();
+
+      // 创建 MediaRecorder（与 AnalyserNode 共享同一个 stream）
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      recorder.start();
+      recordingStartTimeRef.current = Date.now();
+      setRecording(true);
+      setRecordDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordDuration(Math.floor((Date.now() - recordingStartTimeRef.current) / 1000));
+      }, 1000);
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+      toast.error("无法启动录音，请检查麦克风权限");
+    }
+  }, []);
+
+  const stopRecordingAndGetBlob = useCallback(async (): Promise<{ blob: Blob; duration: number }> => {
+    return new Promise((resolve, reject) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === "inactive") {
+        reject(new Error("No active recording"));
+        return;
+      }
+
+      const duration = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+
+      recorder.addEventListener("stop", () => {
+        const mimeType = recorder.mimeType || "audio/webm";
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        audioChunksRef.current = [];
+        cleanupRecording();
+        resolve({ blob, duration: duration || 1 });
+      }, { once: true });
+
+      recorder.stop();
+    });
+  }, [cleanupRecording]);
+
+  const cancelRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.addEventListener("stop", () => {
+        audioChunksRef.current = [];
+      }, { once: true });
+      recorder.stop();
+    }
+    cleanupRecording();
+    setRecording(false);
+  }, [cleanupRecording]);
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const moodRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -389,99 +494,20 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     if (files.length) void addFiles(files);
   };
 
-  // 录音逻辑
-  const startRecording = async () => {
+  // 处理语音上传
+  const handleVoiceUpload = async (file: File, duration: number) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      let duration = 0;
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
-        try {
-          setVoiceUploading(true);
-          const uploadRes = await api.diaryImages.upload(file);
-          setPendingVoice({
-            id: uploadRes.id,
-            duration: duration || 1,
-          });
-        } catch (e) {
-          console.error("Voice upload failed:", e);
-          toast.error("语音上传失败");
-        } finally {
-          setVoiceUploading(false);
-        }
-        stream.getTracks().forEach((track) => track.stop());
-      };
-
-      mediaRecorder.start(200);
-      setRecording(true);
-      setRecordingPaused(false);
-      setRecordDuration(0);
-
-      recordTimerRef.current = setInterval(() => {
-        duration += 1;
-        setRecordDuration(duration);
-      }, 1000);
-    } catch (err) {
-      console.error("Failed to start recording:", err);
-      toast.error("无法启动录音设备");
-    }
-  };
-
-  const pauseRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.pause();
-      setRecordingPaused(true);
-      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-    }
-  };
-
-  const resumeRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "paused") {
-      mediaRecorderRef.current.resume();
-      setRecordingPaused(false);
-      const currentDur = recordDuration;
-      let duration = currentDur;
-      recordTimerRef.current = setInterval(() => {
-        duration += 1;
-        setRecordDuration(duration);
-      }, 1000);
-    }
-  };
-
-  const cancelRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.onstop = () => {
-        if (mediaRecorderRef.current) {
-          const stream = mediaRecorderRef.current.stream;
-          stream.getTracks().forEach((track) => track.stop());
-        }
-      };
-      mediaRecorderRef.current.stop();
-      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      setRecording(false);
-      setRecordingPaused(false);
-      setRecordDuration(0);
-      audioChunksRef.current = [];
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      setRecording(false);
-      setRecordingPaused(false);
+      setVoiceUploading(true);
+      const uploadRes = await api.diaryImages.upload(file);
+      setPendingVoice({
+        id: uploadRes.id,
+        duration: duration || 1,
+      });
+    } catch (e) {
+      console.error("Voice upload failed:", e);
+      toast.error("语音上传失败");
+    } finally {
+      setVoiceUploading(false);
     }
   };
 
@@ -522,7 +548,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       setMood("");
       setShowMoods(false);
       setPendingImages([]);
-      setVisibility("PRIVATE");
+      setVisibility(getCurrentWorkspace() !== "personal" ? "PUBLIC" : "PRIVATE");
       setPendingVoice(null);
       setComposeTags([]);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -677,55 +703,6 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
           </div>
         )}
 
-        {/* 录音控制面板 */}
-        {recording && (
-          <div className="mt-2.5 p-3 rounded-xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                "w-2.5 h-2.5 rounded-full bg-red-500",
-                !recordingPaused && "animate-pulse"
-              )} />
-              <span className="text-xs font-semibold text-tx-secondary tabular-nums">
-                {Math.floor(recordDuration / 60).toString().padStart(2, "0")}:
-                {(recordDuration % 60).toString().padStart(2, "0")}
-              </span>
-              <span className="text-[11px] text-tx-tertiary">
-                {recordingPaused ? "录音已暂停" : "正在录音..."}
-              </span>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {recordingPaused ? (
-                <button
-                  onClick={resumeRecording}
-                  className="px-2.5 py-1 rounded-lg text-[11px] bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 transition-all"
-                >
-                  继续
-                </button>
-              ) : (
-                <button
-                  onClick={pauseRecording}
-                  className="px-2.5 py-1 rounded-lg text-[11px] bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20 transition-all"
-                >
-                  暂停
-                </button>
-              )}
-              <button
-                onClick={cancelRecording}
-                className="px-2.5 py-1 rounded-lg text-[11px] bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
-              >
-                取消
-              </button>
-              <button
-                onClick={stopRecording}
-                className="px-3 py-1 rounded-lg text-[11px] font-medium bg-accent-primary text-white hover:bg-accent-primary/95 transition-all shadow-sm shadow-accent-primary/10"
-              >
-                完成
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* 标签选择 */}
         <div className="mt-3">
           <GenericTagInput
@@ -736,51 +713,71 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
         </div>
       </div>
 
-      {/* 底部操作栏 */}
-      <div className="flex items-center justify-between px-4 pb-3">
-        <div className="flex items-center gap-1">
-          {/* 心情按钮 */}
-          <div ref={moodRef} className="relative">
-            <button
-              onClick={() => setShowMoods(!showMoods)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
-                mood
-                  ? "bg-accent-primary/10 text-accent-primary"
-                  : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
-              )}
-            >
-              {selectedMoodEmoji ? (
-                <span className="text-base">{selectedMoodEmoji}</span>
-              ) : (
-                <Smile size={18} />
-              )}
-              <span className="hidden sm:inline">
-                {mood ? t(`diary.mood${mood.charAt(0).toUpperCase() + mood.slice(1)}`) : t("diary.mood")}
-              </span>
-            </button>
+      {/* 录音面板 - 覆盖底部操作栏 */}
+      <AnimatePresence>
+        {recording && (
+          <RecordingPanel
+            duration={recordDuration}
+            waveformData={recordingWaveform}
+            onRecordingComplete={async () => {
+              // 处理录音完成
+              try {
+                const { blob, duration } = await stopRecordingAndGetBlob();
+                if (blob.size > 0) {
+                  // 去掉 codecs 后缀（如 "audio/webm;codecs=opus" → "audio/webm"），后端做 Set.has 精确匹配
+                  const cleanMime = blob.type.split(";")[0].trim();
+                  const file = new File([blob], "voice.webm", { type: cleanMime });
+                  handleVoiceUpload(file, duration);
+                }
+              } catch (e) {
+                console.error("Recording complete error:", e);
+              }
+              setRecording(false);
+            }}
+            onCancel={() => {
+              cancelRecording();
+              setRecording(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
-            {/* 心情弹出面板 */}
-            <AnimatePresence>
-              {showMoods && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-full left-0 mt-2 p-2.5 bg-app-elevated rounded-xl border border-app-border shadow-lg z-20 w-[220px]"
-                >
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {MOODS.map(({ value: v, emoji }) => (
+      {/* 底部操作栏 - 录音时隐藏 */}
+      {!recording && (
+        <div className="flex items-center justify-between px-4 pb-3 pt-1 gap-3 flex-wrap">
+          {/* 左侧：心情 + 图片 + 语音 */}
+          <div className="flex items-center gap-1.5">
+            {/* 心情选择 */}
+            <div className="relative" ref={moodRef}>
+              <button
+                onClick={() => setShowMoods(!showMoods)}
+                className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-tx-secondary hover:bg-app-hover hover:text-tx-primary transition-all"
+                title={t("diary.selectMood")}
+              >
+                {selectedMoodEmoji ? (
+                  <span className="text-lg">{selectedMoodEmoji}</span>
+                ) : (
+                  <Smile size={18} />
+                )}
+              </button>
+              <AnimatePresence>
+                {showMoods && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute bottom-10 left-0 bg-app-surface border border-app-border shadow-lg rounded-xl p-2 grid grid-cols-6 gap-1 z-50 w-64"
+                  >
+                    {MOODS.map(({ value, emoji }) => (
                       <button
-                        key={v}
+                        key={value}
                         onClick={() => {
-                          setMood(mood === v ? "" : v);
+                          setMood(value);
                           setShowMoods(false);
                         }}
                         className={cn(
                           "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-all",
-                          mood === v
+                          mood === value
                             ? "bg-accent-primary/15 scale-110 ring-1 ring-accent-primary/30"
                             : "hover:bg-app-hover hover:scale-110",
                         )}
@@ -788,113 +785,113 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                         {emoji}
                       </button>
                     ))}
-                  </div>
-                </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* 图片按钮 */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={remainingSlots <= 0}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+                remainingSlots <= 0
+                  ? "text-tx-tertiary/50 cursor-not-allowed"
+                  : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
               )}
-            </AnimatePresence>
+              title={
+                remainingSlots <= 0
+                  ? t("diary.imageLimitReached").replace("{{n}}", String(MAX_IMAGES_PER_DIARY))
+                  : t("diary.addImage")
+              }
+            >
+              <ImagePlus size={16} />
+              <span className="hidden sm:inline">{t("diary.image")}</span>
+              {pendingImages.length > 0 && (
+                <span className="text-[10px] text-tx-tertiary tabular-nums">
+                  {pendingImages.length}/{MAX_IMAGES_PER_DIARY}
+                </span>
+              )}
+            </button>
+
+            {/* 语音按钮 */}
+            <button
+              onClick={startRecording}
+              disabled={recording || pendingVoice !== null}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+                (recording || pendingVoice !== null)
+                  ? "text-tx-tertiary/50 cursor-not-allowed"
+                  : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
+              )}
+              title={pendingVoice !== null ? "每条说说只能录制一段语音" : "录制语音"}
+            >
+              <Mic size={16} />
+              <span className="hidden sm:inline">语音</span>
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+            />
           </div>
 
-          {/* 图片按钮：达到上限就禁用 */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={remainingSlots <= 0}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
-              remainingSlots <= 0
-                ? "text-tx-tertiary/50 cursor-not-allowed"
-                : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
+          {/* 右侧：可见性 + 字数 + 发布 */}
+          <div className="flex items-center gap-2">
+            {/* 可见性范围选择 - 个人空间无需选择 */}
+            {getCurrentWorkspace() !== "personal" && (
+              <select
+                value={visibility}
+                onChange={(e) => setVisibility(e.target.value)}
+                className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2.5 py-1 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium"
+              >
+                <option value="PRIVATE">🔒 自己可见</option>
+                <option value="PUBLIC">🌐 公开</option>
+              </select>
             )}
-            title={
-              remainingSlots <= 0
-                ? t("diary.imageLimitReached").replace(
-                    "{{n}}",
-                    String(MAX_IMAGES_PER_DIARY),
-                  )
-                : t("diary.addImage")
-            }
-          >
-            <ImagePlus size={18} />
-            <span className="hidden sm:inline">{t("diary.image")}</span>
-            {pendingImages.length > 0 && (
-              <span className="text-[10px] text-tx-tertiary tabular-nums">
-                {pendingImages.length}/{MAX_IMAGES_PER_DIARY}
-              </span>
-            )}
-          </button>
-          
-          {/* 语音按钮 */}
-          <button
-            onClick={startRecording}
-            disabled={recording || pendingVoice !== null}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
-              (recording || pendingVoice !== null)
-                ? "text-tx-tertiary/50 cursor-not-allowed"
-                : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
-            )}
-            title={pendingVoice !== null ? "每条说说只能录制一段语音" : "录制语音"}
-          >
-            <Mic size={18} />
-            <span className="hidden sm:inline">语音</span>
-          </button>
+            {/* 字数计数 */}
+            <span
+              className={cn(
+                "text-[11px] tabular-nums transition-colors",
+                text.length > 500 ? "text-red-400" : "text-tx-tertiary",
+              )}
+            >
+              {text.length > 0 && text.length}
+            </span>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"
-            multiple
-            className="hidden"
-            onChange={handleFileChange}
-          />
+            {/* 发布按钮 */}
+            <button
+              onClick={handlePost}
+              disabled={!canSubmit}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-all",
+                canSubmit
+                  ? "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/20 active:scale-95"
+                  : "bg-app-hover text-tx-tertiary cursor-not-allowed",
+              )}
+              title={
+                hasPendingUploads
+                  ? t("diary.waitingUpload")
+                  : hasErrorImages
+                    ? t("diary.errorImagesHint")
+                    : undefined
+              }
+            >
+              {posting ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Send size={13} />
+              )}
+              <span>{t("diary.post")}</span>
+            </button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* 可见性范围选择 */}
-          <select
-            value={visibility}
-            onChange={(e) => setVisibility(e.target.value)}
-            className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2.5 py-1 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium"
-          >
-            <option value="PRIVATE">🔒 自己可见</option>
-            <option value="PUBLIC">🌐 公开</option>
-          </select>
-          {/* 字数计数 */}
-          <span
-            className={cn(
-              "text-[11px] tabular-nums transition-colors",
-              text.length > 500 ? "text-red-400" : "text-tx-tertiary",
-            )}
-          >
-            {text.length > 0 && text.length}
-          </span>
-
-          {/* 发布按钮 */}
-          <button
-            onClick={handlePost}
-            disabled={!canSubmit}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-all",
-              canSubmit
-                ? "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/20 active:scale-95"
-                : "bg-app-hover text-tx-tertiary cursor-not-allowed",
-            )}
-            title={
-              hasPendingUploads
-                ? t("diary.waitingUpload")
-                : hasErrorImages
-                ? t("diary.errorImagesHint")
-                : undefined
-            }
-          >
-            {posting ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Send size={13} />
-            )}
-            <span>{t("diary.post")}</span>
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -1073,7 +1070,7 @@ function VoicePlayer({
   const [pressProgress, setPressProgress] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const progressIntervalRef = useRef<any>(null);
+  const progressIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
 
   const voice = item.voice!;
@@ -1175,9 +1172,9 @@ function VoicePlayer({
         },
       });
       toast.success("转文字成功");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Transcribe failed:", e);
-      toast.error(e?.message || "语音转文字失败");
+      toast.error(e instanceof Error ? e.message : "语音转文字失败");
     } finally {
       setTranscribing(false);
     }
@@ -1199,8 +1196,10 @@ function VoicePlayer({
       setPressProgress(progress);
 
       if (progress >= 100) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
+        if (progressIntervalRef.current !== null) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         setPressProgress(0);
         handleTranscribe();
       }
@@ -1552,7 +1551,6 @@ function DiaryEditor({
   onSaved: (updated: Diary) => void;
 }) {
   const { t } = useTranslation();
-  const { state } = useApp();
   const [text, setText] = useState(item.contentText || "");
   const [mood, setMood] = useState(item.mood || "");
   const [showMoods, setShowMoods] = useState(false);
@@ -1723,9 +1721,9 @@ function DiaryEditor({
         tagIds: editorTags.map((t) => t.id),
       });
       onSaved(updated);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Save diary failed:", e);
-      toast.error(e?.message || t("diary.saveFailed"));
+      toast.error(e instanceof Error ? e.message : t("diary.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1739,14 +1737,6 @@ function DiaryEditor({
       e.preventDefault();
       onCancel();
     }
-  };
-
-  const toggleTag = (tag: Tag) => {
-    setEditorTags((prev) =>
-      prev.find((t) => t.id === tag.id)
-        ? prev.filter((t) => t.id !== tag.id)
-        : [...prev, tag]
-    );
   };
 
   const selectedMoodEmoji = getMoodEmoji(mood);
@@ -1923,26 +1913,28 @@ function DiaryEditor({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 可见性范围选择 */}
+          {/* 可见性范围选择 - 个人空间无需选择，始终仅自己可见 */}
+          {getCurrentWorkspace() !== "personal" && (
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value)}
             className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2.5 py-1 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium"
           >
             <option value="PRIVATE">🔒 自己可见</option>
-            <option value="PUBLIC">🌐 公开</option>
+            <option value="PUBLIC"> 公开</option>
           </select>
-          {/* 取消 */}
-          <button
-            onClick={onCancel}
-            disabled={saving}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium text-tx-secondary bg-app-hover hover:bg-app-hover/80 transition-all disabled:opacity-50"
+          )}
+          {/* 字数计数 */}
+          <span
+            className={cn(
+              "text-[11px] tabular-nums transition-colors",
+              text.length > 500 ? "text-red-400" : "text-tx-tertiary",
+            )}
           >
-            <X size={13} />
-            <span>{t("diary.cancel")}</span>
-          </button>
+            {text.length > 0 && text.length}
+          </span>
 
-          {/* 保存 */}
+          {/* 保存按钮 */}
           <button
             onClick={handleSave}
             disabled={!canSave}
@@ -1963,9 +1955,9 @@ function DiaryEditor({
             {saving ? (
               <Loader2 size={13} className="animate-spin" />
             ) : (
-              <Check size={13} />
+              <Send size={13} />
             )}
-            <span>{t("diary.save")}</span>
+            <span>{t("diary.save") || "保存"}</span>
           </button>
         </div>
       </div>
@@ -2184,7 +2176,6 @@ export default function DiaryCenter() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [stats, setStats] = useState<DiaryStats | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [slogan, setSlogan] = useState("Think Different"); // 可从设置读取
 
   const [visibilityFilter, setVisibilityFilter] = useState<string>("all");
   const [selectedTagId, setSelectedTagId] = useState<string>("all");
@@ -2192,7 +2183,6 @@ export default function DiaryCenter() {
   const [preset, setPreset] = useState<RangePreset>("all");
   const [customRange, setCustomRange] = useState<DateRange>({});
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
-  const [calendarDate, setCalendarDate] = useState<string | null>(null);
 
   // 说说搜索状态 - 从 sessionStorage 恢复
   const [diarySearchQuery, setDiarySearchQuery] = useState(() => {
@@ -2219,7 +2209,7 @@ export default function DiaryCenter() {
     setDiarySearchQuery(query);
     try {
       sessionStorage.setItem("super-diary-search-query", JSON.stringify(query));
-    } catch {}
+    } catch { /* sessionStorage may be unavailable */ }
   };
   const activeRange = useMemo(
     () => presetToRange(preset, customRange),
@@ -2388,7 +2378,6 @@ export default function DiaryCenter() {
   );
 
   const handleCalendarDateSelect = useCallback((dateStr: string) => {
-    setCalendarDate(dateStr);
     setViewMode("list");
     // 设置筛选范围为选中当天
     setPreset("custom");
