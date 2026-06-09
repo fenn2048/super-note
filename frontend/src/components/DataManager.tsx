@@ -175,7 +175,7 @@ export default function DataManager() {
   // 当前导入批次是否包含 zip（zip 本身按目录派生笔记本，不需要 perFile 开关）
   const [hasZip, setHasZip] = useState(false);
   const [zipMeta, setZipMeta] = useState<any | null>(null);
-  // P1-2：nanowen-note 自家导出 zip 在 metadata.json 中会携带 rootNotebookId；
+  // P1-2：nasuper-note 自家导出 zip 在 metadata.json 中会携带 rootNotebookId；
   // 如果当前工作区中仍有同 id 的笔记本，则自动预选，避免用户手动找一遍。
   // 未命中时也给个提示（例如“该备份来自另一个实例/工作区，仍会导入但不会自动选目标本”）。
   const [zipMetaHint, setZipMetaHint] = useState<
@@ -372,14 +372,14 @@ export default function DataManager() {
     if (!lastImportTarget) return;
     setCurrentWorkspace(lastImportTarget.workspaceId);
     window.dispatchEvent(
-      new CustomEvent("nowen:workspace-changed", {
+      new CustomEvent("super:workspace-changed", {
         detail: { workspaceId: lastImportTarget.workspaceId },
       }),
     );
     setLastImportTarget(null);
     // 通过自定义事件请求关闭 SettingsModal（由父组件决定是否监听）。
     // 即便父组件未处理，工作区切换本身也会触发 App 顶层的"重置流程"。
-    window.dispatchEvent(new CustomEvent("nowen:close-settings"));
+    window.dispatchEvent(new CustomEvent("super:close-settings"));
   };
 
   const clearImportList = () => {
@@ -3969,7 +3969,7 @@ function SmtpProviderGuide() {
         ? t("dataManager.smtp.guide.tlsOff")
         : t("dataManager.smtp.guide.tlsDepends");
 
-  const docUrl = "https://github.com/cropflre/nowen-note/blob/main/docs/backup-email-smtp.md";
+  const docUrl = "https://github.com/cropflre/super-note/blob/main/docs/backup-email-smtp.md";
 
   return (
     <div className="rounded-lg border border-sky-200/70 dark:border-sky-500/30 bg-sky-50/60 dark:bg-sky-500/5">
@@ -4371,7 +4371,7 @@ function SmtpConfigSection(props: {
                     type="text"
                     value={fromName}
                     onChange={(e) => setFromName(e.target.value)}
-                    placeholder="nowen-note"
+                    placeholder="super-note"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                 </div>

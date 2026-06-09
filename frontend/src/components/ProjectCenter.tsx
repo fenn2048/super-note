@@ -191,7 +191,7 @@ function TaskRow({
             onClick={() => {
               onSelectProject(task.projectId);
               setTimeout(() => {
-                window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: task.id }));
+                window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
               }, 100);
             }}
             className={`font-semibold text-tx-secondary cursor-pointer hover:text-accent-primary transition-colors text-sm truncate ${
@@ -292,7 +292,7 @@ export default function ProjectCenter() {
   // Navigation Filter State (synced with Sidebar)
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
-      const val = sessionStorage.getItem("nowen-active-project-filter");
+      const val = sessionStorage.getItem("super-active-project-filter");
       return val ? JSON.parse(val) : { type: "all" };
     } catch {
       return { type: "all" };
@@ -394,8 +394,8 @@ export default function ProjectCenter() {
       updated = [...favorites, id];
     }
     setFavorites(updated);
-    localStorage.setItem("nowen-fav-projects", JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent("nowen:project-favorite-toggled"));
+    localStorage.setItem("super-fav-projects", JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("super:project-favorite-toggled"));
   };
 
   const fetchDashboard = useCallback(async () => {
@@ -404,7 +404,7 @@ export default function ProjectCenter() {
       const u = await api.getMe();
       setCurrentUserId(u.id);
 
-      const favs = JSON.parse(localStorage.getItem("nowen-fav-projects") || "[]");
+      const favs = JSON.parse(localStorage.getItem("super-fav-projects") || "[]");
       setFavorites(favs);
 
       const gs = await api.getProjectGroups(workspaceId);
@@ -449,8 +449,8 @@ export default function ProjectCenter() {
         setActiveFilter(customEvent.detail);
       }
     };
-    window.addEventListener("nowen:project-filter-changed", handler);
-    return () => window.removeEventListener("nowen:project-filter-changed", handler);
+    window.addEventListener("super:project-filter-changed", handler);
+    return () => window.removeEventListener("super:project-filter-changed", handler);
   }, []);
 
   useEffect(() => {
@@ -458,8 +458,8 @@ export default function ProjectCenter() {
       const customEvent = e as CustomEvent<{ tagId?: string | null }>;
       setSelectedProjectTagId(customEvent.detail?.tagId ?? null);
     };
-    window.addEventListener("nowen:project-tag-filter-changed", handler);
-    return () => window.removeEventListener("nowen:project-tag-filter-changed", handler);
+    window.addEventListener("super:project-tag-filter-changed", handler);
+    return () => window.removeEventListener("super:project-tag-filter-changed", handler);
   }, []);
 
   // Listen to workspace change events to reload data reactively
@@ -469,8 +469,8 @@ export default function ProjectCenter() {
       const wsId = customEvent.detail?.workspaceId || getCurrentWorkspace();
       setWorkspaceId(wsId);
     };
-    window.addEventListener("nowen:workspace-changed", handleWorkspaceChange);
-    return () => window.removeEventListener("nowen:workspace-changed", handleWorkspaceChange);
+    window.addEventListener("super:workspace-changed", handleWorkspaceChange);
+    return () => window.removeEventListener("super:workspace-changed", handleWorkspaceChange);
   }, []);
 
   // Listen to projects-refreshed events to reload dashboard dynamically
@@ -478,8 +478,8 @@ export default function ProjectCenter() {
     const handleRefresh = () => {
       fetchDashboard();
     };
-    window.addEventListener("nowen:projects-refreshed", handleRefresh);
-    return () => window.removeEventListener("nowen:projects-refreshed", handleRefresh);
+    window.addEventListener("super:projects-refreshed", handleRefresh);
+    return () => window.removeEventListener("super:projects-refreshed", handleRefresh);
   }, [fetchDashboard]);
 
   // Fetch Project Details when activeFilter changes or selection is made
@@ -498,8 +498,8 @@ export default function ProjectCenter() {
           console.error(err);
           toast.error("加载项目详情失败");
           // Revert to dashboard
-          sessionStorage.setItem("nowen-active-project-filter", JSON.stringify({ type: "all" }));
-          window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: { type: "all" } }));
+          sessionStorage.setItem("super-active-project-filter", JSON.stringify({ type: "all" }));
+          window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: { type: "all" } }));
         })
         .finally(() => setLoadingDetail(false));
     } else {
@@ -650,14 +650,14 @@ export default function ProjectCenter() {
 
   const selectProject = (id: string) => {
     const filter = { type: "detail", projectId: id };
-    sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-    window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+    window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
   };
 
   const closeProjectDetail = () => {
     const filter = { type: "all" };
-    sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-    window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+    window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
   };
 
   const handleOpenCreateModal = () => {
@@ -730,7 +730,7 @@ export default function ProjectCenter() {
       }
       setShowCreateModal(false);
       fetchDashboard();
-      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     } catch (err: any) {
       toast.error(err?.message || "操作项目失败");
     }
@@ -743,7 +743,7 @@ export default function ProjectCenter() {
       await api.deleteProject(id);
       toast.success("删除成功");
       fetchDashboard();
-      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     } catch (err: any) {
       toast.error(err?.message || "删除项目失败");
     }
@@ -1042,7 +1042,7 @@ export default function ProjectCenter() {
             {detailTab === "list" && (
               <ProjectList
                 stages={projectStages}
-                onTaskClick={(task) => window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: task.id }))}
+                onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
                 onToggleTaskComplete={handleToggleTaskComplete}
               />
             )}
@@ -1052,13 +1052,13 @@ export default function ProjectCenter() {
             {detailTab === "calendar" && (
               <ProjectCalendar
                 stages={projectStages}
-                onTaskClick={(task) => window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: task.id }))}
+                onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
               />
             )}
             {detailTab === "gantt" && (
               <ProjectGantt
                 stages={projectStages}
-                onTaskClick={(task) => window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: task.id }))}
+                onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
               />
             )}
           </div>
@@ -1590,7 +1590,7 @@ export default function ProjectCenter() {
               onTaskClick={(task) => {
                 selectProject(task.projectId);
                 setTimeout(() => {
-                  window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: task.id }));
+                  window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
                 }, 100);
               }}
             />

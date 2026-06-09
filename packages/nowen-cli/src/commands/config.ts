@@ -8,18 +8,18 @@ export function registerConfigCommand(program: Command) {
     .command("config")
     .description("显示当前连接配置")
     .action(async () => {
-      const url = process.env.NOWEN_URL || "http://localhost:3001";
-      const user = process.env.NOWEN_USERNAME || "admin";
+      const url = process.env.SUPER_URL || "http://localhost:3001";
+      const user = process.env.SUPER_USERNAME || "admin";
 
-      console.log(chalk.bold("⚙️  Nowen CLI 配置:\n"));
+      console.log(chalk.bold("⚙️  Super CLI 配置:\n"));
       console.log(`  服务地址: ${chalk.cyan(url)}`);
       console.log(`  用户名:   ${chalk.cyan(user)}`);
       console.log(`  密码:     ${chalk.gray("***")}`);
       console.log();
       console.log(chalk.gray("通过环境变量修改配置:"));
-      console.log(chalk.gray("  NOWEN_URL=http://your-server:3001"));
-      console.log(chalk.gray("  NOWEN_USERNAME=your-username"));
-      console.log(chalk.gray("  NOWEN_PASSWORD=your-password"));
+      console.log(chalk.gray("  SUPER_URL=http://your-server:3001"));
+      console.log(chalk.gray("  SUPER_USERNAME=your-username"));
+      console.log(chalk.gray("  SUPER_PASSWORD=your-password"));
 
       // 测试连接
       const spinner = ora("测试连接...").start();
@@ -36,7 +36,7 @@ export function registerConfigCommand(program: Command) {
     .command("health")
     .description("检查服务健康状态")
     .action(async () => {
-      const url = process.env.NOWEN_URL || "http://localhost:3001";
+      const url = process.env.SUPER_URL || "http://localhost:3001";
       const spinner = ora(`检查 ${url}...`).start();
       try {
         const res = await fetch(`${url}/api/health`);

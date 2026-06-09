@@ -4,7 +4,7 @@ import fs from "fs";
 import { runMigrations, getCurrentSchemaVersion, CURRENT_SCHEMA_VERSION } from "./migrations.js";
 import { enableIncrementalAutoVacuum } from "../lib/reclaimSpace.js";
 
-const DB_PATH = process.env.DB_PATH || path.join(process.env.ELECTRON_USER_DATA || path.join(process.cwd(), "data"), "nowen-note.db");
+const DB_PATH = process.env.DB_PATH || path.join(process.env.ELECTRON_USER_DATA || path.join(process.cwd(), "data"), "super-note.db");
 
 let db: Database.Database;
 
@@ -58,7 +58,7 @@ export function getDb(): Database.Database {
         `修复指引：\n` +
         `  1) 立即停止服务，避免进一步写入；\n` +
         `  2) 备份当前文件（含 -wal/-shm）到只读介质；\n` +
-        `  3) 优先使用 nowen-note 的备份恢复功能（POST /api/backups/<file>/restore?dryRun=1 预览）；\n` +
+        `  3) 优先使用 super-note 的备份恢复功能（POST /api/backups/<file>/restore?dryRun=1 预览）；\n` +
         `  4) 若无可用备份，可尝试：\n` +
         `       sqlite3 ${path.basename(DB_PATH)} ".recover" | sqlite3 recovered.db\n` +
         `     再用 recovered.db 替换原文件。`

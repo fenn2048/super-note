@@ -1,4 +1,4 @@
-# Nowen-Note UI/UX Design System Reference
+# Super-Note UI/UX Design System Reference
 
 ## 1. Overview & Positioning
 - **Product Positioning**: A lightweight, quiet, family private note-taking, status sharing (Says), and AI knowledge base tool.

@@ -1,8 +1,8 @@
 // electron/logger.js
 // 日志落地（按日期轮转）+ 崩溃上报（crashReporter + uncaughtException / unhandledRejection）。
 // 日志目录：<userData>/logs/   示例：
-//   %APPDATA%/Nowen Note/logs/main-2026-04-23.log
-//   %APPDATA%/Nowen Note/logs/crash/<guid>.dmp
+//   %APPDATA%/Super Note/logs/main-2026-04-23.log
+//   %APPDATA%/Super Note/logs/crash/<guid>.dmp
 //
 // 不依赖 electron-log / winston，保持零新增依赖；必要时可升级。
 
@@ -122,7 +122,7 @@ function initLogger(opts = {}) {
   initialized = true;
 
   const userData =
-    app.getPath("userData") || path.join(require("os").tmpdir(), "nowen-note");
+    app.getPath("userData") || path.join(require("os").tmpdir(), "super-note");
   logDir = path.join(userData, "logs");
   crashDir = path.join(logDir, "crash");
 
@@ -131,7 +131,7 @@ function initLogger(opts = {}) {
     fs.mkdirSync(crashDir, { recursive: true });
   } catch (e) {
     // 目录创建失败时，降级到临时目录
-    logDir = path.join(require("os").tmpdir(), "nowen-note-logs");
+    logDir = path.join(require("os").tmpdir(), "super-note-logs");
     crashDir = path.join(logDir, "crash");
     try {
       fs.mkdirSync(logDir, { recursive: true });
@@ -145,8 +145,8 @@ function initLogger(opts = {}) {
   // Electron 要求 start() 必须调用才能产生 minidump；uploadToServer=false 时不会外发。
   try {
     crashReporter.start({
-      productName: "Nowen Note",
-      companyName: "Nowen",
+      productName: "Super Note",
+      companyName: "Super",
       submitURL: opts.crashSubmitURL || "https://example.invalid/submit",
       uploadToServer: !!opts.uploadCrashes && !!opts.crashSubmitURL,
       ignoreSystemCrashHandler: false,
@@ -176,7 +176,7 @@ function initLogger(opts = {}) {
   });
 
   write("INFO", [
-    `===== Nowen Note 启动 v${app.getVersion()} platform=${process.platform} arch=${process.arch} =====`,
+    `===== Super Note 启动 v${app.getVersion()} platform=${process.platform} arch=${process.arch} =====`,
   ]);
 }
 

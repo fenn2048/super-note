@@ -18,7 +18,7 @@
 # ──── 首次启动前必须手工做的事（无 Mac 也能完成）──────────────────────────────
 #  1. 注册 Apple Developer Program（$99/年）：https://developer.apple.com/programs/
 #  2. 在 App Store Connect 创建 App ID（Bundle ID 须与 capacitor.config.ts 的
-#     appId 一致：com.nowen.note）
+#     appId 一致：com.super.note）
 #  3. 在 https://appstoreconnect.apple.com → Users and Access → Integrations →
 #     App Store Connect API，创建一个 API Key（Role 选 App Manager），下载 .p8
 #  4. 在开发者后台 https://developer.apple.com/account/resources/certificates
@@ -55,7 +55,7 @@ jobs:
 
     env:
       # 与 frontend/capacitor.config.ts 保持一致；改 bundle id 时两处都要改
-      IOS_BUNDLE_ID: com.nowen.note
+      IOS_BUNDLE_ID: com.super.note
       IOS_SCHEME: App
       IOS_WORKSPACE: frontend/ios/App/App.xcworkspace
 
@@ -210,7 +210,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nowen-note-ios
+          name: super-note-ios
           path: ${{ runner.temp }}/ipa/*.ipa
           if-no-files-found: error
           retention-days: 14

@@ -46,10 +46,10 @@ export default function ManualPanel() {
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2 mb-2 text-zinc-950 dark:text-zinc-50">
                 <Sparkles className="w-5 h-5 text-indigo-500" />
-                欢迎使用 Love Write
+                欢迎使用 星空笔记
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Love Write（原 nowen-note）是一款专为个人记录与家庭/团队协作设计的现代笔记应用。支持富文本、说说 timeline、共享待办等模块，提供全方位的云同步与极致离线支持。
+                星空笔记（原 super-note）是一款专为个人记录与家庭/团队协作设计的现代笔记应用。支持富文本、说说 timeline、共享待办等模块，提供全方位的云同步与极致离线支持。
               </p>
             </div>
 
@@ -95,7 +95,7 @@ export default function ManualPanel() {
                 家庭空间与多用户协作
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Love Write 设计了直观的“工作区”（Workspace）概念，支持个人空间与协作空间双轨运行，方便您与家人、伙伴进行实时协作。
+                星空笔记 设计了直观的“工作区”（Workspace）概念，支持个人空间与协作空间双轨运行，方便您与家人、伙伴进行实时协作。
               </p>
             </div>
 
@@ -151,7 +151,7 @@ export default function ManualPanel() {
                 排版密度与快捷操作
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Love Write 配备了功能强大的富文本编辑器，同时支持调整界面的排版密度以适应不同的屏幕和浏览习惯。
+                星空笔记 配备了功能强大的富文本编辑器，同时支持调整界面的排版密度以适应不同的屏幕和浏览习惯。
               </p>
             </div>
 
@@ -219,7 +219,7 @@ export default function ManualPanel() {
                 特别说明：数据库持久化
               </h3>
               <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                虽然系统对外已全部命名为 <strong>Love Write</strong>，为了保证向前兼容性，底层的 SQLite 数据库文件名在服务器中依然保存为 <code>nowen-note.db</code>。此设计是为了防止已部署老版本的用户在更新版本后因文件名更改而导致数据读取失败或丢失。请勿擅自手动更改该物理数据库文件。
+                虽然系统对外已全部命名为 <strong>Love Write</strong>，为了保证向前兼容性，底层的 SQLite 数据库文件名在服务器中依然保存为 <code>super-note.db</code>。此设计是为了防止已部署老版本的用户在更新版本后因文件名更改而导致数据读取失败或丢失。请勿擅自手动更改该物理数据库文件。
               </p>
             </div>
 

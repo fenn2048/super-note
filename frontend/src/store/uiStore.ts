@@ -63,10 +63,10 @@ export interface UIState {
 
 // localStorage 持久化辅助
 const LS_KEYS = {
-  sidebarWidth: "nowen-sidebar-width",
-  noteListWidth: "nowen-notelist-width",
-  noteListCollapsed: "nowen-notelist-collapsed",
-  sidebarCollapsed: "nowen-sidebar-collapsed",
+  sidebarWidth: "super-sidebar-width",
+  noteListWidth: "super-notelist-width",
+  noteListCollapsed: "super-notelist-collapsed",
+  sidebarCollapsed: "super-sidebar-collapsed",
 } as const;
 
 function loadNum(key: string, fallback: number): number {

@@ -146,9 +146,9 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
         }
         const data = await res.json();
         if (cancelled) return;
-        // 同步到 localStorage：项目其它地方还是从 nowen-token 读
+        // 同步到 localStorage：项目其它地方还是从 super-token 读
         try {
-          localStorage.setItem("nowen-token", result.token);
+          localStorage.setItem("super-token", result.token);
         } catch {
           /* ignore */
         }

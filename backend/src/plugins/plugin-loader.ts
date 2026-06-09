@@ -1,7 +1,7 @@
 /**
- * Nowen Note 插件加载器
+ * Super Note 插件加载器
  *
- * 从 data/plugins/ 目录动态加载符合 NowenSkill 接口的插件。
+ * 从 data/plugins/ 目录动态加载符合 SuperSkill 接口的插件。
  * 支持两种加载方式：
  * 1. 本地目录插件（含 manifest.json + JS 模块）
  * 2. 动态注册的内存插件
@@ -50,7 +50,7 @@ export interface SkillResult {
   error?: string;
 }
 
-export interface NowenSkill {
+export interface SuperSkill {
   name: string;
   version: string;
   description: string;
@@ -73,7 +73,7 @@ export interface SkillManifest {
 
 export interface LoadedSkill {
   manifest: SkillManifest;
-  skill: NowenSkill;
+  skill: SuperSkill;
   directory: string;
   loadedAt: string;
   status: "active" | "error" | "disabled";
@@ -166,7 +166,7 @@ export class PluginLoader {
       throw new Error("安全违规：入口文件路径逃逸出插件目录");
     }
 
-    let skill: NowenSkill;
+    let skill: SuperSkill;
     try {
       // 使用 dynamic import 加载 ES 模块
       const moduleUrl = pathToFileURL(resolvedMain).href;
@@ -217,7 +217,7 @@ export class PluginLoader {
   }
 
   /** 注册内存插件（不需要文件） */
-  registerPlugin(manifest: SkillManifest, skill: NowenSkill): void {
+  registerPlugin(manifest: SkillManifest, skill: SuperSkill): void {
     this.plugins.set(manifest.name, {
       manifest,
       skill,

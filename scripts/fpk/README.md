@@ -38,35 +38,35 @@
 ```powershell
 # Windows PowerShell：构建并推 Docker Hub
 $VER = (Get-Content package.json | ConvertFrom-Json).version
-docker build -t yourname/nowen-note:v$VER .
-docker push  yourname/nowen-note:v$VER
-docker tag   yourname/nowen-note:v$VER yourname/nowen-note:latest
-docker push  yourname/nowen-note:latest
+docker build -t yourname/super-note:v$VER .
+docker push  yourname/super-note:v$VER
+docker tag   yourname/super-note:v$VER yourname/super-note:latest
+docker push  yourname/super-note:latest
 ```
 
 然后调 build-fpk.mjs：
 
 ```powershell
 # Windows
-$env:DOCKERHUB_REPO = "yourname/nowen-note"
+$env:DOCKERHUB_REPO = "yourname/super-note"
 $env:FPK_IMAGE_TAG  = "v$VER"   # 与 push 的 tag 对齐！否则飞牛装不上
 node scripts/fpk/build-fpk.mjs
 ```
 
 ```bash
 # Linux / macOS
-DOCKERHUB_REPO=yourname/nowen-note \
+DOCKERHUB_REPO=yourname/super-note \
 FPK_IMAGE_TAG=v${VER} \
 node scripts/fpk/build-fpk.mjs
 ```
 
-成功后产物在 `dist-fpk/`，文件名形如 `nowen-note-1.0.31.fpk`。
+成功后产物在 `dist-fpk/`，文件名形如 `super-note-1.0.31.fpk`。
 
 ### 环境变量参考
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `DOCKERHUB_REPO` | ✅ | 例如 `yourname/nowen-note` |
+| `DOCKERHUB_REPO` | ✅ | 例如 `yourname/super-note` |
 | `FPK_VERSION` | | 写入 manifest 的版本号（飞牛要求 X.Y.Z），默认读 `package.json.version` |
 | `FPK_IMAGE_TAG` | | compose.yaml 里镜像的 tag（可带 v 前缀），**默认与 FPK_VERSION 一致**。release.sh 会传 `v<version>` |
 | `FNPACK_BIN` | | fnpack 可执行文件绝对路径，默认按平台/架构自动探测 |
@@ -126,5 +126,5 @@ ARM 飞牛设备等官方放开后再补 arm64 支持。
 | `fnpack 找不到` | 项目根目录放 `fnpack-<ver>-<os>-<arch>` 二进制，或设 `FNPACK_BIN`；Linux/macOS 记得 `chmod +x`。下载：<https://developer.fnnas.com/> |
 | 安装时报 `manifest unknown` 或 `EOF` | compose 里 image tag 与 Docker Hub 实际 tag 不一致。确认打包时 `FPK_IMAGE_TAG` 和 `docker push` 的 tag 完全相同（推荐都用 `v<version>`） |
 | 安装失败提示版本不兼容 | 飞牛系统版本低于模板要求，升级飞牛或调低 `manifest` 的 `os_min_version` |
-| 装上图标但打不开 | 镜像没拉成功。SSH 进飞牛 `docker logs nowen-note` 看错误（多半是 Docker Hub 网络） |
+| 装上图标但打不开 | 镜像没拉成功。SSH 进飞牛 `docker logs super-note` 看错误（多半是 Docker Hub 网络） |
 | 端口冲突 | 飞牛会自动分配；要固定端口可在飞牛应用详情里改映射 |

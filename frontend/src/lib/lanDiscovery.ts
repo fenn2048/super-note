@@ -3,13 +3,13 @@
  *
  * 架构：
  *   后端（backend/src/services/discovery.ts）通过 bonjour-service 在
- *   `_nowen-note._tcp.local.` 上广播自己。客户端只需用任意 mDNS 浏览器
- *   订阅同一个 service type 即可发现局域网内所有 nowen-note 后端。
+ *   `_super-note._tcp.local.` 上广播自己。客户端只需用任意 mDNS 浏览器
+ *   订阅同一个 service type 即可发现局域网内所有 super-note 后端。
  *
  * 三种运行环境分别用不同实现，但对外暴露同一个接口：
  *
  *   - Electron 桌面端：复用 main 进程已有的 bonjour-service 浏览器，
- *     通过 `window.nowenDesktop.discovery` 桥接（preload 注入）
+ *     通过 `window.superDesktop.discovery` 桥接（preload 注入）
  *
  *   - Capacitor 原生（Android / iOS）：调用社区插件
  *     `@capacitor-community/zeroconf`，Android 内部走 NsdManager，
@@ -31,7 +31,7 @@ import { Capacitor } from "@capacitor/core";
 // ---- 公开接口 ----
 
 export interface DiscoveredService {
-  /** mDNS 实例名，例如 "nowen-note@hostname" */
+  /** mDNS 实例名，例如 "super-note@hostname" */
   name: string;
   /** 原始 host（一般是 ".local" 域名），可能为空 */
   host: string;
@@ -97,7 +97,7 @@ interface ElectronDiscoveryBridge {
 
 function getElectronBridge(): ElectronDiscoveryBridge | null {
   if (typeof window === "undefined") return null;
-  const desktop: any = (window as any).nowenDesktop;
+  const desktop: any = (window as any).superDesktop;
   return desktop && desktop.discovery ? (desktop.discovery as ElectronDiscoveryBridge) : null;
 }
 
@@ -133,8 +133,8 @@ class ElectronDiscovery implements LanDiscovery {
 //     action: "added" | "resolved" | "removed",
 //     service: {
 //       domain: "local.",
-//       type: "_nowen-note._tcp.",
-//       name: "nowen-note@hostname",
+//       type: "_super-note._tcp.",
+//       name: "super-note@hostname",
 //       hostname: "hostname.local.",   // Android 上有时是空串
 //       port: 3001,
 //       ipv4Addresses: ["192.168.1.10"],
@@ -164,7 +164,7 @@ interface ZeroconfPluginShape {
   close?(): Promise<void>;
 }
 
-const ZEROCONF_TYPE = "_nowen-note._tcp.";
+const ZEROCONF_TYPE = "_super-note._tcp.";
 const ZEROCONF_DOMAIN = "local.";
 
 class CapacitorDiscovery implements LanDiscovery {

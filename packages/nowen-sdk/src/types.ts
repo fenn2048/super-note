@@ -1,10 +1,10 @@
 /**
- * Nowen Note SDK 类型定义
+ * Super Note SDK 类型定义
  */
 
 // ===== 配置 =====
-export interface NowenConfig {
-  /** Nowen Note 后端地址，例如 http://localhost:3001 */
+export interface SuperConfig {
+  /** Super Note 后端地址，例如 http://localhost:3001 */
   baseUrl: string;
   /** 登录用户名 */
   username: string;
@@ -278,7 +278,7 @@ export interface SystemSettings {
 }
 
 // ===== 插件/Skill =====
-export interface NowenSkill {
+export interface SuperSkill {
   /** 技能唯一标识 */
   name: string;
   /** 版本号 */
@@ -321,7 +321,7 @@ export interface SkillParam {
 
 export interface SkillContext {
   /** SDK 客户端实例，可调用所有 API */
-  api: import("./client.js").NowenClient;
+  api: import("./client.js").SuperClient;
   /** 日志输出 */
   log: (message: string) => void;
   /** 当前用户 ID */

@@ -162,7 +162,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.CSC_LINK == '' && 'false' || 'true' }}
-          NOWEN_MAC_ARCH: x64
+          SUPER_MAC_ARCH: x64
           TARGET_ARCH: x64
           npm_config_target_arch: x64
         run: |
@@ -175,7 +175,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.CSC_LINK == '' && 'false' || 'true' }}
-          NOWEN_MAC_ARCH: arm64
+          SUPER_MAC_ARCH: arm64
           TARGET_ARCH: arm64
           npm_config_target_arch: arm64
         run: |
@@ -191,11 +191,11 @@ jobs:
         shell: bash
 
       # ========= 上传构建产物作为 workflow artifact（便于下载调试） =========
-      # builder.config.js 中 directories.output 默认为 dist-electron（CI 未设 NOWEN_BUILD_OUT）
+      # builder.config.js 中 directories.output 默认为 dist-electron（CI 未设 SUPER_BUILD_OUT）
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nowen-note-${{ matrix.name }}
+          name: super-note-${{ matrix.name }}
           path: |
             dist-electron/*.exe
             dist-electron/*.dmg

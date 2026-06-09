@@ -11,7 +11,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       defaultTheme="light"
       enableSystem
       disableTransitionOnChange={false}
-      storageKey="nowen-note-theme"
+      storageKey="super-note-theme"
     >
       {children}
     </NextThemesProvider>

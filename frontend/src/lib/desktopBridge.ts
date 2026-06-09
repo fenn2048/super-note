@@ -1,8 +1,8 @@
 /**
  * Electron Desktop Bridge
  * -------------------------------------------------------------
- * 通过 preload 注入的 window.nowenDesktop 与主进程通信。
- * Web 端不会有 window.nowenDesktop，这里做了兜底，安全用在 SSR/浏览器环境。
+ * 通过 preload 注入的 window.superDesktop 与主进程通信。
+ * Web 端不会有 window.superDesktop，这里做了兜底，安全用在 SSR/浏览器环境。
  *
  * 约定的菜单事件：
  *   menu:new-note         新建笔记（等价 Alt+N）
@@ -91,7 +91,7 @@ export interface OpenFilePayload {
   content: string;
 }
 
-interface NowenDesktopAPI {
+interface SuperDesktopAPI {
   on: (channel: string, listener: (payload: unknown) => void) => () => void;
   checkForUpdates: () => Promise<{ ok: boolean; reason?: string; version?: string }>;
   quitAndInstall: () => Promise<{ ok: boolean }>;
@@ -126,9 +126,9 @@ interface NowenDesktopAPI {
   isPortable?: boolean;
 }
 
-function getBridge(): NowenDesktopAPI | null {
+function getBridge(): SuperDesktopAPI | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { nowenDesktop?: NowenDesktopAPI }).nowenDesktop ?? null;
+  return (window as unknown as { superDesktop?: SuperDesktopAPI }).superDesktop ?? null;
 }
 
 export const isDesktop = (): boolean => !!getBridge();

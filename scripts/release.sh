@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# nowen-note 统一发布 / 构建脚本
+# super-note 统一发布 / 构建脚本
 #
 # 两种工作模式：
 #
@@ -39,21 +39,21 @@
 #
 # 使用示例（构建模式，取代 build-arm64.sh）：
 #   ./scripts/release.sh --build-only --arch arm64                             # 构建并 load 到本机
-#   ./scripts/release.sh --build-only --arch arm64 --tar                       # 导出 arm64 tar（默认 nowen-note-arm64.tar）
+#   ./scripts/release.sh --build-only --arch arm64 --tar                       # 导出 arm64 tar（默认 super-note-arm64.tar）
 #   ./scripts/release.sh --build-only --arch arm64 --tar --tar-out /tmp/x.tar  # 自定义 tar 路径
-#   ./scripts/release.sh --build-only --arch arm64 --image registry.example.com/nowen-note:arm64 --push
-#   ./scripts/release.sh --build-only --arch multi --image registry.example.com/nowen-note:multi
+#   ./scripts/release.sh --build-only --arch arm64 --image registry.example.com/super-note:arm64 --push
+#   ./scripts/release.sh --build-only --arch multi --image registry.example.com/super-note:multi
 # =============================================================================
 
 set -euo pipefail
 
 # -------------------- 配置 --------------------
-DEFAULT_IMAGE_NAME="cropflre/nowen-note"
+DEFAULT_IMAGE_NAME="cropflre/super-note"
 DEFAULT_BRANCH="main"
-GITHUB_REPO_URL="https://github.com/cropflre/nowen-note"
-GITHUB_REPO_SLUG="cropflre/nowen-note"   # gh release create 需要的 "owner/repo"
-BUILDX_BUILDER="nowen-note-builder"
-DEFAULT_TAR_OUT="nowen-note-arm64.tar"
+GITHUB_REPO_URL="https://github.com/cropflre/super-note"
+GITHUB_REPO_SLUG="cropflre/super-note"   # gh release create 需要的 "owner/repo"
+BUILDX_BUILDER="super-note-builder"
+DEFAULT_TAR_OUT="super-note-arm64.tar"
 
 # -------------------- 彩色输出 --------------------
 if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
@@ -110,7 +110,7 @@ PC_PLATFORMS=""        # --pc-platform，留空交给下面自动推断
 
 # ===== mac 架构选择（仅 PC_HAS_MAC=1 时生效）=====
 # 逗号分隔，可选 x64 / arm64；默认 "x64,arm64"·两架构都打。
-# 脱离必要性：electron-builder mac.target 已改为单架构读 env NOWEN_MAC_ARCH，
+# 脱离必要性：electron-builder mac.target 已改为单架构读 env SUPER_MAC_ARCH，
 # 这里负责循环：每个 arch 先 rebuild:native，再 electron-builder。
 # 历史教训（2026-05 Intel Mac ERR_DLOPEN_FAILED）：
 #   原来一次 build 打 arm64+x64 dmg，但 better-sqlite3.node 只能 rebuild 一种架构、
@@ -180,10 +180,10 @@ usage() {
       --target TARGETS     逗号分隔：docker / pc / android / fpk / upk / lite / clipper / all
                            默认 docker；示例：--target pc,android,fpk,upk,lite,clipper
                            - lite     : 调 scripts/build-lite.mjs 出 "无后端" 的 PC 安装包
-                           - clipper  : 调 packages/nowen-clipper 出浏览器扩展 zip
+                           - clipper  : 调 packages/super-clipper 出浏览器扩展 zip
                            - upk      : 调 scripts/upk/build-upk.mjs 出绿联 NAS .upk 安装包
       --fpk-dockerhub-repo USER/REPO
-                           飞牛 .fpk 引用的 dockerhub 镜像（默认取 cropflre/nowen-note）
+                           飞牛 .fpk 引用的 dockerhub 镜像（默认取 cropflre/super-note）
       --upk-image REPO:TAG
                            绿联 .upk 要打进包的镜像名（默认 同 fpk-dockerhub-repo : v版本号）
       --upk-build N        绿联 .upk 的构建号（默认 1，会拼成 X.Y.Z.N 写入包名）      --pc-platform LIST   PC 端要打的平台，逗号分隔：win / linux / mac
@@ -245,17 +245,17 @@ usage() {
   $0 -v 1.3.0-rc.1 -y --target all --github-release
 
 环境变量（可选，供 CI 使用）:
-  NOWEN_ANDROID_KEYSTORE_B64      Android keystore 的 base64；脚本会还原为文件并生成
+  SUPER_ANDROID_KEYSTORE_B64      Android keystore 的 base64；脚本会还原为文件并生成
                                   frontend/android/keystore.properties，构建后自动清理
-  NOWEN_ANDROID_KEYSTORE_PASSWORD store 密码
-  NOWEN_ANDROID_KEY_ALIAS         key alias（默认 nowen-release）
-  NOWEN_ANDROID_KEY_PASSWORD      key 密码（未设则等同于 store 密码）
-  NOWEN_SKIP_RCEDIT=1             跳过 electron-builder 的 rcedit（Windows exe 图标/版本注入）
+  SUPER_ANDROID_KEYSTORE_PASSWORD store 密码
+  SUPER_ANDROID_KEY_ALIAS         key alias（默认 super-release）
+  SUPER_ANDROID_KEY_PASSWORD      key 密码（未设则等同于 store 密码）
+  SUPER_SKIP_RCEDIT=1             跳过 electron-builder 的 rcedit（Windows exe 图标/版本注入）
                                   和代码签名；适合 Debian 首次打 Win 包时，避免等 winCodeSign
                                   约 60MB 从 GitHub 下载（国内网络容易卡）
-  NOWEN_LINUX_MAINTAINER          Linux 包 maintainer 字段（默认 "Nowen <noreply@nowen.local>"）
-  NOWEN_LINUX_VENDOR              Linux 包 vendor（默认 "Nowen"）
-  NOWEN_LINUX_HOMEPAGE            homepage URL（默认项目 GitHub 仓库）
+  SUPER_LINUX_MAINTAINER          Linux 包 maintainer 字段（默认 "Super <noreply@super.local>"）
+  SUPER_LINUX_VENDOR              Linux 包 vendor（默认 "Super"）
+  SUPER_LINUX_HOMEPAGE            homepage URL（默认项目 GitHub 仓库）
 
 架构说明（仅 docker target 生效）:
   amd64   原生 docker build，最快；适合 x86 服务器/NAS。
@@ -308,7 +308,7 @@ done
 if [ "$TARGETS_EXPLICIT" = "0" ] && [ "$BUILD_ONLY" = "0" ] && [ "$ASSUME_YES" = "0" ]; then
     echo
     echo "${C_BOLD}${C_CYAN}╔════════════════════════════════════════╗${C_RESET}"
-    echo "${C_BOLD}${C_CYAN}║     Nowen Note 发布向导               ║${C_RESET}"
+    echo "${C_BOLD}${C_CYAN}║     Super Note 发布向导               ║${C_RESET}"
     echo "${C_BOLD}${C_CYAN}╚════════════════════════════════════════╝${C_RESET}"
 
     # ======== 第 1 步：选择发布目标 ========
@@ -323,7 +323,7 @@ if [ "$TARGETS_EXPLICIT" = "0" ] && [ "$BUILD_ONLY" = "0" ] && [ "$ASSUME_YES" =
     echo "  ${C_CYAN}6${C_RESET})  自定义组合                手动输入 docker,pc,android,fpk,upk,lite,clipper 组合"
     echo "  ${C_CYAN}7${C_RESET})  飞牛 .fpk                 仅打包飞牛 NAS 安装包（要求镜像已发到 Docker Hub）"
     echo "  ${C_CYAN}8${C_RESET})  Lite 版（无后端）          仅打 PC 端 lite 安装包（builder.lite.config.js）"
-    echo "  ${C_CYAN}9${C_RESET})  浏览器扩展 (clipper)        仅打 nowen-clipper 浏览器扩展 zip"
+    echo "  ${C_CYAN}9${C_RESET})  浏览器扩展 (clipper)        仅打 super-clipper 浏览器扩展 zip"
     echo "  ${C_CYAN}10${C_RESET}) 绿联 .upk                 仅打包绿联 NAS 安装包（镜像 tar 打进包，本机需 docker）"
     echo
     read -r -p "请输入序号 [1-10]（默认 1）: " _mode_choice
@@ -390,7 +390,7 @@ if [ "$TARGETS_EXPLICIT" = "0" ] && [ "$BUILD_ONLY" = "0" ] && [ "$ASSUME_YES" =
 info "   - 飞牛 .fpk:   ${C_GREEN}是${C_RESET}（在 Docker push 后构建）"
             info "   - 绿联 .upk:   ${C_YELLOW}否${C_RESET}（独立选项 10，避免 ugcli 问题阻断主流程）"
             info "   - Lite 版:     ${C_GREEN}是${C_RESET}（无后端 PC 安装包）"
-            info "   - 浏览器扩展:  ${C_GREEN}是${C_RESET}（nowen-clipper zip）"
+            info "   - 浏览器扩展:  ${C_GREEN}是${C_RESET}（super-clipper zip）"
             info "   - 原子发布:    ${C_GREEN}是${C_RESET}（三端全部构建成功才推送）"
             ;;
         6)
@@ -856,14 +856,14 @@ if [ "$HAS_ANDROID" = "1" ]; then
         info "Android 构建模式: 本机 gradlew"
     fi
 
-    if [ ! -f "frontend/android/keystore.properties" ] && [ -z "${NOWEN_ANDROID_KEYSTORE_B64:-}" ]; then
+    if [ ! -f "frontend/android/keystore.properties" ] && [ -z "${SUPER_ANDROID_KEYSTORE_B64:-}" ]; then
         # 一键全量发布（_ONE_SHOT=1）或原子发布模式下，未签名 APK 等于不可用产物
         # （Android 同包名不同签名 = 用户必须卸载老版才能装新版，等于发了个废包）
         # 直接 die，不让它走到 GitHub Release 给用户造成升级灾难
         if [ "${_ONE_SHOT:-0}" = "1" ] || [ "$ATOMIC_RELEASE" = "1" ]; then
-            die "未找到 frontend/android/keystore.properties 且未设 NOWEN_ANDROID_KEYSTORE_B64：原子/一键全量发布要求签名 APK，请配置后重试（参考 docs/android-signing.md）"
+            die "未找到 frontend/android/keystore.properties 且未设 SUPER_ANDROID_KEYSTORE_B64：原子/一键全量发布要求签名 APK，请配置后重试（参考 docs/android-signing.md）"
         else
-            warn "未找到 frontend/android/keystore.properties 且未设 NOWEN_ANDROID_KEYSTORE_B64，APK 将不会被签名（只能用于调试）"
+            warn "未找到 frontend/android/keystore.properties 且未设 SUPER_ANDROID_KEYSTORE_B64，APK 将不会被签名（只能用于调试）"
         fi
     fi
     command -v node >/dev/null 2>&1 || die "未安装 node（Android 端打包需要先跑 vite build + cap sync）"
@@ -946,12 +946,12 @@ if [ "$HAS_LITE" = "1" ]; then
 fi
 
 # clipper target 前置检查
-# 浏览器扩展打包独立于主仓库的 npm workspace，需要 packages/nowen-clipper 自身
+# 浏览器扩展打包独立于主仓库的 npm workspace，需要 packages/super-clipper 自身
 # 装好依赖（首跑会自动 npm install）。
 if [ "$HAS_CLIPPER" = "1" ]; then
-    [ -d "packages/nowen-clipper" ]                  || die "未找到 packages/nowen-clipper 目录"
-    [ -f "packages/nowen-clipper/package.json" ]     || die "未找到 packages/nowen-clipper/package.json"
-    [ -f "packages/nowen-clipper/scripts/pack.mjs" ] || die "未找到 packages/nowen-clipper/scripts/pack.mjs"
+    [ -d "packages/super-clipper" ]                  || die "未找到 packages/super-clipper 目录"
+    [ -f "packages/super-clipper/package.json" ]     || die "未找到 packages/super-clipper/package.json"
+    [ -f "packages/super-clipper/scripts/pack.mjs" ] || die "未找到 packages/super-clipper/scripts/pack.mjs"
     command -v node >/dev/null 2>&1                  || die "未安装 node（clipper 打包需要）"
     command -v npm  >/dev/null 2>&1                  || die "未安装 npm（clipper 打包需要）"
 fi
@@ -1074,7 +1074,7 @@ else
     # 三端版本号严格单调递增，避免出现 "本地 tag 落后 Docker Hub" 或反之的错位。
     #   1) 本地 git tag
     #   2) GitHub 远端 tag（origin）
-    #   3) Docker Hub 镜像 tag（cropflre/nowen-note）
+    #   3) Docker Hub 镜像 tag（cropflre/super-note）
     # 网络不可用（ls-remote / curl 失败）时静默跳过该来源，不阻断发布。
 
     # 提取形如 vX.Y.Z / X.Y.Z（可带 -rc.N 等后缀）并归一化为裸 X.Y.Z(-suffix)
@@ -1425,7 +1425,7 @@ else
         echo "  Lite 版       : scripts/build-lite.mjs（electron/builder.lite.config.js）"
     fi
     if [ "$HAS_CLIPPER" = "1" ]; then
-        echo "  浏览器扩展    : packages/nowen-clipper -> nowen-clipper-<ver>.zip"
+        echo "  浏览器扩展    : packages/super-clipper -> super-clipper-<ver>.zip"
     fi
     echo "  同步 git tag  : $([ "$DO_GIT_TAG" = "1" ] && echo yes || echo no)"
     echo "  GitHub Release: $([ "$DO_GITHUB_RELEASE" = "1" ] && echo yes || echo no)"
@@ -1466,13 +1466,13 @@ OCI_LABELS=(
     --label "org.opencontainers.image.revision=${GIT_SHA}"
     --label "org.opencontainers.image.created=${BUILD_DATE}"
     --label "org.opencontainers.image.source=${GITHUB_REPO_URL}"
-    --label "org.opencontainers.image.title=nowen-note"
+    --label "org.opencontainers.image.title=super-note"
 )
 [ -n "$VERSION_TAG" ] && OCI_LABELS+=( --label "org.opencontainers.image.version=${VERSION_TAG}" )
 
 # Docker --build-arg：把版本号 / 构建时间塞到运行时 ENV 里
-#   - BUILD_DATE  -> 容器内 NOWEN_BUILD_TIME   -> /api/version 的 buildTime 字段
-#   - APP_VERSION -> 容器内 NOWEN_APP_VERSION  -> /api/version 的 appVersion 兜底
+#   - BUILD_DATE  -> 容器内 SUPER_BUILD_TIME   -> /api/version 的 buildTime 字段
+#   - APP_VERSION -> 容器内 SUPER_APP_VERSION  -> /api/version 的 appVersion 兜底
 # 发布模式才有 VERSION（构建模式 VERSION 为空，APP_VERSION 也跟着空，Dockerfile 里 ARG 默认空字符串兼容）。
 DOCKER_BUILD_ARGS=(
     --build-arg "BUILD_DATE=${BUILD_DATE}"
@@ -1638,7 +1638,7 @@ if [ "$SHOULD_BUILD_DOCKER" = "1" ] && [ "$DRY_RUN" != "1" ] \
 fi
 
 # -------------------- PC 端打包（electron-builder） --------------------
-# 产物会通过 safe-build.mjs 设的 NOWEN_BUILD_OUT=1 输出到 %TEMP%/nowen-note-build
+# 产物会通过 safe-build.mjs 设的 SUPER_BUILD_OUT=1 输出到 %TEMP%/super-note-build
 # 或 dist-electron/（取决于 builder.config.js 的逻辑）。
 # 我们收集本次所有 PC 平台安装包路径，用于后续上传到 GitHub Release。
 #
@@ -1760,7 +1760,7 @@ if [ "$HAS_PC" = "1" ]; then
     # 统一先跑 rebuild:native + build:all（safe-build.mjs 内部也是这三步，这里拆开以便非 Windows 分支复用）
     if [ "$UNAME_S_PC" = "Linux" ] || [ "$UNAME_S_PC" = "Darwin" ]; then
         # 输出目录：在 Linux/macOS 上不做 tmpdir 切换，默认 dist-electron/
-        # （NOWEN_BUILD_OUT 主要是 Windows 下避免 IDE 监听，Linux/macOS 不需要）
+        # （SUPER_BUILD_OUT 主要是 Windows 下避免 IDE 监听，Linux/macOS 不需要）
         info "build:all"
         if [ "$DRY_RUN" = "1" ]; then
             echo "  (dry-run) npm run build:all"
@@ -1811,7 +1811,7 @@ if [ "$HAS_PC" = "1" ]; then
                     warn "你正在 Linux 下打 Windows 目标，常见失败原因："
                     warn "  1) wine 跑 rcedit 被 OOM-kill (signal: killed) → 给 WSL2 加内存：%UserProfile%\\.wslconfig 设 memory=12GB swap=8GB，再 wsl --shutdown"
                     warn "  2) wine 32 位子系统未装 → sudo dpkg --add-architecture i386 && sudo apt install -y wine32:i386 && wineboot -i"
-                    warn "  3) winCodeSign 下载被墙 → 设 NOWEN_SKIP_RCEDIT=1 跳过 rcedit/签名"
+                    warn "  3) winCodeSign 下载被墙 → 设 SUPER_SKIP_RCEDIT=1 跳过 rcedit/签名"
                     warn "  4) prebuild-install 拉 win32 better-sqlite3 超时 → 设 HTTPS_PROXY"
                 fi
                 die "PC 端打包失败（原子发布：未推送任何东西）"
@@ -1826,7 +1826,7 @@ if [ "$HAS_PC" = "1" ]; then
         fi
         if [ "$PC_HAS_MAC" = "1" ]; then
             # mac 按架构循环：每个 arch 都要单独 rebuild:native + electron-builder
-            # 通过 NOWEN_MAC_ARCH 让 builder.config.js 的 mac.target 只产出该架构 dmg/zip
+            # 通过 SUPER_MAC_ARCH 让 builder.config.js 的 mac.target 只产出该架构 dmg/zip
             #
             # 默认只打 x64：
             #   - Intel Mac 原生跑
@@ -1848,8 +1848,8 @@ if [ "$HAS_PC" = "1" ]; then
                 if [ "$_ma" != "x64" ] && [ "$_ma" != "arm64" ]; then
                     die "--mac-arch 未知值: $_ma （合法: x64 / arm64）"
                 fi
-                info "mac arch=${_ma}: 先 rebuild:native，再 electron-builder（NOWEN_MAC_ARCH=${_ma}）"
-                NOWEN_MAC_ARCH="$_ma" _build_one_pc_target --mac darwin "$_ma"
+                info "mac arch=${_ma}: 先 rebuild:native，再 electron-builder（SUPER_MAC_ARCH=${_ma}）"
+                SUPER_MAC_ARCH="$_ma" _build_one_pc_target --mac darwin "$_ma"
             done
             if [ "${#_MAC_ARCH_ARR[@]}" -gt 1 ]; then
                 warn "本次打了多个 mac 架构（${_MAC_ARCHES_LIST}），latest-mac.yml 仅保留最后一次构建的架构信息——自动更新仅对该架构生效"
@@ -1879,11 +1879,11 @@ if [ "$HAS_PC" = "1" ]; then
     fi
 
     # 解析产物目录：
-    #   - Windows safe-build.mjs 用 NOWEN_BUILD_OUT=1 => %TEMP%/nowen-note-build
+    #   - Windows safe-build.mjs 用 SUPER_BUILD_OUT=1 => %TEMP%/super-note-build
     #   - Linux/macOS 直接走 dist-electron/
     PC_OUT_CANDIDATES=(
         "${REPO_ROOT}/dist-electron"
-        "$(node -e 'console.log(require("os").tmpdir())' 2>/dev/null)/nowen-note-build"
+        "$(node -e 'console.log(require("os").tmpdir())' 2>/dev/null)/super-note-build"
     )
     PC_OUT=""
     for cand in "${PC_OUT_CANDIDATES[@]}"; do
@@ -1904,8 +1904,8 @@ if [ "$HAS_PC" = "1" ]; then
         # 历史包（参见 issue：v1.0.32 Release Assets 含 1.0.11 起所有版本）。
         #
         # 正确做法：用 ${VERSION} 作为子串过滤。electron-builder 输出文件名一定
-        # 带版本号（Nowen.Note.Setup.1.0.32.exe / Nowen.Note-1.0.32.AppImage /
-        # Nowen.Note-1.0.32-arm64-mac.zip / Nowen.Note-1.0.32.exe.blockmap 等）。
+        # 带版本号（Super.Note.Setup.1.0.32.exe / Super.Note-1.0.32.AppImage /
+        # Super.Note-1.0.32-arm64-mac.zip / Super.Note-1.0.32.exe.blockmap 等）。
         # 例外：latest.yml / latest-mac.yml / latest-linux.yml 不带版本号，但
         # electron-builder 每次构建会覆写为当前版本元数据，直接全收即可。
         #
@@ -1954,13 +1954,13 @@ fi
 # -------------------- Android 端打包（Capacitor + Gradle） --------------------
 #
 # Keystore 注入（CI 场景常用）：
-#   若设置了 NOWEN_ANDROID_KEYSTORE_B64，会把它 base64 -d 还原为 keystore 文件，
+#   若设置了 SUPER_ANDROID_KEYSTORE_B64，会把它 base64 -d 还原为 keystore 文件，
 #   并自动生成 frontend/android/keystore.properties。
-#   环境变量（全部可选，仅在传入 NOWEN_ANDROID_KEYSTORE_B64 时才读）：
-#     NOWEN_ANDROID_KEYSTORE_B64        keystore 文件 base64
-#     NOWEN_ANDROID_KEYSTORE_PASSWORD   store 密码
-#     NOWEN_ANDROID_KEY_ALIAS           key alias（默认 nowen-release）
-#     NOWEN_ANDROID_KEY_PASSWORD        key 密码（未设则沿用 store 密码）
+#   环境变量（全部可选，仅在传入 SUPER_ANDROID_KEYSTORE_B64 时才读）：
+#     SUPER_ANDROID_KEYSTORE_B64        keystore 文件 base64
+#     SUPER_ANDROID_KEYSTORE_PASSWORD   store 密码
+#     SUPER_ANDROID_KEY_ALIAS           key alias（默认 super-release）
+#     SUPER_ANDROID_KEY_PASSWORD        key 密码（未设则沿用 store 密码）
 #
 # trap 机制：
 #   成功或失败退出时都会清理临时生成的 keystore / keystore.properties，
@@ -1973,7 +1973,7 @@ ANDROID_KEYSTORE_PROPS_TEMP_CREATED=0
 cleanup_android_keystore() {
     # 只清理脚本自己创建的；原本就存在的文件不动
     if [ "$ANDROID_KEYSTORE_TEMP_CREATED" = "1" ]; then
-        rm -f "${REPO_ROOT}/frontend/android/app/nowen-release.keystore" 2>/dev/null || true
+        rm -f "${REPO_ROOT}/frontend/android/app/super-release.keystore" 2>/dev/null || true
     fi
     if [ "$ANDROID_KEYSTORE_PROPS_TEMP_CREATED" = "1" ]; then
         rm -f "${REPO_ROOT}/frontend/android/keystore.properties" 2>/dev/null || true
@@ -1983,38 +1983,38 @@ cleanup_android_keystore() {
 prepare_android_keystore() {
     # 幂等：外部已有 keystore.properties 时不覆盖，仅在用户提供了 B64 环境变量时才自动生成
     local props_file="${REPO_ROOT}/frontend/android/keystore.properties"
-    local keystore_path="${REPO_ROOT}/frontend/android/app/nowen-release.keystore"
+    local keystore_path="${REPO_ROOT}/frontend/android/app/super-release.keystore"
 
-    if [ -z "${NOWEN_ANDROID_KEYSTORE_B64:-}" ]; then
+    if [ -z "${SUPER_ANDROID_KEYSTORE_B64:-}" ]; then
         return 0
     fi
 
     if [ -f "$props_file" ]; then
-        warn "检测到已有 keystore.properties，忽略 NOWEN_ANDROID_KEYSTORE_B64（不覆盖）"
+        warn "检测到已有 keystore.properties，忽略 SUPER_ANDROID_KEYSTORE_B64（不覆盖）"
         return 0
     fi
 
     command -v base64 >/dev/null 2>&1 || die "需要 base64 命令来还原 keystore"
 
-    local store_pwd="${NOWEN_ANDROID_KEYSTORE_PASSWORD:-}"
-    local key_alias="${NOWEN_ANDROID_KEY_ALIAS:-nowen-release}"
-    local key_pwd="${NOWEN_ANDROID_KEY_PASSWORD:-$store_pwd}"
+    local store_pwd="${SUPER_ANDROID_KEYSTORE_PASSWORD:-}"
+    local key_alias="${SUPER_ANDROID_KEY_ALIAS:-super-release}"
+    local key_pwd="${SUPER_ANDROID_KEY_PASSWORD:-$store_pwd}"
 
-    [ -n "$store_pwd" ] || die "设置了 NOWEN_ANDROID_KEYSTORE_B64 但未设 NOWEN_ANDROID_KEYSTORE_PASSWORD"
+    [ -n "$store_pwd" ] || die "设置了 SUPER_ANDROID_KEYSTORE_B64 但未设 SUPER_ANDROID_KEYSTORE_PASSWORD"
 
     info "从环境变量还原 Android keystore -> $keystore_path"
     if [ "$DRY_RUN" = "1" ]; then
         echo "  (dry-run) 解码 keystore 并写入 keystore.properties"
     else
         # macOS 与 Linux 的 base64 兼容：-d 在两者上都支持
-        printf '%s' "$NOWEN_ANDROID_KEYSTORE_B64" | base64 -d > "$keystore_path" \
-            || die "NOWEN_ANDROID_KEYSTORE_B64 解码失败（是否正确的 base64？）"
+        printf '%s' "$SUPER_ANDROID_KEYSTORE_B64" | base64 -d > "$keystore_path" \
+            || die "SUPER_ANDROID_KEYSTORE_B64 解码失败（是否正确的 base64？）"
         ANDROID_KEYSTORE_TEMP_CREATED=1
 
         # keystore.properties 中的 storeFile 是相对于 rootProject.projectDir（即 frontend/android/）
-        # 所以这里写 "app/nowen-release.keystore"
+        # 所以这里写 "app/super-release.keystore"
         cat > "$props_file" <<EOF
-storeFile=app/nowen-release.keystore
+storeFile=app/super-release.keystore
 storePassword=${store_pwd}
 keyAlias=${key_alias}
 keyPassword=${key_pwd}
@@ -2040,10 +2040,10 @@ if [ "$HAS_ANDROID" = "1" ]; then
     # --android-docker-sync：连同这两步也放进 Docker（镜像里自带 node，宿主可完全不装 node）
     if [ "$ANDROID_DOCKER_SYNC" = "1" ]; then
         info "frontend build + npx cap sync android（Docker 内）"
-        GRADLE_CACHE_VOL="${HOME}/.gradle-docker-nowen-note"
+        GRADLE_CACHE_VOL="${HOME}/.gradle-docker-super-note"
         mkdir -p "$GRADLE_CACHE_VOL"
         # 同步用一个 npm 缓存卷，避免每次都重新下载依赖
-        NPM_CACHE_VOL="${HOME}/.npm-docker-nowen-note"
+        NPM_CACHE_VOL="${HOME}/.npm-docker-super-note"
         mkdir -p "$NPM_CACHE_VOL"
         DOCKER_UID="$(id -u 2>/dev/null || echo 1000)"
         DOCKER_GID="$(id -g 2>/dev/null || echo 1000)"
@@ -2086,7 +2086,7 @@ if [ "$HAS_ANDROID" = "1" ]; then
         # cimg/android:2024.01.1-node 自带 JDK 17 + Android SDK + Node，国内机器首次拉会慢些。
         # - 用 host 的 UID/GID 避免产物文件变成 root
         # - 挂载 ~/.gradle 作为缓存，避免每次重跑都下载依赖
-        GRADLE_CACHE_VOL="${HOME}/.gradle-docker-nowen-note"
+        GRADLE_CACHE_VOL="${HOME}/.gradle-docker-super-note"
         mkdir -p "$GRADLE_CACHE_VOL"
 
         # 构造 docker 命令
@@ -2131,7 +2131,7 @@ if [ "$HAS_ANDROID" = "1" ]; then
     if [ "$DRY_RUN" != "1" ]; then
         APK_SRC="${REPO_ROOT}/frontend/android/app/build/outputs/apk/release/app-release.apk"
         if [ -f "$APK_SRC" ]; then
-            APK_OUT="${REPO_ROOT}/frontend/android/app/build/outputs/apk/release/Nowen-Note-${VERSION}.apk"
+            APK_OUT="${REPO_ROOT}/frontend/android/app/build/outputs/apk/release/Super-Note-${VERSION}.apk"
             cp -f "$APK_SRC" "$APK_OUT"
             ANDROID_ARTIFACTS+=( "$APK_OUT" )
             info "APK: $APK_OUT"
@@ -2142,10 +2142,10 @@ if [ "$HAS_ANDROID" = "1" ]; then
                 # 原子/一键全量发布：未签名 APK = 不可发布（同包名换签名会让所有老用户必须卸载重装）
                 # 必须 die，不能让未签名包混进 GitHub Release
                 if [ "${_ONE_SHOT:-0}" = "1" ] || [ "$ATOMIC_RELEASE" = "1" ]; then
-                    die "Android 打包产出的是未签名 APK ($APK_UNSIGNED)：原子/一键全量发布要求签名 APK，请检查 frontend/android/keystore.properties 或 NOWEN_ANDROID_KEYSTORE_B64 配置"
+                    die "Android 打包产出的是未签名 APK ($APK_UNSIGNED)：原子/一键全量发布要求签名 APK，请检查 frontend/android/keystore.properties 或 SUPER_ANDROID_KEYSTORE_B64 配置"
                 fi
                 warn "只找到未签名 APK: $APK_UNSIGNED"
-                warn "检查 frontend/android/keystore.properties 或 NOWEN_ANDROID_KEYSTORE_B64 是否配置正确"
+                warn "检查 frontend/android/keystore.properties 或 SUPER_ANDROID_KEYSTORE_B64 是否配置正确"
                 ANDROID_ARTIFACTS+=( "$APK_UNSIGNED" )
             else
                 die "Android 打包成功但找不到 APK 产物"
@@ -2186,10 +2186,10 @@ if [ "$HAS_FPK" = "1" ]; then
 
     # 收集 dist-fpk/ 下产物
     # 注意：dist-fpk/ 目录只增不清，里面会堆积历次发布的 .fpk（例如
-    # nowen-note-1.0.29.fpk ... nowen-note-1.0.34.fpk）。收集时**必须只**
+    # super-note-1.0.29.fpk ... super-note-1.0.34.fpk）。收集时**必须只**
     # 抓本次版本号对应的文件，否则会把一堆旧版本一起传到新 Release。
     # 用 "*${VERSION}.fpk" 是因为 build-fpk.mjs 产物名固定为
-    # nowen-note-${VERSION}.fpk / nowen-note-${VERSION}-<arch>.fpk 等形态。
+    # super-note-${VERSION}.fpk / super-note-${VERSION}-<arch>.fpk 等形态。
     FPK_OUT="${REPO_ROOT}/dist-fpk"
     if [ "$DRY_RUN" != "1" ] && [ -d "$FPK_OUT" ]; then
         while IFS= read -r f; do
@@ -2298,7 +2298,7 @@ if [ "$HAS_UPK" = "1" ]; then
     # 收集 dist-upk/ 下产物
     # 与 fpk 同思路：dist-upk 是只增不清，必须按当前 VERSION 子串过滤，
     # 否则会把所有历史版本一起传到 GitHub Release。
-    # ugcli pack 默认产物名形如 amd64_io.nowen.note_${VERSION}.${BUILD_NO}.upk
+    # ugcli pack 默认产物名形如 amd64_io.super.note_${VERSION}.${BUILD_NO}.upk
     UPK_OUT="${REPO_ROOT}/dist-upk"
     if [ "$DRY_RUN" != "1" ] && [ -d "$UPK_OUT" ]; then
         while IFS= read -r f; do
@@ -2362,10 +2362,10 @@ if [ "$HAS_LITE" = "1" ]; then
 
     # 收集产物：候选目录与 build-lite.mjs 内部一致
     #   - 普通态：dist-electron-lite/
-    #   - --safe：%TEMP%/nowen-note-lite-build/
+    #   - --safe：%TEMP%/super-note-lite-build/
     LITE_OUT_CANDIDATES=(
         "${REPO_ROOT}/dist-electron-lite"
-        "$(node -e 'console.log(require("os").tmpdir())' 2>/dev/null)/nowen-note-lite-build"
+        "$(node -e 'console.log(require("os").tmpdir())' 2>/dev/null)/super-note-lite-build"
     )
     LITE_OUT=""
     for cand in "${LITE_OUT_CANDIDATES[@]}"; do
@@ -2405,9 +2405,9 @@ if [ "$HAS_LITE" = "1" ]; then
         fi
     elif [ "$DRY_RUN" != "1" ]; then
         if [ "${_ONE_SHOT:-0}" = "1" ] || [ "$ATOMIC_RELEASE" = "1" ]; then
-            die "Lite 输出目录不存在（dist-electron-lite / nowen-note-lite-build）：build-lite.mjs 是否成功？"
+            die "Lite 输出目录不存在（dist-electron-lite / super-note-lite-build）：build-lite.mjs 是否成功？"
         fi
-        warn "Lite 输出目录不存在（dist-electron-lite / nowen-note-lite-build）"
+        warn "Lite 输出目录不存在（dist-electron-lite / super-note-lite-build）"
     fi
 
     LITE_END=$(date +%s)
@@ -2415,29 +2415,29 @@ if [ "$HAS_LITE" = "1" ]; then
     ok "Lite 打包完成，用时 ${LITE_BUILD_DURATION}s"
 fi
 
-# -------------------- 浏览器扩展（nowen-clipper）打包 --------------------
-# 输出 packages/nowen-clipper/releases/nowen-clipper-<extVer>.zip
-# 注意：扩展自身的 version 来自 packages/nowen-clipper/package.json，与主仓库 VERSION
+# -------------------- 浏览器扩展（super-clipper）打包 --------------------
+# 输出 packages/super-clipper/releases/super-clipper-<extVer>.zip
+# 注意：扩展自身的 version 来自 packages/super-clipper/package.json，与主仓库 VERSION
 # 解耦（Chrome/Firefox 商店上传必须递增扩展自身版本号；和主版本号绑定反而难维护）。
-# 这里尊重 packages/nowen-clipper/package.json 已经写好的版本号，不做改写。
+# 这里尊重 packages/super-clipper/package.json 已经写好的版本号，不做改写。
 CLIPPER_ARTIFACTS=()
 CLIPPER_BUILD_DURATION=0
 if [ "$HAS_CLIPPER" = "1" ]; then
-    step "浏览器扩展打包（packages/nowen-clipper）"
+    step "浏览器扩展打包（packages/super-clipper）"
     CLIPPER_START=$(date +%s)
 
-    CLIPPER_DIR="${REPO_ROOT}/packages/nowen-clipper"
+    CLIPPER_DIR="${REPO_ROOT}/packages/super-clipper"
 
     # 1) 依赖体检：缺 node_modules 自动 npm install
     if [ "$DRY_RUN" != "1" ] && [ ! -d "${CLIPPER_DIR}/node_modules" ]; then
-        info "packages/nowen-clipper/node_modules 不存在，自动 npm install"
+        info "packages/super-clipper/node_modules 不存在，自动 npm install"
         ( cd "$CLIPPER_DIR" && run_argv npm install )
     fi
 
     # 2) 跑 npm run pack：内部串了 build + flatten-html + copy-public + pack.mjs
-    info "npm run pack（packages/nowen-clipper）"
+    info "npm run pack（packages/super-clipper）"
     if [ "$DRY_RUN" = "1" ]; then
-        echo "  (dry-run) cd packages/nowen-clipper && npm run pack"
+        echo "  (dry-run) cd packages/super-clipper && npm run pack"
     else
         ( cd "$CLIPPER_DIR" && run_argv npm run pack )
     fi
@@ -2446,9 +2446,9 @@ if [ "$HAS_CLIPPER" = "1" ]; then
     CLIPPER_OUT="${CLIPPER_DIR}/releases"
     if [ "$DRY_RUN" != "1" ] && [ -d "$CLIPPER_OUT" ]; then
         # 只收"本次打的那一个"，避免把历史 zip 一并上传：
-        # 读 packages/nowen-clipper/package.json 的 version 字段
+        # 读 packages/super-clipper/package.json 的 version 字段
         CLIPPER_VER="$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "${CLIPPER_DIR}/package.json" | head -1 | sed -E 's/.*"([^"]+)"$/\1/')"
-        TARGET_ZIP="${CLIPPER_OUT}/nowen-clipper-${CLIPPER_VER}.zip"
+        TARGET_ZIP="${CLIPPER_OUT}/super-clipper-${CLIPPER_VER}.zip"
         if [ -f "$TARGET_ZIP" ]; then
             CLIPPER_ARTIFACTS+=( "$TARGET_ZIP" )
             info "Clipper 产物: $TARGET_ZIP"

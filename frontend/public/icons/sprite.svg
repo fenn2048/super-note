@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
-  <!-- nowen-note Icon Sprite · 默认 stroke="currentColor", 2px, 圆角 -->
+  <!-- super-note Icon Sprite · 默认 stroke="currentColor", 2px, 圆角 -->
   <defs>
     <style>
       symbol { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

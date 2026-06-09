@@ -21,7 +21,7 @@
  *
  * 选项：
  *   --db                    指定 SQLite 数据库文件路径。
- *                           默认 $DB_PATH → <ELECTRON_USER_DATA or cwd>/data/nowen-note.db
+ *                           默认 $DB_PATH → <ELECTRON_USER_DATA or cwd>/data/super-note.db
  *   --attachments-dir       附件落盘目录（后端路由里也读这个路径）。
  *                           默认 <ELECTRON_USER_DATA or cwd>/data/attachments/
  *   --dry-run               只预览（默认）。不写磁盘、不写 DB。
@@ -172,7 +172,7 @@ function printHelp() {
   node ${me} --rollback <backup-file> [--db <path>] [--yes]
 
 选项：
-  --db                 指定 SQLite 文件路径，默认 data/nowen-note.db
+  --db                 指定 SQLite 文件路径，默认 data/super-note.db
   --attachments-dir    附件落盘目录，默认 data/attachments/
   --dry-run            只预览（默认）
   --apply              真正执行（先生成 .bak 备份；按笔记粒度做事务）
@@ -191,7 +191,7 @@ function resolveDbPath(cliPath) {
   if (cliPath) return path.resolve(cliPath);
   if (process.env.DB_PATH) return path.resolve(process.env.DB_PATH);
   const base = process.env.ELECTRON_USER_DATA || path.join(process.cwd(), "data");
-  return path.resolve(base, "nowen-note.db");
+  return path.resolve(base, "super-note.db");
 }
 
 function resolveAttachmentsDir(cliPath) {

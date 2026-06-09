@@ -95,7 +95,7 @@ const lowlight = createLowlight(common);
 //
 // 这是全局一次性补丁，使用 Symbol 防重复应用。
 // ---------------------------------------------------------------------------
-const RESOLVE_PATCHED = Symbol.for("nowen.pm.resolve.patched");
+const RESOLVE_PATCHED = Symbol.for("super.pm.resolve.patched");
 if (!(ProseMirrorNode.prototype as any)[RESOLVE_PATCHED]) {
   const originalResolve = ProseMirrorNode.prototype.resolve;
   ProseMirrorNode.prototype.resolve = function patchedResolve(pos: number) {
@@ -651,7 +651,7 @@ const IndentExtension = Extension.create({
  */
 function createKeyboardExtension(flushSaveRef: React.MutableRefObject<() => void>) {
   return Extension.create({
-    name: "nowenKeyboard",
+    name: "superKeyboard",
     addKeyboardShortcuts() {
       const editor = this.editor as any;
 
@@ -2797,7 +2797,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
   /**
    * 桌面端格式菜单桥（macOS 原生菜单 / 快捷键 → Tiptap）
    * ----------------------------------------------------------------
-   * 监听 window "nowen:format" 自定义事件，由 `useDesktopMenuBridge`（App.tsx）
+   * 监听 window "super:format" 自定义事件，由 `useDesktopMenuBridge`（App.tsx）
    * 在收到 Electron 主进程 "menu:format" IPC 时派发。payload 形如：
    *   { mark: "bold" | "italic" | "underline" | "strike" | "code" }
    *   { node: "heading", level: 1..6 }
@@ -2840,8 +2840,8 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         chain.setParagraph().run();
       }
     };
-    window.addEventListener("nowen:format", handler as EventListener);
-    return () => window.removeEventListener("nowen:format", handler as EventListener);
+    window.addEventListener("super:format", handler as EventListener);
+    return () => window.removeEventListener("super:format", handler as EventListener);
   }, [editor, editable]);
 
   /**
@@ -2855,7 +2855,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
    *   - 浅比较去重：大多数键盘输入不改变格式状态，去重后 IPC 调用量降至 ~0。
    *   - 编辑器卸载 / 失焦时发 null，让主进程清空所有 checked（避免"残影"）。
    *
-   * 仅在 Electron 环境下有效；Web / 移动端 window.nowenDesktop 不存在，直接短路。
+   * 仅在 Electron 环境下有效；Web / 移动端 window.superDesktop 不存在，直接短路。
    *
    * Markdown 模式下 TiptapEditor 根本没挂载，自然不会上报——符合语义：
    * 菜单 checked 反映的始终是"当前正在编辑的那个上下文"。MD 未来若需要可以
@@ -3270,8 +3270,8 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
   // 用 CustomEvent 而不是把 setSearchOpen 提到外部，是为了避免改 TiptapEditor 的对外接口。
   useEffect(() => {
     const onOpen = () => setSearchOpen(true);
-    window.addEventListener("nowen:open-search", onOpen);
-    return () => window.removeEventListener("nowen:open-search", onOpen);
+    window.addEventListener("super:open-search", onOpen);
+    return () => window.removeEventListener("super:open-search", onOpen);
   }, []);
 
   if (!editor) return null;
@@ -4067,7 +4067,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
                           setAttachmentPreview(null);
                           // 触发笔记内容刷新：让外层 EditorPane 拉一次最新 note。
                           try {
-                            window.dispatchEvent(new CustomEvent("nowen:note-updated", { detail: { noteId: res.note.id } }));
+                            window.dispatchEvent(new CustomEvent("super:note-updated", { detail: { noteId: res.note.id } }));
                           } catch { /* ignore */ }
                         } catch (err: any) {
                           console.error("Replace docx failed:", err);

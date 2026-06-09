@@ -1,7 +1,7 @@
 /**
  * electron-builder 配置 —— **Lite 发行版**（无内置 backend）。
  *
- * 适用场景：只想连接远端/局域网 Nowen 服务器的用户，不需要本机自带 SQLite 后端。
+ * 适用场景：只想连接远端/局域网 Super 服务器的用户，不需要本机自带 SQLite 后端。
  * 相较 full 版：
  *   - 不打包 backend/dist + backend/node_modules + 不校验 better-sqlite3 的原生 ABI
  *   - 安装体积大幅缩小（~70MB → ~25MB 量级，实际以产物为准）
@@ -13,7 +13,7 @@
  *   - 产物文件名加 "-lite" 后缀：便于分发与识别
  *
  * 运行时识别 lite 的两种冗余手段：
- *   1) extraMetadata 把 nowenLiteOnly=true 注入 app.asar 内的 package.json
+ *   1) extraMetadata 把 superLiteOnly=true 注入 app.asar 内的 package.json
  *   2) 主进程 isLiteOnlyBuild() 另行判定 `backend/dist/index.js` 是否存在（更可靠）
  *   任一命中即认为是 lite-only 包。
  *
@@ -23,23 +23,23 @@ const path = require("path");
 const os = require("os");
 
 // full 配置里的环境变量 / 路径策略保持一致（产物可外迁到 %TEMP%，避免 IDE 监听锁）
-const OUT_DIR = process.env.NOWEN_BUILD_OUT
-  ? path.join(os.tmpdir(), "nowen-note-lite-build")
+const OUT_DIR = process.env.SUPER_BUILD_OUT
+  ? path.join(os.tmpdir(), "super-note-lite-build")
   : "dist-electron-lite";
 
 // rcedit 跳过开关（与 full 同）
-const SKIP_RCEDIT = process.env.NOWEN_SKIP_RCEDIT === "1";
+const SKIP_RCEDIT = process.env.SUPER_SKIP_RCEDIT === "1";
 const SIGN_AND_EDIT_EXECUTABLE = !SKIP_RCEDIT;
 
 // Linux 元信息（与 full 同；仅 synopsis/description 变更以区分 lite）
 const LINUX_MAINTAINER =
-  process.env.NOWEN_LINUX_MAINTAINER || "Nowen <noreply@nowen.local>";
-const LINUX_VENDOR = process.env.NOWEN_LINUX_VENDOR || "Nowen";
+  process.env.SUPER_LINUX_MAINTAINER || "Super <noreply@super.local>";
+const LINUX_VENDOR = process.env.SUPER_LINUX_VENDOR || "Super";
 
 module.exports = {
   // appId 加 .lite 后缀 —— 关键：避免与 full 安装包互覆盖、autoUpdate 串 feed
-  appId: "com.nowen.note.lite",
-  productName: "Nowen Note Lite",
+  appId: "com.super.note.lite",
+  productName: "Super Note Lite",
 
   /**
    * 没有 backend 就不跑 better-sqlite3 的 ABI 校验。留一个 beforeBuild 只做前端产物存在性检查。
@@ -65,12 +65,12 @@ module.exports = {
   electronLanguages: ["en-US", "zh-CN"],
 
   /**
-   * 把 `nowenLiteOnly: true` 合并进 app.asar 内的 package.json。
+   * 把 `superLiteOnly: true` 合并进 app.asar 内的 package.json。
    * 除此之外 electron-builder 还会顺带把版本号等元信息同步 —— 这里只补一个自定义字段，
    * 不覆盖 name/version/main 等关键字段。
    */
   extraMetadata: {
-    nowenLiteOnly: true,
+    superLiteOnly: true,
   },
 
   /**
@@ -82,7 +82,7 @@ module.exports = {
     {
       provider: "github",
       owner: "cropflre",
-      repo: "nowen-note",
+      repo: "super-note",
       releaseType: "release",
       channel: "lite",
     },
@@ -148,7 +148,7 @@ module.exports = {
     signDlls: false,
     signingHashAlgorithms: ["sha256"],
     verifyUpdateCodeSignature: true,
-    publisherName: "Nowen",
+    publisherName: "Super",
     // 产物名加 -lite 后缀，便于跟 full 分发包并排
     artifactName: "${productName}-${version}-lite-setup.${ext}",
   },
@@ -159,9 +159,9 @@ module.exports = {
     deleteAppDataOnUninstall: false,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
-    shortcutName: "Nowen Note Lite",
-    // 关键：独立安装目录，避免与 full 的 "Nowen Note" 相互覆盖
-    // 默认 %LOCALAPPDATA%\Programs\Nowen Note Lite
+    shortcutName: "Super Note Lite",
+    // 关键：独立安装目录，避免与 full 的 "Super Note" 相互覆盖
+    // 默认 %LOCALAPPDATA%\Programs\Super Note Lite
   },
   portable: {
     artifactName: "${productName}-${version}-lite-portable.${ext}",
@@ -192,13 +192,13 @@ module.exports = {
     mimeTypes: ["text/markdown", "text/plain"],
     maintainer: LINUX_MAINTAINER,
     vendor: LINUX_VENDOR,
-    synopsis: "Nowen Note (Lite) — remote-only client",
+    synopsis: "Super Note (Lite) — remote-only client",
     description:
-      "Nowen Note Lite — 仅包含前端客户端的轻量发行版，需连接远端 Nowen Note 服务器；安装体积更小，启动更快。",
+      "Super Note Lite — 仅包含前端客户端的轻量发行版，需连接远端 Super Note 服务器；安装体积更小，启动更快。",
     desktop: {
       entry: {
-        StartupWMClass: "Nowen Note Lite",
-        Keywords: "note;markdown;editor;nowen;lite;",
+        StartupWMClass: "Super Note Lite",
+        Keywords: "note;markdown;editor;super;lite;",
       },
     },
     artifactName: "${productName}-${version}-lite.${ext}",

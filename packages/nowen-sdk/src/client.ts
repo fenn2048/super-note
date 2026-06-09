@@ -1,7 +1,7 @@
 /**
- * Nowen Note SDK 客户端
+ * Super Note SDK 客户端
  *
- * 完整封装 Nowen Note 后端所有 REST API，支持：
+ * 完整封装 Super Note 后端所有 REST API，支持：
  * - 笔记本/笔记/标签/任务/思维导图/日记 CRUD
  * - AI 写作助手 + 知识库问答
  * - 全文搜索
@@ -11,7 +11,7 @@
  */
 
 import type {
-  NowenConfig, Notebook, CreateNotebookParams, UpdateNotebookParams,
+  SuperConfig, Notebook, CreateNotebookParams, UpdateNotebookParams,
   Note, NoteSummary, ListNotesParams, CreateNoteParams, UpdateNoteParams,
   Tag, CreateTagParams,
   Task, TaskStats, ListTasksParams, CreateTaskParams, UpdateTaskParams,
@@ -20,7 +20,7 @@ import type {
   SearchResult, SystemSettings, ExportFormat,
 } from "./types.js";
 
-export class NowenClient {
+export class SuperClient {
   private baseUrl: string;
   private username: string;
   private password: string;
@@ -28,7 +28,7 @@ export class NowenClient {
   private token: string | null = null;
   private _fetch: typeof fetch;
 
-  constructor(config: NowenConfig) {
+  constructor(config: SuperConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.username = config.username;
     this.password = config.password;

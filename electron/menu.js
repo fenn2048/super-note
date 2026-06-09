@@ -1,6 +1,6 @@
 // electron/menu.js
 // 构建跨平台原生菜单；菜单项的 accelerator 即作为窗口快捷键生效。
-// 通过 IPC 把动作透传给 renderer（frontend 侦听 window.nowenDesktop.on("menu:xxx", ...)）。
+// 通过 IPC 把动作透传给 renderer（frontend 侦听 window.superDesktop.on("menu:xxx", ...)）。
 //
 // 本文件按 Apple Human Interface Guidelines 排列 macOS 菜单顺序：
 //   App → 文件 → 编辑 → 格式 → 视图 → 窗口 → 帮助

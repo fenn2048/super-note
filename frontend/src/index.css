@@ -1604,7 +1604,7 @@ body.density-compact {
  *   1) 编辑器内的 MathInline / MathBlock NodeView（`.math-node-*`、`.math-view-*`）
  *   2) 编辑器内编辑态的源码 + 实时预览（`.math-edit-*`）
  *   3) 分享页 MD / PM 路径的占位与异步注入（`.shared-math-*`）
- * KaTeX 自带的 CSS 在 lib 里按需 inject，这里只补 nowen 自定义的容器。
+ * KaTeX 自带的 CSS 在 lib 里按需 inject，这里只补 super 自定义的容器。
  * ========================================================================= */
 
 /* —— 编辑器内：math 节点视觉 —— */
@@ -2404,7 +2404,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 .dark .author-story-content strong {
   color: #a5b4fc; /* indigo-300，深色模式下加亮一档 */
 }
-/* 内联代码：让 nowen-note / 群名 QQ 号一类的标识更显眼 */
+/* 内联代码：让 super-note / 群名 QQ 号一类的标识更显眼 */
 .author-story-content :not(pre) > code {
   background: rgb(244 244 245); /* zinc-100 */
   color: rgb(99 102 241);

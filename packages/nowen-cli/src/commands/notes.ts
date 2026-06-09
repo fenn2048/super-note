@@ -9,7 +9,7 @@ export function registerNotesCommands(program: Command) {
     .command("notes")
     .description("笔记管理");
 
-  // nowen notes list
+  // super notes list
   notes
     .command("list")
     .description("列出笔记")
@@ -71,7 +71,7 @@ export function registerNotesCommands(program: Command) {
       }
     });
 
-  // nowen notes get <id>
+  // super notes get <id>
   notes
     .command("get <id>")
     .description("查看笔记内容")
@@ -99,7 +99,7 @@ export function registerNotesCommands(program: Command) {
       }
     });
 
-  // nowen notes create
+  // super notes create
   notes
     .command("create")
     .description("创建笔记")
@@ -126,7 +126,7 @@ export function registerNotesCommands(program: Command) {
       }
     });
 
-  // nowen notes update <id>
+  // super notes update <id>
   notes
     .command("update <id>")
     .description("更新笔记")
@@ -161,7 +161,7 @@ export function registerNotesCommands(program: Command) {
       }
     });
 
-  // nowen notes delete <id>
+  // super notes delete <id>
   notes
     .command("delete <id>")
     .description("删除笔记")

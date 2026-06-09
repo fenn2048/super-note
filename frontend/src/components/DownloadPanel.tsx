@@ -10,7 +10,7 @@
  * 数据源：
  *   - /api/releases/latest（后端代理 GitHub API，60s 缓存）。
  *   - 该接口返回的 assets[].browserDownloadUrl 形如
- *       https://github.com/cropflre/nowen-note/releases/download/v1.1.7/Nowen-Note-1.1.7.apk
+ *       https://github.com/cropflre/super-note/releases/download/v1.1.7/Super-Note-1.1.7.apk
  *     前端只做"在这条 URL 前面拼一段加速代理"的字符串变换，不再二次请求 GitHub。
  *
  * 加速源选择策略：
@@ -65,7 +65,7 @@ type MirrorSource =
 
 const MIRROR_SOURCES: MirrorSource[] = [
   // Gitee 镜像放第一位：国内用户最稳的兜底（自有仓库，速度可控）
-  { id: "gitee", label: "Gitee 镜像", kind: "gitee", owner: "cropflre", repo: "nowen-note" },
+  { id: "gitee", label: "Gitee 镜像", kind: "gitee", owner: "cropflre", repo: "super-note" },
   { id: "ghproxy", label: "ghproxy.net", kind: "proxy", prefix: "https://ghproxy.net/" },
   { id: "llkk", label: "gh.llkk.cc", kind: "proxy", prefix: "https://gh.llkk.cc/" },
   { id: "mirror", label: "mirror.ghproxy.com", kind: "proxy", prefix: "https://mirror.ghproxy.com/" },
@@ -95,7 +95,7 @@ type AssetCategory =
   | "android"       // APK
   | "fpk"           // 飞牛 NAS
   | "upk"           // 绿联 NAS
-  | "clipper"       // 浏览器扩展 zip（nowen-clipper）
+  | "clipper"       // 浏览器扩展 zip（super-clipper）
   | "other";
 
 interface Asset {
@@ -118,8 +118,8 @@ function categorize(name: string): AssetCategory {
   if (lower.endsWith(".apk")) return "android";
   if (lower.endsWith(".fpk")) return "fpk";
   if (lower.endsWith(".upk")) return "upk";
-  // clipper 浏览器扩展：发布脚本里包名形如 nowen-clipper-x.y.z.zip
-  if (lower.startsWith("nowen-clipper") && lower.endsWith(".zip")) return "clipper";
+  // clipper 浏览器扩展：发布脚本里包名形如 super-clipper-x.y.z.zip
+  if (lower.startsWith("super-clipper") && lower.endsWith(".zip")) return "clipper";
   return "other";
 }
 
@@ -181,7 +181,7 @@ const GROUP_ORDER: Array<{
 ];
 
 const DOCKER_RUN_COMMAND =
-  "docker run -d --name nowen-note -p 3001:3001 -v ~/nowen-data:/app/data cropflre/nowen-note:latest";
+  "docker run -d --name super-note -p 3001:3001 -v ~/super-data:/app/data cropflre/super-note:latest";
 
 export default function DownloadPanel() {
   const { t } = useTranslation();
@@ -375,7 +375,7 @@ export default function DownloadPanel() {
           </div>
           <div className="text-xs text-amber-700/80 dark:text-amber-400/80 break-all">{errMsg}</div>
           <a
-            href="https://github.com/cropflre/nowen-note/releases/latest"
+            href="https://github.com/cropflre/super-note/releases/latest"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200 hover:underline"

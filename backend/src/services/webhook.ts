@@ -1,5 +1,5 @@
 /**
- * Nowen Note Webhook 事件系统
+ * Super Note Webhook 事件系统
  *
  * 支持注册 Webhook URL，当指定事件发生时自动推送通知。
  * 事件类型：
@@ -163,10 +163,10 @@ class WebhookDispatcher {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Nowen-Event": event,
-            "X-Nowen-Signature": signature ? `sha256=${signature}` : "",
-            "X-Nowen-Delivery": deliveryId,
-            "User-Agent": "Nowen-Note-Webhook/1.0",
+            "X-Super-Event": event,
+            "X-Super-Signature": signature ? `sha256=${signature}` : "",
+            "X-Super-Delivery": deliveryId,
+            "User-Agent": "Super-Note-Webhook/1.0",
           },
           body: payload,
           signal: controller.signal,

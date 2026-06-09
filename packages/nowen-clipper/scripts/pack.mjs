@@ -2,7 +2,7 @@
 /**
  * 打包扩展为 zip（用于上传 Chrome Web Store 或分发）。
  * 输入：dist/ 构建产物
- * 输出：releases/nowen-clipper-<version>.zip
+ * 输出：releases/super-clipper-<version>.zip
  */
 import { mkdirSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync, renameSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -27,9 +27,9 @@ const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
 
 // 包名后缀策略：
 //   优先看 --browser=xxx CLI 参数（chrome/edge/firefox），允许显式覆盖。
-//   - chrome  → 无后缀          nowen-clipper-<v>.zip
-//   - edge    → -edge 后缀      nowen-clipper-<v>-edge.zip
-//   - firefox → -firefox 后缀   nowen-clipper-<v>-firefox.zip
+//   - chrome  → 无后缀          super-clipper-<v>.zip
+//   - edge    → -edge 后缀      super-clipper-<v>-edge.zip
+//   - firefox → -firefox 后缀   super-clipper-<v>-firefox.zip
 // 若没显式传 --browser，则回退到看 dist/manifest.json 的特征：
 //   有 browser_specific_settings.gecko 视作 firefox 包；否则当作 chrome。
 //   （edge 与 chrome 的 manifest 完全一致，无法靠 manifest 区分，这种情况下
@@ -53,7 +53,7 @@ else {
     // dist/manifest.json 不存在时，前面 dist 存在性检查已经处理过，这里忽略解析失败，按 Chrome 包名走。
   }
 }
-const zipName = `nowen-clipper-${pkg.version}${suffix}.zip`;
+const zipName = `super-clipper-${pkg.version}${suffix}.zip`;
 const zipPath = join(out, zipName);
 
 const zip = new JSZip();

@@ -19,11 +19,11 @@
  *     → 提示用户"恢复未保存的修改"
  *   - 一旦保存成功（saveInflight 收到 200 + 新 version）立即清掉对应草稿
  *
- * 存储 key: "nowen-draft-{noteId}"
+ * 存储 key: "super-draft-{noteId}"
  */
 
-const DRAFT_KEY_PREFIX = "nowen-draft-";
-const DRAFT_INDEX_KEY = "nowen-draft-index"; // 记录所有 draft noteId，便于全局清理
+const DRAFT_KEY_PREFIX = "super-draft-";
+const DRAFT_INDEX_KEY = "super-draft-index"; // 记录所有 draft noteId，便于全局清理
 /** 单条草稿最大存活时间：30 天（超出按"用户已经放弃"处理） */
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 

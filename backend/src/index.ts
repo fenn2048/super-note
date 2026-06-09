@@ -182,7 +182,7 @@ app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
 app.get("/api/settings", (c) => {
   const db = getDb();
   const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled'").all() as { key: string; value: string }[];
-  const result: Record<string, string> = { site_title: "love-write", site_favicon: "", editor_font_family: "", debug_files_query: "false", web_ui_enabled: "true" };
+  const result: Record<string, string> = { site_title: "ark-notes", site_favicon: "", editor_font_family: "", debug_files_query: "false", web_ui_enabled: "true" };
   for (const row of rows) {
     result[row.key] = row.value;
   }
@@ -578,7 +578,7 @@ try {
   console.warn("[init] startEmbeddingWorker failed:", e);
 }
 
-console.log(`🚀 love-write API running on http://localhost:${port}`);
+console.log(`🚀 ark-notes API running on http://localhost:${port}`);
 console.log(`📖 OpenAPI 文档: http://localhost:${port}/api/openapi.json`);
 
 // @hono/node-server 的 serve 返回底层 http.Server；拿到后挂 WebSocket

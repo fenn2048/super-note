@@ -456,8 +456,8 @@ export default function MindMapCenter() {
       setEditingNodeId(null);
       loadMaps();
     };
-    window.addEventListener("nowen:workspace-changed", onWs);
-    return () => window.removeEventListener("nowen:workspace-changed", onWs);
+    window.addEventListener("super:workspace-changed", onWs);
+    return () => window.removeEventListener("super:workspace-changed", onWs);
   }, [loadMaps]);
 
   // 选择一个导图
@@ -931,7 +931,7 @@ export default function MindMapCenter() {
 
     const content = buildXmindContent(result.data, title);
     const contentJson = JSON.stringify(content);
-    const metadata = JSON.stringify({ creator: { name: "nowen-note", version: "1.0.0" } });
+    const metadata = JSON.stringify({ creator: { name: "super-note", version: "1.0.0" } });
     const manifest = JSON.stringify({ "file-entries": { "content.json": {}, "metadata.json": {} } });
 
     // 使用简易 ZIP 打包（无压缩），xmind 本质是 ZIP

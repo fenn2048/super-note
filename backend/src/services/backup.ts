@@ -1,5 +1,5 @@
 /**
- * Nowen Note 数据备份与恢复系统
+ * Super Note 数据备份与恢复系统
  *
  * 设计原则（P0/P1 重构后）：
  *  1. **真·全量备份**：full 备份是 zip 包，内容含
@@ -696,7 +696,7 @@ export class BackupManager {
     const id = crypto.randomUUID();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const ext = type === "full" ? ".zip" : ".bak";
-    const filename = `nowen-backup-${type}-${timestamp}${ext}`;
+    const filename = `super-backup-${type}-${timestamp}${ext}`;
     const backupPath = path.join(this.backupDir, filename);
 
     try {
@@ -786,7 +786,7 @@ export class BackupManager {
     const zip = new JSZip();
 
     // 1) 临时 .db 快照
-    const tmpDb = path.join(os.tmpdir(), `nowen-fullbk-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`);
+    const tmpDb = path.join(os.tmpdir(), `super-fullbk-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`);
     try {
       await db.backup(tmpDb);
       zip.file("db.sqlite", fs.readFileSync(tmpDb));
@@ -915,7 +915,7 @@ export class BackupManager {
    *   4. .zip 还会进一步解析 meta.json、比对 formatVersion / schemaVersion，
    *      形式非法直接拒绝（与 restoreFromZip 的前置检查语义一致，避免无法恢复
    *      的坏包进库）；
-   *   5. 生成的文件名固定为 `nowen-backup-<type>-imported-<ts>.<ext>`，
+   *   5. 生成的文件名固定为 `super-backup-<type>-imported-<ts>.<ext>`，
    *      强制前缀"imported"让管理员在列表里一眼区分"这份是外部导入的"。
    *
    * 元信息：
@@ -966,7 +966,7 @@ export class BackupManager {
       this.ensureDir();
       const tmp = path.join(
         this.backupDir,
-        `.nowen-ingest-probe-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
+        `.super-ingest-probe-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
       );
       fs.writeFileSync(tmp, bytes);
       try {
@@ -1010,11 +1010,11 @@ export class BackupManager {
       const zip = await JSZip.loadAsync(bytes);
       const metaFile = zip.file("meta.json");
       if (!metaFile) {
-        throw new Error(".zip 内缺少 meta.json，非 nowen-note 全量备份格式");
+        throw new Error(".zip 内缺少 meta.json，非 super-note 全量备份格式");
       }
       const dbFile = zip.file("db.sqlite");
       if (!dbFile) {
-        throw new Error(".zip 内缺少 db.sqlite，非 nowen-note 全量备份格式");
+        throw new Error(".zip 内缺少 db.sqlite，非 super-note 全量备份格式");
       }
       let meta: {
         formatVersion?: number;
@@ -1033,7 +1033,7 @@ export class BackupManager {
           `无法导入：备份格式版本太高。`,
           `  备份调用的格式版本：${meta.formatVersion}`,
           `  当前程序支持的最高格式版本：${BACKUP_FORMAT_VERSION}`,
-          `  请升级 nowen-note 到该备份产生时的版本（或更新）后再导入。`,
+          `  请升级 super-note 到该备份产生时的版本（或更新）后再导入。`,
         ].join("\n"),
       );
     }
@@ -1046,7 +1046,7 @@ export class BackupManager {
     // —— 3. 落盘 + 生成 meta.json
     this.ensureDir();
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const destFilename = `nowen-backup-${type}-imported-${ts}${extLower}`;
+    const destFilename = `super-backup-${type}-imported-${ts}${extLower}`;
     const destPath = path.join(this.backupDir, destFilename);
 
     fs.writeFileSync(destPath, bytes);
@@ -1127,7 +1127,7 @@ export class BackupManager {
           `无法恢复：备份格式版本高于当前程序。`,
           `  备份格式版本：${meta.formatVersion}（备份产生时间 ${meta.createdAt || "unknown"}）`,
           `  当前程序支持的最高格式版本：${BACKUP_FORMAT_VERSION}`,
-          `  请升级 nowen-note 到该备份产生时的版本或更新后再恢复；`,
+          `  请升级 super-note 到该备份产生时的版本或更新后再恢复；`,
           `  若仅需从该备份拼选数据，可在 https://github.com/ 查看项目 Releases 页获取对应版本。`,
         ].join("\n"),
       );
@@ -1146,8 +1146,8 @@ export class BackupManager {
           `  当前程序支持的最高 schema 版本：${codeMaxSchema}`,
           `  备份产生时间：${meta.createdAt || "unknown"}`,
           ``,
-          `原因：该备份是从更新版本的 nowen-note 产生的，错误地被灌到了旧程序。`,
-          `解决方案：升级 nowen-note 到与该备份同版或更新后再试。`,
+          `原因：该备份是从更新版本的 super-note 产生的，错误地被灌到了旧程序。`,
+          `解决方案：升级 super-note 到与该备份同版或更新后再试。`,
           `提示：不要手动修改 meta.json 来绕过此检查，将造成数据不一致。`,
         ].join("\n"),
       );
@@ -1170,7 +1170,7 @@ export class BackupManager {
       // 文件名加 crypto 随机串避免两次并发 dryRun 撞名。
       const tmpDb = path.join(
         this.backupDir,
-        `.nowen-dryrun-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
+        `.super-dryrun-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
       );
       fs.writeFileSync(tmpDb, await dbFile.async("nodebuffer"));
       try {
@@ -1234,7 +1234,7 @@ export class BackupManager {
     const { getDbPath, closeDb } = await import("../db/schema.js");
     const tmpDb = path.join(
       this.backupDir,
-      `.nowen-restore-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
+      `.super-restore-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
     );
     fs.writeFileSync(tmpDb, await dbFile.async("nodebuffer"));
 
@@ -1611,7 +1611,7 @@ export class BackupManager {
     const tooLarge = stat.size > EMAIL_ATTACHMENT_LIMIT;
 
     const lines = [
-      `这是一封由 nowen-note 自动发送的备份完成通知。`,
+      `这是一封由 super-note 自动发送的备份完成通知。`,
       ``,
       `备份文件：${filename}`,
       `大小：${sizeMB} MB`,
@@ -1634,7 +1634,7 @@ export class BackupManager {
 
     const result = await sendMail({
       to,
-      subject: `[nowen-note] 自动备份 ${filename}`,
+      subject: `[super-note] 自动备份 ${filename}`,
       text: lines.join("\n"),
       attachments,
     });
@@ -1762,7 +1762,7 @@ export class BackupManager {
         return;
       }
       const lines = [
-        `nowen-note 备份链路连续失败 ${this.health.consecutiveFailures} 次，已进入降级状态。`,
+        `super-note 备份链路连续失败 ${this.health.consecutiveFailures} 次，已进入降级状态。`,
         ``,
         `最近失败时间：${this.health.lastFailureAt || new Date().toISOString()}`,
         `失败原因：${reason}`,
@@ -1773,7 +1773,7 @@ export class BackupManager {
       ];
       const result = await sendMail({
         to: cfg.emailTo,
-        subject: `[nowen-note] 备份连续失败告警（${this.health.consecutiveFailures} 次）`,
+        subject: `[super-note] 备份连续失败告警（${this.health.consecutiveFailures} 次）`,
         text: lines.join("\n"),
       });
       if (result.success) {

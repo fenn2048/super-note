@@ -8,7 +8,7 @@ export function registerAICommands(program: Command) {
     .command("ai")
     .description("AI 功能");
 
-  // nowen ai ask <question>
+  // super ai ask <question>
   ai
     .command("ask <question>")
     .description("知识库问答")
@@ -33,7 +33,7 @@ export function registerAICommands(program: Command) {
       }
     });
 
-  // nowen ai process
+  // super ai process
   ai
     .command("process")
     .description("AI 文本处理")
@@ -58,7 +58,7 @@ export function registerAICommands(program: Command) {
       }
     });
 
-  // nowen ai stats
+  // super ai stats
   ai
     .command("stats")
     .description("知识库统计")
@@ -76,7 +76,7 @@ export function registerAICommands(program: Command) {
       }
     });
 
-  // nowen ai models
+  // super ai models
   ai
     .command("models")
     .description("列出可用 AI 模型")

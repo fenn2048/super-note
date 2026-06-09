@@ -456,20 +456,20 @@ if (typeof window !== "undefined" && isNativePlatform()) {
       const extra = action.notification.extra;
       if (extra) {
         if (extra.sourceType && extra.sourceId) {
-          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+          sessionStorage.setItem("super:pending-navigate", JSON.stringify({
             sourceType: extra.sourceType,
             sourceId: extra.sourceId
           }));
-          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+          window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
         } else if (extra.taskId) {
-          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+          sessionStorage.setItem("super:pending-navigate", JSON.stringify({
             sourceType: "task",
             sourceId: extra.taskId
           }));
-          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+          window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
         }
       } else {
-        window.dispatchEvent(new CustomEvent("nowen:navigate-to-tasks"));
+        window.dispatchEvent(new CustomEvent("super:navigate-to-tasks"));
       }
     });
   } catch (err) {

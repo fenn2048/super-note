@@ -54,7 +54,7 @@ import { useUserPreferences } from "@/hooks/useUserPreferences";
 // ---------------------------------------------------------------------------
 // 编辑器模式切换（MD vs Tiptap）
 // ---------------------------------------------------------------------------
-// URL `?md=1|0` 强制；否则读 localStorage["nowen.editor_mode"]。
+// URL `?md=1|0` 强制；否则读 localStorage["super.editor_mode"]。
 // 读写协议与工具：frontend/src/lib/editorMode.ts
 // 切换完整流程：docs/editor-mode-switch.md
 //
@@ -62,7 +62,7 @@ import { useUserPreferences } from "@/hooks/useUserPreferences";
 //   顶栏的 `MD / RTE` 徽标按钮对普通用户隐藏 —— 绝大多数人用不到双引擎，
 //   按钮占位 + tooltip 反而造成困惑。双引擎**本身并没有删除**：
 //     - `?md=1` / `?md=0` URL 参数仍然生效（给高级用户和自动化测试留口子）
-//     - `localStorage["nowen.editor_mode"]` 仍然被读取
+//     - `localStorage["super.editor_mode"]` 仍然被读取
 //     - toggleEditorMode 完整切换协议保留，未来若把入口迁到设置页，一行开关即可恢复
 //   如要在开发期临时显示按钮，把下方常量改为 true；正式发布请保持 false。
 const SHOW_EDITOR_MODE_TOGGLE = false;
@@ -640,8 +640,8 @@ export default function EditorPane() {
   /** 当前登录用户信息，用于 awareness 显示本人名字与颜色 */
   const [selfUser, setSelfUser] = useState<{ userId: string; username: string } | null>(() => {
     try {
-      const cachedId = localStorage.getItem("nowen-self-userid");
-      const cachedName = localStorage.getItem("nowen-self-username");
+      const cachedId = localStorage.getItem("super-self-userid");
+      const cachedName = localStorage.getItem("super-self-username");
       if (cachedId && cachedName) return { userId: cachedId, username: cachedName };
     } catch {}
     return null;
@@ -653,8 +653,8 @@ export default function EditorPane() {
       .then((me: any) => {
         if (cancelled || !me?.id) return;
         try {
-          localStorage.setItem("nowen-self-userid", me.id);
-          localStorage.setItem("nowen-self-username", me.username || me.id);
+          localStorage.setItem("super-self-userid", me.id);
+          localStorage.setItem("super-self-username", me.username || me.id);
         } catch {}
         setSelfUser({ userId: me.id, username: me.username || me.id });
       })
@@ -1743,11 +1743,11 @@ export default function EditorPane() {
             </span>
           </div>
           {/* 搜索（查找替换）：移动端高频操作上提到顶部，方便点击；
-              通过自定义事件 'nowen:open-search' 触发 TiptapEditor 内部的 SearchReplacePanel，
+              通过自定义事件 'super:open-search' 触发 TiptapEditor 内部的 SearchReplacePanel，
               避免把 TiptapEditor 的内部 state 提升到外部、保持组件接口干净。 */}
           <Button
             variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-            onClick={() => window.dispatchEvent(new CustomEvent('nowen:open-search'))}
+            onClick={() => window.dispatchEvent(new CustomEvent('super:open-search'))}
             aria-label={t('editor.searchInNote')}
           >
             <Search size={17} />

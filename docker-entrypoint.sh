@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# nowen-note 容器启动脚本
+# super-note 容器启动脚本
 # -----------------------------------------------------------------------------
 # 职责：让镜像"开箱即用"——用户不必手动配置 JWT_SECRET 就能启动，同时保持
 # 生产环境"不使用硬编码默认密钥"的安全基线。
@@ -24,27 +24,27 @@
 
 set -eu
 
-DATA_DIR="${NOWEN_DATA_DIR:-/app/data}"
+DATA_DIR="${SUPER_DATA_DIR:-/app/data}"
 SECRET_FILE="$DATA_DIR/.jwt_secret"
 
 mkdir -p "$DATA_DIR"
 
 # 版本号自动纠偏：
 # NAS / 应用市场更新容器时，有些平台会复用旧容器的环境变量，导致
-# NOWEN_APP_VERSION 仍停在旧版本（例如 1.1.4），而镜像里的前端/后端已经是新版本。
-# 启动时优先用镜像内 package.json 纠正 NOWEN_APP_VERSION；只有显式设置
-# NOWEN_APP_VERSION_OVERRIDE 时才允许外部强制覆盖。
-PACKAGED_APP_VERSION="$(node -e 'const fs=require("fs"); for (const [p,n] of [["/app/package.json","nowen-note"],["/app/backend/package.json","nowen-note-backend"]]) { try { const pkg=JSON.parse(fs.readFileSync(p,"utf8")); if (pkg.name===n && pkg.version) { process.stdout.write(String(pkg.version)); process.exit(0); } } catch (_) {} }' 2>/dev/null || true)"
-if [ -n "${NOWEN_APP_VERSION_OVERRIDE:-}" ]; then
-  NOWEN_APP_VERSION="$NOWEN_APP_VERSION_OVERRIDE"
-  export NOWEN_APP_VERSION
-  echo "[entrypoint] NOWEN_APP_VERSION forced by NOWEN_APP_VERSION_OVERRIDE=$NOWEN_APP_VERSION"
+# SUPER_APP_VERSION 仍停在旧版本（例如 1.1.4），而镜像里的前端/后端已经是新版本。
+# 启动时优先用镜像内 package.json 纠正 SUPER_APP_VERSION；只有显式设置
+# SUPER_APP_VERSION_OVERRIDE 时才允许外部强制覆盖。
+PACKAGED_APP_VERSION="$(node -e 'const fs=require("fs"); for (const [p,n] of [["/app/package.json","super-note"],["/app/backend/package.json","super-note-backend"]]) { try { const pkg=JSON.parse(fs.readFileSync(p,"utf8")); if (pkg.name===n && pkg.version) { process.stdout.write(String(pkg.version)); process.exit(0); } } catch (_) {} }' 2>/dev/null || true)"
+if [ -n "${SUPER_APP_VERSION_OVERRIDE:-}" ]; then
+  SUPER_APP_VERSION="$SUPER_APP_VERSION_OVERRIDE"
+  export SUPER_APP_VERSION
+  echo "[entrypoint] SUPER_APP_VERSION forced by SUPER_APP_VERSION_OVERRIDE=$SUPER_APP_VERSION"
 elif [ -n "$PACKAGED_APP_VERSION" ]; then
-  if [ "${NOWEN_APP_VERSION:-}" != "$PACKAGED_APP_VERSION" ]; then
-    echo "[entrypoint] NOWEN_APP_VERSION normalized: ${NOWEN_APP_VERSION:-<empty>} -> $PACKAGED_APP_VERSION"
+  if [ "${SUPER_APP_VERSION:-}" != "$PACKAGED_APP_VERSION" ]; then
+    echo "[entrypoint] SUPER_APP_VERSION normalized: ${SUPER_APP_VERSION:-<empty>} -> $PACKAGED_APP_VERSION"
   fi
-  NOWEN_APP_VERSION="$PACKAGED_APP_VERSION"
-  export NOWEN_APP_VERSION
+  SUPER_APP_VERSION="$PACKAGED_APP_VERSION"
+  export SUPER_APP_VERSION
 fi
 
 # 生成强随机密钥（64 字节 base64，约 88 字符）。优先 openssl，回退 /dev/urandom

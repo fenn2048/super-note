@@ -11,7 +11,7 @@ initCodeBlockTheme();
 // 默认展示日间模式：仅在用户首次打开、尚未存过主题偏好时写入 "light"。
 // 这样 next-themes 在 enableSystem 开启下也不会被系统暗色覆盖；
 // 用户在 ThemeToggle 里切到 system/dark 后，下次启动会沿用其选择。
-const THEME_KEY = "nowen-note-theme";
+const THEME_KEY = "super-note-theme";
 if (typeof localStorage !== "undefined" && !localStorage.getItem(THEME_KEY)) {
   localStorage.setItem(THEME_KEY, "light");
 }
@@ -19,7 +19,7 @@ if (typeof localStorage !== "undefined" && !localStorage.getItem(THEME_KEY)) {
 // Electron 平台标记：供 CSS 做平台定向样式（主要给 macOS hiddenInset 下的 drag region 用）。
 // 放在渲染之前，避免首帧看到侧栏被 Traffic Light 遮挡。
 try {
-  const desk: any = (window as any).nowenDesktop;
+  const desk: any = (window as any).superDesktop;
   if (desk && desk.isDesktop && typeof desk.platform === "string") {
     document.documentElement.setAttribute("data-electron", desk.platform);
   }

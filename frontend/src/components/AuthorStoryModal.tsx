@@ -148,7 +148,7 @@ export default function AuthorStoryModal({ open, onClose }: AuthorStoryModalProp
               <div className="text-center text-sm text-zinc-500 dark:text-zinc-400 py-8 space-y-3">
                 <div>{t("about.authorStoryLoadFailed", "作者感言加载失败")}</div>
                 <a
-                  href="https://github.com/cropflre/nowen-note/blob/main/AUTHOR_STORY.md"
+                  href="https://github.com/cropflre/super-note/blob/main/AUTHOR_STORY.md"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-accent-primary hover:underline"
@@ -173,7 +173,7 @@ export default function AuthorStoryModal({ open, onClose }: AuthorStoryModalProp
                           flex items-center justify-between shrink-0
                           bg-zinc-50 dark:bg-zinc-900/60">
             <a
-              href="https://github.com/cropflre/nowen-note"
+              href="https://github.com/cropflre/super-note"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-accent-primary

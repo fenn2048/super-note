@@ -24,7 +24,7 @@
  *     直接挂掉"。
  *
  * 鉴权扩展：
- *   - 可选环境变量 GITHUB_TOKEN（也兼容 NOWEN_GITHUB_TOKEN）：填了后
+ *   - 可选环境变量 GITHUB_TOKEN（也兼容 SUPER_GITHUB_TOKEN）：填了后
  *     authenticated quota 升到 5000/h，并支持私有仓库（虽然本项目是公开的）。
  *
  * 无需鉴权：与 /api/version 同级，贴着 health 挂在 JWT 之前。
@@ -35,18 +35,18 @@ import { Hono } from "hono";
 const router = new Hono();
 
 // 仓库地址硬编码；如果未来仓库重命名，这里改一次即可。
-const GITHUB_OWNER = process.env.NOWEN_RELEASE_OWNER || "cropflre";
-const GITHUB_REPO = process.env.NOWEN_RELEASE_REPO || "nowen-note";
+const GITHUB_OWNER = process.env.SUPER_RELEASE_OWNER || "cropflre";
+const GITHUB_REPO = process.env.SUPER_RELEASE_REPO || "super-note";
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
-// 可选 token：优先 GITHUB_TOKEN（与生态一致），其次 NOWEN_GITHUB_TOKEN
+// 可选 token：优先 GITHUB_TOKEN（与生态一致），其次 SUPER_GITHUB_TOKEN
 // （避免与同主机其他服务的 GITHUB_TOKEN 冲突时，运维有显式覆盖入口）。
-const GITHUB_TOKEN = (process.env.NOWEN_GITHUB_TOKEN || process.env.GITHUB_TOKEN || "").trim();
+const GITHUB_TOKEN = (process.env.SUPER_GITHUB_TOKEN || process.env.GITHUB_TOKEN || "").trim();
 
 // 缓存 TTL：成功 15min，失败 5min。允许通过环境变量按部署调优。
 // 选 15min 的依据：1h / 15min = 4 次/小时外呼，留 56 次余量给"用户手动刷新"。
-const CACHE_TTL_MS = parseTtl(process.env.NOWEN_RELEASE_CACHE_MS, 15 * 60_000);
-const FAIL_CACHE_TTL_MS = parseTtl(process.env.NOWEN_RELEASE_FAIL_CACHE_MS, 5 * 60_000);
+const CACHE_TTL_MS = parseTtl(process.env.SUPER_RELEASE_CACHE_MS, 15 * 60_000);
+const FAIL_CACHE_TTL_MS = parseTtl(process.env.SUPER_RELEASE_FAIL_CACHE_MS, 5 * 60_000);
 const FETCH_TIMEOUT_MS = 5_000;
 
 function parseTtl(raw: string | undefined, fallback: number): number {
@@ -57,7 +57,7 @@ function parseTtl(raw: string | undefined, fallback: number): number {
 }
 
 interface ReleaseAsset {
-  name: string;            // 文件名，如 "Nowen Note Setup 1.1.7.exe"
+  name: string;            // 文件名，如 "Super Note Setup 1.1.7.exe"
   size: number;            // 字节
   contentType: string;     // application/octet-stream 等
   browserDownloadUrl: string; // GitHub 直链

@@ -1,21 +1,21 @@
 /**
- * Nowen Note API 客户端
- * 封装对 Nowen Note 后端 REST API 的调用
+ * Super Note API 客户端
+ * 封装对 Super Note 后端 REST API 的调用
  */
 
-export interface NowenApiConfig {
+export interface SuperApiConfig {
   baseUrl: string;   // 例如 http://localhost:3001
   username: string;
   password: string;
 }
 
-export class NowenApiClient {
+export class SuperApiClient {
   private baseUrl: string;
   private username: string;
   private password: string;
   private token: string | null = null;
 
-  constructor(config: NowenApiConfig) {
+  constructor(config: SuperApiConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.username = config.username;
     this.password = config.password;

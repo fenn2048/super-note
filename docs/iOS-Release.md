@@ -1,6 +1,6 @@
 # iOS 发布指南（无 Mac 方案）
 
-> 适用于：Windows/Linux 开发者，想把 `nowen-note` 发到 App Store/TestFlight，但**没有 Mac 设备**。
+> 适用于：Windows/Linux 开发者，想把 `super-note` 发到 App Store/TestFlight，但**没有 Mac 设备**。
 >
 > 整体思路：**全部代码在 Windows 写，构建/签名/上传由 GitHub Actions 的 macOS runner 完成。**
 
@@ -18,7 +18,7 @@
 ### 2. 创建 App ID（在 https://developer.apple.com/account 网页操作，无需 Mac）
 
 - Identifiers → `+` → App IDs → App
-- Bundle ID 填 **`com.nowen.note`**（必须和 `frontend/capacitor.config.ts` 的 `appId` 一致）
+- Bundle ID 填 **`com.super.note`**（必须和 `frontend/capacitor.config.ts` 的 `appId` 一致）
 - Capabilities 至少勾选 Push Notifications（如果将来要推送）；其余按需
 
 ### 3. 创建签名证书（推荐：fastlane match，全自动；备选：Apple Configurator 手动）
@@ -124,7 +124,7 @@ GitHub 仓库 → Actions → `iOS Build & TestFlight` → Run workflow → 选�
 
 本地 Windows 跑 `npx cap sync ios` 必然报这个，**正常现象**——CocoaPods 是 Ruby 包，CI 的 macOS runner 自带，本地不需要装。
 
-### Q2: `xcodebuild: error: No profiles for 'com.nowen.note' were found`
+### Q2: `xcodebuild: error: No profiles for 'com.super.note' were found`
 
 Provisioning Profile 的 Bundle ID 跟 `capacitor.config.ts` 不一致。检查 Apple Developer 后台的 App ID 与 Profile 关联是否正确。
 

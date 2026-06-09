@@ -35,7 +35,7 @@ export const CODE_BLOCK_THEMES: CodeBlockThemeMeta[] = [
 
 export const DEFAULT_CODE_BLOCK_THEME: CodeBlockThemeId = "github-dark";
 
-const STORAGE_KEY = "nowen.codeBlockTheme";
+const STORAGE_KEY = "super.codeBlockTheme";
 
 export function getSavedCodeBlockTheme(): CodeBlockThemeId {
   try {
@@ -64,7 +64,7 @@ export function setCodeBlockTheme(theme: CodeBlockThemeId) {
   applyCodeBlockTheme(theme);
   // 广播，其它组件可订阅同步
   try {
-    window.dispatchEvent(new CustomEvent("nowen:codeblock-theme-change", { detail: theme }));
+    window.dispatchEvent(new CustomEvent("super:codeblock-theme-change", { detail: theme }));
   } catch {
     /* ignore */
   }

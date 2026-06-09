@@ -14,7 +14,7 @@
  *
  * 与现有体系的关系
  * ----------------------------------------------------------------------------
- * - 普通 token 仍存 localStorage["nowen-token"]（项目其它地方依赖它）。
+ * - 普通 token 仍存 localStorage["super-token"]（项目其它地方依赖它）。
  *   "快速登录"做的是把同一份 token 镜像保存到 Keystore，并加一道生物识别门。
  * - 启用前提：必须能拿到一个有效的 token（即用户刚密码登录成功）。
  * - 不启用 / 启用后又被关闭：完全等同于现状，零回归风险。
@@ -47,15 +47,15 @@ type BiometricModule = typeof import("@aparajita/capacitor-biometric-auth");
 // ============================================================================
 
 /** Secure storage 中保存 token 的 key（用专属前缀避免与其他业务冲突） */
-const SS_TOKEN_KEY = "nowen.quickLogin.token";
+const SS_TOKEN_KEY = "super.quickLogin.token";
 /** Secure storage 中保存"开关已开"标记的 key */
-const SS_ENABLED_KEY = "nowen.quickLogin.enabled";
+const SS_ENABLED_KEY = "super.quickLogin.enabled";
 /** Secure storage 中保存关联的服务器 URL（防止换服务器后用旧 token 串台） */
-const SS_SERVER_URL_KEY = "nowen.quickLogin.serverUrl";
+const SS_SERVER_URL_KEY = "super.quickLogin.serverUrl";
 /** Secure storage 中保存关联的用户名（仅展示用） */
-const SS_USERNAME_KEY = "nowen.quickLogin.username";
+const SS_USERNAME_KEY = "super.quickLogin.username";
 /** localStorage 中保存"已询问过用户是否启用"的标记，避免反复打扰 */
-const LS_ENROLL_ASKED_KEY = "nowen-quickLogin-asked";
+const LS_ENROLL_ASKED_KEY = "super-quickLogin-asked";
 
 // ============================================================================
 // 平台 / 插件加载
@@ -83,7 +83,7 @@ async function loadSecureStorage(): Promise<SecureStorageModule | null> {
       );
       // 设置一个项目专属 prefix，避免和其它库冲突
       try {
-        await mod.SecureStorage.setKeyPrefix("nowen_");
+        await mod.SecureStorage.setKeyPrefix("super_");
       } catch {
         /* 不致命 */
       }
@@ -339,9 +339,9 @@ export async function attemptQuickLogin(): Promise<QuickLoginAttemptResult> {
 
   try {
     await bio.BiometricAuth.authenticate({
-      reason: "解锁 Love Write",
+      reason: "解锁 星空笔记",
       cancelTitle: "改用密码登录",
-      androidTitle: "Love Write 快速登录",
+      androidTitle: "星空笔记 快速登录",
       androidSubtitle: "请验证你的指纹 / 人脸 / 锁屏密码",
       androidConfirmationRequired: false,
       allowDeviceCredential: true,

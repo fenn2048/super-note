@@ -9,7 +9,7 @@ export function registerTasksCommands(program: Command) {
     .command("tasks")
     .description("任务管理");
 
-  // nowen tasks list
+  // super tasks list
   tasks
     .command("list")
     .description("列出任务")
@@ -57,7 +57,7 @@ export function registerTasksCommands(program: Command) {
       }
     });
 
-  // nowen tasks stats
+  // super tasks stats
   tasks
     .command("stats")
     .description("任务统计")
@@ -76,7 +76,7 @@ export function registerTasksCommands(program: Command) {
       }
     });
 
-  // nowen tasks create
+  // super tasks create
   tasks
     .command("create <title>")
     .description("创建任务")
@@ -96,7 +96,7 @@ export function registerTasksCommands(program: Command) {
       }
     });
 
-  // nowen tasks toggle <id>
+  // super tasks toggle <id>
   tasks
     .command("toggle <id>")
     .description("切换任务完成状态")

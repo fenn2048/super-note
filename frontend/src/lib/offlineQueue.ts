@@ -13,7 +13,7 @@
  *   - flush 时遇 409 自动用 currentVersion 重试一次（复用 putWithReconcile 语义）；
  *   - 非 409 失败保留在队列里，下次再试。
  *
- * 存储 key: "nowen-offline-queue:v2:<server-scope>:<userId>"
+ * 存储 key: "super-offline-queue:v2:<server-scope>:<userId>"
  * 格式: JSON 数组 OfflineQueueItem[]
  *
  * 关键：队列必须按「服务器/本地实例 + 用户」隔离。
@@ -45,10 +45,10 @@ export interface OfflineQueueItem {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const LEGACY_STORAGE_KEY = "nowen-offline-queue";
-const STORAGE_KEY_PREFIX = "nowen-offline-queue:v2";
-const LEGACY_LOCAL_ID_MAP_KEY = "nowen-offline-id-map";
-const LOCAL_ID_MAP_KEY_PREFIX = "nowen-offline-id-map:v2";
+const LEGACY_STORAGE_KEY = "super-offline-queue";
+const STORAGE_KEY_PREFIX = "super-offline-queue:v2";
+const LEGACY_LOCAL_ID_MAP_KEY = "super-offline-id-map";
+const LOCAL_ID_MAP_KEY_PREFIX = "super-offline-id-map:v2";
 /** 单条最大存活时间：7 天 */
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /** flush 间单条最大重试次数（超出后丢弃） */
@@ -97,11 +97,11 @@ function isLoopbackUrl(url: string): boolean {
 
 function getServerScope(): string {
   let server = "";
-  try { server = localStorage.getItem("nowen-server-url") || ""; } catch { /* ignore */ }
+  try { server = localStorage.getItem("super-server-url") || ""; } catch { /* ignore */ }
   const origin = typeof window !== "undefined" && window.location.origin.startsWith("http")
     ? window.location.origin
     : "";
-  const isDesktop = typeof window !== "undefined" && !!(window as any).nowenDesktop?.isDesktop;
+  const isDesktop = typeof window !== "undefined" && !!(window as any).superDesktop?.isDesktop;
 
   // 桌面 full 本地后端是 loopback + 动态端口，队列 key 必须稳定；远端/lite
   // 通常不是 loopback，仍按 URL 隔离，避免服务器之间串队列。
@@ -116,7 +116,7 @@ function getServerScope(): string {
 /** 当前登录上下文对应的队列 key：服务器/本地实例 + 用户 双维度隔离。 */
 export function getOfflineQueueStorageKey(): string {
   let token: string | null = null;
-  try { token = localStorage.getItem("nowen-token"); } catch { /* ignore */ }
+  try { token = localStorage.getItem("super-token"); } catch { /* ignore */ }
   return `${STORAGE_KEY_PREFIX}:${normalizeScopePart(getServerScope())}:${normalizeScopePart(decodeUserIdFromToken(token))}`;
 }
 

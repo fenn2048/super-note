@@ -13,11 +13,11 @@
  * 依赖：
  *   - Docker CLI（docker）需要在容器内可用
  *   - /var/run/docker.sock 需要挂载到容器
- *   - nowen-note-sensevoice 镜像需已构建
+ *   - super-note-sensevoice 镜像需已构建
  */
 
-const SENSEVOICE_CONTAINER = "nowen-note-sensevoice";
-const SENSEVOICE_IMAGE = "nowen-note-sensevoice:latest";
+const SENSEVOICE_CONTAINER = "super-note-sensevoice";
+const SENSEVOICE_IMAGE = "super-note-sensevoice:latest";
 const SENSEVOICE_URL = "http://sensevoice:8000/v1/audio/transcriptions";
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分钟空闲超时
 const STARTUP_TIMEOUT_MS = 60 * 1000;   // 容器启动最大等待时间
@@ -65,8 +65,8 @@ async function startContainer(): Promise<void> {
     execSync(`docker rm -f ${SENSEVOICE_CONTAINER} 2>/dev/null`, { timeout: 5000 });
   } catch { /* ignore */ }
 
-  // 启动新容器（连接到默认 compose 网络以便被 nowen-note 访问）
-  const networkName = process.env.SENSEVOICE_NETWORK || "nowen-note_default";
+  // 启动新容器（连接到默认 compose 网络以便被 super-note 访问）
+  const networkName = process.env.SENSEVOICE_NETWORK || "super-note_default";
   execSync(
     `docker run -d --name ${SENSEVOICE_CONTAINER} ` +
     `--network ${networkName} ` +

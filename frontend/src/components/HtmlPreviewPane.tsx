@@ -4,7 +4,7 @@
  * 两种渲染策略：
  *   1. **完整 HTML 文档**（以 `<!DOCTYPE` 或 `<html` 开头）：
  *      使用 `<iframe srcdoc>` 渲染，完全隔离样式，1:1 还原原始页面。
- *      这通常是 nowen-clipper 的「完全克隆」模式产出的内容。
+ *      这通常是 super-clipper 的「完全克隆」模式产出的内容。
  *
  *   2. **HTML 片段**（普通 clipper 剪藏）：
  *      使用 DOMPurify + `dangerouslySetInnerHTML` 渲染，
@@ -115,7 +115,7 @@ function prepareIframeHtml(html: string): string {
       document.body ? document.body.scrollHeight : 0,
       document.documentElement ? document.documentElement.scrollHeight : 0
     );
-    window.parent.postMessage({ type: '__nowen_iframe_height__', height: h }, '*');
+    window.parent.postMessage({ type: '__super_iframe_height__', height: h }, '*');
   }
   // 初始 + 图片加载后 + resize
   window.addEventListener('load', function() { setTimeout(reportHeight, 100); });

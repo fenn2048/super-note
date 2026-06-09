@@ -20,7 +20,7 @@ import type { Context } from "hono";
 
 // ========== JWT Secret 初始化 ==========
 
-const DEV_FALLBACK_SECRET = "nowen-note-secret-key-change-in-production";
+const DEV_FALLBACK_SECRET = "super-note-secret-key-change-in-production";
 
 function resolveJwtSecret(): string {
   const fromEnv = process.env.JWT_SECRET;
@@ -69,7 +69,7 @@ function resolveShareJwtSecret(): string {
   const explicit = process.env.SHARE_JWT_SECRET;
   if (explicit && explicit.length >= 16) return explicit;
   // 用 HMAC(JWT_SECRET, "share-token-v1") 派生，保证与登录 secret 不同
-  return crypto.createHmac("sha256", JWT_SECRET).update("nowen-share-token-v1").digest("hex");
+  return crypto.createHmac("sha256", JWT_SECRET).update("super-share-token-v1").digest("hex");
 }
 
 export const SHARE_JWT_SECRET: string = resolveShareJwtSecret();

@@ -1,8 +1,8 @@
-# nowen-note
+# super-note
 
 > A self-hosted private knowledge base, inspired by Synology Note Station.
 >
-> 自托管的私有知识库。[中文 README](./README.md) · [Author's Note](./AUTHOR_STORY.en.md) · [Live Demo](https://note.nowen.cn/)
+> 自托管的私有知识库。[中文 README](./README.md) · [Author's Note](./AUTHOR_STORY.en.md) · [Live Demo](https://note.super.cn/)
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/Node-20%2B-green.svg)](https://nodejs.org/)
@@ -17,7 +17,7 @@
 - **File manager**: Image thumbnails (sharp webp at 240/480/960, ~100x bandwidth saving on dense galleries), "My uploads" view (referenced / unreferenced), orphan cleanup
 - **Automation**: Sandboxed plugin system, Webhooks, audit log, scheduled auto-backup
 - **Cross-platform**: Web / Electron (Win/macOS/Linux) / Android (Capacitor)
-- **Developer ecosystem**: MCP Server, TypeScript SDK, CLI, [browser clipper extension](https://chromewebstore.google.com/detail/nowen-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg), OpenAPI 3.0 — see [`packages/`](./packages)
+- **Developer ecosystem**: MCP Server, TypeScript SDK, CLI, [browser clipper extension](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg), OpenAPI 3.0 — see [`packages/`](./packages)
 
 ## Stack
 
@@ -41,7 +41,7 @@ React 18 · TypeScript · Vite 5 · Tiptap 3 · Tailwind · Hono 4 · SQLite(FTS
 
 Don't want to self-host yet? Try the official demo site maintained by the author:
 
-- URL: <https://note.nowen.cn/>
+- URL: <https://note.super.cn/>
 - Username: `demo`
 - Password: `demo123456`
 
@@ -54,8 +54,8 @@ Don't want to self-host yet? Try the official demo site maintained by the author
 ### Docker (recommended)
 
 ```bash
-git clone https://github.com/cropflre/nowen-note.git
-cd nowen-note
+git clone https://github.com/cropflre/super-note.git
+cd super-note
 docker-compose up -d
 ```
 
@@ -66,8 +66,8 @@ Open `http://<your-ip>:3001`.
 Requires Node.js 20+.
 
 ```bash
-git clone https://github.com/cropflre/nowen-note.git
-cd nowen-note
+git clone https://github.com/cropflre/super-note.git
+cd super-note
 npm run install:all
 npm run dev:backend   # backend on :3001
 npm run dev:frontend  # frontend on :5173
@@ -82,11 +82,11 @@ npm run electron:dev      # Electron dev
 npm run electron:build    # Package for Windows / macOS / Linux
 ```
 
-For Android, download the APK directly from [Releases](https://github.com/cropflre/nowen-note/releases), or build it yourself with `npx cap sync android && npx cap open android`.
+For Android, download the APK directly from [Releases](https://github.com/cropflre/super-note/releases), or build it yourself with `npx cap sync android && npx cap open android`.
 
 ### fnOS (one-click .fpk install)
 
-Grab the latest `nowen-note-x.y.z.fpk` from [Releases](https://github.com/cropflre/nowen-note/releases). On your fnOS NAS, open **App Center → Settings → Install app manually** and pick the file. After installation, click the "Nowen Note" icon on the desktop or open `http://<nas-ip>:3001` in your browser.
+Grab the latest `super-note-x.y.z.fpk` from [Releases](https://github.com/cropflre/super-note/releases). On your fnOS NAS, open **App Center → Settings → Install app manually** and pick the file. After installation, click the "Super Note" icon on the desktop or open `http://<nas-ip>:3001` in your browser.
 
 > The .fpk currently targets x86_64 fnOS only (`platform=x86`). To build it yourself, see [scripts/fpk/README.md](./scripts/fpk/README.md).
 
@@ -95,7 +95,7 @@ Grab the latest `nowen-note-x.y.z.fpk` from [Releases](https://github.com/cropfl
 | Env var | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3001` | Service port |
-| `DB_PATH` | `/app/data/nowen-note.db` | Database file path |
+| `DB_PATH` | `/app/data/super-note.db` | Database file path |
 | `OLLAMA_URL` | — | Local Ollama endpoint (optional) |
 
 Data persistence: mount **`/app/data`** from the container to the host (not `/data`). The image declares `VOLUME ["/app/data"]`, so mainstream NAS panels will prefill this path.
@@ -104,7 +104,7 @@ Backup policy: auto-backups are written to `/app/data/backups` by default, shari
 
 ## Documentation
 
-- Browser clipper extension (Chrome / Edge): [Chrome Web Store](https://chromewebstore.google.com/detail/nowen-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)
+- Browser clipper extension (Chrome / Edge): [Chrome Web Store](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)
 - Deployment guide (Local / Docker / Desktop / Mobile / Synology / UGREEN / QNAP / fnOS / ZSpace / ARM64): [docs/deployment.md](./docs/deployment.md)
 - fnOS .fpk packaging: [scripts/fpk/README.md](./scripts/fpk/README.md)
 - ARM64 details: [docs/deploy-arm64.md](./docs/deploy-arm64.md)

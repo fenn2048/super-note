@@ -1,10 +1,10 @@
 {
-  "name": "nowen-cli",
+  "name": "super-cli",
   "version": "1.0.0",
-  "description": "Nowen Note 命令行工具 — 从终端管理你的笔记",
+  "description": "Super Note 命令行工具 — 从终端管理你的笔记",
   "type": "module",
   "bin": {
-    "nowen": "dist/cli.js"
+    "super": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -16,6 +16,6 @@
     "ora": "^8.0.1",
     "cli-table3": "^0.6.5"
   },
-  "keywords": ["nowen-note", "cli", "notes"],
+  "keywords": ["super-note", "cli", "notes"],
   "license": "MIT"
 }

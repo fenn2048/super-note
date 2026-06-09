@@ -9,7 +9,7 @@ export function registerNotebooksCommands(program: Command) {
     .command("notebooks")
     .description("笔记本管理");
 
-  // nowen notebooks list
+  // super notebooks list
   notebooks
     .command("list")
     .description("列出所有笔记本")
@@ -45,7 +45,7 @@ export function registerNotebooksCommands(program: Command) {
       }
     });
 
-  // nowen notebooks create
+  // super notebooks create
   notebooks
     .command("create <name>")
     .description("创建笔记本")
@@ -65,7 +65,7 @@ export function registerNotebooksCommands(program: Command) {
       }
     });
 
-  // nowen notebooks delete <id>
+  // super notebooks delete <id>
   notebooks
     .command("delete <id>")
     .description("删除笔记本")

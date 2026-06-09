@@ -1,21 +1,21 @@
 /**
  * SDK 客户端的精简内联版
- * 由于 nowen-cli 和 @nowen/sdk 是独立包，为避免复杂的本地引用，内联核心客户端
+ * 由于 super-cli 和 @super/sdk 是独立包，为避免复杂的本地引用，内联核心客户端
  */
 
-export interface NowenConfig {
+export interface SuperConfig {
   baseUrl: string;
   username: string;
   password: string;
 }
 
-export class NowenClient {
+export class SuperClient {
   private baseUrl: string;
   private username: string;
   private password: string;
   private token: string | null = null;
 
-  constructor(config: NowenConfig) {
+  constructor(config: SuperConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.username = config.username;
     this.password = config.password;

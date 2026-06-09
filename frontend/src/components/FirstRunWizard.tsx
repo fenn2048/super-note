@@ -24,7 +24,7 @@ interface FirstRunWizardProps {
 
 const STEPS = [
   {
-    title: "欢迎来到 NowenNote",
+    title: "欢迎来到 SuperNote",
     description: "为家庭打造的笔记、说说和待办协作空间。记录生活点滴、管理家庭事务、分享重要信息。",
     icon: <Sparkles size={32} />,
     color: "from-violet-500 to-pink-500",
@@ -90,7 +90,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         icon: "🏠",
       });
       setCurrentWorkspace(ws.id);
-      window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: ws.id } }));
+      window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: ws.id } }));
       setCreated(true);
       toast.success("家庭空间创建成功！");
     } catch (e: any) {

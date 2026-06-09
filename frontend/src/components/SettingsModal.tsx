@@ -262,7 +262,7 @@ function VersionCompareCard() {
           {portable ? (
             <>
               <a
-                href="https://github.com/cropflre/nowen-note/releases/latest"
+                href="https://github.com/cropflre/super-note/releases/latest"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-primary text-white text-xs font-medium hover:opacity-90"
@@ -532,7 +532,7 @@ function AboutPanel() {
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{t('about.license')}</p>
         </div>
         <a
-          href="https://github.com/cropflre/nowen-note"
+          href="https://github.com/cropflre/super-note"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:opacity-80 transition-opacity"
@@ -1348,8 +1348,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
   // 把这层 Modal 也关掉，否则切到目标工作区但弹窗仍盖住主界面，体感很奇怪。
   useEffect(() => {
     const onCloseRequest = () => onClose();
-    window.addEventListener("nowen:close-settings", onCloseRequest);
-    return () => window.removeEventListener("nowen:close-settings", onCloseRequest);
+    window.addEventListener("super:close-settings", onCloseRequest);
+    return () => window.removeEventListener("super:close-settings", onCloseRequest);
   }, [onClose]);
 
   const isAdmin = currentUser?.role === "admin";

@@ -20,7 +20,7 @@ import { realtime } from "@/lib/realtime";
 /* ===== 排序模式 ===== */
 type SortBy = "manual" | "updatedAt" | "createdAt" | "title";
 type SortDir = "asc" | "desc";
-const SORT_STORAGE_KEY = "nowen.noteList.sort";
+const SORT_STORAGE_KEY = "super.noteList.sort";
 
 function loadSortPref(): { by: SortBy; dir: SortDir } {
   try {
@@ -2681,7 +2681,7 @@ export default function NoteList() {
               aria-label={t('sidebar.emptyTrash')}
               onClick={() => {
                 try {
-                  window.dispatchEvent(new CustomEvent("nowen:open-empty-trash"));
+                  window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
                 } catch { /* ignore */ }
               }}
             >
@@ -2785,7 +2785,7 @@ export default function NoteList() {
               aria-label={t('sidebar.emptyTrash')}
               onClick={() => {
                 try {
-                  window.dispatchEvent(new CustomEvent("nowen:open-empty-trash"));
+                  window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
                 } catch { /* ignore */ }
               }}
             >

@@ -9,7 +9,7 @@ export function registerTagsCommands(program: Command) {
     .command("tags")
     .description("标签管理");
 
-  // nowen tags list
+  // super tags list
   tags
     .command("list")
     .description("列出所有标签")
@@ -45,7 +45,7 @@ export function registerTagsCommands(program: Command) {
       }
     });
 
-  // nowen tags create <name>
+  // super tags create <name>
   tags
     .command("create <name>")
     .description("创建标签")

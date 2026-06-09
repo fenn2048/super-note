@@ -26,7 +26,7 @@
 import crypto from "crypto";
 import type { Database as BetterSqliteDB } from "better-sqlite3";
 
-export const API_TOKEN_PREFIX = "nkn_"; // "nowen note key"
+export const API_TOKEN_PREFIX = "nkn_"; // "super note key"
 const TOKEN_RAW_BYTES = 32;
 
 /** 支持的 scope 常量 */

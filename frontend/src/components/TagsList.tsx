@@ -20,7 +20,7 @@ export default function TagsList() {
   const actions = useAppActions();
 
   const [tagsExpanded, setTagsExpanded] = useState(() => {
-    try { return localStorage.getItem("nowen-tags-expanded") !== "0"; } catch { return true; }
+    try { return localStorage.getItem("super-tags-expanded") !== "0"; } catch { return true; }
   });
   const [tagColorPopover, setTagColorPopover] = useState<{
     tagId: string; tagName: string; color: string; x: number; y: number;
@@ -29,7 +29,7 @@ export default function TagsList() {
   const toggleTagsExpanded = useCallback(() => {
     setTagsExpanded((prev) => {
       const next = !prev;
-      try { localStorage.setItem("nowen-tags-expanded", next ? "1" : "0"); } catch {}
+      try { localStorage.setItem("super-tags-expanded", next ? "1" : "0"); } catch {}
       return next;
     });
   }, []);

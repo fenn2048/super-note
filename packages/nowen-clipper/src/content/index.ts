@@ -10,7 +10,7 @@
  *   - manifest 的 content_scripts 已声明式注入；如果 background 又用 executeScript
  *     注入第二次，两次脚本会共用同一个 isolated world，顶层 `const` 会因重名抛
  *     SyntaxError，导致整段脚本作废。
- *   - 解决：整个脚本包成 IIFE，并在 window 上挂一个 `__nowenClipperLoaded` 标记，
+ *   - 解决：整个脚本包成 IIFE，并在 window 上挂一个 `__superClipperLoaded` 标记，
  *     第二次进来直接 return，不会再触达任何顶层声明。
  */
 
@@ -24,21 +24,21 @@ import type {
   ScrollToResponse,
 } from "../lib/protocol";
 
-(function initNowenClipperContent() {
+(function initSuperClipperContent() {
   const win = window as any;
-  if (win.__nowenClipperLoaded) {
+  if (win.__superClipperLoaded) {
     // 已经有同版本/旧版本在跑，跳过重复注入；旧 listener 会继续工作。
     return;
   }
-  win.__nowenClipperLoaded = true;
+  win.__superClipperLoaded = true;
 
   // 版本标记——用于确认 content script 是否已更新
   const CONTENT_SCRIPT_VERSION = "0.4.0";
 
   // 防重复注册：如果存在 listener（极少数边缘场景），先移除它
-  if (typeof win.__nowenClipperListener === "function") {
-    console.log("[nowen-clipper content] 移除旧版本 listener");
-    chrome.runtime.onMessage.removeListener(win.__nowenClipperListener);
+  if (typeof win.__superClipperListener === "function") {
+    console.log("[super-clipper content] 移除旧版本 listener");
+    chrome.runtime.onMessage.removeListener(win.__superClipperListener);
   }
 
   type MessageType = ExtractRequest | PageDimensionsRequest | ScrollToRequest;
@@ -50,12 +50,12 @@ import type {
   ): boolean | undefined {
     if (!msg || !msg.type) return undefined;
 
-    console.log(`[nowen-clipper content v${CONTENT_SCRIPT_VERSION}] 收到消息:`, msg.type);
+    console.log(`[super-clipper content v${CONTENT_SCRIPT_VERSION}] 收到消息:`, msg.type);
 
     if (msg.type === "EXTRACT_REQUEST") {
       try {
         let data;
-        console.log(`[nowen-clipper content] EXTRACT_REQUEST mode = "${msg.mode}"`);
+        console.log(`[super-clipper content] EXTRACT_REQUEST mode = "${msg.mode}"`);
         if (msg.mode === "simplified") {
           data = extractSimplified();
         } else if (msg.mode === "selection") {
@@ -76,7 +76,7 @@ import type {
           });
           return;
         }
-        console.log(`[nowen-clipper content] 抽取成功: mode=${data.mode}, html长度=${data.html.length}, 含<img>=${(data.html.match(/<img/gi) || []).length}张`);
+        console.log(`[super-clipper content] 抽取成功: mode=${data.mode}, html长度=${data.html.length}, 含<img>=${(data.html.match(/<img/gi) || []).length}张`);
         sendResponse({ type: "EXTRACT_RESPONSE", ok: true, data });
       } catch (e: any) {
         sendResponse({
@@ -144,7 +144,7 @@ import type {
 
   // 注册新 listener 并保存到 window 全局，供后续版本移除
   chrome.runtime.onMessage.addListener(messageHandler as any);
-  win.__nowenClipperListener = messageHandler;
+  win.__superClipperListener = messageHandler;
 
-  console.log(`[nowen-clipper content] v${CONTENT_SCRIPT_VERSION} 已注册 at`, location.href);
+  console.log(`[super-clipper content] v${CONTENT_SCRIPT_VERSION} 已注册 at`, location.href);
 })();

@@ -112,11 +112,11 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     };
     load();
     const onChange = () => load();
-    window.addEventListener("nowen:workspace-changed", onChange);
-    window.addEventListener("nowen:workspace-features-changed", onChange);
+    window.addEventListener("super:workspace-changed", onChange);
+    window.addEventListener("super:workspace-features-changed", onChange);
     return () => {
-      window.removeEventListener("nowen:workspace-changed", onChange);
-      window.removeEventListener("nowen:workspace-features-changed", onChange);
+      window.removeEventListener("super:workspace-changed", onChange);
+      window.removeEventListener("super:workspace-features-changed", onChange);
     };
   }, []);
 
@@ -208,10 +208,10 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     broadcastLogout("switch_to_local");
     try {
       clearServerUrl();
-      localStorage.removeItem("nowen-token");
-      localStorage.removeItem("nowen-prefer-cloud");
-      localStorage.removeItem("nowen-offline-queue");
-      localStorage.removeItem("nowen-offline-id-map");
+      localStorage.removeItem("super-token");
+      localStorage.removeItem("super-prefer-cloud");
+      localStorage.removeItem("super-offline-queue");
+      localStorage.removeItem("super-offline-id-map");
     } catch { /* ignore */ }
     window.location.reload();
   }, [canSwitchBackToLocal, t]);
@@ -392,7 +392,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
       {/* 设置 + 登出 */}
       <button
-        onClick={() => window.dispatchEvent(new CustomEvent("nowen:open-settings"))}
+        onClick={() => window.dispatchEvent(new CustomEvent("super:open-settings"))}
         title={showLabel ? undefined : t('sidebar.settings')}
         aria-label={t('sidebar.settings')}
         className={cn(

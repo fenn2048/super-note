@@ -96,9 +96,9 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
       api.getKnowledgeStats().then(setStats).catch(() => {});
     };
     reload();
-    window.addEventListener("nowen:workspace-changed", reload);
+    window.addEventListener("super:workspace-changed", reload);
     return () => {
-      window.removeEventListener("nowen:workspace-changed", reload);
+      window.removeEventListener("super:workspace-changed", reload);
     };
   }, []);
 

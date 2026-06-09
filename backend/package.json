@@ -1,5 +1,5 @@
 {
-  "name": "nowen-note-backend",
+  "name": "super-note-backend",
   "version": "1.1.13",
   "scripts": {
     "dev": "tsx watch src/index.ts",

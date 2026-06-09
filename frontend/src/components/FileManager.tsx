@@ -168,7 +168,7 @@ const SORT_OPTIONS: Array<{ value: FileSortKey; label: string }> = [
 // - 切档时回到第 1 页（避免在第 5 页/小档切到大档后落到一个空页）。
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
-const PAGE_SIZE_STORAGE_KEY = "nowen.fileManager.pageSize";
+const PAGE_SIZE_STORAGE_KEY = "super.fileManager.pageSize";
 
 /** 从 localStorage 读出上次选择的 pageSize；非法/缺失时回退默认值。 */
 function readStoredPageSize(): number {
@@ -450,7 +450,7 @@ export default function FileManager() {
       loadReclaimable();
       // 广播：可能有别的视图（DataManager 的存储面板）也要同步
       try {
-        window.dispatchEvent(new CustomEvent("nowen:storage-changed", { detail: { reason: "cleanup-orphans" } }));
+        window.dispatchEvent(new CustomEvent("super:storage-changed", { detail: { reason: "cleanup-orphans" } }));
       } catch { /* ignore */ }
     } catch (err: any) {
       console.error("[FileManager] cleanup failed:", err);
@@ -477,11 +477,11 @@ export default function FileManager() {
       loadReclaimable();
       loadList();
     };
-    window.addEventListener("nowen:workspace-changed", onWs);
-    window.addEventListener("nowen:storage-changed", onStorage);
+    window.addEventListener("super:workspace-changed", onWs);
+    window.addEventListener("super:storage-changed", onStorage);
     return () => {
-      window.removeEventListener("nowen:workspace-changed", onWs);
-      window.removeEventListener("nowen:storage-changed", onStorage);
+      window.removeEventListener("super:workspace-changed", onWs);
+      window.removeEventListener("super:storage-changed", onStorage);
     };
   }, [loadStats, loadList, loadReclaimable]);
 

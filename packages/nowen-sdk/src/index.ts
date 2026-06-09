@@ -1,11 +1,11 @@
 /**
- * @nowen/sdk — Nowen Note TypeScript SDK
+ * @super/sdk — Super Note TypeScript SDK
  *
  * 用法：
  * ```ts
- * import { NowenClient } from "@nowen/sdk";
+ * import { SuperClient } from "@super/sdk";
  *
- * const client = new NowenClient({
+ * const client = new SuperClient({
  *   baseUrl: "http://localhost:3001",
  *   username: "admin",
  *   password: "admin123",
@@ -15,5 +15,5 @@
  * ```
  */
 
-export { NowenClient } from "./client.js";
+export { SuperClient } from "./client.js";
 export type * from "./types.js";

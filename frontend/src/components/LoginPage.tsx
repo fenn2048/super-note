@@ -158,17 +158,17 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
   // Electron 桌面端特殊处理：首次启动时 localStorage 里什么都没有，若走常规逻辑会
   // 展示一个空的"服务器地址"框，强迫用户先填才能登录 —— 但 Electron 本身就带一个
   // 本机内置后端（窗口加载的就是 http://127.0.0.1:<port>/），默认就该连它。
-  // 因此若 Electron 检测到 nowenDesktop 且没有历史 serverUrl，用 window.location.origin
+  // 因此若 Electron 检测到 superDesktop 且没有历史 serverUrl，用 window.location.origin
   // 作为默认地址预填。用户想连远程时清空 host 另填即可。
   useEffect(() => {
     if (!isClientMode) return;
-    const saved = getServerUrl() || localStorage.getItem("nowen-server-url-last") || "";
+    const saved = getServerUrl() || localStorage.getItem("super-server-url-last") || "";
     if (saved) {
       setServerParts(parseServerUrl(saved));
       setServerStatus("ok");
       return;
     }
-    const isElectron = !!(window as any).nowenDesktop?.isDesktop;
+    const isElectron = !!(window as any).superDesktop?.isDesktop;
     if (isElectron && window.location.origin.startsWith("http")) {
       setServerParts(parseServerUrl(window.location.origin));
       // 不主动标 ok —— 让用户按"登录"时再测，避免误判
@@ -266,7 +266,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
     }
     setServerStatus("ok");
     setServerUrl(url);
-    localStorage.setItem("nowen-server-url-last", url);
+    localStorage.setItem("super-server-url-last", url);
     return url;
   };
 
@@ -329,7 +329,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
       setTwoFactorCode("");
       return;
     }
-    localStorage.setItem("nowen-token", data.token);
+    localStorage.setItem("super-token", data.token);
     // 持久化「记住密码 / 自动登录」配置（两者同时可独立开关）
     await persistRememberState(baseUrl);
     onLogin(data.token, data.user);
@@ -359,7 +359,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
       setError(data?.error || t("auth.twoFactor.verifyFailed"));
       return;
     }
-    localStorage.setItem("nowen-token", data.token);
+    localStorage.setItem("super-token", data.token);
     onLogin(data.token, data.user);
   };
 
@@ -394,7 +394,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
         },
         baseUrl || undefined,
       );
-      localStorage.setItem("nowen-token", data.token);
+      localStorage.setItem("super-token", data.token);
       onLogin(data.token, data.user);
     } catch (err: any) {
       setError(err.message || t("auth.registerFailed"));
@@ -422,7 +422,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
 
   const handleDisconnect = () => {
     clearServerUrl();
-    localStorage.removeItem("nowen-token");
+    localStorage.removeItem("super-token");
     // 断开服务器 = 凭据不再有意义，一并清掉防止下次自动登录打到错误服务器
     void clearRememberedCredentials();
     setServerParts({ protocol: "http", host: "", port: "" });
@@ -934,14 +934,14 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
 
           {/*
             D-1：桌面端"返回本地（零登录）"入口。
-            条件：当前已写过 nowen-prefer-cloud（说明用户是从 NavRail 主动切到云端模式来的）。
+            条件：当前已写过 super-prefer-cloud（说明用户是从 NavRail 主动切到云端模式来的）。
             点击后清掉标记 + token + reload，App.tsx 重新走 ensureLocalAccount 流程。
             注意：不清理 IndexedDB / 本地 SQLite 数据，本地笔记本依然完整保留。
           */}
           {(() => {
-            const isElectron = !!(window as any).nowenDesktop?.isDesktop;
+            const isElectron = !!(window as any).superDesktop?.isDesktop;
             const preferCloud = (() => {
-              try { return localStorage.getItem("nowen-prefer-cloud") === "1"; } catch { return false; }
+              try { return localStorage.getItem("super-prefer-cloud") === "1"; } catch { return false; }
             })();
             if (!isElectron || !preferCloud) return null;
             return (
@@ -950,8 +950,8 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                   type="button"
                   onClick={() => {
                     try {
-                      localStorage.removeItem("nowen-prefer-cloud");
-                      localStorage.removeItem("nowen-token");
+                      localStorage.removeItem("super-prefer-cloud");
+                      localStorage.removeItem("super-token");
                       clearServerUrl();
                     } catch { /* ignore */ }
                     window.location.reload();

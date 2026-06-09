@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 108 108">
-  <!-- 背景 - Nowen Note 深色主题 -->
+  <!-- 背景 - Super Note 深色主题 -->
   <rect width="108" height="108" fill="#0D1117"/>
   
   <!-- 笔记纸 - 带折角的圆角矩形（白色纸面） -->
@@ -17,7 +17,7 @@
   <line x1="35" y1="62" x2="72" y2="62" stroke="#CBD5E1" stroke-width="1.5" fill="none"/>
   <line x1="35" y1="69" x2="60" y2="69" stroke="#CBD5E1" stroke-width="1.5" fill="none"/>
 
-  <!-- 大写字母 N - Nowen品牌标识 -->
+  <!-- 大写字母 N - Super品牌标识 -->
   <path fill="#3B82F6" d="M40,78 L40,44 L44.5,44 L62,72 L62,44 L66.5,44 L66.5,78 L62,78 L44.5,50 L44.5,78 Z"/>
 
   <!-- 右下角小铅笔装饰 -->

@@ -1,11 +1,11 @@
 {
-  "name": "nowen-mcp",
+  "name": "super-mcp",
   "version": "1.0.0",
-  "description": "Nowen Note MCP Server — 让 AI 工具直接操作笔记系统",
+  "description": "Super Note MCP Server — 让 AI 工具直接操作笔记系统",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "nowen-mcp": "./dist/index.js"
+    "super-mcp": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -1,5 +1,5 @@
 /**
- * 与 nowen-note 后端的 HTTP 交互。
+ * 与 super-note 后端的 HTTP 交互。
  *
  * 认证方式：用户名 + 密码登录获取 JWT，后续通过 Authorization: Bearer <JWT> 认证。
  *
@@ -9,7 +9,7 @@
  *   - POST /api/export/import    批量导入笔记
  *   - GET  /api/notebooks        列出可选笔记本
  */
-import { normalizeBaseUrl, type NowenClipperConfig } from "./storage";
+import { normalizeBaseUrl, type SuperClipperConfig } from "./storage";
 
 export interface ImportNotePayload {
   title: string;
@@ -49,25 +49,25 @@ export interface LoginResponse {
   ticket?: string;
 }
 
-export class NowenApiError extends Error {
+export class SuperApiError extends Error {
   constructor(
     public status: number,
     public code: string | undefined,
     message: string,
   ) {
     super(message);
-    this.name = "NowenApiError";
+    this.name = "SuperApiError";
   }
 }
 
-function authHeaders(cfg: NowenClipperConfig): HeadersInit {
+function authHeaders(cfg: SuperClipperConfig): HeadersInit {
   return {
     Authorization: `Bearer ${cfg.token}`,
     "Content-Type": "application/json",
   };
 }
 
-async function parseErr(res: Response): Promise<NowenApiError> {
+async function parseErr(res: Response): Promise<SuperApiError> {
   let code: string | undefined;
   let message = res.statusText;
   try {
@@ -81,7 +81,7 @@ async function parseErr(res: Response): Promise<NowenApiError> {
       /* ignore */
     }
   }
-  return new NowenApiError(res.status, code, `[${res.status}] ${message}`);
+  return new SuperApiError(res.status, code, `[${res.status}] ${message}`);
 }
 
 /**
@@ -124,7 +124,7 @@ export async function verify2FA(
 }
 
 /** 探活 + token 校验：GET /api/me 成功即代表 token 有效 */
-export async function ping(cfg: NowenClipperConfig): Promise<{ username: string; role: string }> {
+export async function ping(cfg: SuperClipperConfig): Promise<{ username: string; role: string }> {
   const base = normalizeBaseUrl(cfg.serverUrl);
   const res = await fetch(`${base}/api/me`, {
     method: "GET",
@@ -136,7 +136,7 @@ export async function ping(cfg: NowenClipperConfig): Promise<{ username: string;
 
 /** 获取笔记本树（打平过的列表） */
 export async function listNotebooks(
-  cfg: NowenClipperConfig,
+  cfg: SuperClipperConfig,
 ): Promise<Array<{ id: string; name: string; parentId: string | null }>> {
   const base = normalizeBaseUrl(cfg.serverUrl);
   const res = await fetch(`${base}/api/notebooks`, { headers: authHeaders(cfg) });
@@ -151,7 +151,7 @@ export async function listNotebooks(
  * 因此"图片随正文一起提交"对调用方是零感知的。
  */
 export async function importNote(
-  cfg: NowenClipperConfig,
+  cfg: SuperClipperConfig,
   payload: ImportNotePayload,
 ): Promise<ImportResponse> {
   const base = normalizeBaseUrl(cfg.serverUrl);
@@ -226,7 +226,7 @@ export interface AIEnhanceResult {
 }
 
 export async function enhanceClip(
-  cfg: NowenClipperConfig,
+  cfg: SuperClipperConfig,
   payload: AIEnhanceRequest,
 ): Promise<AIEnhanceResult> {
   const base = normalizeBaseUrl(cfg.serverUrl);
@@ -254,7 +254,7 @@ export interface SaveClipPayload {
   visibility?: string;
 }
 
-export async function getClipWorkspaces(cfg: NowenClipperConfig): Promise<any[]> {
+export async function getClipWorkspaces(cfg: SuperClipperConfig): Promise<any[]> {
   const base = normalizeBaseUrl(cfg.serverUrl);
   const res = await fetch(`${base}/api/clip/workspaces`, {
     method: "GET",
@@ -266,7 +266,7 @@ export async function getClipWorkspaces(cfg: NowenClipperConfig): Promise<any[]>
   return (await res.json()) as any[];
 }
 
-export async function getClipNotebooks(cfg: NowenClipperConfig, workspaceId?: string): Promise<any[]> {
+export async function getClipNotebooks(cfg: SuperClipperConfig, workspaceId?: string): Promise<any[]> {
   const base = normalizeBaseUrl(cfg.serverUrl);
   const url = workspaceId
     ? `${base}/api/clip/notebooks?workspaceId=${encodeURIComponent(workspaceId)}`
@@ -282,7 +282,7 @@ export async function getClipNotebooks(cfg: NowenClipperConfig, workspaceId?: st
 }
 
 export async function uploadClipImage(
-  cfg: NowenClipperConfig,
+  cfg: SuperClipperConfig,
   file: File | Blob,
   workspaceId?: string | null,
 ): Promise<{ id: string; url: string; mimeType: string; size: number }> {
@@ -305,7 +305,7 @@ export async function uploadClipImage(
   return (await res.json()) as { id: string; url: string; mimeType: string; size: number };
 }
 
-export async function saveClip(cfg: NowenClipperConfig, payload: SaveClipPayload): Promise<{ success: boolean; id: string }> {
+export async function saveClip(cfg: SuperClipperConfig, payload: SaveClipPayload): Promise<{ success: boolean; id: string }> {
   const base = normalizeBaseUrl(cfg.serverUrl);
   const res = await fetch(`${base}/api/clip/save`, {
     method: "POST",

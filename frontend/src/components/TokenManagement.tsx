@@ -540,7 +540,7 @@ function CreateTokenDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("tokens.create.namePlaceholder", {
-              defaultValue: "例如：NOWEN 书签同步",
+              defaultValue: "例如：SUPER 书签同步",
             })}
             maxLength={64}
             className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 dark:focus:border-indigo-500"

@@ -968,7 +968,7 @@ export default function TaskCenter() {
 
   useEffect(() => {
     if (viewMode !== "list") {
-      window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+      window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
       return;
     }
     const viewport = scrollRef.current;
@@ -978,11 +978,11 @@ export default function TaskCenter() {
     const handleScroll = () => {
       const scrollTop = viewport.scrollTop;
       if (scrollTop <= 0) {
-        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
       } else if (scrollTop > lastScrollTop + 10) {
-        window.dispatchEvent(new CustomEvent("nowen:scroll-hide-bars"));
+        window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
       } else if (scrollTop < lastScrollTop - 10) {
-        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
       }
       lastScrollTop = scrollTop;
     };
@@ -1024,20 +1024,20 @@ export default function TaskCenter() {
       setSelectedTask(null);
       loadTasks();
     };
-    window.addEventListener("nowen:workspace-changed", onWs);
-    return () => window.removeEventListener("nowen:workspace-changed", onWs);
+    window.addEventListener("super:workspace-changed", onWs);
+    return () => window.removeEventListener("super:workspace-changed", onWs);
   }, [loadTasks]);
 
   // 监听待办快捷跳转事件，自动打开详情抽屉
   useEffect(() => {
     const checkPendingNavigate = async () => {
-      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      const pendingRaw = sessionStorage.getItem("super:pending-navigate");
       if (!pendingRaw) return;
       try {
         const pending = JSON.parse(pendingRaw);
         if (pending.sourceType === "task" && pending.sourceId) {
           const taskId = pending.sourceId;
-          sessionStorage.removeItem("nowen:pending-navigate");
+          sessionStorage.removeItem("super:pending-navigate");
 
           // 尝试从本地加载的任务中查找
           const localTask = tasks.find((t) => t.id === taskId);
@@ -1064,9 +1064,9 @@ export default function TaskCenter() {
       checkPendingNavigate();
     }
 
-    window.addEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+    window.addEventListener("super:navigate-to-item-trigger", checkPendingNavigate);
     return () => {
-      window.removeEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+      window.removeEventListener("super:navigate-to-item-trigger", checkPendingNavigate);
     };
   }, [isLoading, tasks]);
 
@@ -1079,7 +1079,7 @@ export default function TaskCenter() {
       const updated = await api.toggleTask(id);
       
       syncTaskNotification(updated);
-      window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
 
       // Refresh stats
       const s = await api.getTaskStats();
@@ -1112,7 +1112,7 @@ export default function TaskCenter() {
       }
       
       syncTaskNotification(task);
-      window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
 
       const s = await api.getTaskStats();
       setStats(s);
@@ -1130,7 +1130,7 @@ export default function TaskCenter() {
       if (selectedTask?.id === id) setSelectedTask(updated);
       
       syncTaskNotification(updated);
-      window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
 
       // 关键字段（dueDate / priority / isCompleted 等）变化会影响左侧
       // 「今天 / 未来 7 天 / 已逾期 / 已完成」分组计数，需要同步刷新统计。
@@ -1160,7 +1160,7 @@ export default function TaskCenter() {
       syncTaskNotification({ id, isCompleted: 1 } as any);
       await api.deleteTask(id);
       
-      window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
 
       const s = await api.getTaskStats();
       setStats(s);

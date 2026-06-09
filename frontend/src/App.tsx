@@ -48,7 +48,7 @@ import { realtime } from "@/lib/realtime";
 
 import { App as CapApp } from "@capacitor/app";
 
-const AUTH_USER_CACHE_PREFIX = "nowen-auth-user:";
+const AUTH_USER_CACHE_PREFIX = "super-auth-user:";
 
 function normalizeAuthUrl(url: string): string {
   return url.replace(/\/+$/, "").toLowerCase();
@@ -67,7 +67,7 @@ function getAuthCacheScope(serverUrl: string): string {
   const origin = typeof window !== "undefined" && window.location.origin.startsWith("http")
     ? window.location.origin
     : "";
-  const isDesktop = typeof window !== "undefined" && !!(window as any).nowenDesktop?.isDesktop;
+  const isDesktop = typeof window !== "undefined" && !!(window as any).superDesktop?.isDesktop;
   if (isDesktop && ((serverUrl && isLoopbackAuthUrl(serverUrl)) || (!serverUrl && origin && isLoopbackAuthUrl(origin)))) {
     return "local-desktop";
   }
@@ -135,7 +135,7 @@ function isVerifyNetworkFailure(err: any): boolean {
 }
 
 function isNativeClientRuntime(): boolean {
-  return !!(window as any).nowenDesktop?.isDesktop
+  return !!(window as any).superDesktop?.isDesktop
     || !!(window as any).Capacitor?.isNativePlatform?.()
     || (!!(window as any).Capacitor?.platform && (window as any).Capacitor.platform !== "web");
 }
@@ -159,7 +159,7 @@ function WebUiDisabledPage() {
       <main className="max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-zinc-900 mb-3">网页端已被管理员关闭</h1>
         <p className="text-sm leading-7">
-          当前服务器仅提供 API 服务。请使用 Love Write 桌面客户端连接该服务器。
+          当前服务器仅提供 API 服务。请使用 星空笔记 桌面客户端连接该服务器。
         </p>
       </main>
     </div>
@@ -313,11 +313,11 @@ function AppLayout() {
   useEffect(() => {
     const show = () => setBarsVisible(true);
     const hide = () => setBarsVisible(false);
-    window.addEventListener("nowen:scroll-show-bars", show);
-    window.addEventListener("nowen:scroll-hide-bars", hide);
+    window.addEventListener("super:scroll-show-bars", show);
+    window.addEventListener("super:scroll-hide-bars", hide);
     return () => {
-      window.removeEventListener("nowen:scroll-show-bars", show);
-      window.removeEventListener("nowen:scroll-hide-bars", hide);
+      window.removeEventListener("super:scroll-show-bars", show);
+      window.removeEventListener("super:scroll-hide-bars", hide);
     };
   }, []);
 
@@ -343,9 +343,9 @@ function AppLayout() {
       setSettingsTab(tab);
       setShowSettings(true);
     };
-    window.addEventListener("nowen:open-settings", onOpenSettings);
+    window.addEventListener("super:open-settings", onOpenSettings);
     return () => {
-      window.removeEventListener("nowen:open-settings", onOpenSettings);
+      window.removeEventListener("super:open-settings", onOpenSettings);
     };
   }, []);
   // v16 P3 后续：Rail 视觉模式三档（icon / label / hidden）。
@@ -366,7 +366,7 @@ function AppLayout() {
    * Cmd-K 全局搜索面板开关
    * ----------------------------------------------------------------
    * 三种来源：
-   *   1) 组件内部 Cmd-K 键盘事件自己派发 "nowen:open-command-palette"；
+   *   1) 组件内部 Cmd-K 键盘事件自己派发 "super:open-command-palette"；
    *   2) macOS 原生菜单 "搜索笔记…" / Dock 右键 → useDesktopMenuBridge.onOpenSearch；
    *   3) 未来若需要业务代码编程式打开，同样 dispatch 上述事件即可。
    * 统一从外部事件驱动 setOpen(true)，组件只负责展示 + Esc 关闭。
@@ -374,8 +374,8 @@ function AppLayout() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   useEffect(() => {
     const onOpen = () => setCommandPaletteOpen(true);
-    window.addEventListener("nowen:open-command-palette", onOpen);
-    return () => window.removeEventListener("nowen:open-command-palette", onOpen);
+    window.addEventListener("super:open-command-palette", onOpen);
+    return () => window.removeEventListener("super:open-command-palette", onOpen);
   }, []);
 
   // 离线队列入队事件 → 把 syncStatus 切到 "queued"（让 UI 展示"已暂存"而非"已同步"）
@@ -383,8 +383,8 @@ function AppLayout() {
     const onQueued = () => {
       actions.setSyncStatus("queued");
     };
-    window.addEventListener("nowen:offline-queued", onQueued);
-    return () => window.removeEventListener("nowen:offline-queued", onQueued);
+    window.addEventListener("super:offline-queued", onQueued);
+    return () => window.removeEventListener("super:offline-queued", onQueued);
   }, [actions]);
 
   // 获取待办任务提醒统计与消息未读数（红点）
@@ -410,13 +410,13 @@ function AppLayout() {
       fetchStats();
     };
 
-    window.addEventListener("nowen:task-stats-changed", onStatsChanged);
-    window.addEventListener("nowen:workspace-changed", onStatsChanged);
+    window.addEventListener("super:task-stats-changed", onStatsChanged);
+    window.addEventListener("super:workspace-changed", onStatsChanged);
 
     return () => {
       if (timer) clearInterval(timer);
-      window.removeEventListener("nowen:task-stats-changed", onStatsChanged);
-      window.removeEventListener("nowen:workspace-changed", onStatsChanged);
+      window.removeEventListener("super:task-stats-changed", onStatsChanged);
+      window.removeEventListener("super:workspace-changed", onStatsChanged);
     };
   }, [actions]);
 
@@ -475,7 +475,7 @@ function AppLayout() {
   // 监听通知点击/仪表盘点击的快捷跳转事件
   useEffect(() => {
     const handleNavigateTrigger = async () => {
-      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      const pendingRaw = sessionStorage.getItem("super:pending-navigate");
       if (!pendingRaw) return;
       try {
         const pending = JSON.parse(pendingRaw);
@@ -498,7 +498,7 @@ function AppLayout() {
           } finally {
             actions.setNoteLoading(false);
           }
-          sessionStorage.removeItem("nowen:pending-navigate");
+          sessionStorage.removeItem("super:pending-navigate");
         } else if (sourceType === "diary") {
           actions.setViewMode("diary");
           actions.setMobileView("list");
@@ -511,13 +511,13 @@ function AppLayout() {
       }
     };
 
-    window.addEventListener("nowen:navigate-to-item-trigger", handleNavigateTrigger);
+    window.addEventListener("super:navigate-to-item-trigger", handleNavigateTrigger);
 
     // 延迟少许检查挂起的导航，等待组件及状态初始化完成
     const timer = setTimeout(handleNavigateTrigger, 200);
 
     return () => {
-      window.removeEventListener("nowen:navigate-to-item-trigger", handleNavigateTrigger);
+      window.removeEventListener("super:navigate-to-item-trigger", handleNavigateTrigger);
       clearTimeout(timer);
     };
   }, [actions]);
@@ -528,8 +528,8 @@ function AppLayout() {
       actions.setViewMode("tasks");
       actions.setMobileView("list");
     };
-    window.addEventListener("nowen:navigate-to-tasks", onNavigateToTasks);
-    return () => window.removeEventListener("nowen:navigate-to-tasks", onNavigateToTasks);
+    window.addEventListener("super:navigate-to-tasks", onNavigateToTasks);
+    return () => window.removeEventListener("super:navigate-to-tasks", onNavigateToTasks);
   }, [actions]);
 
 
@@ -559,7 +559,7 @@ function AppLayout() {
   // useSiteSettings 是分享页/登录页等更外层场景也会用到的更基础 Provider。
   const { siteConfig } = useSiteSettings();
   useEffect(() => {
-    const baseTitle = siteConfig.title || "love-write";
+    const baseTitle = siteConfig.title || "ark-notes";
     if (userPrefs.noteTitleAsAppTitle) {
       const noteTitle = (state.activeNote?.title || "").trim();
       document.title = noteTitle ? `${noteTitle} - ${baseTitle}` : baseTitle;
@@ -625,7 +625,7 @@ function AppLayout() {
 
   // ── 工作区切换：清空当前会话态，回到空态页 ──────────────────────────
   //
-  // WorkspaceSwitcher 切换后会广播 "nowen:workspace-changed"。之前只有 Sidebar /
+  // WorkspaceSwitcher 切换后会广播 "super:workspace-changed"。之前只有 Sidebar /
   // TaskCenter / FileManager / DiaryCenter / MindMap 自己监听并各自重拉，但
   // App 顶层并没有清理"正在编辑的笔记 + 笔记列表 + 选择/筛选状态"——于是会
   // 出现两类问题：
@@ -658,19 +658,19 @@ function AppLayout() {
       actions.refreshNotes();
       actions.refreshNotebooks();
     };
-    window.addEventListener("nowen:workspace-changed", onWorkspaceChanged);
-    return () => window.removeEventListener("nowen:workspace-changed", onWorkspaceChanged);
+    window.addEventListener("super:workspace-changed", onWorkspaceChanged);
+    return () => window.removeEventListener("super:workspace-changed", onWorkspaceChanged);
   }, [actions]);
 
   // 微信公众号文章保存自动导入与跳转
   useEffect(() => {
     let active = true;
     const handlePendingImport = async () => {
-      const url = sessionStorage.getItem("nowen:pending-import-url");
+      const url = sessionStorage.getItem("super:pending-import-url");
       if (!url) return;
 
       // 马上清除，避免重复触发
-      sessionStorage.removeItem("nowen:pending-import-url");
+      sessionStorage.removeItem("super:pending-import-url");
 
       const { toast } = await import("@/lib/toast");
       const loadingToastId = toast.info("正在抓取并保存文章到剪藏笔记本...", 0);
@@ -691,11 +691,11 @@ function AppLayout() {
         // 自动进入该笔记页面进行查看
         setTimeout(() => {
           if (!active) return;
-          sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+          sessionStorage.setItem("super:pending-navigate", JSON.stringify({
             sourceType: "note",
             sourceId: result.noteId
           }));
-          window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+          window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
         }, 500);
       } catch (err: any) {
         if (!active) return;
@@ -709,12 +709,12 @@ function AppLayout() {
     const timer = setTimeout(handlePendingImport, 800);
 
     // 2) 监听后续新接收到的链接事件（针对应用在后台运行，用户再次点击分享的情况）
-    window.addEventListener("nowen:pending-import-url-trigger", handlePendingImport);
+    window.addEventListener("super:pending-import-url-trigger", handlePendingImport);
 
     return () => {
       active = false;
       clearTimeout(timer);
-      window.removeEventListener("nowen:pending-import-url-trigger", handlePendingImport);
+      window.removeEventListener("super:pending-import-url-trigger", handlePendingImport);
     };
   }, [actions]);
 
@@ -903,7 +903,7 @@ function AppLayout() {
               isOpen={showDiaryComposer}
               onClose={() => setShowDiaryComposer(false)}
               onPost={() => {
-                window.dispatchEvent(new CustomEvent("nowen:workspace-changed"));
+                window.dispatchEvent(new CustomEvent("super:workspace-changed"));
               }}
             />
           )}
@@ -960,11 +960,11 @@ function MobileTopBar() {
   useEffect(() => {
     const show = () => setVisible(true);
     const hide = () => setVisible(false);
-    window.addEventListener("nowen:scroll-show-bars", show);
-    window.addEventListener("nowen:scroll-hide-bars", hide);
+    window.addEventListener("super:scroll-show-bars", show);
+    window.addEventListener("super:scroll-hide-bars", hide);
     return () => {
-      window.removeEventListener("nowen:scroll-show-bars", show);
-      window.removeEventListener("nowen:scroll-hide-bars", hide);
+      window.removeEventListener("super:scroll-show-bars", show);
+      window.removeEventListener("super:scroll-hide-bars", hide);
     };
   }, []);
 
@@ -996,11 +996,11 @@ function MobileTabBar() {
   useEffect(() => {
     const show = () => setVisible(true);
     const hide = () => setVisible(false);
-    window.addEventListener("nowen:scroll-show-bars", show);
-    window.addEventListener("nowen:scroll-hide-bars", hide);
+    window.addEventListener("super:scroll-show-bars", show);
+    window.addEventListener("super:scroll-hide-bars", hide);
     return () => {
-      window.removeEventListener("nowen:scroll-show-bars", show);
-      window.removeEventListener("nowen:scroll-hide-bars", hide);
+      window.removeEventListener("super:scroll-show-bars", show);
+      window.removeEventListener("super:scroll-hide-bars", hide);
     };
   }, []);
 
@@ -1010,8 +1010,8 @@ function MobileTabBar() {
     actions.setMobileView("list");
     if (mode === "projects") {
       const filter = { type: "my-tasks" };
-      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+      sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+      window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
     }
   };
 
@@ -1176,12 +1176,12 @@ function AuthGate() {
   // 判断是否为客户端模式（Electron / Android / 曾配置过服务器地址）
   //
   // Electron 打包后窗口加载的是 http://127.0.0.1:<port>/，protocol 是 "http:" 而非 "file:"，
-  // 所以不能只靠 protocol 判断。preload 会注入 window.nowenDesktop.isDesktop=true，
+  // 所以不能只靠 protocol 判断。preload 会注入 window.superDesktop.isDesktop=true，
   // 用它精确识别 Electron 桌面端 —— 同一个 Electron 窗口既能连"内置 backend"（localhost）
   // 也能连"远程服务器"（填 IP + 端口），登录页会展示服务器地址输入框。
   const isCapacitor = !!(window as any).Capacitor?.isNativePlatform?.()
     || !!(window as any).Capacitor?.platform && (window as any).Capacitor.platform !== "web";
-  const isElectron = !!(window as any).nowenDesktop?.isDesktop;
+  const isElectron = !!(window as any).superDesktop?.isDesktop;
   const isClientMode = window.location.protocol === "file:"
     || window.location.protocol === "capacitor:"
     || isCapacitor
@@ -1189,7 +1189,7 @@ function AuthGate() {
     || !!getServerUrl();
 
   const checkAuth = useCallback(() => {
-    const token = localStorage.getItem("nowen-token");
+    const token = localStorage.getItem("super-token");
     if (!token) {
       setIsAuthenticated(false);
       return;
@@ -1262,7 +1262,7 @@ function AuthGate() {
             // 后续读请求会走 offlineRead，本地缓存可用；写请求失败会进 offlineQueue。
             setUser(cachedUser);
             setIsAuthenticated(true);
-            try { window.dispatchEvent(new CustomEvent("nowen:cloud-degraded")); } catch { /* ignore */ }
+            try { window.dispatchEvent(new CustomEvent("super:cloud-degraded")); } catch { /* ignore */ }
             return;
           }
           // 无缓存时无法绑定 localStore 用户 id，只能展示登录页；但仍不清 token，
@@ -1280,23 +1280,23 @@ function AuthGate() {
     // Phase A: Electron 桌面端零登录优先 —— 在任何"客户端模式 + 无 serverUrl 即回登录页"
     // 的判断之前先问主进程要本地账号 token。
     //   - 如果 localStorage 里已有 token（用户已显式登录过），优先尊重之，不覆盖；
-    //   - 仅当未登录且 nowenDesktop.isDesktop+getLocalAuth 可用时才走零登录路径；
+    //   - 仅当未登录且 superDesktop.isDesktop+getLocalAuth 可用时才走零登录路径；
     //   - lite 模式（连远端）下主进程会返回 null，自动回落到原有登录流程；
     //   - 拿到 token 时同时把 window.location.origin（http://127.0.0.1:<port>）
-    //     写入 nowen-server-url，让后续 API 调用照常走 ${serverUrl}/api，
+    //     写入 super-server-url，让后续 API 调用照常走 ${serverUrl}/api，
     //     避免 verify / fetch 落空。
     //   - 整体放到最前面是因为：桌面端首启 localStorage 一片空白，
     //     原先 "isClientMode && !getServerUrl()" 会直接 return，零登录代码永远走不到。
-    const desktopApi = (window as any).nowenDesktop;
+    const desktopApi = (window as any).superDesktop;
     const existingToken = (() => {
-      try { return localStorage.getItem("nowen-token"); } catch { return null; }
+      try { return localStorage.getItem("super-token"); } catch { return null; }
     })();
     // D-1：桌面端"切换到云端"开关。
-    //   用户在 NavRail 点击云端入口后会写 nowen-prefer-cloud=1，
+    //   用户在 NavRail 点击云端入口后会写 super-prefer-cloud=1，
     //   此时强制跳过零登录，直接进登录页（让用户输入 fnos 服务器地址）。
     //   返回本地模式时 LoginPage 会清除该标记 + reload，零登录恢复。
     const preferCloud = (() => {
-      try { return localStorage.getItem("nowen-prefer-cloud") === "1"; } catch { return false; }
+      try { return localStorage.getItem("super-prefer-cloud") === "1"; } catch { return false; }
     })();
     if (!existingToken && !preferCloud && desktopApi?.isDesktop && desktopApi?.getLocalAuth) {
       let cancelled = false;
@@ -1304,10 +1304,10 @@ function AuthGate() {
         if (cancelled) return;
         if (auth?.token) {
           try {
-            localStorage.setItem("nowen-token", auth.token);
+            localStorage.setItem("super-token", auth.token);
             // 桌面端首启把 origin 当作 serverUrl 落盘，让后续同源 API 调用顺利通过
             if (!getServerUrl() && window.location.origin.startsWith("http")) {
-              localStorage.setItem("nowen-server-url", window.location.origin);
+              localStorage.setItem("super-server-url", window.location.origin);
             }
           } catch { /* ignore */ }
           saveCachedAuthUser(getAuthCacheScope(getServerUrl()), auth.token, auth.user);
@@ -1350,14 +1350,14 @@ function AuthGate() {
   //
   //   storage 事件只在"其他"tab 修改 localStorage 时触发（不会在自己这 tab 触发），
   //   所以 handler 里调 window.location.reload() 不会导致死循环。
-  //   仅监听我们自己的 key：nowen-token / nowen-server-url / nowen-logout-broadcast。
+  //   仅监听我们自己的 key：super-token / super-server-url / super-logout-broadcast。
   //
-  //   另外单独用一个 "nowen-logout-broadcast" key 作为广播通道：
+  //   另外单独用一个 "super-logout-broadcast" key 作为广播通道：
   //   当某 tab 主动登出时 setItem(..., Date.now()) 即可通知所有其他 tab。
   useEffect(() => {
     const onStorage = (ev: StorageEvent) => {
       if (!ev.key) return;
-      if (ev.key === "nowen-token") {
+      if (ev.key === "super-token") {
         const oldHad = !!ev.oldValue;
         const nowHas = !!ev.newValue;
         if (oldHad && !nowHas) {
@@ -1371,12 +1371,12 @@ function AuthGate() {
           // 其他 tab 刚登录成功 → 本 tab 去走一遍 verify，无感进入已登录态
           checkAuth();
         }
-      } else if (ev.key === "nowen-logout-broadcast") {
+      } else if (ev.key === "super-logout-broadcast") {
         // 其他 tab 主动登出 → 本 tab 也清本地 token 并回登录页
-        try { localStorage.removeItem("nowen-token"); } catch {}
+        try { localStorage.removeItem("super-token"); } catch {}
         setIsAuthenticated(false);
         setUser(null);
-      } else if (ev.key === "nowen-server-url") {
+      } else if (ev.key === "super-server-url") {
         // 服务器地址改了，接下来的 API 调用需要刷新页面才能命中新 base URL
         // 只有已登录（或正在展示列表）才需要 reload，未登录状态本身就在输服务器地址那一步，不用动
         if (isAuthenticated) {
@@ -1407,7 +1407,7 @@ function AuthGate() {
 
   // 「更新日志」首次升级自动弹窗。
   //   - 仅在已登录分支生效（enable=!!user），未登录态不打扰；
-  //   - useWhatsNew 内部对比 localStorage.nowen-seen-version 与 __APP_VERSION__，
+  //   - useWhatsNew 内部对比 localStorage.super-seen-version 与 __APP_VERSION__，
   //     不一致才返回 shouldShow=true，关闭后立即写回，下一次升级才再弹。
   const showWhatsNew = false;
   const markWhatsNewSeen = () => {};
@@ -1581,8 +1581,8 @@ function App() {
           if (!isAttached) return;
           const url = event.url;
           if (url && /^https?:\/\/mp\.weixin\.qq\.com\/s[\/?]/.test(url)) {
-            sessionStorage.setItem("nowen:pending-import-url", url);
-            window.dispatchEvent(new CustomEvent("nowen:pending-import-url-trigger"));
+            sessionStorage.setItem("super:pending-import-url", url);
+            window.dispatchEvent(new CustomEvent("super:pending-import-url-trigger"));
           }
         });
         return handler;

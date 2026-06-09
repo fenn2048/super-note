@@ -9,12 +9,12 @@ import { useCallback, useEffect, useState } from "react";
  * 这样组合出 default-light / default-dark / macos-light / macos-dark 四种视觉，
  * 增加新皮肤（nord / solarized …）时只需要多一组 CSS 变量，不动 next-themes。
  *
- * 存储在 localStorage("nowen-note-skin")；FOUC 防护由 index.html 里的同步内联脚本完成。
+ * 存储在 localStorage("super-note-skin")；FOUC 防护由 index.html 里的同步内联脚本完成。
  */
 
 export type Skin = "obsidian" | "macos" | "notion" | "memos" | "flomo";
 
-export const SKIN_STORAGE_KEY = "nowen-note-skin";
+export const SKIN_STORAGE_KEY = "super-note-skin";
 const ALL_SKINS: readonly Skin[] = ["obsidian", "macos", "notion", "memos", "flomo"] as const;
 
 function readSkin(): Skin {

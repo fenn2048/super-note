@@ -9,8 +9,8 @@
  *   - "hidden" : 完全隐藏 Rail，腾出 48px 给编辑器（窄屏 / 长篇写作）
  *
  * 设计要点：
- * - 偏好持久化在 localStorage（key=nowen-rail-mode）。
- * - 跨 tab 同步：监听 storage 事件；同 tab 内多组件同步：自定义事件 nowen:rail-mode-changed。
+ * - 偏好持久化在 localStorage（key=super-rail-mode）。
+ * - 跨 tab 同步：监听 storage 事件；同 tab 内多组件同步：自定义事件 super:rail-mode-changed。
  *   这样 App.tsx（控制是否渲染）/ NavRail（自身样式）/ Sidebar Header（切换按钮）
  *   可以独立调用而无需 state 提升或塞进 AppContext reducer。
  * - 不进 AppContext：纯 UI 偏好，没有跨业务联动；提到 reducer 反而是过度设计。
@@ -27,8 +27,8 @@ export type RailMode = "icon" | "label" | "hidden";
 /** Rail 三档循环切换的固定顺序（用于"按一下按钮切到下一档"的入口） */
 export const RAIL_MODE_CYCLE: readonly RailMode[] = ["icon", "label", "hidden"] as const;
 
-const STORAGE_KEY = "nowen-rail-mode";
-const SYNC_EVENT = "nowen:rail-mode-changed";
+const STORAGE_KEY = "super-rail-mode";
+const SYNC_EVENT = "super:rail-mode-changed";
 const DEFAULT_MODE: RailMode = "icon";
 
 function isValid(v: string | null): v is RailMode {

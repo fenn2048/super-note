@@ -11,7 +11,7 @@
  *   6. P2-#6 双向 sync：join 后发 stateVector 给服务端，换取服务端侧的 diff
  *
  * 生命周期：
- *   - new NowenYjsProvider(noteId, user) → 连通后 y:join → y:sync-step1
+ *   - new SuperYjsProvider(noteId, user) → 连通后 y:join → y:sync-step1
  *   - destroy() → 发 y:leave + 清理 listener + 关闭 IndexedDB（可选）
  */
 
@@ -35,7 +35,7 @@ type Listener = (payload: any) => void;
 const MAX_UPDATE_BYTES = 1 * 1024 * 1024;
 /** P1-#5 pending 队列最大条数，溢出合并 */
 const MAX_PENDING_UPDATES = 500;
-const YJS_IDB_PREFIX = "nowen-y-v2";
+const YJS_IDB_PREFIX = "super-y-v2";
 
 function normalizeScopePart(value: string): string {
   return (value || "unknown").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
@@ -56,14 +56,14 @@ function isLoopbackUrl(url: string): boolean {
 
 function getServerScope(): string {
   let server = "";
-  try { server = localStorage.getItem("nowen-server-url") || ""; } catch { /* ignore */ }
+  try { server = localStorage.getItem("super-server-url") || ""; } catch { /* ignore */ }
   const origin = typeof window !== "undefined" && window.location.origin.startsWith("http")
     ? window.location.origin
     : "";
-  const isDesktop = typeof window !== "undefined" && !!(window as any).nowenDesktop?.isDesktop;
+  const isDesktop = typeof window !== "undefined" && !!(window as any).superDesktop?.isDesktop;
 
   // 桌面 full 本地后端是 loopback + 动态端口；协作文档 IDB 名称必须稳定，
-  // 否则每次重启都会换一套 `nowen-y-*` 缓存。远端/lite 仍按 URL 隔离。
+  // 否则每次重启都会换一套 `super-y-*` 缓存。远端/lite 仍按 URL 隔离。
   if (isDesktop && ((server && isLoopbackUrl(server)) || (!server && origin && isLoopbackUrl(origin)))) {
     return "local-desktop";
   }
@@ -81,7 +81,7 @@ function getYjsPersistenceName(noteId: string, userId: string): string {
   ].join("-");
 }
 
-export class NowenYjsProvider {
+export class SuperYjsProvider {
   readonly noteId: string;
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
@@ -258,7 +258,7 @@ export class NowenYjsProvider {
       // 诊断日志：用于排查 "collabSynced 永远 false" 的死状态
       // noteId 不匹配是正常的（同一 realtime 单例被多个 provider 共享）
       if (msg.noteId !== this.noteId) {
-        if (typeof window !== "undefined" && (window as any).__NOWEN_DEBUG_Y__) {
+        if (typeof window !== "undefined" && (window as any).__SUPER_DEBUG_Y__) {
           console.debug(
             `[yjs-provider] y:sync ignored (noteId mismatch): got=${msg.noteId}, me=${this.noteId}`,
           );
@@ -375,7 +375,7 @@ export class NowenYjsProvider {
         console.warn(
           `[yjs-provider] ⚠️ STUCK: ${this.noteId} has been waiting for y:sync for ${Date.now() - joinedAt}ms (still in status="${this.status}"). ` +
           `Possible causes: (1) backend never replied y:sync, (2) WS message lost, (3) realtime event dispatcher dropped the message. ` +
-          `Set window.__NOWEN_DEBUG_Y__=true and open DevTools → Network → WS → Messages to inspect frames.`,
+          `Set window.__SUPER_DEBUG_Y__=true and open DevTools → Network → WS → Messages to inspect frames.`,
         );
       }, 5000);
     } else {
@@ -450,7 +450,7 @@ export class NowenYjsProvider {
     if (this.status === next) return;
     const prev = this.status;
     this.status = next;
-    if (typeof window !== "undefined" && (window as any).__NOWEN_DEBUG_Y__) {
+    if (typeof window !== "undefined" && (window as any).__SUPER_DEBUG_Y__) {
       console.debug(
         `[yjs-provider] status ${prev} → ${next} for ${this.noteId}`,
       );

@@ -340,7 +340,7 @@ export async function runAttachmentMigration(opts: {
 /**
  * 调试用：可在控制台手工调起。
  *   await runLightMigrationFromCurrentSession({ cloudUrl, cloudToken })
- * 假设当前 localStorage 里 nowen-token 是本地 token（典型场景：桌面零登录态）。
+ * 假设当前 localStorage 里 super-token 是本地 token（典型场景：桌面零登录态）。
  */
 export async function runLightMigrationFromCurrentSession(args: {
   localBaseUrl: string;

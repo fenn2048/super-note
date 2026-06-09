@@ -689,9 +689,9 @@ export async function readMarkdownFromZipWithMeta(
     try {
       const text = await metaEntry.async("text");
       const parsed = JSON.parse(text) as ZipImportMeta;
-      // 轻量边界检查：只认可 nowen-note 自家导出的 metadata，避免被外部 zip
+      // 轻量边界检查：只认可 super-note 自家导出的 metadata，避免被外部 zip
       // 中的同名文件误认（用户可能上传个包含 metadata.json 的项目压缩包）。
-      if (parsed && parsed.app === "nowen-note") {
+      if (parsed && parsed.app === "super-note") {
         meta = parsed;
         meta.zipObject = zip;
 

@@ -1,4 +1,4 @@
-package com.nowen.note;
+package com.super.note;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -123,7 +123,7 @@ export default function MentionList() {
         case "note":
           await api.getNote(item.sourceId); // 权限验证
           actions.setViewMode("all");
-          window.dispatchEvent(new CustomEvent("nowen:open-note", { detail: item.sourceId }));
+          window.dispatchEvent(new CustomEvent("super:open-note", { detail: item.sourceId }));
           break;
         case "diary":
           actions.setViewMode("diary");

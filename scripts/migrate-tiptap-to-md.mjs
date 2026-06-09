@@ -11,7 +11,7 @@
  *
  * 选项：
  *   --db <path>              指定 SQLite 数据库文件路径。默认按环境变量 $DB_PATH，
- *                            再回退到 backend/data/nowen-note.db。
+ *                            再回退到 backend/data/super-note.db。
  *   --dry-run                只预览（默认）。不写库，打印 before/after 摘要。
  *   --apply                  真正执行写入。会先做一次全库备份 .bak。
  *   --limit N                最多处理 N 条（默认不限）。
@@ -103,7 +103,7 @@ function printHelp() {
   node ${me} --rollback <backup-file> [--db <path>] [--yes]
 
 选项：
-  --db       指定 SQLite 文件路径，默认 backend/data/nowen-note.db
+  --db       指定 SQLite 文件路径，默认 backend/data/super-note.db
   --dry-run  只预览（默认）
   --apply    真正执行写入（会先生成 .bak 备份，并在单个事务内批量写入）
   --limit N  最多处理 N 条
@@ -349,7 +349,7 @@ function tiptapJsonToMarkdown(jsonStr) {
 function resolveDbPath(cliPath) {
   if (cliPath) return path.resolve(cliPath);
   if (process.env.DB_PATH) return path.resolve(process.env.DB_PATH);
-  return path.resolve(__dirname, "..", "backend", "data", "nowen-note.db");
+  return path.resolve(__dirname, "..", "backend", "data", "super-note.db");
 }
 
 function backupDb(dbPath) {

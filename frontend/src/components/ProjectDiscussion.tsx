@@ -133,11 +133,11 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
       actions.setViewMode("all");
       // Give a tiny timeout for viewmode setup before opening note
       setTimeout(() => {
-        window.dispatchEvent(new CustomEvent("nowen:open-note", { detail: card.id }));
+        window.dispatchEvent(new CustomEvent("super:open-note", { detail: card.id }));
       }, 50);
     } else {
       // It's a task. Trigger event to let parent page open the task detail editor
-      window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: card.id }));
+      window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: card.id }));
     }
   };
 

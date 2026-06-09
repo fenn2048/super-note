@@ -5,7 +5,7 @@
     <!-- Favicon：品牌蓝 + 白色笔记 + N 字母，替代 Vite 默认图标 -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- 老旧浏览器回退到品牌 PNG logo -->
-    <link rel="alternate icon" type="image/svg+xml" href="/nowen-note-icon.svg" />
+    <link rel="alternate icon" type="image/svg+xml" href="/super-note-icon.svg" />
     <!-- iOS 添加到主屏幕 -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
     <!-- 品牌主题色（地址栏/PWA） -->
@@ -21,7 +21,7 @@
     <script>
       (function () {
         try {
-          var t = localStorage.getItem("nowen-note-theme");
+          var t = localStorage.getItem("super-note-theme");
           if (!t || t === "system") {
             t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
           }
@@ -31,7 +31,7 @@
             document.documentElement.classList.add("dark");
           }
 
-          var s = localStorage.getItem("nowen-note-skin");
+          var s = localStorage.getItem("super-note-skin");
           if (s && s !== "obsidian") {
             document.documentElement.setAttribute("data-skin", s);
           }

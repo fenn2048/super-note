@@ -27,7 +27,7 @@ import React, {
  *   - 字段类型显式 boolean，不用 unknown JSON——以后加新字段就在这里加 key。
  */
 
-const STORAGE_KEY = "nowen.user-prefs.v1";
+const STORAGE_KEY = "super.user-prefs.v1";
 
 /** 阅读密度：影响编辑器正文段落与列表项的纵向间距/行高。
  *   - "cozy"   ：默认宽松（保持历史观感）

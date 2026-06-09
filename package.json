@@ -1,8 +1,8 @@
 {
-  "name": "nowen-note",
+  "name": "super-note",
   "version": "1.1.13",
-  "description": "Nowen Note - A modern note-taking application",
-  "author": "Nowen",
+  "description": "Super Note - A modern note-taking application",
+  "author": "Super",
   "private": true,
   "main": "electron/main.js",
   "scripts": {

@@ -59,17 +59,17 @@ export function extractArticle(): ExtractResult | null {
     // 质量检测：提取出的文字量是否足够
     const ratio = bodyTextLen > 0 ? extractedTextLen / bodyTextLen : 1;
     console.log(
-      `[nowen-clipper] Readability 提取: ${extractedTextLen} 字 / 全文 ${bodyTextLen} 字 (${(ratio * 100).toFixed(1)}%)`,
+      `[super-clipper] Readability 提取: ${extractedTextLen} 字 / 全文 ${bodyTextLen} 字 (${(ratio * 100).toFixed(1)}%)`,
     );
     if (extractedTextLen >= 100 && ratio >= 0.3) {
       // Readability 提取效果合格
       return readabilityResult;
     }
     console.log(
-      `[nowen-clipper] Readability 提取不充分，回退到全页抓取`,
+      `[super-clipper] Readability 提取不充分，回退到全页抓取`,
     );
   } else {
-    console.log("[nowen-clipper] Readability 返回 null，回退到全页抓取");
+    console.log("[super-clipper] Readability 返回 null，回退到全页抓取");
   }
 
   // Fallback：直接抓取 body 内容，只做基本清洗
@@ -543,7 +543,7 @@ export function extractFullPage(): ExtractResult | null {
       mode: "article", // 复用 article mode 标记，后端不需要区分
     };
   } catch (e: any) {
-    console.error("[nowen-clipper] extractFullPage 失败:", e);
+    console.error("[super-clipper] extractFullPage 失败:", e);
     return null;
   }
 }

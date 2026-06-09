@@ -2,7 +2,7 @@
 //
 // 桌面端"记住密码 / 自动登录"凭据持久化。
 //
-// 存储位置：{userData}/nowen-data/credentials.json
+// 存储位置：{userData}/super-data/credentials.json
 // 敏感字段用 Electron safeStorage 加密后写入（base64）：
 //   - Windows: DPAPI（绑当前用户）
 //   - macOS:   Keychain

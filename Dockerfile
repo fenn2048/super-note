@@ -1,21 +1,21 @@
 # =============================================================================
-# nowen-note 多架构 Dockerfile（Alpine 精简版）
+# super-note 多架构 Dockerfile（Alpine 精简版）
 # -----------------------------------------------------------------------------
 # 支持 linux/amd64 与 linux/arm64，macOS（Apple Silicon + Intel）均可原生构建。
 #
 # 构建方式：
 #   # macOS Apple Silicon → arm64（默认，最快，无需 QEMU）
-#   docker build -t nowen-note .
+#   docker build -t super-note .
 #
 #   # macOS Intel / Linux x86 → amd64
-#   docker build -t nowen-note .
+#   docker build -t super-note .
 #
 #   # 显式指定架构
-#   docker build --platform linux/amd64 -t nowen-note .
-#   docker build --platform linux/arm64 -t nowen-note .
+#   docker build --platform linux/amd64 -t super-note .
+#   docker build --platform linux/arm64 -t super-note .
 #
 #   # 多架构 manifest
-#   docker buildx build --platform linux/amd64,linux/arm64 -t nowen-note --push .
+#   docker buildx build --platform linux/amd64,linux/arm64 -t super-note --push .
 #
 # 关键设计：
 #   - 基础镜像：node:20-alpine（~42MB），而非 node:20-slim（~150MB）
@@ -160,11 +160,11 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # ---- 版本/构建元信息 ----
 ARG BUILD_DATE=""
 ARG APP_VERSION=""
-ENV NOWEN_BUILD_TIME=${BUILD_DATE}
-ENV NOWEN_APP_VERSION=${APP_VERSION}
+ENV SUPER_BUILD_TIME=${BUILD_DATE}
+ENV SUPER_APP_VERSION=${APP_VERSION}
 
 ENV NODE_ENV=production
-ENV DB_PATH=/app/data/nowen-note.db
+ENV DB_PATH=/app/data/super-note.db
 ENV PORT=3001
 
 EXPOSE 3001

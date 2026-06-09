@@ -57,8 +57,8 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
         }
       }
     };
-    window.addEventListener("nowen:open-project-task", handleOpenTaskEvent);
-    return () => window.removeEventListener("nowen:open-project-task", handleOpenTaskEvent);
+    window.addEventListener("super:open-project-task", handleOpenTaskEvent);
+    return () => window.removeEventListener("super:open-project-task", handleOpenTaskEvent);
   }, [stages]);
 
   // Fetch workspace tags when Task Details opens

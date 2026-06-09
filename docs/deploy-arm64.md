@@ -24,7 +24,7 @@
 # 注册 QEMU binfmt，使 x86 能执行 arm64 二进制（buildx 需要）
 docker run --privileged --rm tonistiigi/binfmt --install arm64
 
-# buildx builder 会由 scripts/release.sh 自动创建（nowen-note-builder）
+# buildx builder 会由 scripts/release.sh 自动创建（super-note-builder）
 # 也可手动创建自己的：
 # docker buildx create --name my-builder --use
 # docker buildx inspect --bootstrap
@@ -40,37 +40,37 @@ docker run --privileged --rm tonistiigi/binfmt --install arm64
 ```bash
 bash scripts/release.sh --build-only --arch arm64 -y
 # 构建完成后:
-docker run --platform linux/arm64 -p 3001:3001 -v nowen-data:/app/data cropflre/nowen-note:arm64
+docker run --platform linux/arm64 -p 3001:3001 -v super-data:/app/data cropflre/super-note:arm64
 ```
 
 **B. 导出 tar 文件（内网没 registry 的常用姿势）**
 
 ```bash
 bash scripts/release.sh --build-only --arch arm64 --tar -y
-# 默认得到 nowen-note-arm64.tar，可用 --tar-out /path/to/xxx.tar 自定义
+# 默认得到 super-note-arm64.tar，可用 --tar-out /path/to/xxx.tar 自定义
 # scp 到板子后：
-docker load -i nowen-note-arm64.tar
+docker load -i super-note-arm64.tar
 ```
 
 **C. 推到自建 registry**
 
 ```bash
 bash scripts/release.sh --build-only --arch arm64 \
-  --image registry.example.com/nowen-note:arm64 --push -y
+  --image registry.example.com/super-note:arm64 --push -y
 ```
 
 **D. 多架构 manifest（同时发 amd64 + arm64 到自建 registry）**
 
 ```bash
 bash scripts/release.sh --build-only --arch multi \
-  --image registry.example.com/nowen-note:multi -y
+  --image registry.example.com/super-note:multi -y
 # multi 模式必然 push，不能 --load / --tar
 ```
 
 **E. 正式发布多架构镜像到 Docker Hub（推荐姿势）**
 
 ```bash
-# 一次打 :vX.Y.Z + :latest 两个 tag，推送到 cropflre/nowen-note，并同步 git tag
+# 一次打 :vX.Y.Z + :latest 两个 tag，推送到 cropflre/super-note，并同步 git tag
 bash scripts/release.sh -v 1.3.0 --arch multi -y
 ```
 
@@ -82,11 +82,11 @@ bash scripts/release.sh -v 1.3.0 --arch multi -y
 
 ```bash
 docker run -d \
-  --name nowen-note \
+  --name super-note \
   --restart unless-stopped \
   -p 3001:3001 \
-  -v nowen-note-data:/app/data \
-  cropflre/nowen-note:arm64
+  -v super-note-data:/app/data \
+  cropflre/super-note:arm64
 ```
 
 访问 `http://<板子 IP>:3001` 即可。
@@ -100,7 +100,7 @@ docker compose up -d
 ```
 
 > 若使用已构建的 arm64 镜像而非本地再次 build，可把 compose 里的 `build:`
-> 整块删掉，只保留 `image: cropflre/nowen-note:arm64`（或任意你 push 到的镜像名）。
+> 整块删掉，只保留 `image: cropflre/super-note:arm64`（或任意你 push 到的镜像名）。
 
 ---
 
@@ -129,7 +129,7 @@ docker compose up -d
 ### Q3. 想在板子原生构建
 可以，但时间会是交叉构建的 2–4 倍。直接在板子仓库根执行：
 ```bash
-docker build -t nowen-note:arm64 .
+docker build -t super-note:arm64 .
 ```
 
 ### Q4. JWT 密钥怎么处理
@@ -138,5 +138,5 @@ docker build -t nowen-note:arm64 .
 如需统一密钥（多实例共享登录态），用 `-e JWT_SECRET=...` 显式注入。
 
 ### Q5. 板子能反过来给 x86 主机用吗？
-`cropflre/nowen-note:arm64` 镜像不能在 x86 上原生跑，但启用了 binfmt/qemu 的主机
+`cropflre/super-note:arm64` 镜像不能在 x86 上原生跑，但启用了 binfmt/qemu 的主机
 可以通过 `docker run --platform linux/arm64` 模拟执行（慢，仅用于验证）。

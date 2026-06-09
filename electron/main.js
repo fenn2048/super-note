@@ -23,7 +23,7 @@ const {
 // 日志 & 崩溃上报需尽早初始化（crashReporter.start 建议在 ready 之前）
 initLogger({
   // 如需接入外部崩溃上报服务（如 Sentry/Bugsnag/自建 collector），填入 URL 并设置 uploadCrashes=true
-  // crashSubmitURL: process.env.NOWEN_CRASH_URL,
+  // crashSubmitURL: process.env.SUPER_CRASH_URL,
   // uploadCrashes: true,
 });
 
@@ -58,7 +58,7 @@ app.on("second-instance", (_event, argv) => {
 
 // ---------- 路径工具 ----------
 function getUserDataPath() {
-  return path.join(app.getPath("userData"), "nowen-data");
+  return path.join(app.getPath("userData"), "super-data");
 }
 
 // ---------- JWT 密钥：桌面版"首启自动生成并持久化" ----------
@@ -118,12 +118,12 @@ function getBackendEntry() {
  * 当前是否为"Lite-only 发行版"：打包产物内不含 backend。
  *
  * 判断依据：
- *   1. 环境变量 NOWEN_LITE_ONLY=1（CI / 调试可强制声明）
+ *   1. 环境变量 SUPER_LITE_ONLY=1（CI / 调试可强制声明）
  *   2. 已 packaged 但 backend/dist/index.js 不存在（lite builder.config 剥掉了 backend）
  * 开发环境下始终返回 false，避免误切。
  */
 function isLiteOnlyBuild() {
-  if (process.env.NOWEN_LITE_ONLY === "1") return true;
+  if (process.env.SUPER_LITE_ONLY === "1") return true;
   if (!app.isPackaged) return false;
   try {
     return !fs.existsSync(getBackendEntry());
@@ -337,7 +337,7 @@ async function startBackend() {
   backendPort = await getFreePort();
   const backendEntry = getBackendEntry();
   const userDataPath = getUserDataPath();
-  const dbPath = path.join(userDataPath, "nowen-note.db");
+  const dbPath = path.join(userDataPath, "super-note.db");
   const backendCwd = app.isPackaged
     ? path.join(process.resourcesPath)
     : path.join(__dirname, "..");
@@ -564,7 +564,7 @@ function createSplash(message) {
       .dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
       @keyframes b{0%,80%,100%{transform:scale(.5);opacity:.4}40%{transform:scale(1);opacity:1}}
     </style></head><body><div class="box">
-      <div class="title">Nowen Note</div>
+      <div class="title">Super Note</div>
       <div class="hint">${hint} <span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
     </div></body></html>`;
   splashWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
@@ -587,7 +587,7 @@ function openAboutWindow() {
     maximizable: false,
     parent: mainWindow || undefined,
     modal: true,
-    title: "关于 Nowen Note",
+    title: "关于 Super Note",
     backgroundColor: "#0D1117",
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
@@ -600,9 +600,9 @@ function openAboutWindow() {
       .ver{font-size:13px;color:#7d8590;margin-bottom:16px}
       .desc{font-size:12px;color:#8b949e;line-height:1.6}
     </style></head><body><div class="box">
-      <div class="title">Nowen Note</div>
+      <div class="title">Super Note</div>
       <div class="ver">v${app.getVersion()}</div>
-      <div class="desc">一款现代化的笔记应用<br/>© Nowen</div>
+      <div class="desc">一款现代化的笔记应用<br/>© Super</div>
     </div></body></html>`;
   about.setMenuBarVisibility(false);
   about.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
@@ -645,7 +645,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: "Nowen Note",
+    title: "Super Note",
     icon: path.join(__dirname, "icon.png"),
     backgroundColor: isMac ? "#00000000" : "#0D1117",
     show: false,
@@ -656,8 +656,8 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
       // 通过 additionalArguments 把 lite-only 标识带给 preload.js
-      // （preload 里读 process.env.NOWEN_LITE_ONLY；sandbox 关闭时可用 env）
-      additionalArguments: isLiteOnlyBuild() ? ["--nowen-lite-only"] : [],
+      // （preload 里读 process.env.SUPER_LITE_ONLY；sandbox 关闭时可用 env）
+      additionalArguments: isLiteOnlyBuild() ? ["--super-lite-only"] : [],
     },
   });
 
@@ -760,7 +760,7 @@ function showStartupError(err) {
     `日志目录：\n${logDir}\n\n` +
     `数据目录：\n${getUserDataPath()}`;
   dialog.showErrorBox(
-    isLite ? "Nowen Note 连接失败" : "Nowen Note 启动失败",
+    isLite ? "Super Note 连接失败" : "Super Note 启动失败",
     detail
   );
 }

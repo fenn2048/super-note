@@ -2253,13 +2253,13 @@ export default function DiaryCenter() {
   // 监听的说说快捷跳转事件，自动滚动并高亮目标说说
   useEffect(() => {
     const checkPendingNavigate = () => {
-      const pendingRaw = sessionStorage.getItem("nowen:pending-navigate");
+      const pendingRaw = sessionStorage.getItem("super:pending-navigate");
       if (!pendingRaw) return;
       try {
         const pending = JSON.parse(pendingRaw);
         if (pending.sourceType === "diary" && pending.sourceId) {
           const diaryId = pending.sourceId;
-          sessionStorage.removeItem("nowen:pending-navigate");
+          sessionStorage.removeItem("super:pending-navigate");
 
           // 滚动并高亮
           setTimeout(() => {
@@ -2282,9 +2282,9 @@ export default function DiaryCenter() {
       checkPendingNavigate();
     }
 
-    window.addEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+    window.addEventListener("super:navigate-to-item-trigger", checkPendingNavigate);
     return () => {
-      window.removeEventListener("nowen:navigate-to-item-trigger", checkPendingNavigate);
+      window.removeEventListener("super:navigate-to-item-trigger", checkPendingNavigate);
     };
   }, [items]);
 
@@ -2294,8 +2294,8 @@ export default function DiaryCenter() {
       loadTimeline(true);
       loadStats();
     };
-    window.addEventListener("nowen:workspace-changed", onWs);
-    return () => window.removeEventListener("nowen:workspace-changed", onWs);
+    window.addEventListener("super:workspace-changed", onWs);
+    return () => window.removeEventListener("super:workspace-changed", onWs);
   }, [loadTimeline, loadStats]);
 
   useEffect(() => {
@@ -2306,11 +2306,11 @@ export default function DiaryCenter() {
     const handleScroll = () => {
       const scrollTop = viewport.scrollTop;
       if (scrollTop <= 0) {
-        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
       } else if (scrollTop > lastScrollTop + 10) {
-        window.dispatchEvent(new CustomEvent("nowen:scroll-hide-bars"));
+        window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
       } else if (scrollTop < lastScrollTop - 10) {
-        window.dispatchEvent(new CustomEvent("nowen:scroll-show-bars"));
+        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
       }
       lastScrollTop = scrollTop;
     };

@@ -46,14 +46,14 @@ class RealtimeClient {
 
   /**
    * 解析 WebSocket URL：
-   *   - 优先用自定义 server URL（nowen-server-url）
+   *   - 优先用自定义 server URL（super-server-url）
    *   - 否则根据当前页面 origin 推断
    */
   private resolveWsUrl(): string | null {
-    const token = localStorage.getItem("nowen-token");
+    const token = localStorage.getItem("super-token");
     if (!token) return null;
 
-    const serverUrl = localStorage.getItem("nowen-server-url");
+    const serverUrl = localStorage.getItem("super-server-url");
     let origin: string;
     if (serverUrl) {
       origin = serverUrl.replace(/\/+$/, "");
@@ -111,9 +111,9 @@ class RealtimeClient {
             this.selfUserId = msg.userId;
             // 同步写入 localStorage，给依赖 localStorage 同步读的初始化逻辑用
             // （例如 EditorPane 的 selfUser 初始值、useRealtimeNote 的 SELF_USERID_CACHE_KEY）
-            try { localStorage.setItem("nowen-self-userid", msg.userId); } catch {}
+            try { localStorage.setItem("super-self-userid", msg.userId); } catch {}
             if (typeof msg.username === "string" && msg.username) {
-              try { localStorage.setItem("nowen-self-username", msg.username); } catch {}
+              try { localStorage.setItem("super-self-username", msg.username); } catch {}
             }
           }
         }
@@ -126,9 +126,9 @@ class RealtimeClient {
           if (typeof window !== "undefined") {
             // L10: 广播给其他 tab 一起下线（这里避免 import api.ts 产生循环依赖，手动内联 broadcast）
             try {
-              localStorage.removeItem("nowen-token");
-              localStorage.setItem("nowen-logout-broadcast", `${Date.now()}|force-logout`);
-              localStorage.removeItem("nowen-logout-broadcast");
+              localStorage.removeItem("super-token");
+              localStorage.setItem("super-logout-broadcast", `${Date.now()}|force-logout`);
+              localStorage.removeItem("super-logout-broadcast");
             } catch {}
             // 给 UI 一点时间显示 toast（业务层订阅 force-logout 可展示原因）
             setTimeout(() => {
@@ -223,7 +223,7 @@ class RealtimeClient {
   getSelfUserId(): string | null {
     if (this.selfUserId) return this.selfUserId;
     try {
-      const cached = localStorage.getItem("nowen-self-userid");
+      const cached = localStorage.getItem("super-self-userid");
       if (cached) return cached;
     } catch {}
     return null;
@@ -350,7 +350,7 @@ if (typeof window !== "undefined") {
   // X-Connection-Id 头。后端 broadcastNoteUpdated 据此排除发起者，避免
   // "自己保存触发 note:updated 又广播回自己"造成的输入回退误判。
   // 用 window 单向挂载（而非 import）规避潜在的循环依赖风险。
-  (window as any).__nowenGetConnectionId = () => realtime.getConnectionId();
+  (window as any).__superGetConnectionId = () => realtime.getConnectionId();
 }
 
 // --------- Phase 3: Base64 <-> Uint8Array（浏览器环境） ---------

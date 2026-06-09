@@ -222,7 +222,7 @@ function BackupStatusCard() {
         </div>
       </div>
       <button
-        onClick={() => window.dispatchEvent(new CustomEvent("nowen:open-settings", { detail: { tab: "data" } }))}
+        onClick={() => window.dispatchEvent(new CustomEvent("super:open-settings", { detail: { tab: "data" } }))}
         className="text-[10px] text-accent-primary hover:underline shrink-0"
       >
         ＞ 设置
@@ -403,7 +403,7 @@ export default function Dashboard() {
 
       // 切换到新工作区
       setCurrentWorkspace(ws.id);
-      window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: ws.id } }));
+      window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: ws.id } }));
 
       toast.success("家庭空间创建成功！邀请家人加入吧");
       setCreating(false);
@@ -458,14 +458,14 @@ export default function Dashboard() {
       api.getWorkspaces().then(setWorkspaces).catch(() => {});
       loadDashboard();
     };
-    window.addEventListener("nowen:workspace-changed", handleWorkspaceChanged);
-    return () => window.removeEventListener("nowen:workspace-changed", handleWorkspaceChanged);
+    window.addEventListener("super:workspace-changed", handleWorkspaceChanged);
+    return () => window.removeEventListener("super:workspace-changed", handleWorkspaceChanged);
   }, [loadDashboard]);
 
   const handleSwitchSpace = (id: string) => {
     setCurrentWorkspace(id);
     setShowSpaceDropdown(false);
-    window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: id } }));
+    window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: id } }));
   };
 
   // Combine simple tasks and project tasks for upcoming display
@@ -497,7 +497,7 @@ export default function Dashboard() {
       try {
         const updated = await api.toggleTask(id);
         syncTaskNotification(updated);
-        window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+        window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
         api.getTaskStats().then((s) => {
           setStats((prev) => ({ ...prev, taskPending: s.activeReminders || prev.taskPending }));
         }).catch(console.error);
@@ -511,7 +511,7 @@ export default function Dashboard() {
         const prev = projectTasks.find((p) => p.id === id);
         const currentCompleted = prev ? prev.isCompleted : 0;
         await api.updateProjectTask(id, { isCompleted: currentCompleted === 1 ? 0 : 1 });
-        window.dispatchEvent(new CustomEvent("nowen:task-stats-changed"));
+        window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
         loadDashboard();
       } catch {
         loadDashboard();
@@ -521,32 +521,32 @@ export default function Dashboard() {
 
   const handleDiaryClick = (diaryId: string) => {
     haptic.light();
-    sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+    sessionStorage.setItem("super:pending-navigate", JSON.stringify({
       sourceType: "diary",
       sourceId: diaryId,
     }));
     actions.setViewMode("diary");
-    window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+    window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
   };
 
   const handleTaskClick = (taskId: string) => {
     haptic.light();
-    sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+    sessionStorage.setItem("super:pending-navigate", JSON.stringify({
       sourceType: "task",
       sourceId: taskId,
     }));
     actions.setViewMode("tasks");
-    window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+    window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
   };
 
   const handleNoteClick = async (noteId: string) => {
     haptic.light();
-    sessionStorage.setItem("nowen:pending-navigate", JSON.stringify({
+    sessionStorage.setItem("super:pending-navigate", JSON.stringify({
       sourceType: "note",
       sourceId: noteId,
     }));
     actions.setViewMode("all");
-    window.dispatchEvent(new CustomEvent("nowen:navigate-to-item-trigger"));
+    window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
   };
 
   const handleQuickCreateNote = async () => {
@@ -593,8 +593,8 @@ export default function Dashboard() {
     haptic.light();
     actions.setViewMode("projects");
     const filter = { type: "my-tasks" };
-    sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-    window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+    window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
   };
 
   return (
@@ -789,8 +789,8 @@ export default function Dashboard() {
                 haptic.light();
                 actions.setViewMode("projects");
                 const filter = { type: "my-tasks", status: "pending" };
-                sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-                window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+                sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+                window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
               }}
             />
             <QuickStatCard
@@ -802,8 +802,8 @@ export default function Dashboard() {
                 haptic.light();
                 actions.setViewMode("projects");
                 const filter = { type: "my-tasks" };
-                sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-                window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+                sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+                window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
               }}
             />
             <QuickStatCard
@@ -880,8 +880,8 @@ export default function Dashboard() {
                       haptic.light();
                       actions.setViewMode("projects");
                       const filter = { type: "my-tasks", status: "pending" };
-                      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-                      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+                      sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+                      window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
                     }}
                     className="text-[10px] text-accent-primary hover:underline"
                   >
@@ -901,7 +901,7 @@ export default function Dashboard() {
                       onClick={() => {
                         if (item.__source === "project") {
                           actions.setViewMode("projects");
-                          window.dispatchEvent(new CustomEvent("nowen:open-project-task", { detail: item.id }));
+                          window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: item.id }));
                         } else {
                           handleTaskClick(item.id);
                         }

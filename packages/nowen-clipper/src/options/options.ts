@@ -1,7 +1,7 @@
 /**
  * Options 页：所有配置项 + 登录认证。
  */
-import { getConfig, setConfig, normalizeBaseUrl, type NowenClipperConfig } from "../lib/storage";
+import { getConfig, setConfig, normalizeBaseUrl, type SuperClipperConfig } from "../lib/storage";
 import { login, verify2FA, ping } from "../lib/api";
 import type { AIEnhanceTasks } from "../lib/protocol";
 
@@ -175,7 +175,7 @@ function onRelogin() {
   (document.getElementById("login-result")!).textContent = "";
 }
 
-function readForm(): Partial<NowenClipperConfig> {
+function readForm(): Partial<SuperClipperConfig> {
   // 读取 AI 任务勾选
   const aiTasks: AIEnhanceTasks = {};
   document

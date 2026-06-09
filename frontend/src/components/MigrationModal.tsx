@@ -38,7 +38,7 @@ interface CloudLoginRecord {
   lastUsedAt: number;
 }
 
-const CLOUD_LOGIN_RECORDS_KEY = "nowen-cloud-login-records-v1";
+const CLOUD_LOGIN_RECORDS_KEY = "super-cloud-login-records-v1";
 const MAX_CLOUD_LOGIN_RECORDS = 8;
 
 function makeRecordId(cloudUrl: string, username: string): string {
@@ -124,7 +124,7 @@ export default function MigrationModal({
 
   // 本地 endpoint：当前页面就是本地后端代理对象，token 是 localStorage 里的本地 token。
   const localBaseUrl = getLocalServerUrl() || ""; // 桌面零登录态下为空，等同于"同源"
-  const localToken = localStorage.getItem("nowen-token") || "";
+  const localToken = localStorage.getItem("super-token") || "";
 
   function normalizeCloudUrl(raw: string): string {
     const t = raw.trim().replace(/\/+$/, "");
@@ -258,9 +258,9 @@ export default function MigrationModal({
   function enterCloudDirectly() {
     rememberCloudLogin({ url: cloudUrl, token: cloudToken, username, displayName: cloudUserDisplay });
     try {
-      localStorage.setItem("nowen-server-url", cloudUrl);
-      localStorage.setItem("nowen-token", cloudToken);
-      localStorage.removeItem("nowen-prefer-cloud");
+      localStorage.setItem("super-server-url", cloudUrl);
+      localStorage.setItem("super-token", cloudToken);
+      localStorage.removeItem("super-prefer-cloud");
     } catch { /* ignore */ }
     setSuccessKind("direct");
     setStep("success");
@@ -424,9 +424,9 @@ export default function MigrationModal({
       // 写入云端凭证：让下次启动直接进入云端模式
       rememberCloudLogin({ url: cloudUrl, token: cloudToken, username, displayName: cloudUserDisplay });
       try {
-        localStorage.setItem("nowen-server-url", cloudUrl);
-        localStorage.setItem("nowen-token", cloudToken);
-        localStorage.removeItem("nowen-prefer-cloud");
+        localStorage.setItem("super-server-url", cloudUrl);
+        localStorage.setItem("super-token", cloudToken);
+        localStorage.removeItem("super-prefer-cloud");
       } catch { /* ignore */ }
       setSuccessKind("migration");
       setStep("success");
@@ -552,7 +552,7 @@ export default function MigrationModal({
             <div className="space-y-3.5">
               <input
                 type="text"
-                name="nowen-cloud-url"
+                name="super-cloud-url"
                 autoComplete="off"
                 placeholder="服务器地址（如 http://192.168.1.10:3001）"
                 value={cloudUrl}
@@ -562,7 +562,7 @@ export default function MigrationModal({
               />
               <input
                 type="text"
-                name="nowen-cloud-username"
+                name="super-cloud-username"
                 autoComplete="off"
                 placeholder="用户名"
                 value={username}
@@ -572,7 +572,7 @@ export default function MigrationModal({
               />
               <input
                 type="password"
-                name="nowen-cloud-password"
+                name="super-cloud-password"
                 autoComplete="new-password"
                 placeholder="密码"
                 value={password}

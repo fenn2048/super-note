@@ -16,7 +16,7 @@ $null
 generate-icons.js
 frontend/android/build_output.txt
 # 打包产物
-nowen-note-*.zip
+super-note-*.zip
 dist-fpk/
 dist-upk/
 fnpack-1.2.1-*
@@ -30,7 +30,7 @@ ugnas-*.html
 # 本地导入测试样本（用户私人数据，不应入库）
 docs/samples/
 *.note.attach/
-/nowen-note-data/
+super-note-data/
 
 # 临时调试/排查输出（不应入库）
 _td_test.js

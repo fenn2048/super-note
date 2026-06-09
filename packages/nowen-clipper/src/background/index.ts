@@ -13,7 +13,7 @@
 import "../lib/sw-polyfill";
 
 import { getConfig, isConfigured, normalizeBaseUrl } from "../lib/storage";
-import { enhanceClip, NowenApiError, type AIEnhanceResult, saveClip, uploadClipImage, type SaveClipPayload } from "../lib/api";
+import { enhanceClip, SuperApiError, type AIEnhanceResult, saveClip, uploadClipImage, type SaveClipPayload } from "../lib/api";
 import { buildContentBundle, inlineImages } from "../lib/transform";
 import type {
   AIEnhanceMode,
@@ -31,68 +31,68 @@ chrome.runtime.onInstalled.addListener(() => {
   try {
     chrome.contextMenus.removeAll(() => {
       chrome.contextMenus.create({
-        id: "nowen-clip-selection",
+        id: "super-clip-selection",
         title: "剪藏选中内容到笔记",
         contexts: ["selection"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-selection-diary",
+        id: "super-clip-selection-diary",
         title: "剪藏选中内容到说说",
         contexts: ["selection"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-page",
-        title: "剪藏整个页面到 Nowen Note",
+        id: "super-clip-page",
+        title: "剪藏整个页面到 Super Note",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-simplified",
-        title: "剪藏简化内容到 Nowen Note",
+        id: "super-clip-simplified",
+        title: "剪藏简化内容到 Super Note",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-fullpage",
-        title: "完全克隆页面到 Nowen Note",
+        id: "super-clip-fullpage",
+        title: "完全克隆页面到 Super Note",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-screenshot",
-        title: "截图当前可视区域到 Nowen Note",
+        id: "super-clip-screenshot",
+        title: "截图当前可视区域到 Super Note",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-full-screenshot",
-        title: "截图整个页面到 Nowen Note",
+        id: "super-clip-full-screenshot",
+        title: "截图整个页面到 Super Note",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
-        id: "nowen-clip-link",
-        title: "剪藏这个链接到 Nowen Note",
+        id: "super-clip-link",
+        title: "剪藏这个链接到 Super Note",
         contexts: ["link"],
       });
     });
   } catch (e) {
-    console.warn("[nowen-clipper] create contextMenus failed:", e);
+    console.warn("[super-clipper] create contextMenus failed:", e);
   }
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.id) return;
-  if (info.menuItemId === "nowen-clip-selection") {
+  if (info.menuItemId === "super-clip-selection") {
     void runClip({ type: "CLIP_REQUEST", mode: "selection", tabId: tab.id });
-  } else if (info.menuItemId === "nowen-clip-selection-diary") {
+  } else if (info.menuItemId === "super-clip-selection-diary") {
     void runClip({ type: "CLIP_REQUEST", mode: "selection", tabId: tab.id, notebookId: "__diary__" });
-  } else if (info.menuItemId === "nowen-clip-page") {
+  } else if (info.menuItemId === "super-clip-page") {
     void runClip({ type: "CLIP_REQUEST", mode: "article", tabId: tab.id });
-  } else if (info.menuItemId === "nowen-clip-simplified") {
+  } else if (info.menuItemId === "super-clip-simplified") {
     void runClip({ type: "CLIP_REQUEST", mode: "simplified", tabId: tab.id });
-  } else if (info.menuItemId === "nowen-clip-fullpage") {
+  } else if (info.menuItemId === "super-clip-fullpage") {
     void runClip({ type: "CLIP_REQUEST", mode: "fullpage", tabId: tab.id });
-  } else if (info.menuItemId === "nowen-clip-screenshot") {
+  } else if (info.menuItemId === "super-clip-screenshot") {
     void runClip({ type: "CLIP_REQUEST", mode: "screenshot", tabId: tab.id });
-  } else if (info.menuItemId === "nowen-clip-full-screenshot") {
+  } else if (info.menuItemId === "super-clip-full-screenshot") {
     void runClip({ type: "CLIP_REQUEST", mode: "fullScreenshot", tabId: tab.id });
-  } else if (info.menuItemId === "nowen-clip-link" && info.linkUrl) {
+  } else if (info.menuItemId === "super-clip-link" && info.linkUrl) {
     void clipLinkOnly(info.linkUrl, tab);
   }
 });
@@ -113,7 +113,7 @@ chrome.commands?.onCommand.addListener(async (command) => {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || msg.type !== "CLIP_REQUEST") return undefined;
-  console.log("[nowen-clipper] 收到 CLIP_REQUEST, mode =", msg.mode, "完整消息:", JSON.stringify(msg));
+  console.log("[super-clipper] 收到 CLIP_REQUEST, mode =", msg.mode, "完整消息:", JSON.stringify(msg));
   // 异步响应：返回 true，通过 sendResponse 回传最终结果
   (async () => {
     try {
@@ -137,12 +137,12 @@ interface ClipResult {
 }
 
 async function runClip(req: ClipRequest): Promise<ClipResult> {
-  console.log("[nowen-clipper] runClip 开始, mode =", req.mode);
+  console.log("[super-clipper] runClip 开始, mode =", req.mode);
 
   const cfg = await getConfig();
   if (!isConfigured(cfg)) {
     notify(
-      "请先设置 Nowen Note",
+      "请先设置 Super Note",
       "右键扩展图标 → 选项，填入服务器地址并登录账号。",
     );
     try {
@@ -155,7 +155,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
 
   // 截图模式走专门流程
   if (req.mode === "screenshot" || req.mode === "fullScreenshot") {
-    console.log("[nowen-clipper] 进入截图流程, mode =", req.mode);
+    console.log("[super-clipper] 进入截图流程, mode =", req.mode);
     return runScreenshotClip(req);
   }
 
@@ -163,7 +163,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
 
   const extractMode: "article" | "selection" | "simplified" | "fullpage" =
     req.mode === "simplified" ? "simplified" : req.mode === "selection" ? "selection" : req.mode === "fullpage" ? "fullpage" : "article";
-  console.log("[nowen-clipper] extractMode =", extractMode);
+  console.log("[super-clipper] extractMode =", extractMode);
 
   const extracted = await requestExtract(req.tabId, extractMode);
   if (!extracted.ok || !extracted.data) {
@@ -176,7 +176,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
 
   // fullpage 模式：完整克隆的自包含 HTML 文档，跳过图片内联和格式转换，直接上传
   if (req.mode === "fullpage") {
-    sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传完整页面到 Nowen Note..." });
+    sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传完整页面到 Super Note..." });
     const tags = parseTags(req.overrideTags ?? cfg.defaultTags);
 
     // 构建附加信息（评论 + 来源）注入到 <head> 内部
@@ -313,7 +313,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
         aiInfo = { ok: true };
       } else {
         const err = aiResp.error || "AI 返回失败";
-        console.warn("[nowen-clipper] AI 优化失败:", err);
+        console.warn("[super-clipper] AI 优化失败:", err);
         aiInfo = { ok: false, error: err };
         if (cfg.aiFailureStrategy === "fail") {
           notify("AI 优化失败", err);
@@ -323,7 +323,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
       }
     } catch (e: any) {
       const msg = describeError(e);
-      console.warn("[nowen-clipper] AI 优化异常:", msg);
+      console.warn("[super-clipper] AI 优化异常:", msg);
       aiInfo = { ok: false, error: msg };
       if (cfg.aiFailureStrategy === "fail") {
         notify("AI 优化失败", msg);
@@ -355,7 +355,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
       // 折中：直接用 "标题 + AI 块 + 来源/标签" 重新构建
       const rebuilt = buildContentBundle({
         title: pageTitle,
-        html: cfg.outputFormat === "html" ? aiBlock : `<pre data-nowen-md>${escapeHtml(aiBlock)}</pre>`,
+        html: cfg.outputFormat === "html" ? aiBlock : `<pre data-super-md>${escapeHtml(aiBlock)}</pre>`,
         sourceUrl: data.url,
         siteName: data.siteName,
         format: cfg.outputFormat,
@@ -363,7 +363,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
         tags,
         comment: req.comment,
       });
-      // markdown 模式下，buildContentBundle 会把 <pre data-nowen-md> 转成代码块——
+      // markdown 模式下，buildContentBundle 会把 <pre data-super-md> 转成代码块——
       // 这不是我们要的；改成直接拼字符串。
       if (cfg.outputFormat === "markdown") {
         content = `${aiBlock}\n\n${buildFooterMd(cfg.includeSource, data.url, data.siteName, tags)}`;
@@ -383,7 +383,7 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
   }
 
   // 上传
-  sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传到 Nowen Note..." });
+  sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传到 Super Note..." });
   const isDiary = req.notebookId === "__diary__";
   try {
     const savePayload: any = {
@@ -513,12 +513,12 @@ async function captureFullPageViaDebugger(tabId: number): Promise<string> {
             }
             // 创建一个 style 标签，只针对 fixed/sticky 元素添加覆盖
             var style = document.createElement('style');
-            style.id = '__nowen_clipper_disable_fixed__';
-            style.textContent = '[data-nowen-was-fixed] { position: absolute !important; }';
+            style.id = '__super_clipper_disable_fixed__';
+            style.textContent = '[data-super-was-fixed] { position: absolute !important; }';
             document.head.appendChild(style);
             // 给 fixed/sticky 元素打标记
             for (var j = 0; j < fixedEls.length; j++) {
-              fixedEls[j].setAttribute('data-nowen-was-fixed', fixedEls[j].style.position || '');
+              fixedEls[j].setAttribute('data-super-was-fixed', fixedEls[j].style.position || '');
             }
             return fixedEls.length;
           })()
@@ -528,7 +528,7 @@ async function captureFullPageViaDebugger(tabId: number): Promise<string> {
     )) as { result: { value: number } };
 
     console.log(
-      "[nowen-clipper] 通过 CDP 禁用了",
+      "[super-clipper] 通过 CDP 禁用了",
       injectResult?.result?.value ?? 0,
       "个 fixed/sticky 元素",
     );
@@ -584,11 +584,11 @@ async function captureFullPageViaDebugger(tabId: number): Promise<string> {
     await chrome.debugger.sendCommand(target, "Runtime.evaluate", {
       expression: `
         (function() {
-          var style = document.getElementById('__nowen_clipper_disable_fixed__');
+          var style = document.getElementById('__super_clipper_disable_fixed__');
           if (style) style.remove();
-          var marked = document.querySelectorAll('[data-nowen-was-fixed]');
+          var marked = document.querySelectorAll('[data-super-was-fixed]');
           for (var i = 0; i < marked.length; i++) {
-            marked[i].removeAttribute('data-nowen-was-fixed');
+            marked[i].removeAttribute('data-super-was-fixed');
           }
         })()
       `,
@@ -636,13 +636,13 @@ async function captureFullPageByScrolling(tabId: number): Promise<string> {
     target: { tabId },
     func: () => {
       // 注入禁用 fixed/sticky 的样式
-      const STYLE_ID = "__nowen_clipper_disable_fixed__";
+      const STYLE_ID = "__super_clipper_disable_fixed__";
       let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
       if (!style) {
         style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent =
-          "*[data-nowen-was-fixed] { position: absolute !important; }";
+          "*[data-super-was-fixed] { position: absolute !important; }";
         document.head.appendChild(style);
       }
       const all = document.querySelectorAll<HTMLElement>("*");
@@ -650,7 +650,7 @@ async function captureFullPageByScrolling(tabId: number): Promise<string> {
       all.forEach((el) => {
         const cs = window.getComputedStyle(el);
         if (cs.position === "fixed" || cs.position === "sticky") {
-          el.setAttribute("data-nowen-was-fixed", el.style.position || "");
+          el.setAttribute("data-super-was-fixed", el.style.position || "");
           count++;
         }
       });
@@ -704,11 +704,11 @@ async function captureFullPageByScrolling(tabId: number): Promise<string> {
   await chrome.scripting.executeScript({
     target: { tabId },
     func: (prev: number) => {
-      const style = document.getElementById("__nowen_clipper_disable_fixed__");
+      const style = document.getElementById("__super_clipper_disable_fixed__");
       if (style) style.remove();
       document
-        .querySelectorAll<HTMLElement>("[data-nowen-was-fixed]")
-        .forEach((el) => el.removeAttribute("data-nowen-was-fixed"));
+        .querySelectorAll<HTMLElement>("[data-super-was-fixed]")
+        .forEach((el) => el.removeAttribute("data-super-was-fixed"));
       window.scrollTo({ top: prev, behavior: "auto" });
     },
     args: [meta.prevScrollY],
@@ -848,7 +848,7 @@ async function uploadScreenshot(
  *
  * 注：content.js 由 manifest 的 content_scripts 在 document_idle 阶段声明式注入，
  * 这里不再用 chrome.scripting.executeScript 主动注入第二次——重复注入会导致
- * 顶层 const 重名 SyntaxError（content.js 已用 IIFE + __nowenClipperLoaded 做了
+ * 顶层 const 重名 SyntaxError（content.js 已用 IIFE + __superClipperLoaded 做了
  * 幂等防御，但避免触发就更稳）。
  *
  * 代价：扩展热更新后，旧标签页仍跑旧版 content script，需要刷新页面才能生效，
@@ -859,12 +859,12 @@ async function requestExtract(
   mode: "article" | "selection" | "simplified" | "fullpage",
 ): Promise<ExtractResponse> {
   const msg: ExtractRequest = { type: "EXTRACT_REQUEST", mode };
-  console.log("[nowen-clipper] requestExtract: tabId =", tabId, "mode =", mode);
+  console.log("[super-clipper] requestExtract: tabId =", tabId, "mode =", mode);
 
   try {
     const res = (await chrome.tabs.sendMessage(tabId, msg)) as ExtractResponse;
     if (res && res.type === "EXTRACT_RESPONSE") {
-      console.log("[nowen-clipper] requestExtract 成功, ok =", res.ok, "mode =", res.data?.mode);
+      console.log("[super-clipper] requestExtract 成功, ok =", res.ok, "mode =", res.data?.mode);
       return res;
     }
     // 如果返回了非预期的响应格式
@@ -937,13 +937,13 @@ async function captureWithRetry(maxRetries = 4): Promise<string | null> {
       const msg = String(e?.message || e);
       // 仅在速率限制错误时重试
       if (msg.includes("MAX_CAPTURE") && attempt < maxRetries) {
-        console.warn(`[nowen-clipper] captureVisibleTab quota hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        console.warn(`[super-clipper] captureVisibleTab quota hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await sleep(delay);
         delay *= 2; // 指数退避
         continue;
       }
       // 非速率限制错误 或 重试耗尽
-      console.error("[nowen-clipper] captureVisibleTab failed:", msg);
+      console.error("[super-clipper] captureVisibleTab failed:", msg);
       return null;
     }
   }
@@ -980,7 +980,7 @@ function parseTags(raw: string): string[] {
 }
 
 function describeError(e: unknown): string {
-  if (e instanceof NowenApiError) {
+  if (e instanceof SuperApiError) {
     if (e.status === 401) return "登录已过期或失效，请在扩展选项中重新登录。";
     if (e.status === 403) return "权限不足：" + e.message;
     return e.message;

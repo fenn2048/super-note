@@ -5,7 +5,7 @@
     android:viewportWidth="108">
 
     <!--
-        Nowen Note 简约图标（foreground / v24）
+        Super Note 简约图标（foreground / v24）
         内容与 drawable/ic_launcher_foreground.xml 保持一致，
         仅为 API 24+ 独立副本（Android 构建系统要求）
     -->

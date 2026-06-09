@@ -139,7 +139,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
   // 功能开关：乐观更新 + 失败回滚。
   //   - owner 勾选时立即本地生效（侧边栏通过事件广播同步）
   //   - 后端失败则回滚 UI 并 toast
-  //   - 广播自定义事件 'nowen:workspace-features-changed'，由侧边栏/路由守卫订阅
+  //   - 广播自定义事件 'super:workspace-features-changed'，由侧边栏/路由守卫订阅
   const handleToggleFeature = async (key: keyof WorkspaceFeatures, value: boolean) => {
     if (!features || !isOwner) return;
     const prev = features;
@@ -150,7 +150,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
       // 后端归一化结果为准，避免本地与服务端漂移
       setFeatures(saved);
       window.dispatchEvent(
-        new CustomEvent("nowen:workspace-features-changed", {
+        new CustomEvent("super:workspace-features-changed", {
           detail: { workspaceId, features: saved },
         }),
       );

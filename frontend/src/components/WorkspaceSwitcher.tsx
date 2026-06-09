@@ -100,7 +100,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
     setOpen(false);
     onWorkspaceChange?.(id);
     // 触发页面重载以刷新所有数据
-    window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: id } }));
+    window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: id } }));
   };
 
   const currentWs = workspaces.find((w) => w.id === current);
@@ -218,7 +218,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
             onSaved={() => {
               setEditing(null);
               loadWorkspaces();
-              window.dispatchEvent(new CustomEvent("nowen:workspace-changed", { detail: { workspaceId: current } }));
+              window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: current } }));
             }}
           />
         )}
@@ -234,7 +234,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
                 setCurrentWorkspace("personal");
                 onWorkspaceChange?.("personal");
                 window.dispatchEvent(
-                  new CustomEvent("nowen:workspace-changed", {
+                  new CustomEvent("super:workspace-changed", {
                     detail: { workspaceId: "personal" },
                   }),
                 );

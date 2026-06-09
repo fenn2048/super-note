@@ -112,12 +112,12 @@ async function main() {
     args["target-arch"] || process.env.TARGET_ARCH || process.arch;
   const hostPlatform = process.platform;
   const hostArch = process.arch;
-  // --prebuild 或 NOWEN_FORCE_PREBUILD=1：即使同平台也强制走 prebuild-install，
+  // --prebuild 或 SUPER_FORCE_PREBUILD=1：即使同平台也强制走 prebuild-install，
   // 用于本地缺少可用 C++ 工具链（例如 VS 18 还没被 node-gyp 识别）的应急情况。
   const forcePrebuild =
     args["prebuild"] === "true" ||
     args["force-prebuild"] === "true" ||
-    process.env.NOWEN_FORCE_PREBUILD === "1";
+    process.env.SUPER_FORCE_PREBUILD === "1";
   const isCross =
     forcePrebuild ||
     targetPlatform !== hostPlatform ||

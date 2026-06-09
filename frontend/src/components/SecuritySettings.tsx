@@ -448,7 +448,7 @@ function TwoFactorSection() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "nowen-recovery-codes.txt";
+    a.download = "super-recovery-codes.txt";
     a.click();
     URL.revokeObjectURL(url);
   };

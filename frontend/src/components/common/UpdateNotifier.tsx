@@ -85,7 +85,7 @@ function detectClientBuildId(): string | null {
 const CLIENT_BUILD_ID: string | null = detectClientBuildId();
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
-const DISMISS_KEY = "nowen-update-dismissed-version";
+const DISMISS_KEY = "super-update-dismissed-version";
 
 /**
  * dismiss 的读写。
@@ -120,7 +120,7 @@ function writeDismissed(key: string) {
 }
 
 // Android native 壳的 APK 下载页（落在 GitHub release 页，最稳）
-const APK_DOWNLOAD_URL = "https://github.com/cropflre/nowen-note/releases/latest";
+const APK_DOWNLOAD_URL = "https://github.com/cropflre/super-note/releases/latest";
 
 /**
  * 简单的 semver 比较：a < b 返回 -1；a > b 返回 1；相等返回 0。

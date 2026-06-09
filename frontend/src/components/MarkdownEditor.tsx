@@ -186,7 +186,7 @@ function ToolbarDivider() {
  * 颜色刻意不写死，继承当前主题 CSS 变量（--tx-primary / accent-primary 等），
  * 由下面的 EditorView.theme 接管视觉细节，保持和项目整体风格一致。
  */
-const nowenMdHighlight = HighlightStyle.define([
+const superMdHighlight = HighlightStyle.define([
   { tag: t.heading1, fontSize: "1.6em", fontWeight: "700", lineHeight: "1.4" },
   { tag: t.heading2, fontSize: "1.35em", fontWeight: "700", lineHeight: "1.4" },
   { tag: t.heading3, fontSize: "1.15em", fontWeight: "600", lineHeight: "1.4" },
@@ -798,7 +798,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           codeLanguages: languages,
           addKeymap: true,
         }),
-        syntaxHighlighting(nowenMdHighlight),
+        syntaxHighlighting(superMdHighlight),
 
         // 主题 + 可编辑开关（用 Compartment 动态切换）
         baseTheme,
@@ -1049,7 +1049,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   /**
    * 桌面端格式菜单桥（macOS 原生菜单 / 快捷键 → CodeMirror）
    * ----------------------------------------------------------------
-   * 与 TiptapEditor 共用同一个 "nowen:format" 事件契约（由 useDesktopMenuBridge
+   * 与 TiptapEditor 共用同一个 "super:format" 事件契约（由 useDesktopMenuBridge
    * 在收到 Electron 主进程 "menu:format" IPC 时派发）。
    *
    * Markdown ↔ 语义映射：
@@ -1101,8 +1101,8 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         view.focus();
       }
     };
-    window.addEventListener("nowen:format", handler as EventListener);
-    return () => window.removeEventListener("nowen:format", handler as EventListener);
+    window.addEventListener("super:format", handler as EventListener);
+    return () => window.removeEventListener("super:format", handler as EventListener);
   }, [editable]);
 
   // ---------- 标题变化触发保存 ----------
@@ -1322,7 +1322,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       >
         <div
           ref={hostRef}
-          className="nowen-md-editor h-full"
+          className="super-md-editor h-full"
           // 让 CM6 内部滚动容器能获得正确高度
           style={{ minHeight: "100%" }}
         />

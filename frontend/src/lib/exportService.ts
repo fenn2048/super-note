@@ -1045,7 +1045,7 @@ export async function exportAllNotes(
       "metadata.json",
       JSON.stringify({
         version: "1.0",
-        app: "nowen-note",
+        app: "super-note",
         exportedAt: new Date().toISOString(),
         totalNotes: total,
         totalDiaries: diaries.length,
@@ -1063,7 +1063,7 @@ export async function exportAllNotes(
         "export-warnings.json",
         JSON.stringify({
           version: "1.0",
-          app: "nowen-note",
+          app: "super-note",
           generatedAt: new Date().toISOString(),
           summary: { ok: imgStats.ok, failed: imgStats.failed },
           failures: imgStats.failures,
@@ -1092,7 +1092,7 @@ export async function exportAllNotes(
 
     // 5. 触发下载
     const date = new Date().toISOString().slice(0, 10);
-    saveAs(blob, `nowen-note_backup_${date}.zip`);
+    saveAs(blob, `super-note_backup_${date}.zip`);
 
     // 若有图片下载失败，给用户一个非阻塞警告
     if (imgStats.failed > 0) {
@@ -1250,7 +1250,7 @@ export async function exportNotebook(
       "metadata.json",
       JSON.stringify({
         version: "1.0",
-        app: "nowen-note",
+        app: "super-note",
         exportedAt: new Date().toISOString(),
         scope: "notebook",
         rootNotebookId: notebookId,
@@ -1267,7 +1267,7 @@ export async function exportNotebook(
         "export-warnings.json",
         JSON.stringify({
           version: "1.0",
-          app: "nowen-note",
+          app: "super-note",
           generatedAt: new Date().toISOString(),
           scope: "notebook",
           rootNotebookId: notebookId,
@@ -1616,7 +1616,7 @@ async function renderPrintableHtmlToPdfBlob(docHtml: string): Promise<Blob> {
  * 单篇导出为 PDF。
  *
  * 优先级：
- *   1) Electron 桌面端：走 `window.nowenDesktop.exportNoteToPDF`，
+ *   1) Electron 桌面端：走 `window.superDesktop.exportNoteToPDF`，
  *      主进程用离屏 BrowserWindow + webContents.printToPDF **直接保存矢量 PDF**，
  *      用户只需选保存位置，不会弹系统打印对话框；中文/文字可选/体积小。
  *   2) 纯浏览器环境：用 html2canvas + jsPDF **直接生成 PDF 并触发下载**——
@@ -1642,11 +1642,11 @@ export async function exportSingleNoteAsPDF(noteId: string): Promise<ExportPdfRe
 
     // —— 优先：Electron 静默导出 ——
     const desktop = (window as unknown as {
-      nowenDesktop?: {
+      superDesktop?: {
         exportNoteToPDF?: (payload: { html: string; suggestedName?: string }) =>
           Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>;
       };
-    }).nowenDesktop;
+    }).superDesktop;
     if (desktop && typeof desktop.exportNoteToPDF === "function") {
       const res = await desktop.exportNoteToPDF({
         html: docHtml,

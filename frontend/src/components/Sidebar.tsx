@@ -620,7 +620,7 @@ function NotebookItem({
                     onSelect={(noteId) => {
                       import("@/lib/api").then(({ api }) => {
                         api.getNote(noteId).then((fullNote) => {
-                          window.dispatchEvent(new CustomEvent("nowen:open-note", { detail: { noteId, note: fullNote } }));
+                          window.dispatchEvent(new CustomEvent("super:open-note", { detail: { noteId, note: fullNote } }));
                         });
                       });
                     }}
@@ -771,7 +771,7 @@ function ProjectSidebar() {
   const [projectTags, setProjectTags] = useState<Tag[]>([]);
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<string | null>(() => {
     try {
-      const raw = sessionStorage.getItem("nowen-active-project-tag-filter");
+      const raw = sessionStorage.getItem("super-active-project-tag-filter");
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -785,8 +785,8 @@ function ProjectSidebar() {
     const handleWsChange = () => {
       setWorkspaceId(getCurrentWorkspace());
     };
-    window.addEventListener("nowen:workspace-changed", handleWsChange);
-    return () => window.removeEventListener("nowen:workspace-changed", handleWsChange);
+    window.addEventListener("super:workspace-changed", handleWsChange);
+    return () => window.removeEventListener("super:workspace-changed", handleWsChange);
   }, []);
 
   useEffect(() => {
@@ -797,7 +797,7 @@ function ProjectSidebar() {
 
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
-      const val = sessionStorage.getItem("nowen-active-project-filter");
+      const val = sessionStorage.getItem("super-active-project-filter");
       return val ? JSON.parse(val) : { type: "all" };
     } catch {
       return { type: "all" };
@@ -824,23 +824,23 @@ function ProjectSidebar() {
     const handleRefresh = () => {
       fetchGroupsAndProjects();
     };
-    window.addEventListener("nowen:projects-refreshed", handleRefresh);
-    return () => window.removeEventListener("nowen:projects-refreshed", handleRefresh);
+    window.addEventListener("super:projects-refreshed", handleRefresh);
+    return () => window.removeEventListener("super:projects-refreshed", handleRefresh);
   }, [fetchGroupsAndProjects]);
 
   useEffect(() => {
-    const favs = JSON.parse(localStorage.getItem("nowen-fav-projects") || "[]");
+    const favs = JSON.parse(localStorage.getItem("super-fav-projects") || "[]");
     setFavorites(favs);
   }, []);
 
   // Listen to favorite toggles
   useEffect(() => {
     const handleFavToggle = () => {
-      const favs = JSON.parse(localStorage.getItem("nowen-fav-projects") || "[]");
+      const favs = JSON.parse(localStorage.getItem("super-fav-projects") || "[]");
       setFavorites(favs);
     };
-    window.addEventListener("nowen:project-favorite-toggled", handleFavToggle);
-    return () => window.removeEventListener("nowen:project-favorite-toggled", handleFavToggle);
+    window.addEventListener("super:project-favorite-toggled", handleFavToggle);
+    return () => window.removeEventListener("super:project-favorite-toggled", handleFavToggle);
   }, []);
 
   useEffect(() => {
@@ -850,23 +850,23 @@ function ProjectSidebar() {
         setActiveFilter(customEvent.detail);
       }
     };
-    window.addEventListener("nowen:project-filter-changed", handler);
-    return () => window.removeEventListener("nowen:project-filter-changed", handler);
+    window.addEventListener("super:project-filter-changed", handler);
+    return () => window.removeEventListener("super:project-filter-changed", handler);
   }, []);
 
   const selectFilter = (filter: typeof activeFilter) => {
     setActiveFilter(filter);
-    sessionStorage.setItem("nowen-active-project-filter", JSON.stringify(filter));
-    window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: filter }));
+    sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+    window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
     actions.setMobileSidebar(false);
   };
 
   const selectTagFilter = (tagId: string | null) => {
     setSelectedProjectTagId(tagId);
     try {
-      sessionStorage.setItem("nowen-active-project-tag-filter", JSON.stringify(tagId));
+      sessionStorage.setItem("super-active-project-tag-filter", JSON.stringify(tagId));
     } catch {}
-    window.dispatchEvent(new CustomEvent("nowen:project-tag-filter-changed", { detail: { tagId } }));
+    window.dispatchEvent(new CustomEvent("super:project-tag-filter-changed", { detail: { tagId } }));
     actions.setMobileSidebar(false);
   };
 
@@ -881,7 +881,7 @@ function ProjectSidebar() {
     try {
       await api.createProjectGroup({ name, workspaceId: workspaceId === "personal" ? null : workspaceId });
       fetchGroupsAndProjects();
-      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     } catch (e) {
       console.error(e);
     }
@@ -899,7 +899,7 @@ function ProjectSidebar() {
     try {
       await api.updateProjectGroup(groupId, { name });
       fetchGroupsAndProjects();
-      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     } catch (e) {
       console.error(e);
     }
@@ -916,7 +916,7 @@ function ProjectSidebar() {
     try {
       await api.deleteProjectGroup(groupId);
       fetchGroupsAndProjects();
-      window.dispatchEvent(new CustomEvent("nowen:projects-refreshed"));
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     } catch (e) {
       console.error(e);
     }
@@ -1176,7 +1176,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   // 标签区域折叠状态 - 从 localStorage 恢复
   const [tagsExpanded, setTagsExpanded] = useState(() => {
     try {
-      const saved = localStorage.getItem("nowen-tags-expanded");
+      const saved = localStorage.getItem("super-tags-expanded");
       return saved === null ? true : saved === "true";
     } catch {
       return true;
@@ -1186,7 +1186,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   // 笔记本区域折叠状态 - 从 localStorage 恢复
   const [notebooksExpanded, setNotebooksExpanded] = useState(() => {
     try {
-      const saved = localStorage.getItem("nowen-notebooks-expanded");
+      const saved = localStorage.getItem("super-notebooks-expanded");
       return saved === null ? true : saved === "true";
     } catch {
       return true;
@@ -1194,7 +1194,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   });
 
   // v15 信息架构改造前：导航区是一个可折叠的扁平 8 项列表（与笔记本/标签的折叠策略一致），
-  // 用 navExpanded + nowen-nav-expanded localStorage 控制。改造后导航被拆为
+  // 用 navExpanded + super-nav-expanded localStorage 控制。改造后导航被拆为
   // 工作台 / 内容模块 / 工具 三组并始终展开，折叠交互被去掉——主入口不应被隐藏。
   // localStorage key 保留写权也不再读取，旧值会被自然遗忘；如果未来需要恢复，
   // 可以重新引入这套 state。
@@ -1203,7 +1203,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   const toggleTagsExpanded = useCallback(() => {
     setTagsExpanded((prev) => {
       const next = !prev;
-      try { localStorage.setItem("nowen-tags-expanded", String(next)); } catch {}
+      try { localStorage.setItem("super-tags-expanded", String(next)); } catch {}
       return next;
     });
   }, []);
@@ -1212,7 +1212,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   const toggleNotebooksExpanded = useCallback(() => {
     setNotebooksExpanded((prev) => {
       const next = !prev;
-      try { localStorage.setItem("nowen-notebooks-expanded", String(next)); } catch {}
+      try { localStorage.setItem("super-notebooks-expanded", String(next)); } catch {}
       return next;
     });
   }, []);
@@ -1365,7 +1365,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
 
 
 
-  // Listen for nowen:open-note to open note in editor
+  // Listen for super:open-note to open note in editor
 
   useEffect(() => {
 
@@ -1383,9 +1383,9 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
 
     };
 
-    window.addEventListener("nowen:open-note", handler);
+    window.addEventListener("super:open-note", handler);
 
-    return () => window.removeEventListener("nowen:open-note", handler);
+    return () => window.removeEventListener("super:open-note", handler);
 
   }, [actions]);
 
@@ -1503,8 +1503,8 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       actions.setViewMode("all");
       
       // 重置项目模块的活动过滤器，避免过期过滤条件（如分组）跨空间残留导致项目不可见
-      sessionStorage.setItem("nowen-active-project-filter", JSON.stringify({ type: "all" }));
-      window.dispatchEvent(new CustomEvent("nowen:project-filter-changed", { detail: { type: "all" } }));
+      sessionStorage.setItem("super-active-project-filter", JSON.stringify({ type: "all" }));
+      window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: { type: "all" } }));
 
       loadScopedData();
       loadFeatures();
@@ -1514,11 +1514,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     };
     // Y4: MembersPanel 中 owner 改功能开关后会广播此事件，让 Sidebar 立即更新可见项
     const onFeaturesChanged = () => loadFeatures();
-    window.addEventListener("nowen:workspace-changed", onWorkspaceChange);
-    window.addEventListener("nowen:workspace-features-changed", onFeaturesChanged);
+    window.addEventListener("super:workspace-changed", onWorkspaceChange);
+    window.addEventListener("super:workspace-features-changed", onFeaturesChanged);
     return () => {
-      window.removeEventListener("nowen:workspace-changed", onWorkspaceChange);
-      window.removeEventListener("nowen:workspace-features-changed", onFeaturesChanged);
+      window.removeEventListener("super:workspace-changed", onWorkspaceChange);
+      window.removeEventListener("super:workspace-features-changed", onFeaturesChanged);
     };
   }, []);
 
@@ -1986,7 +1986,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     try { actions.refreshNotes(); } catch { /* ignore */ }
     try {
       window.dispatchEvent(
-        new CustomEvent("nowen:storage-changed", { detail: { reason: "notebook-deleted" } }),
+        new CustomEvent("super:storage-changed", { detail: { reason: "notebook-deleted" } }),
       );
     } catch { /* ignore */ }
     setDeleteTarget(null);
@@ -2014,8 +2014,8 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   // 避免在 NoteList 重复实现一份 80 行复杂逻辑。
   useEffect(() => {
     const onOpenEmptyTrash = () => { void openEmptyTrashConfirm(); };
-    window.addEventListener("nowen:open-empty-trash", onOpenEmptyTrash);
-    return () => window.removeEventListener("nowen:open-empty-trash", onOpenEmptyTrash);
+    window.addEventListener("super:open-empty-trash", onOpenEmptyTrash);
+    return () => window.removeEventListener("super:open-empty-trash", onOpenEmptyTrash);
   }, []);
 
   const handleEmptyTrashConfirm = async () => {
@@ -2037,7 +2037,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       }
       // 通知其他视图（FileManager / DataManager）刷新空间占用统计
       try {
-        window.dispatchEvent(new CustomEvent("nowen:storage-changed", { detail: { reason: "trash-emptied" } }));
+        window.dispatchEvent(new CustomEvent("super:storage-changed", { detail: { reason: "trash-emptied" } }));
       } catch { /* ignore */ }
       // 若当前正处于回收站视图，刷新列表
       if (state.viewMode === "trash") {

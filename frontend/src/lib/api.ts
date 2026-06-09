@@ -14,10 +14,10 @@ import {
 } from "@/lib/offlineRead";
 
 // 服务器地址管理
-const SERVER_URL_KEY = "nowen-server-url";
+const SERVER_URL_KEY = "super-server-url";
 
 // ========== 当前工作区（Phase 1 协作） ==========
-const WORKSPACE_KEY = "nowen-current-workspace";
+const WORKSPACE_KEY = "super-current-workspace";
 
 /**
  * 获取当前激活的工作区 ID
@@ -57,7 +57,7 @@ function readServerUrlFromQuery(): string {
   if (typeof window === "undefined") return "";
   try {
     const params = new URLSearchParams(window.location.search);
-    const raw = params.get("serverUrl") || params.get("nowen-server-url") || "";
+    const raw = params.get("serverUrl") || params.get("super-server-url") || "";
     if (!raw || !isValidServerUrl(raw)) return "";
     return raw.replace(/\/+$/, "");
   } catch {
@@ -375,14 +375,14 @@ async function safeJson<T>(res: Response, fullUrl: string): Promise<T> {
 }
 
 function getToken(): string | null {
-  return localStorage.getItem("nowen-token");
+  return localStorage.getItem("super-token");
 }
 
 /**
  * L10: 退出登录的统一入口。
  *
  * 设计要点：
- *   - 移除本 tab 的 token，同时通过 `nowen-logout-broadcast` 触发 storage 事件，
+ *   - 移除本 tab 的 token，同时通过 `super-logout-broadcast` 触发 storage 事件，
  *     让其他 tab 的 AuthGate 也一起退出；
  *   - broadcast 的 value 仅用来触发 storage 事件（不能连续写相同值，否则浏览器会
  *     合并掉不派发事件），因此写 Date.now()；
@@ -393,7 +393,7 @@ export function broadcastLogout(reason?: string) {
   // Phase 6: 登出时顺便告诉后端吊销当前 session（不等待结果，失败忽略）。
   //   注意必须在 removeItem 前拿到 token；使用 keepalive 以让浏览器关闭时也尽量发出去。
   try {
-    const token = localStorage.getItem("nowen-token");
+    const token = localStorage.getItem("super-token");
     if (token) {
       fetch(`${getBaseUrl()}/auth/logout`, {
         method: "POST",
@@ -405,11 +405,11 @@ export function broadcastLogout(reason?: string) {
     /* ignore */
   }
   try {
-    localStorage.removeItem("nowen-token");
-    // 其他 tab 监听到该 key 的 storage 事件后会自己 removeItem("nowen-token") 并回登录页
-    localStorage.setItem("nowen-logout-broadcast", `${Date.now()}|${reason || ""}`);
+    localStorage.removeItem("super-token");
+    // 其他 tab 监听到该 key 的 storage 事件后会自己 removeItem("super-token") 并回登录页
+    localStorage.setItem("super-logout-broadcast", `${Date.now()}|${reason || ""}`);
     // 立即删除，这样下次登出也能再次触发（避免 value 相同被合并）
-    localStorage.removeItem("nowen-logout-broadcast");
+    localStorage.removeItem("super-logout-broadcast");
   } catch {
     /* 隐私模式下 localStorage 可能不可用，忽略 */
   }
@@ -482,7 +482,7 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
     // selfUserId 守卫兜底。
     let connId: string | null = null;
     try {
-      const fn = (window as any)?.__nowenGetConnectionId;
+      const fn = (window as any)?.__superGetConnectionId;
       if (typeof fn === "function") connId = fn();
     } catch {
       /* SSR / window 不可用时静默 */
@@ -512,7 +512,7 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
             "[api] retry without X-Connection-Id succeeded — backend CORS likely missing this header in allowHeaders. Disabling injection for this session.",
           );
           // 关闭后续注入。注意只关一个会话内的注入，不写 storage（升级后端后下次重启即恢复）。
-          try { (window as any).__nowenGetConnectionId = () => null; } catch { /* ignore */ }
+          try { (window as any).__superGetConnectionId = () => null; } catch { /* ignore */ }
         } catch (retryErr: any) {
           // 用户主动 abort（非超时） → 原样抛
           if (retryErr?.name === "AbortError" && userSignal?.aborted) throw retryErr;
@@ -642,7 +642,7 @@ function handleOfflineEnqueue<T>(url: string, method: string, bodyStr?: string):
   });
 
   // 派发自定义事件通知 UI（syncStatus = offline）
-  window.dispatchEvent(new CustomEvent("nowen:offline-queued"));
+  window.dispatchEvent(new CustomEvent("super:offline-queued"));
 
   // Phase D: 离线写也要立刻反映到 localStore，否则用户离线创建的笔记
   //   在重启后会消失（offlineQueue 在 localStorage、笔记本身却没在 IDB 中）。
@@ -703,7 +703,7 @@ export const api = {
     const res = await fetch(`${getBaseUrl()}/settings`);
     if (!res.ok)
       return {
-        site_title: "nowen-note",
+        site_title: "super-note",
         site_favicon: "",
         editor_font_family: "",
         feature_personal_export_enabled: "true",
@@ -1141,7 +1141,7 @@ export const api = {
       { method: "POST", body: JSON.stringify(data) },
     );
     if (res.token) {
-      try { localStorage.setItem("nowen-token", res.token); } catch {}
+      try { localStorage.setItem("super-token", res.token); } catch {}
     }
     return res;
   },
@@ -1153,7 +1153,7 @@ export const api = {
       { method: "POST", body: JSON.stringify({ confirmText }), sudoToken },
     );
     if (res.token) {
-      try { localStorage.setItem("nowen-token", res.token); } catch {}
+      try { localStorage.setItem("super-token", res.token); } catch {}
     }
     return res;
   },
@@ -2448,7 +2448,7 @@ export const api = {
      * 不走 request()，因为 request 只处理 JSON。
      */
     downloadExport: async () => {
-      const token = localStorage.getItem("nowen-token");
+      const token = localStorage.getItem("super-token");
       const res = await fetch(`${getBaseUrl()}/data-file/export`, {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -2461,7 +2461,7 @@ export const api = {
       const cd = res.headers.get("Content-Disposition") || "";
       const m = cd.match(/filename="?([^";]+)"?/);
       const fallbackTs = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const filename = m?.[1] || `nowen-note-${fallbackTs}.data`;
+      const filename = m?.[1] || `super-note-${fallbackTs}.data`;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -2480,7 +2480,7 @@ export const api = {
      * 成功后 requireRestart=true —— 调用方必须明确提示用户重启后端。
      */
     uploadImport: async (file: File, sudoToken: string) => {
-      const token = localStorage.getItem("nowen-token");
+      const token = localStorage.getItem("super-token");
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`${getBaseUrl()}/data-file/import`, {
@@ -2622,7 +2622,7 @@ export const api = {
      *
      * 典型场景：
      *   - 管理员收到「发送到邮箱」的 .bak 附件，想在别的实例接上；
-     *   - 从 U盘 / 异机拷贝 nowen-backup-*.zip 过来。
+     *   - 从 U盘 / 异机拷贝 super-backup-*.zip 过来。
      *
      * 导入本身不触及现网数据——文件只是被放进 backupDir 并补齐 meta.json。要真
      * 正应用它，管理员还需要在列表里点「恢复」，走 dryRun 预览 + sudo 二次确认

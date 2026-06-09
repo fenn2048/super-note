@@ -57,7 +57,7 @@ export default function MobileMorePage() {
       icon: <Settings className="w-6 h-6 text-emerald-500" />,
       desc: "个性化外观、账户与数据同步设置",
       onClick: () => {
-        window.dispatchEvent(new CustomEvent("nowen:open-settings"));
+        window.dispatchEvent(new CustomEvent("super:open-settings"));
       },
     },
   ];

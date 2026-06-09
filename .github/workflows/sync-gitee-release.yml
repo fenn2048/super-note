@@ -15,7 +15,7 @@
 # 必需的 Repository Secrets：
 #   GITEE_TOKEN  — Gitee 个人访问令牌（projects + user_info 权限）
 #   GITEE_OWNER  — Gitee 用户名（如 cropflre）
-#   GITEE_REPO   — Gitee 仓库名（如 nowen-note）
+#   GITEE_REPO   — Gitee 仓库名（如 super-note）
 
 name: Sync Release to Gitee
 

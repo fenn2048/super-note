@@ -1,5 +1,5 @@
 /**
- * Nowen Note 插件管理 API
+ * Super Note 插件管理 API
  *
  * - GET    /api/plugins          — 列出已加载的插件
  * - POST   /api/plugins/reload   — 重新扫描和加载所有插件

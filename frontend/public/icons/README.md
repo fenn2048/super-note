@@ -1,6 +1,6 @@
-# nowen-note 图标系统
+# super-note 图标系统
 
-一套为 nowen-note 专门定制的矢量图标方案，与品牌 Logo（`/nowen-note-icon.svg`）共享同一视觉语言。
+一套为 super-note 专门定制的矢量图标方案，与品牌 Logo（`/super-note-icon.svg`）共享同一视觉语言。
 
 ## 设计规范
 

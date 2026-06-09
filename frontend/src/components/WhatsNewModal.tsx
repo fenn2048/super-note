@@ -36,7 +36,7 @@ interface WhatsNewModalProps {
  * 「更新日志」Modal。
  *
  * 两条使用路径：
- *   1) 首次升级到新版本自动弹出（App.tsx 里检测 localStorage.nowen-seen-version vs __APP_VERSION__）
+ *   1) 首次升级到新版本自动弹出（App.tsx 里检测 localStorage.super-seen-version vs __APP_VERSION__）
  *   2) 「设置 → 关于」面板里手动打开
  *
  * 数据加载策略：
@@ -167,7 +167,7 @@ export default function WhatsNewModal({ open, onClose, highlightVersion }: Whats
                   {t("whatsNew.loadFailed", "更新日志加载失败")}
                 </p>
                 <a
-                  href="https://github.com/cropflre/nowen-note/releases"
+                  href="https://github.com/cropflre/super-note/releases"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg
@@ -257,7 +257,7 @@ export default function WhatsNewModal({ open, onClose, highlightVersion }: Whats
                           flex items-center justify-between shrink-0
                           bg-zinc-50 dark:bg-zinc-900/60">
             <a
-              href="https://github.com/cropflre/nowen-note/releases"
+              href="https://github.com/cropflre/super-note/releases"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-accent-primary
@@ -287,7 +287,7 @@ export default function WhatsNewModal({ open, onClose, highlightVersion }: Whats
  * 首次升级检测 Hook。
  *
  * 策略：
- *   - localStorage.nowen-seen-version 与 __APP_VERSION__ 不一致 → 说明用户是刚升级上来的
+ *   - localStorage.super-seen-version 与 __APP_VERSION__ 不一致 → 说明用户是刚升级上来的
  *   - 首次安装（key 不存在）也会触发一次，让新用户第一次就能看到产品能力速览
  *     （如果不想要此行为，外层组件可以在 enable=false 时不挂载此 Modal）
  *   - 关闭后立刻写回 localStorage，之后再也不弹；下次升版 key 不一致又会触发
@@ -296,7 +296,7 @@ export default function WhatsNewModal({ open, onClose, highlightVersion }: Whats
  *   - shouldShow：当前是否应该展示 Modal
  *   - markSeen：调用后写入 seen version 并把 shouldShow 设为 false（Modal onClose 里调）
  */
-const SEEN_VERSION_KEY = "nowen-seen-version";
+const SEEN_VERSION_KEY = "super-seen-version";
 
 export function useWhatsNew(enable: boolean = true): [boolean, () => void] {
   const [shouldShow, setShouldShow] = useState(false);

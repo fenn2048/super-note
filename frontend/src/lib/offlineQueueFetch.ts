@@ -9,7 +9,7 @@
 import { getBaseUrl } from "@/lib/api";
 
 function getToken(): string | null {
-  return localStorage.getItem("nowen-token");
+  return localStorage.getItem("super-token");
 }
 
 /**

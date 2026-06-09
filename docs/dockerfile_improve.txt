@@ -17,19 +17,19 @@
   macOS 构建示例
 
   # Apple Silicon（arm64）— 原生，最快
-  docker build -t nowen-note .
+  docker build -t super-note .
 
   # Intel Mac（amd64）— 原生
-  docker build -t nowen-note .
+  docker build -t super-note .
 
   # 中国大陆用户（macOS 上 Docker Hub 可达的话不用配）
   docker build \
     --build-arg APK_MIRROR=mirrors.ustc.edu.cn \
     --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-    -t nowen-note .
+    -t super-note .
 
   # 或在 docker-compose 中取消 build.args 注释
-  docker compose build nowen-note
+  docker compose build super-note
 
   对于 macOS 用户，不需要 QEMU / 跨模拟——因为 Docker Desktop 在 Apple Silicon 上原生跑 linux/arm64，在 Intel 上原生跑 linux/amd64，直接 docker build 就是最快的。
 
@@ -45,7 +45,7 @@
 
   使用方式
   
-  # 轻量模式（仅 nowen-note，~80MB 内存，无 AI 服务）
+  # 轻量模式（仅 super-note，~80MB 内存，无 AI 服务）
   docker compose up -d
 
   # 完整模式（含 Ollama + SenseVoice，~2.4GB 内存）
@@ -60,7 +60,7 @@
   ┌──────┬───────────────────────┬──────────┬────────────────────┐
   │ 模式 │       运行服务        │ 内存占用 │      适用场景      │
   ├──────┼───────────────────────┼──────────┼────────────────────┤
-  │ 轻量 │ nowen-note            │ ~80MB    │ 日常笔记+说说+待办 │
+  │ 轻量 │ super-note            │ ~80MB    │ 日常笔记+说说+待办 │
   ├──────┼───────────────────────┼──────────┼────────────────────┤
   │ 完整 │ + Ollama + SenseVoice │ ~2.4GB   │ AI 聊天+语音转文字 │
   └──────┴───────────────────────┴──────────┴────────────────────┘
@@ -71,13 +71,13 @@
  构建方式
 
   # 中国大陆用户（推荐）
-  docker build --build-arg DOCKER_REGISTRY=docker.m.daocloud.io/ -t nowen-note .
+  docker build --build-arg DOCKER_REGISTRY=docker.m.daocloud.io/ -t super-note .
 
   # 海外用户（直接拉 Docker Hub）
-  docker build -t nowen-note .
+  docker build -t super-note .
 
 docker build \
     --build-arg DOCKER_REGISTRY=docker.m.daocloud.io/ \
     --build-arg APK_MIRROR=mirrors.aliyun.com \
     --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-    -t nowen-note .
+    -t super-note .

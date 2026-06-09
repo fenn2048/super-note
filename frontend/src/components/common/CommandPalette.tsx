@@ -129,7 +129,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         e.preventDefault();
         if (!open) {
           // 由外部控制开合，发个 CustomEvent 让 App 层监听并 setOpen(true)
-          window.dispatchEvent(new CustomEvent("nowen:open-command-palette"));
+          window.dispatchEvent(new CustomEvent("super:open-command-palette"));
         }
       } else if (open && e.key === "Escape") {
         e.preventDefault();

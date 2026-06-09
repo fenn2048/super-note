@@ -1,8 +1,8 @@
-# nowen-note
+# super-note
 
 > 自托管的私有知识库，对标群晖 Note Station。
 >
-> A self-hosted private knowledge base. [English README](./README.en.md) · [作者感言](./AUTHOR_STORY.md) · [在线体验](http://note.nowen.cn/)
+> A self-hosted private knowledge base. [English README](./README.en.md) · [作者感言](./AUTHOR_STORY.md) · [在线体验](http://note.super.cn/)
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/Node-20%2B-green.svg)](https://nodejs.org/)
@@ -17,7 +17,7 @@
 - **文件管理**：图片缩略图（webp 三档自适应，密集图床场景流量降至 1/100）、「我的上传」分类（已引用 / 未引用细分）、孤儿清理
 - **自动化**：沙箱插件系统、Webhook、审计日志、定时自动备份
 - **多端**：Web / Electron（Win/macOS/Linux）/ Android（Capacitor）
-- **开发者生态**：MCP Server、TypeScript SDK、CLI、[浏览器剪藏扩展](https://chromewebstore.google.com/detail/nowen-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)、OpenAPI 3.0（见 [`packages/`](./packages)）
+- **开发者生态**：MCP Server、TypeScript SDK、CLI、[浏览器剪藏扩展](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)、OpenAPI 3.0（见 [`packages/`](./packages)）
 
 ## 技术栈
 
@@ -41,7 +41,7 @@ React 18 · TypeScript · Vite 5 · Tiptap 3 · Tailwind · Hono 4 · SQLite(FTS
 
 不想本地部署？可以直接打开作者维护的官方体验站点：
 
-- 地址：<https://note.nowen.cn/>
+- 地址：<https://note.super.cn/>
 - 账号：`demo`
 - 密码：`demo123456`
 
@@ -54,8 +54,8 @@ React 18 · TypeScript · Vite 5 · Tiptap 3 · Tailwind · Hono 4 · SQLite(FTS
 ### Docker（推荐）
 
 ```bash
-git clone https://github.com/cropflre/nowen-note.git
-cd nowen-note
+git clone https://github.com/cropflre/super-note.git
+cd super-note
 docker-compose up -d
 ```
 
@@ -66,8 +66,8 @@ docker-compose up -d
 需要 Node.js 20+。
 
 ```bash
-git clone https://github.com/cropflre/nowen-note.git
-cd nowen-note
+git clone https://github.com/cropflre/super-note.git
+cd super-note
 npm run install:all
 npm run dev:backend   # 后端 :3001
 npm run dev:frontend  # 前端 :5173
@@ -82,11 +82,11 @@ npm run electron:dev      # Electron 开发
 npm run electron:build    # 打包 Windows / macOS / Linux
 ```
 
-Android 可直接从 [Releases](https://github.com/cropflre/nowen-note/releases) 下载 APK，或 `npx cap sync android && npx cap open android` 自行构建。
+Android 可直接从 [Releases](https://github.com/cropflre/super-note/releases) 下载 APK，或 `npx cap sync android && npx cap open android` 自行构建。
 
 ### 飞牛 fnOS（.fpk 一键安装）
 
-从 [Releases](https://github.com/cropflre/nowen-note/releases) 下载最新 `nowen-note-x.y.z.fpk`，在飞牛 NAS 「应用中心 → 设置 → 手动安装应用」选中文件即可。安装后桌面出现「弄文笔记」图标，浏览器打开 `http://<飞牛IP>:3001`。
+从 [Releases](https://github.com/cropflre/super-note/releases) 下载最新 `super-note-x.y.z.fpk`，在飞牛 NAS 「应用中心 → 设置 → 手动安装应用」选中文件即可。安装后桌面出现「弄文笔记」图标，浏览器打开 `http://<飞牛IP>:3001`。
 
 > 当前 .fpk 仅支持 x86_64 飞牛设备（`platform=x86`）。手动打包参见 [scripts/fpk/README.md](./scripts/fpk/README.md)。
 
@@ -95,7 +95,7 @@ Android 可直接从 [Releases](https://github.com/cropflre/nowen-note/releases)
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `PORT` | `3001` | 服务端口 |
-| `DB_PATH` | `/app/data/nowen-note.db` | 数据库文件路径 |
+| `DB_PATH` | `/app/data/super-note.db` | 数据库文件路径 |
 | `OLLAMA_URL` | — | 本地 Ollama 地址（可选） |
 
 数据持久化：容器需将 **`/app/data`** 映射到宿主机（不是 `/data`）。镜像已声明 `VOLUME ["/app/data"]`，主流 NAS 面板会自动预填该路径。
@@ -104,7 +104,7 @@ Android 可直接从 [Releases](https://github.com/cropflre/nowen-note/releases)
 
 ## 文档
 
-- 浏览器剪藏扩展（Chrome / Edge）：[Chrome Web Store](https://chromewebstore.google.com/detail/nowen-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)
+- 浏览器剪藏扩展（Chrome / Edge）：[Chrome Web Store](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)
 - 部署指南（本地 / Docker / 桌面 / 移动 / 群晖 / 绿联 / 威联通 / 飞牛 / 极空间 / ARM64）：[docs/deployment.md](./docs/deployment.md)
 - 飞牛 .fpk 应用打包：[scripts/fpk/README.md](./scripts/fpk/README.md)
 - ARM64 详解：[docs/deploy-arm64.md](./docs/deploy-arm64.md)
@@ -124,9 +124,9 @@ Android 可直接从 [Releases](https://github.com/cropflre/nowen-note/releases)
 终端执行一行命令解除隔离即可（路径换成你实际拖过去的位置）：
 
 ```bash
-sudo xattr -dr com.apple.quarantine "/Applications/Nowen Note.app"
+sudo xattr -dr com.apple.quarantine "/Applications/Super Note.app"
 # 或
-sudo xattr -dr com.apple.quarantine ~/Downloads/Nowen\ Note.app
+sudo xattr -dr com.apple.quarantine ~/Downloads/Super\ Note.app
 ```
 
 执行后双击重新打开即可。Apple Silicon 用户若用了 x64 版本，需要 Rosetta 2

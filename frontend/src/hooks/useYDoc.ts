@@ -19,7 +19,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
-import { NowenYjsProvider, ProviderStatus, ProviderUser } from "@/lib/yjsProvider";
+import { SuperYjsProvider, ProviderStatus, ProviderUser } from "@/lib/yjsProvider";
 import { realtime } from "@/lib/realtime";
 
 export interface UseYDocOptions {
@@ -31,7 +31,7 @@ export interface UseYDocOptions {
 
 export interface UseYDocResult {
   doc: Y.Doc | null;
-  provider: NowenYjsProvider | null;
+  provider: SuperYjsProvider | null;
   status: ProviderStatus | "idle";
   /** 是否已完成初次 sync（可开始绑定编辑器） */
   synced: boolean;
@@ -46,7 +46,7 @@ export function useYDoc({ noteId, user, enabled }: UseYDocOptions): UseYDocResul
   });
 
   // 用 ref 保存当前 provider，方便在 effect cleanup 里 destroy 时保证是同一个
-  const currentRef = useRef<{ doc: Y.Doc; provider: NowenYjsProvider } | null>(null);
+  const currentRef = useRef<{ doc: Y.Doc; provider: SuperYjsProvider } | null>(null);
 
   useEffect(() => {
     if (!enabled || !noteId || !user) {
@@ -64,7 +64,7 @@ export function useYDoc({ noteId, user, enabled }: UseYDocOptions): UseYDocResul
     realtime.connect();
 
     const doc = new Y.Doc();
-    const provider = new NowenYjsProvider(noteId, user, doc);
+    const provider = new SuperYjsProvider(noteId, user, doc);
     currentRef.current = { doc, provider };
 
     setState({ doc, provider, status: provider.getStatus(), synced: false });

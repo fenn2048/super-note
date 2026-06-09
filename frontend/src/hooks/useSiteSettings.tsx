@@ -13,7 +13,7 @@ export interface SiteConfig {
 }
 
 const DEFAULT_CONFIG: SiteConfig = {
-  title: "nowen-note",
+  title: "super-note",
   favicon: "",
   editorFontFamily: "",
 };
@@ -64,7 +64,7 @@ function parseDataUrlMime(url: string): string {
 }
 
 function applyToDOM(title: string, faviconUrl: string) {
-  document.title = title || "nowen-note";
+  document.title = title || "super-note";
 
   // 清理页面上所有"图标类"link（含 alternate/apple-touch/shortcut），避免旧节点覆盖新节点
   const oldLinks = document.head.querySelectorAll<HTMLLinkElement>(
@@ -132,7 +132,7 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     api.getSiteSettingsPublic().then(async (data) => {
       const config: SiteConfig = {
-        title: data.site_title || "nowen-note",
+        title: data.site_title || "super-note",
         favicon: data.site_favicon || "",
         editorFontFamily: data.editor_font_family || "",
       };
@@ -166,7 +166,7 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
       site_favicon: favicon,
     });
     const config: SiteConfig = {
-      title: data.site_title || "nowen-note",
+      title: data.site_title || "super-note",
       favicon: data.site_favicon || "",
       editorFontFamily: data.editor_font_family || siteConfig.editorFontFamily,
     };

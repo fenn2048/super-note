@@ -18,12 +18,12 @@ let initialized = false;
 // ---- 上下文（由 main.js 注入） --------------------------------------------
 // main.js 在 app.whenReady 之后会调 setUpdaterContext({ getUserDataPath })
 // 把 userData 目录的真实路径告诉 updater。这样升级前备份就能落在与 backend
-// 完全一致的 `{userData}/nowen-data` 下，不会出现两套数据目录的怪异情况。
+// 完全一致的 `{userData}/super-data` 下，不会出现两套数据目录的怪异情况。
 let ctx = {
   /** 返回 backend 实际使用的数据目录（含 SQLite）。默认兜底写进 app.getPath("userData") */
   getUserDataPath: () => {
     try {
-      return path.join(app.getPath("userData"), "nowen-data");
+      return path.join(app.getPath("userData"), "super-data");
     } catch {
       return null;
     }
@@ -51,8 +51,8 @@ function setUpdaterContext(next) {
  *   之前做一次"纯粹的 DB 快照"作为最后一道兜底。
  *
  * 策略：
- *   - 源文件：{userData}/nowen-data/nowen-note.db
- *   - 目标：  {userData}/nowen-data/backups-pre-update/<ISO-ts>.db
+ *   - 源文件：{userData}/super-data/super-note.db
+ *   - 目标：  {userData}/super-data/backups-pre-update/<ISO-ts>.db
  *   - 只保留最近 3 份（按文件名字典序；ISO 时间戳保证与创建顺序一致）
  *   - 使用 fs.copyFileSync；SQLite 支持 WAL 模式时 .db 单文件可能不含最新
  *     事务，但 backend 进程此刻已被 autoUpdater 退出流程停掉，checkpoint
@@ -67,7 +67,7 @@ function backupDatabaseBeforeUpdate() {
       console.warn("[updater] 备份跳过：userDataPath 为空");
       return;
     }
-    const dbPath = path.join(userDataPath, "nowen-note.db");
+    const dbPath = path.join(userDataPath, "super-note.db");
     if (!fs.existsSync(dbPath)) {
       console.log("[updater] 备份跳过：DB 文件不存在", dbPath);
       return;
@@ -153,7 +153,7 @@ function initAutoUpdater(opts = {}) {
         defaultId: 0,
         cancelId: 1,
         title: "更新已下载",
-        message: `Nowen Note ${info?.version} 已下载完成`,
+        message: `Super Note ${info?.version} 已下载完成`,
         detail: "重启后将自动安装新版本。安装前会自动保留一份数据库快照。",
       })
       .then((r) => {

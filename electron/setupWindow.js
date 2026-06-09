@@ -84,7 +84,7 @@ const HTML = String.raw`
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>选择服务器 - Nowen Note</title>
+<title>选择服务器 - Super Note</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -158,7 +158,7 @@ const HTML = String.raw`
 <div class="wrap">
   <div>
     <h1>切换到轻量模式</h1>
-    <div class="sub">连接到一个已经部署好的 Nowen Note 服务（Docker / 团队服务器）。本机将不再启动后端，也不创建本地数据库。</div>
+    <div class="sub">连接到一个已经部署好的 Super Note 服务（Docker / 团队服务器）。本机将不再启动后端，也不创建本地数据库。</div>
   </div>
 
   <div class="section-title">服务器地址</div>
@@ -208,7 +208,7 @@ const HTML = String.raw`
 
   function renderLan() {
     if (!lanItems.length) {
-      lanList.innerHTML = '<div class="lan-empty">未发现局域网内的 Nowen Note 服务（确保服务端开启了 mDNS 广播）。</div>';
+      lanList.innerHTML = '<div class="lan-empty">未发现局域网内的 Super Note 服务（确保服务端开启了 mDNS 广播）。</div>';
       return;
     }
     lanList.innerHTML = "";

@@ -17,7 +17,7 @@
 
 export type EditorMode = "md" | "tiptap";
 
-export const EDITOR_MODE_KEY = "nowen.editor_mode";
+export const EDITOR_MODE_KEY = "super.editor_mode";
 
 /** URL 查询参数 key；`?md=1` 强制启用 MD，`?md=0` 强制启用 Tiptap */
 const URL_FORCE_KEY = "md";

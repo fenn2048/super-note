@@ -8,7 +8,7 @@
 
 import type { AIEnhanceMode, AIEnhanceTasks, ClipMode } from "./protocol";
 
-export interface NowenClipperConfig {
+export interface SuperClipperConfig {
   /** 后端地址，例如 https://note.example.com 或 http://localhost:3001 */
   serverUrl: string;
   /** 登录用户名 */
@@ -54,7 +54,7 @@ export interface NowenClipperConfig {
   lastNotebookId?: string;
 }
 
-const DEFAULTS: NowenClipperConfig = {
+const DEFAULTS: SuperClipperConfig = {
   serverUrl: "",
   username: "",
   token: "",
@@ -87,14 +87,14 @@ const DEFAULTS: NowenClipperConfig = {
   lastNotebookId: "__default__",
 };
 
-const CONFIG_KEY = "nowenClipperConfig";
+const CONFIG_KEY = "superClipperConfig";
 
 /** 读取配置，未设置时返回默认值 */
-export async function getConfig(): Promise<NowenClipperConfig> {
+export async function getConfig(): Promise<SuperClipperConfig> {
   const store = chrome.storage.sync || chrome.storage.local;
   const data = (await store.get(CONFIG_KEY)) as Record<string, unknown>;
-  const raw = (data[CONFIG_KEY] || {}) as Partial<NowenClipperConfig>;
-  const merged = { ...DEFAULTS, ...raw } as NowenClipperConfig;
+  const raw = (data[CONFIG_KEY] || {}) as Partial<SuperClipperConfig>;
+  const merged = { ...DEFAULTS, ...raw } as SuperClipperConfig;
   // aiEnhanceTasks 是嵌套对象，浅合并会丢字段——单独深合并
   if (raw.aiEnhanceTasks) {
     merged.aiEnhanceTasks = { ...DEFAULTS.aiEnhanceTasks, ...raw.aiEnhanceTasks };
@@ -103,16 +103,16 @@ export async function getConfig(): Promise<NowenClipperConfig> {
 }
 
 /** 写入配置（浅合并，传入 null 会覆盖为默认） */
-export async function setConfig(patch: Partial<NowenClipperConfig>): Promise<NowenClipperConfig> {
+export async function setConfig(patch: Partial<SuperClipperConfig>): Promise<SuperClipperConfig> {
   const current = await getConfig();
-  const merged = { ...current, ...patch } as NowenClipperConfig;
+  const merged = { ...current, ...patch } as SuperClipperConfig;
   const store = chrome.storage.sync || chrome.storage.local;
   await store.set({ [CONFIG_KEY]: merged });
   return merged;
 }
 
 /** 简单判断是否"已配置好可用"（至少有 server + token） */
-export function isConfigured(cfg: NowenClipperConfig): boolean {
+export function isConfigured(cfg: SuperClipperConfig): boolean {
   return !!cfg.serverUrl && !!cfg.token;
 }
 
