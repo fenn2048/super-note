@@ -311,8 +311,21 @@ export default function ProjectCenter() {
   const [roleFilter, setRoleFilter] = useState<"assigned" | "created" | "participating">("assigned");
   const [statusFilter, setStatusFilter] = useState<"pending" | "today" | "overdue" | "completed">("pending");
   const [wsMembers, setWsMembers] = useState<any[]>([]);
+  // 任务搜索状态现在由 Sidebar 统一管理，这里只保留本地状态用于同步
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<string | null>(null);
+
+  // 监听来自 Sidebar 的任务搜索状态变化
+  useEffect(() => {
+    const handleProjectSearchChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ query: string }>;
+      if (customEvent.detail?.query !== undefined) {
+        setProjectSearchQuery(customEvent.detail.query);
+      }
+    };
+    window.addEventListener("super:project-search-changed", handleProjectSearchChange);
+    return () => window.removeEventListener("super:project-search-changed", handleProjectSearchChange);
+  }, []);
 
   // Quick Add task state
   const [quickAddTitle, setQuickAddTitle] = useState("");

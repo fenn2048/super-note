@@ -30,13 +30,17 @@ import { Diary, DiaryStats, Tag } from "@/types";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/lib/toast";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useApp } from "@/store/AppContext";
 import GenericTagInput from "@/components/GenericTagInput";
 import DiaryCalendar from "@/components/DiaryCalendar";
+import DiaryHeatMap from "@/components/DiaryHeatMap";
 import MentionPicker, { parseMentionTrigger, replaceMentionText } from "@/components/MentionPicker";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+
 
 marked.setOptions({
   gfm: true,
@@ -2180,6 +2184,7 @@ export default function DiaryCenter() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [stats, setStats] = useState<DiaryStats | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [slogan, setSlogan] = useState("Think Different"); // 可从设置读取
 
   const [visibilityFilter, setVisibilityFilter] = useState<string>("all");
   const [selectedTagId, setSelectedTagId] = useState<string>("all");
@@ -2189,15 +2194,33 @@ export default function DiaryCenter() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [calendarDate, setCalendarDate] = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
+  // 说说搜索状态 - 从 sessionStorage 恢复
+  const [diarySearchQuery, setDiarySearchQuery] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("super-diary-search-query");
+      return saved ? JSON.parse(saved) : "";
+    } catch {
+      return "";
+    }
+  });
+
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
+      setDebouncedSearch(diarySearchQuery);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [diarySearchQuery]);
+
+  // 处理搜索输入变化
+  const handleDiarySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setDiarySearchQuery(query);
+    try {
+      sessionStorage.setItem("super-diary-search-query", JSON.stringify(query));
+    } catch {}
+  };
   const activeRange = useMemo(
     () => presetToRange(preset, customRange),
     [preset, customRange],
@@ -2378,38 +2401,77 @@ export default function DiaryCenter() {
 
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-app-bg">
-      {/* 左侧标签筛选栏 */}
-      <div className="hidden md:flex w-[180px] min-w-[180px] shrink-0 flex-col border-r border-app-border bg-app-surface">
-        <div className="p-3 border-b border-app-border">
-          <h3 className="text-[11px] font-semibold text-tx-tertiary uppercase tracking-wider">标签筛选</h3>
+      {/* 左侧边栏：空间切换 + 搜索框 + 热力图 + 标签筛选 */}
+      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col border-r border-app-border bg-app-sidebar overflow-hidden">
+        {/* 顶部区域：空间切换 + 搜索框 */}
+        <div className="flex-shrink-0 border-b border-app-border/40 p-3 space-y-2">
+          {/* 空间切换组件 */}
+          <WorkspaceSwitcher />
+
+          {/* 搜索框 */}
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+            <Input
+              placeholder={t('diary.searchPlaceholder') || "搜索说说..."}
+              className="pl-8 h-8 text-xs bg-app-bg border-app-border"
+              value={diarySearchQuery}
+              onChange={handleDiarySearchChange}
+            />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-          <button
-            onClick={() => setSelectedTagId("all")}
-            className={cn(
-              "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors",
-              selectedTagId === "all" || !selectedTagId
-                ? "bg-accent-primary/10 text-accent-primary font-medium"
-                : "text-tx-secondary hover:bg-app-hover"
-            )}
-          >
-            全部
-          </button>
-          {state.tags.map((tag) => (
+
+        {/* 说说热力图 */}
+        <div className="flex-shrink-0 border-b border-app-border/40 p-3 bg-app-bg/30">
+          <DiaryHeatMap
+            stats={useMemo(() => {
+              // 从所有加载的 items 计算每日统计
+              const counts: Record<string, number> = {};
+              for (const item of items) {
+                const dateStr = item.createdAt.split(" ")[0]; // YYYY-MM-DD
+                counts[dateStr] = (counts[dateStr] || 0) + 1;
+              }
+              return Object.entries(counts).map(([date, count]) => ({ date, count }));
+            }, [items])}
+            onDateSelect={handleCalendarDateSelect}
+          />
+        </div>
+
+        {/* 标签筛选区域 */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-tx-tertiary px-1 mb-2">
+            {t('diary.tagFilter') || "标签筛选"}
+          </div>
+          <div className="space-y-1">
+            {/* "全部"按钮 */}
             <button
-              key={tag.id}
-              onClick={() => setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id)}
+              onClick={() => setSelectedTagId("all")}
               className={cn(
-                "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors flex items-center gap-2",
-                selectedTagId === tag.id
+                "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                selectedTagId === "all" || !selectedTagId
                   ? "bg-accent-primary/10 text-accent-primary font-medium"
                   : "text-tx-secondary hover:bg-app-hover"
               )}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-              <span className="truncate">{tag.name}</span>
+              <span className="w-2 h-2 rounded-full bg-accent-primary shrink-0" />
+              <span>{t('diary.allTags') || "全部标签"}</span>
             </button>
-          ))}
+            {/* 标签列表 */}
+            {state.tags.map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id)}
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                  selectedTagId === tag.id
+                    ? "bg-accent-primary/10 text-accent-primary font-medium"
+                    : "text-tx-secondary hover:bg-app-hover"
+                )}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                <span className="truncate">{tag.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -2417,7 +2479,7 @@ export default function DiaryCenter() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <ScrollArea className="flex-1" ref={scrollRef}>
           <div className="max-w-[640px] mx-auto px-4 py-6 space-y-6">
-          {/* 顶部标题 + 统计 + 视图切换 */}
+          {/* 顶部标题 + 统计 */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
@@ -2434,22 +2496,9 @@ export default function DiaryCenter() {
                 )}
               </div>
             </div>
-            {/* 日历/列表切换 */}
-            <button
-              onClick={() => setViewMode((v) => (v === "list" ? "calendar" : "list"))}
-              className={cn(
-                "w-9 h-9 rounded-xl flex items-center justify-center transition-all",
-                viewMode === "calendar"
-                  ? "bg-accent-primary/10 text-accent-primary"
-                  : "text-tx-tertiary hover:bg-app-hover",
-              )}
-              title={viewMode === "calendar" ? "列表视图" : "日历视图"}
-            >
-              {viewMode === "calendar" ? <Calendar size={18} /> : <CalendarDays size={18} />}
-            </button>
           </div>
 
-          {/* 筛选时间 + 可见性 + 标签 */}
+          {/* 筛选时间 + 可见性 */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <FilterBar
               preset={preset}
@@ -2457,35 +2506,7 @@ export default function DiaryCenter() {
               onChange={handleFilterChange}
             />
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* 搜索框 */}
-              <div className="relative w-full sm:w-[160px]">
-                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索说说..."
-                  className="w-full text-[11px] pl-8 pr-3 py-1 bg-app-hover/80 border border-app-border text-tx-secondary rounded-full outline-none focus:border-accent-primary/50 transition-all font-medium"
-                />
-              </div>
-
-              {/* 标签筛选 */}
-              {state.tags.length > 0 && (
-                <select
-                  value={selectedTagId}
-                  onChange={(e) => setSelectedTagId(e.target.value)}
-                  className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-3 py-1 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium"
-                >
-                  <option value="all">🏷️ 所有标签</option>
-                  {state.tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-
+            <div className="flex flex-wrap items-center gap-2">
               {/* 可见性筛选 */}
               <div className="flex items-center gap-1 bg-app-hover/40 p-0.5 rounded-full border border-app-border/40 select-none">
                 <button

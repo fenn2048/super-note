@@ -1199,6 +1199,44 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   // localStorage key 保留写权也不再读取，旧值会被自然遗忘；如果未来需要恢复，
   // 可以重新引入这套 state。
 
+  // 项目管理视图下的任务搜索状态
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
+
+  // 监听项目管理视图的搜索状态变化
+  useEffect(() => {
+    const handleProjectSearchChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ query: string }>;
+      if (customEvent.detail?.query !== undefined) {
+        setProjectSearchQuery(customEvent.detail.query);
+        // 如果在项目管理视图，同步更新 searchInput
+        if (state.viewMode === "projects") {
+          setSearchInput(customEvent.detail.query);
+        }
+      }
+    };
+    window.addEventListener("super:project-search-changed", handleProjectSearchChange);
+    return () => window.removeEventListener("super:project-search-changed", handleProjectSearchChange);
+  }, [state.viewMode]);
+
+  // 当切换到项目管理视图时，清空笔记搜索，加载任务搜索状态
+  useEffect(() => {
+    if (state.viewMode === "projects") {
+      // 从 sessionStorage 恢复任务搜索状态
+      try {
+        const saved = sessionStorage.getItem("super-project-search-query");
+        const query = saved ? JSON.parse(saved) : "";
+        setProjectSearchQuery(query);
+        setSearchInput(query);
+      } catch {
+        setProjectSearchQuery("");
+        setSearchInput("");
+      }
+    } else {
+      // 离开项目管理视图时，清空任务搜索状态
+      setProjectSearchQuery("");
+    }
+  }, [state.viewMode]);
+
   // 切换标签折叠状态时持久化到 localStorage
   const toggleTagsExpanded = useCallback(() => {
     setTagsExpanded((prev) => {
@@ -2142,9 +2180,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       {/* Workspace Switcher + Search（v15：合并垂直 padding，
           原来 pt-2 + py-2 共占 ~16px 间隙，现在压到 ~8px） */}
       <div className="px-3 pt-2 pb-1">
-        <div className="text-xl font-bold text-tx-primary px-1 mb-2 truncate" title={currentWorkspaceName}>
-          {currentWorkspaceName}
-        </div>
         <WorkspaceSwitcher />
       </div>
 
@@ -2153,7 +2188,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
           <Input
-            placeholder={t('sidebar.searchPlaceholder')}
+            placeholder={state.viewMode === "projects" ? (t('projects.searchTasksPlaceholder') || "搜索任务...") : t('sidebar.searchPlaceholder')}
             className="pl-8 h-8 text-xs bg-app-bg border-app-border"
             value={searchInput}
             /* data-sidebar-search：Electron 原生"搜索"菜单 / Dock Quick Action 的
@@ -2161,13 +2196,28 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
              * "搜索"语义就是聚焦此输入框。 */
             data-sidebar-search=""
             onChange={(e) => {
-              setSearchInput(e.target.value);
-              if (e.target.value.trim()) {
-                actions.setViewMode("search");
-                actions.setSearchQuery(e.target.value);
+              const query = e.target.value;
+              setSearchInput(query);
+              
+              if (state.viewMode === "projects") {
+                // 项目管理视图：更新任务搜索状态
+                setProjectSearchQuery(query);
+                try {
+                  sessionStorage.setItem("super-project-search-query", JSON.stringify(query));
+                } catch {}
+                // 广播搜索状态变化，让 ProjectCenter 同步
+                window.dispatchEvent(
+                  new CustomEvent("super:project-search-changed", { detail: { query } })
+                );
               } else {
-                actions.setViewMode("all");
-                actions.setSearchQuery("");
+                // 其他视图：笔记搜索逻辑
+                if (query.trim()) {
+                  actions.setViewMode("search");
+                  actions.setSearchQuery(query);
+                } else {
+                  actions.setViewMode("all");
+                  actions.setSearchQuery("");
+                }
               }
             }}
           />
