@@ -498,6 +498,46 @@ function AppLayout() {
     };
   }, [actions, i18n.language]);
 
+  // 当未读消息变化时，动态更新移动端应用图标的角标(Badge)
+  useEffect(() => {
+    if (isNativePlatform()) {
+      const updateBadge = async () => {
+        try {
+          const { Badge } = await import("@capawesome/capacitor-badge");
+          const perm = await Badge.checkPermissions();
+          if (perm.display !== "granted") {
+            await Badge.requestPermissions();
+          }
+          await Badge.set({ count: state.unreadMentionCount });
+        } catch (err) {
+          console.error("Failed to update app icon badge:", err);
+        }
+      };
+      updateBadge();
+    }
+  }, [state.unreadMentionCount]);
+
+  // 监听移动端生命周期状态变化，返回前台时立即同步最新消息与重连 WebSocket
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    
+    let active = true;
+    const handler = CapApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive && active) {
+        actions.refreshMentionCount();
+        realtime.connect();
+        api.getTaskStats().then((stats) => {
+          actions.setReminderActiveCount(stats.activeReminders || 0);
+        }).catch(console.error);
+      }
+    });
+
+    return () => {
+      active = false;
+      handler.then((h) => h.remove());
+    };
+  }, [actions]);
+
   // 监听通知点击/仪表盘点击的快捷跳转事件
   useEffect(() => {
     const handleNavigateTrigger = async () => {
@@ -1239,10 +1279,18 @@ function MobileTabBar() {
           )}
         >
           <div className={cn(
-            "p-1 rounded-md transition-transform duration-200",
+            "p-1 rounded-md transition-transform duration-200 relative",
             tab.active ? "scale-110" : ""
           )}>
             {tab.icon}
+            {tab.id === "more" && state.unreadMentionCount > 0 && (
+              <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500 border border-app-surface shadow-sm" />
+            )}
+            {tab.id === "projects" && state.reminderActiveCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-[2.5px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
+                {state.reminderActiveCount}
+              </span>
+            )}
           </div>
           <span className="text-[11px] font-medium tracking-wide mt-0.5">{tab.label}</span>
           {tab.active && (

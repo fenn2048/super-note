@@ -433,6 +433,20 @@ function AboutPanel() {
   const { t } = useTranslation();
   const server = getServerUrl() || (typeof window !== "undefined" ? window.location.origin : "");
   const downloadBaseUrl = server.replace(/\/+$/, "");
+  const [isIgnoringBattery, setIsIgnoringBattery] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
+      import("@capacitor/core").then(({ registerPlugin }) => {
+        const AppPermissions = registerPlugin<any>("AppPermissions");
+        AppPermissions.isIgnoringBatteryOptimizations()
+          .then((res: any) => {
+            setIsIgnoringBattery(!!res.isIgnoring);
+          })
+          .catch(console.error);
+      });
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -563,34 +577,80 @@ function AboutPanel() {
 
       {/* Android 专属功能 */}
       {typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android" && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Wrench size={15} className="text-accent-primary" />
-            调试与日志
-          </h3>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            如果您在使用过程中遇到问题，可以导出应用运行日志以协助排查和诊断。
-          </p>
-          <button
-            onClick={async () => {
-              const { toast } = await import("@/lib/toast");
-              const loadingToast = toast.info("正在导出日志...", 0);
-              try {
-                const { registerPlugin } = await import("@capacitor/core");
-                const AppPermissions = registerPlugin<any>("AppPermissions");
-                await AppPermissions.exportLogs();
-                toast.dismiss(loadingToast);
-                toast.success("日志已成功导出并可分享");
-              } catch (err: any) {
-                toast.dismiss(loadingToast);
-                toast.error(err?.message || "导出日志失败");
-              }
-            }}
-            className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
-          >
-            <Download size={14} />
-            导出运行日志
-          </button>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Shield size={15} className="text-accent-primary" />
+              后台服务保活
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              为了确保在后台能够稳定地通过 WebSocket 接收实时消息提醒，请确保关闭系统的电池优化。
+            </p>
+            
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 text-xs">
+              <span className="text-zinc-600 dark:text-zinc-400">电池优化状态</span>
+              <span className={cn(
+                "font-semibold",
+                isIgnoringBattery === true ? "text-emerald-500" : "text-amber-500"
+              )}>
+                {isIgnoringBattery === true ? "已关闭优化 (后台运行稳定)" : "未关闭优化 (可能被后台清理)"}
+              </span>
+            </div>
+
+            {isIgnoringBattery !== true && (
+              <button
+                onClick={async () => {
+                  try {
+                    const { registerPlugin } = await import("@capacitor/core");
+                    const AppPermissions = registerPlugin<any>("AppPermissions");
+                    await AppPermissions.requestIgnoreBatteryOptimizations();
+                    
+                    // Re-check after returning from settings (or just wait a bit)
+                    setTimeout(async () => {
+                      const res = await AppPermissions.isIgnoringBatteryOptimizations();
+                      setIsIgnoringBattery(!!res.isIgnoring);
+                    }, 2000);
+                  } catch (err: any) {
+                    const { toast } = await import("@/lib/toast");
+                    toast.error(err?.message || "无法打开电池优化设置");
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+              >
+                去关闭电池优化
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Wrench size={15} className="text-accent-primary" />
+              调试与日志
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              如果您在使用过程中遇到问题，可以导出应用运行日志以协助排查和诊断。
+            </p>
+            <button
+              onClick={async () => {
+                const { toast } = await import("@/lib/toast");
+                const loadingToast = toast.info("正在导出日志...", 0);
+                try {
+                  const { registerPlugin } = await import("@capacitor/core");
+                  const AppPermissions = registerPlugin<any>("AppPermissions");
+                  await AppPermissions.exportLogs();
+                  toast.dismiss(loadingToast);
+                  toast.success("日志已成功导出并可分享");
+                } catch (err: any) {
+                  toast.dismiss(loadingToast);
+                  toast.error(err?.message || "导出日志失败");
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+            >
+              <Download size={14} />
+              导出运行日志
+            </button>
+          </div>
         </div>
       )}
 

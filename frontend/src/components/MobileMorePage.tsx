@@ -1,5 +1,5 @@
 import React from "react";
-import { useAppActions } from "@/store/AppContext";
+import { useApp, useAppActions } from "@/store/AppContext";
 import { broadcastLogout } from "@/lib/api";
 import { FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 
 export default function MobileMorePage() {
   const { t } = useTranslation();
+  const { state } = useApp();
   const actions = useAppActions();
 
   const handleNavigate = (mode: any) => {
@@ -89,8 +90,13 @@ export default function MobileMorePage() {
             onClick={item.onClick}
             className="flex flex-col justify-between p-4 rounded-card border border-app-border/40 bg-app-surface/30 hover:bg-app-hover active:scale-[0.98] transition-all text-left group min-h-[120px]"
           >
-            <div className="w-10 h-10 rounded-button bg-app-surface border border-app-border flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-button bg-app-surface border border-app-border flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform relative">
               {item.icon}
+              {item.id === "mentions" && state.unreadMentionCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-surface">
+                  {state.unreadMentionCount}
+                </span>
+              )}
             </div>
             <div className="mt-4">
               <div className="text-sm font-semibold text-tx-primary">{item.label}</div>
