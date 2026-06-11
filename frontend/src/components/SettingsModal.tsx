@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, Heart, Sparkles, RefreshCw, Wrench, ZoomIn, Key, Building2, BookOpen, ToggleLeft, Download } from "lucide-react";
+import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, Heart, Sparkles, RefreshCw, Wrench, ZoomIn, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import SkinSwitcher from "@/components/SkinSwitcher";
@@ -17,7 +17,7 @@ import DownloadPanel from "@/components/DownloadPanel";
 import ManualPanel from "@/components/ManualPanel";
 import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
-import { api } from "@/lib/api";
+import { api, getServerUrl } from "@/lib/api";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
@@ -486,6 +486,10 @@ function AboutPanel() {
   const [showAuthorStory, setShowAuthorStory] = useState(false);
   // 赞赏码大图预览：点击赞赏码缩略图时弹起 Lightbox
   const [sponsorPreviewOpen, setSponsorPreviewOpen] = useState(false);
+
+  const server = getServerUrl() || (typeof window !== "undefined" ? window.location.origin : "");
+  const downloadBaseUrl = server.replace(/\/+$/, "");
+
   return (
     <div className="space-y-6">
       {/* 标题区 */}
@@ -520,6 +524,96 @@ function AboutPanel() {
               <span className="text-xs text-zinc-700 dark:text-zinc-300">{t(`about.${key}`)}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="h-px bg-zinc-200 dark:bg-zinc-800" />
+
+      {/* 插件与客户端下载 */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+          <Download size={15} className="text-accent-primary" />
+          下载扩展与客户端 (Debug 自签名版)
+        </h3>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          提供本地重新打包的浏览器剪藏扩展和 Android 客户端安装包。
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Chrome 扩展 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Chrome 剪藏插件</div>
+                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-chrome.zip</div>
+              </div>
+            </div>
+            <a
+              href={`${downloadBaseUrl}/downloads/super-clipper-chrome.zip`}
+              download
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
+            >
+              <Download size={11} />
+              下载
+            </a>
+          </div>
+
+          {/* Edge 扩展 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Edge 剪藏插件</div>
+                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-edge.zip</div>
+              </div>
+            </div>
+            <a
+              href={`${downloadBaseUrl}/downloads/super-clipper-edge.zip`}
+              download
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
+            >
+              <Download size={11} />
+              下载
+            </a>
+          </div>
+
+          {/* Firefox 扩展 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Firefox 剪藏插件</div>
+                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-firefox.zip</div>
+              </div>
+            </div>
+            <a
+              href={`${downloadBaseUrl}/downloads/super-clipper-firefox.zip`}
+              download
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
+            >
+              <Download size={11} />
+              下载
+            </a>
+          </div>
+
+          {/* Android 客户端 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Smartphone size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Android 客户端</div>
+                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-note-debug.apk</div>
+              </div>
+            </div>
+            <a
+              href={`${downloadBaseUrl}/downloads/super-note-debug.apk`}
+              download
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
+            >
+              <Download size={11} />
+              下载
+            </a>
+          </div>
         </div>
       </div>
 
@@ -1378,6 +1472,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     // 「开发者」面板：仅管理员可见，承载运行时调试开关（如 files-list 查询日志）。
     // 普通用户根本看不到这一项，与后端的 admin-only 写入闸门双层防御。
     ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench }] : []),
+    // 关于星空笔记
+    { id: "about" as const, label: t('settings.about', { defaultValue: '关于星空笔记' }), icon: Info },
   ];
 
   // 用 Portal 挂载到 body：
@@ -1539,6 +1635,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                   {activeTab === "workspaces" && isAdmin && <WorkspaceManagement />}
                   {activeTab === "data" && <DataManager />}
                   {activeTab === "developer" && isAdmin && <DeveloperPanel />}
+                  {activeTab === "about" && <AboutPanel />}
                 </PanelErrorBoundary>
               </div>
             </div>
@@ -1620,6 +1717,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                       {activeTab === "workspaces" && isAdmin && <WorkspaceManagement />}
                       {activeTab === "data" && <DataManager />}
                       {activeTab === "developer" && isAdmin && <DeveloperPanel />}
+                      {activeTab === "about" && <AboutPanel />}
                     </PanelErrorBoundary>
                   </motion.div>
                 </AnimatePresence>

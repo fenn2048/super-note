@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { BookOpen, Sparkles, Users, Key, Database, Smile, Rocket, HelpCircle, Shield, ArrowRight } from "lucide-react";
+import { BookOpen, Sparkles, Users, Key, Database, Smile, Rocket, HelpCircle, Shield, ArrowRight, Globe } from "lucide-react";
 
-type SectionId = "quickstart" | "workspace" | "editor" | "data" | "health";
+type SectionId = "quickstart" | "workspace" | "editor" | "data" | "health" | "clipper";
 
 export default function ManualPanel() {
   const [activeSection, setActiveSection] = useState<SectionId>("quickstart");
@@ -10,6 +10,7 @@ export default function ManualPanel() {
     { id: "quickstart" as const, label: "🚀 快速上手", desc: "创建笔记与基础操作" },
     { id: "workspace" as const, label: "🏠 家庭空间与协作", desc: "多用户共享与邀请" },
     { id: "editor" as const, label: "✍️ 智能排版与快捷键", desc: "编辑技巧与阅读密度" },
+    { id: "clipper" as const, label: "🌐 浏览器剪藏插件", desc: "网页内容一键剪藏" },
     { id: "data" as const, label: "🔒 数据管理与安全", desc: "自动备份与恢复" },
     { id: "health" as const, label: "🛸 健康关怀提醒", desc: "太空飞船休息提醒" },
   ];
@@ -197,6 +198,68 @@ export default function ManualPanel() {
                   <span className="font-mono text-[10px] bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700">Cmd / Ctrl + \</span>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "clipper" && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-lg font-bold flex items-center gap-2 mb-2 text-zinc-950 dark:text-zinc-50">
+                <Globe className="w-5 h-5 text-indigo-500" />
+                浏览器剪藏插件安装与使用
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                通过浏览器剪藏插件，您可以在浏览任意网页时一键将正文智能解析并永久保存至您的星空笔记中。
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800/60 space-y-4">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">📦 1. 插件安装方法</h3>
+              <div className="space-y-3 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <div>
+                  <strong className="text-zinc-800 dark:text-zinc-200">第一步：获取插件包</strong>
+                  <p className="mt-0.5">前往星空笔记的“设置 &rarr; 关于星空笔记”界面，在底部的“下载扩展与客户端”区域中，根据您使用的浏览器点击下载对应的 ZIP 插件压缩包，并解压到本地文件夹中。</p>
+                </div>
+                <div>
+                  <strong className="text-zinc-800 dark:text-zinc-200">第二步：开启浏览器开发者模式</strong>
+                  <ul className="list-disc pl-4 mt-1 space-y-1">
+                    <li><strong className="text-zinc-700 dark:text-zinc-300">Chrome 浏览器</strong>：在地址栏输入 <code>chrome://extensions</code> 回车，然后开启右上角的“开发者模式”开关。</li>
+                    <li><strong className="text-zinc-700 dark:text-zinc-300">Edge 浏览器</strong>：在地址栏输入 <code>edge://extensions</code> 回车，然后开启左侧或下方的“开发人员模式”开关。</li>
+                    <li><strong className="text-zinc-700 dark:text-zinc-300">Firefox 浏览器</strong>：在地址栏输入 <code>about:debugging</code>，点击“此 Firefox”并点击“临时载入附加组件”选择解压出来的 manifest.json 载入，或通过签名包安装。</li>
+                  </ul>
+                </div>
+                <div>
+                  <strong className="text-zinc-800 dark:text-zinc-200">第三步：载入已解压的扩展程序</strong>
+                  <p className="mt-0.5">在 Chrome 或 Edge 的扩展管理页面，点击左上角的“<strong className="text-zinc-700 dark:text-zinc-300">加载已解压的扩展程序</strong>” (Load unpacked) 按钮，选择您刚刚解压的插件文件夹。载入成功后，建议点击浏览器工具栏的拼图图标将“星空笔记网页剪藏”插件固定在工具栏。</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100/40 dark:border-indigo-900/20 space-y-4">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">⚙️ 2. 配置与连接</h3>
+              <div className="space-y-3 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <div>
+                  <strong className="text-zinc-800 dark:text-zinc-200">第一步：填写服务器地址</strong>
+                  <p className="mt-0.5">点击浏览器工具栏的星空笔记剪藏插件图标。在配置弹窗中，输入您部署的星空笔记服务器的完整 URL（例如：<code>http://192.168.1.100:3001</code>）。</p>
+                </div>
+                <div>
+                  <strong className="text-zinc-800 dark:text-zinc-200">第二步：创建并填写访问令牌 (Token)</strong>
+                  <p className="mt-0.5">
+                    为了保障数据安全，插件需要使用个人访问令牌连接。请前往星空笔记网页端或客户端，打开“设置 → 访问令牌”界面，点击“创建令牌”，输入名称并勾选权限后创建。复制生成的令牌密钥，粘贴到剪藏插件的“Access Token”输入框中，点击保存连接。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">🚀 3. 开始一键剪藏网页</h3>
+              <ol className="list-decimal pl-4 space-y-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <li>浏览任意网页时，点击浏览器右上角的星空笔记剪藏插件图标，或者在页面空白处点击右键，选择“剪藏到星空笔记”。</li>
+                <li>插件会智能过滤广告，自动解析网页的文章正文并将其转为干净排版的 Markdown 格式。</li>
+                <li>您可以在弹窗中预览或手动编辑解析后的正文与标题，选择要保存的目标笔记本、添加标签属性。</li>
+                <li>点击“保存笔记”按钮，插件即会在后台将文章连同内嵌的图片和格式附件自动拉取保存到您的私有服务器中。</li>
+              </ol>
             </div>
           </div>
         )}
