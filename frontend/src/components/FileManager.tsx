@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 文件管理中心（ViewMode=files）
  * ---------------------------------------------------------------------------
  * 定位：
@@ -932,15 +932,15 @@ export default function FileManager() {
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      {/* 顶栏 */}
+      {/* 顶栏 - 桌面端 */}
       <div
-        className="flex flex-wrap items-center gap-3 px-4 md:px-6 py-3 border-b border-app-border bg-app-surface/40"
-        style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
+        className="hidden md:flex items-center justify-between px-6 py-3 border-b border-app-border bg-app-surface/40 shrink-0"
       >
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Left: Title & Stats */}
+        <div className="flex items-center gap-2 min-w-0">
           <div
             className={cn(
-              "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+              "w-8 h-8 rounded-button flex items-center justify-center shrink-0 transition-colors",
               isImageHostMode
                 ? "bg-indigo-500/15 text-indigo-500"
                 : "bg-accent-primary/10 text-accent-primary",
@@ -948,131 +948,247 @@ export default function FileManager() {
           >
             {isImageHostMode ? <Globe size={18} /> : <Inbox size={18} />}
           </div>
-          <div>
-            <h2 className="text-sm font-semibold text-tx-primary">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-tx-primary truncate">
               {isImageHostMode ? "图床" : "文件管理"}
             </h2>
-            <p className="text-[11px] text-tx-tertiary leading-none mt-0.5">
+            <p className="text-[10px] text-tx-tertiary leading-none mt-0.5 truncate max-w-[300px]">
               {isImageHostMode
-                ? "上传图片 / 文件即得直链 · 支持复制 URL / Markdown / HTML"
+                ? "直链分享 · 支持复制 Markdown / HTML"
                 : statsLine || "\u00A0"}
             </p>
           </div>
         </div>
 
-        <div className="flex-1" />
-
-        {/* 图床模式开关：放在视图切换之前，让用户第一眼能找到。
-            图床本质是 FileManager 的"图片专区 + 直链复制"特化形态，
-            点亮后整页 UI 会切换为图床外观（标题 / 图标 / 卡片工具条）。 */}
-        <Button
-          size="sm"
-          variant={isImageHostMode ? "default" : "outline"}
-          onClick={toggleImageHostMode}
-          className={cn(
-            "shrink-0",
-            isImageHostMode &&
-              "bg-indigo-500 hover:bg-indigo-600 text-white border-indigo-500",
-          )}
-          title={isImageHostMode ? "退出图床" : "进入图床（外链分享 · 图片与文件直链）"}
-        >
-          <Globe size={14} className="mr-1" />
-          {isImageHostMode ? "退出图床" : "图床"}
-        </Button>
-
-        {/* 视图切换：图床模式锁定网格视图，所以隐藏切换组 */}
-        {!isImageHostMode && (
-          <div className="hidden md:flex items-center rounded-lg border border-app-border bg-app-bg p-0.5">
-            <button
-              className={cn(
-                "px-2 py-1 rounded-md text-xs flex items-center gap-1 transition-colors",
-                viewMode === "grid" ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
-              )}
-              onClick={() => setViewMode("grid")}
-              title="网格视图"
-            >
-              <LayoutGrid size={14} />
-            </button>
-            <button
-              className={cn(
-                "px-2 py-1 rounded-md text-xs flex items-center gap-1 transition-colors",
-                viewMode === "list" ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
-              )}
-              onClick={() => setViewMode("list")}
-              title="列表视图"
-            >
-              <List size={14} />
-            </button>
-          </div>
-        )}
-
-        <Button
-          size="sm"
-          variant={selectionMode ? "default" : "outline"}
-          onClick={toggleSelectionMode}
-          className="shrink-0"
-          title={selectionMode ? "退出多选" : "进入多选"}
-        >
-          {selectionMode ? (
-            <>
-              <X size={14} className="mr-1" />
-              退出多选
-            </>
-          ) : (
-            <>
-              <CheckSquare size={14} className="mr-1" />
-              选择
-            </>
-          )}
-        </Button>
-
-        {/* 可回收空间徽标：
-            - 仅在检测到"有可清理的孤儿"时显示（items>0），避免干扰正常使用；
-            - 点击触发真清理（含二次确认）；
-            - 扫描失败或还没扫完则不渲染，保持顶栏简洁。 */}
-        {reclaimable && reclaimable.items > 0 && (
+        {/* Right: Actions Group */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* 图床 Mode Toggle */}
           <Button
             size="sm"
-            variant="outline"
-            onClick={handleCleanupOrphans}
-            disabled={cleaningUp}
-            className="shrink-0 text-amber-600 border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/60"
-            title={`发现 ${reclaimable.items} 个没有被任何笔记引用的附件，可释放约 ${humanSize(reclaimable.bytes)}`}
-          >
-            {cleaningUp ? (
-              <Loader2 size={14} className="mr-1 animate-spin" />
-            ) : (
-              <Sparkles size={14} className="mr-1" />
+            variant={isImageHostMode ? "default" : "outline"}
+            onClick={toggleImageHostMode}
+            className={cn(
+              "h-8 px-3 text-xs rounded-button",
+              isImageHostMode && "bg-indigo-500 hover:bg-indigo-600 text-white border-indigo-500",
             )}
-            <span className="hidden sm:inline">可回收 </span>
-            <span>{humanSize(reclaimable.bytes)}</span>
-            <span className="ml-1 text-[10px] opacity-70">({reclaimable.items})</span>
+            title={isImageHostMode ? "退出图床" : "进入图床"}
+          >
+            <Globe size={14} className="mr-1" />
+            <span>{isImageHostMode ? "退出图床" : "图床"}</span>
           </Button>
-        )}
 
-        <Button size="sm" onClick={onPickFiles} disabled={uploading} className="shrink-0">
-          {uploading ? <Loader2 size={14} className="animate-spin mr-1" /> : <Upload size={14} className="mr-1" />}
-          {uploading ? "上传中" : "上传文件"}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          // 图床支持任意类型——图片 / 压缩包 / PDF 等都能拿到公开直链分享给他人下载，
-          // 不再限制 accept。
-          className="hidden"
-          onChange={onFileInputChange}
-        />
+          {/* Select Toggle */}
+          <Button
+            size="sm"
+            variant={selectionMode ? "default" : "outline"}
+            onClick={toggleSelectionMode}
+            className="h-8 px-3 text-xs rounded-button"
+            title={selectionMode ? "退出多选" : "选择"}
+          >
+            {selectionMode ? (
+              <>
+                <X size={14} className="mr-1" />
+                <span>退出多选</span>
+              </>
+            ) : (
+              <>
+                <CheckSquare size={14} className="mr-1" />
+                <span>选择</span>
+              </>
+            )}
+          </Button>
+
+          {/* Upload Button */}
+          <Button
+            size="sm"
+            onClick={onPickFiles}
+            disabled={uploading}
+            className="h-8 px-3 text-xs rounded-button"
+          >
+            {uploading ? (
+              <Loader2 size={14} className="animate-spin mr-1" />
+            ) : (
+              <Upload size={14} className="mr-1" />
+            )}
+            <span>{uploading ? "上传中" : "上传文件"}</span>
+          </Button>
+
+          {/* Reclaimable Space Clean Button */}
+          {reclaimable && reclaimable.items > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCleanupOrphans}
+              disabled={cleaningUp}
+              className="h-8 px-2.5 text-amber-600 border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/60 rounded-button"
+              title={`发现 ${reclaimable.items} 个没有被任何笔记引用的附件，可释放约 ${humanSize(reclaimable.bytes)}`}
+            >
+              {cleaningUp ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Sparkles size={14} />
+              )}
+              <span className="ml-1">{humanSize(reclaimable.bytes)}</span>
+            </Button>
+          )}
+
+          {/* View Mode Switcher */}
+          {!isImageHostMode && (
+            <div className="flex items-center rounded-button border border-app-border bg-app-bg p-0.5 h-8">
+              <button
+                className={cn(
+                  "px-2 py-1 rounded-button text-xs flex items-center gap-1 transition-colors",
+                  viewMode === "grid" ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
+                )}
+                onClick={() => setViewMode("grid")}
+                title="网格视图"
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                className={cn(
+                  "px-2 py-1 rounded-button text-xs flex items-center gap-1 transition-colors",
+                  viewMode === "list" ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
+                )}
+                onClick={() => setViewMode("list")}
+                title="列表视图"
+              >
+                <List size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 工具条：分类 / 搜索 / 排序 */}
-      <div className="flex flex-wrap items-center gap-2 px-4 md:px-6 py-2 border-b border-app-border bg-app-surface/20">
-        {/* 分类 Tabs：
-            - 普通模式：5 个 tab（全部 / 图片 / 文件 / 我的上传 / 孤儿）
-            - 图床模式：与普通模式同构，但"孤儿"改名为"未引用"——更贴合图床场景
-              （图床里这一类多是用户传上去专门发外链的、本就不需要被笔记引用的资源，
-              "孤儿"措辞略带贬义，"未引用"更中性）。 */}
-        <div className="flex items-center gap-1 text-xs">
+      {/* 顶栏 - 移动端 */}
+      <div
+        className="flex md:hidden flex-col gap-3 px-4 py-3 border-b border-app-border bg-app-surface/40 shrink-0"
+        style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
+      >
+        {/* Row 1: Back/Close, Title/Stats, Quick Actions */}
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: Back button & Title/Stats */}
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => {
+                actions.setViewMode("more");
+                actions.setMobileView("list");
+              }}
+              className="p-1.5 -ml-1 rounded-button text-tx-secondary hover:bg-app-hover active:bg-app-active flex items-center justify-center"
+            >
+              <X size={18} />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-tx-primary truncate">
+                {isImageHostMode ? "图床" : "文件管理"}
+              </h2>
+              <p className="text-[10px] text-tx-tertiary leading-none mt-0.5 truncate">
+                {isImageHostMode
+                  ? "直链分享 · 支持复制 Markdown"
+                  : statsLine || "\u00A0"}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: Icon-only toggles */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Reclaimable Cleanup Button */}
+            {reclaimable && reclaimable.items > 0 && (
+              <button
+                onClick={handleCleanupOrphans}
+                disabled={cleaningUp}
+                className={cn(
+                  "w-8 h-8 rounded-button flex items-center justify-center text-amber-600 bg-amber-500/10 border border-amber-500/20 active:bg-amber-500/20",
+                  cleaningUp && "opacity-60"
+                )}
+                title={`可清理附件，释放约 ${humanSize(reclaimable.bytes)}`}
+              >
+                {cleaningUp ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+              </button>
+            )}
+
+            {/* Globe Toggle */}
+            <button
+              onClick={toggleImageHostMode}
+              className={cn(
+                "w-8 h-8 rounded-button flex items-center justify-center border transition-all",
+                isImageHostMode
+                  ? "bg-indigo-500/15 text-indigo-500 border-indigo-500/30"
+                  : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover"
+              )}
+              title={isImageHostMode ? "退出图床" : "进入图床"}
+            >
+              <Globe size={14} />
+            </button>
+
+            {/* Select Toggle */}
+            <button
+              onClick={toggleSelectionMode}
+              className={cn(
+                "w-8 h-8 rounded-button flex items-center justify-center border transition-all",
+                selectionMode
+                  ? "bg-accent-primary/15 text-accent-primary border-accent-primary/30"
+                  : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover"
+              )}
+              title={selectionMode ? "退出多选" : "多选"}
+            >
+              <CheckSquare size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Search Input & Upload Button */}
+        <div className="flex items-center gap-2">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-0">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+            <Input
+              placeholder="按文件名搜索…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-7 h-8 text-xs bg-app-bg w-full rounded-button border-app-border focus-visible:ring-1 focus-visible:ring-accent-primary focus-visible:border-accent-primary"
+            />
+            {searchInput && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-tx-tertiary hover:text-tx-primary"
+                onClick={() => setSearchInput("")}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Upload Button */}
+          <Button
+            size="sm"
+            onClick={onPickFiles}
+            disabled={uploading}
+            className="h-8 px-2.5 text-xs bg-accent-primary hover:bg-accent-primary/95 text-white border-accent-primary shadow-sm active:scale-[0.98] transition-transform rounded-button shrink-0"
+          >
+            {uploading ? (
+              <Loader2 size={13} className="animate-spin mr-1" />
+            ) : (
+              <Upload size={13} className="mr-1" />
+            )}
+            <span>{uploading ? "上传中" : "上传"}</span>
+          </Button>
+        </div>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={onFileInputChange}
+      />
+
+      {/* 工具条：分类 Tabs（移动端支持横向滑动，防止折叠多行） */}
+      <div className="px-4 md:px-6 py-2 border-b border-app-border bg-app-surface/20 shrink-0">
+        <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar -mx-4 px-4 scroll-smooth">
           {(isImageHostMode
             ? ([
                 { key: "all", label: "全部", count: stats?.total ?? 0, icon: <Filter size={12} /> },
@@ -1095,16 +1211,12 @@ export default function FileManager() {
                 { key: "all", label: "全部", count: stats?.total ?? 0, icon: <Filter size={12} /> },
                 { key: "image", label: "图片", count: stats?.images.count ?? 0, icon: <ImageIcon size={12} /> },
                 { key: "file", label: "文件", count: stats?.files.count ?? 0, icon: <FileText size={12} /> },
-                // 我的上传：用户从文件管理页直接上传的文件（≠ 编辑器粘贴的）。
-                // 选中后下面会显示二级子 tab（全部 / 已引用 / 未引用）。
                 {
                   key: "myUploads",
                   label: "我的上传",
                   count: stats?.myUploads?.total ?? 0,
                   icon: <UploadCloud size={12} />,
                 },
-                // 孤儿（unreferenced）tab：高亮琥珀色，与顶栏"可回收"徽标视觉呼应；
-                // count 为 0 时也显示，方便用户确认"当前没有孤儿"。
                 {
                   key: "unreferenced",
                   label: "孤儿",
@@ -1117,11 +1229,11 @@ export default function FileManager() {
               key={tab.key}
               onClick={() => handleCategoryChange(tab.key as CategoryFilter)}
               className={cn(
-                "px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors",
+                "px-3 py-1.5 rounded-button flex items-center gap-1.5 transition-colors shrink-0 text-xs",
                 category === tab.key
                   ? tab.key === "unreferenced"
-                    ? "bg-amber-500/15 text-amber-600"
-                    : "bg-accent-primary/15 text-accent-primary"
+                    ? "bg-amber-500/15 text-amber-600 font-medium"
+                    : "bg-accent-primary/15 text-accent-primary font-medium"
                   : tab.key === "unreferenced" && tab.count > 0
                     ? "text-amber-600 hover:bg-amber-500/10"
                     : "text-tx-secondary hover:bg-app-hover",
@@ -1136,21 +1248,44 @@ export default function FileManager() {
             >
               {tab.icon}
               <span>{tab.label}</span>
-              <span className="text-[10px] text-tx-tertiary">{tab.count}</span>
+              <span className="text-[10px] opacity-75">{tab.count}</span>
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="flex-1" />
+      {/* 排序与小标题行 - 仅移动端显示 */}
+      <div className="flex md:hidden items-center justify-between px-4 py-1.5 border-b border-app-border bg-app-surface/5 shrink-0 text-xs">
+        <span className="text-[11px] font-semibold text-tx-secondary tracking-wider">文件列表</span>
+        <div className="flex items-center gap-1 text-tx-secondary">
+          <ArrowUpDown size={11} className="text-tx-tertiary" />
+          <select
+            className="h-7 pl-1 pr-4 py-0 rounded-button border border-app-border bg-app-bg text-tx-primary text-[11px] outline-none focus:border-accent-primary cursor-pointer"
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as FileSortKey);
+              setPage(1);
+            }}
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
+      {/* 搜索与排序栏 - 仅桌面端显示 */}
+      <div className="hidden md:flex items-center gap-3 px-6 py-2 border-b border-app-border bg-app-surface/10 shrink-0">
         {/* 搜索 */}
-        <div className="relative w-full sm:w-56">
+        <div className="relative flex-1 min-w-0">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
           <Input
             placeholder="按文件名搜索…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-7 h-8 text-xs bg-app-bg"
+            className="pl-7 h-8 text-xs bg-app-bg w-full rounded-button border-app-border focus-visible:ring-1 focus-visible:ring-accent-primary focus-visible:border-accent-primary"
           />
           {searchInput && (
             <button
@@ -1163,10 +1298,10 @@ export default function FileManager() {
         </div>
 
         {/* 排序 */}
-        <div className="flex items-center gap-1 text-xs">
+        <div className="flex items-center gap-1.5 shrink-0 text-xs">
           <ArrowUpDown size={12} className="text-tx-tertiary" />
           <select
-            className="h-8 px-2 rounded-md border border-app-border bg-app-bg text-tx-primary text-xs outline-none"
+            className="h-8 px-2 rounded-button border border-app-border bg-app-bg text-tx-primary text-xs outline-none focus:border-accent-primary transition-colors cursor-pointer"
             value={sort}
             onChange={(e) => {
               setSort(e.target.value as FileSortKey);
@@ -1214,7 +1349,7 @@ export default function FileManager() {
                 setPage(1);
               }}
               className={cn(
-                "px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors",
+                "px-2 py-0.5 rounded-button flex items-center gap-1 transition-colors",
                 myUploadsRef === sub.key
                   ? "bg-accent-primary/15 text-accent-primary"
                   : "text-tx-secondary hover:bg-app-hover",
@@ -1355,7 +1490,7 @@ export default function FileManager() {
                 <div className="flex items-center gap-1">
                   <span className="text-tx-tertiary">每页</span>
                   <select
-                    className="h-7 px-1.5 rounded-md border border-app-border bg-app-bg text-tx-primary text-xs outline-none"
+                    className="h-7 px-1.5 rounded-button border border-app-border bg-app-bg text-tx-primary text-xs outline-none"
                     value={pageSize}
                     onChange={(e) => handlePageSizeChange(Number.parseInt(e.target.value, 10))}
                     disabled={loading}
@@ -1568,7 +1703,7 @@ const GridCard = React.memo(function GridCard({
   return (
     <div
       className={cn(
-        "group relative rounded-lg border bg-app-surface overflow-hidden hover:shadow-sm transition-all cursor-pointer",
+        "group relative rounded-card border bg-app-surface overflow-hidden hover:shadow-sm transition-all cursor-pointer",
         selected
           ? "border-accent-primary ring-2 ring-accent-primary/40"
           : "border-app-border hover:border-accent-primary/50",
@@ -1641,7 +1776,7 @@ const GridCard = React.memo(function GridCard({
         <div className="absolute top-1.5 left-1.5 z-10">
           <button
             className={cn(
-              "w-6 h-6 rounded-md flex items-center justify-center transition-colors shadow-sm",
+              "w-6 h-6 rounded-button flex items-center justify-center transition-colors shadow-sm",
               selected
                 ? "bg-accent-primary text-white"
                 : "bg-white/85 text-tx-secondary hover:bg-white",
@@ -1670,7 +1805,7 @@ const GridCard = React.memo(function GridCard({
           )}
         >
           <button
-            className="w-6 h-6 rounded-md bg-black/50 hover:bg-black/70 text-white flex items-center justify-center disabled:opacity-50"
+            className="w-6 h-6 rounded-button bg-black/50 hover:bg-black/70 text-white flex items-center justify-center disabled:opacity-50"
             onClick={(e) => {
               e.stopPropagation();
               onDownload(item);
@@ -1683,7 +1818,7 @@ const GridCard = React.memo(function GridCard({
 
           {isImageHostMode ? (
             // 分裂按钮：左半 URL，右半下拉 MD/HTML
-            <div className="relative flex items-stretch rounded-md overflow-hidden">
+            <div className="relative flex items-stretch rounded-button overflow-hidden">
               <button
                 className="px-1.5 bg-black/50 hover:bg-black/70 text-white flex items-center"
                 onClick={(e) => {
@@ -1706,7 +1841,7 @@ const GridCard = React.memo(function GridCard({
               </button>
               {formatMenuOpen && (
                 <div
-                  className="absolute right-0 top-full mt-1 z-20 min-w-[120px] rounded-md border border-app-border bg-app-surface shadow-md py-1 text-xs"
+                  className="absolute right-0 top-full mt-1 z-20 min-w-[120px] rounded-window border border-app-border bg-app-surface shadow-md py-1 text-xs"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {(["url", "markdown", "html"] as ImageHostFormat[]).map((fmt) => (
@@ -1728,7 +1863,7 @@ const GridCard = React.memo(function GridCard({
             </div>
           ) : (
             <button
-              className="w-6 h-6 rounded-md bg-black/50 hover:bg-black/70 text-white flex items-center justify-center"
+              className="w-6 h-6 rounded-button bg-black/50 hover:bg-black/70 text-white flex items-center justify-center"
               onClick={(e) => {
                 e.stopPropagation();
                 onCopyUrl(item);
@@ -1773,7 +1908,7 @@ function ListView({
   onToggleSelect: (id: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-app-border bg-app-surface overflow-hidden">
+    <div className="rounded-card border border-app-border bg-app-surface overflow-hidden">
       <table className="w-full text-xs">
         <thead className="bg-app-bg/60 text-tx-tertiary">
           <tr>
@@ -1821,7 +1956,7 @@ function ListView({
                   </td>
                 )}
                 <td className="px-3 py-2 w-10">
-                  <div className="w-8 h-8 rounded-md bg-app-bg flex items-center justify-center overflow-hidden">
+                  <div className="w-8 h-8 rounded-button bg-app-bg flex items-center justify-center overflow-hidden">
                     {it.category === "image" ? (
                       // 列表小缩略图：32×32，优先用后端 webp 缩略（240w 显示在 32px 上完全够），
                       // 没有 thumbnailUrl 时回退原图（svg / ico / 老服务端兼容）

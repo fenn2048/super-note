@@ -16,17 +16,23 @@ STORE_PASS="${STORE_PASS:-android}"
 KEY_PASS="${KEY_PASS:-android}"
 OUT_DIR="${OUT_DIR:-$ANDROID_PROJECT_DIR/output}"
 
+# Find Java Home
+if [ -z "${JAVA_HOME:-}" ]; then
+  if [ -d "$HOME/.local/jdk-21.0.11+10/Contents/Home" ]; then
+    export JAVA_HOME="$HOME/.local/jdk-21.0.11+10/Contents/Home"
+    export PATH="$JAVA_HOME/bin:$PATH"
+  fi
+fi
+
 # Find Android SDK tools
-ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
 ZIPALIGN_CMD=""
 APKSIGNER_CMD=""
-if [ -n "$ANDROID_SDK_ROOT" ]; then
+if [ -d "$ANDROID_SDK_ROOT/build-tools" ]; then
   # prefer latest build-tools available
-  if [ -d "$ANDROID_SDK_ROOT/build-tools" ]; then
-    LATEST=$(ls -1 "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -n1)
-    ZIPALIGN_CMD="$ANDROID_SDK_ROOT/build-tools/$LATEST/zipalign"
-    APKSIGNER_CMD="$ANDROID_SDK_ROOT/build-tools/$LATEST/apksigner"
-  fi
+  LATEST=$(ls -1 "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -n1)
+  ZIPALIGN_CMD="$ANDROID_SDK_ROOT/build-tools/$LATEST/zipalign"
+  APKSIGNER_CMD="$ANDROID_SDK_ROOT/build-tools/$LATEST/apksigner"
 fi
 # Fallback to PATH
 : ${ZIPALIGN_CMD:="$(which zipalign 2>/dev/null || true)"}

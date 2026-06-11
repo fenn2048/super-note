@@ -907,7 +907,6 @@ function AppLayout() {
           </div>
         ) : isFilesView ? (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <MobileTopBar />
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <FileManager />
             </Suspense>
