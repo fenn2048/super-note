@@ -147,7 +147,7 @@ export default function ServerAddressInput({
           onChange={(e) => update({ protocol: e.target.value as ServerScheme })}
           aria-label={t("server.protocolLabel")}
           className={
-            "appearance-none bg-transparent text-sm text-zinc-900 dark:text-zinc-100 " +
+            "appearance-none bg-transparent text-base md:text-sm text-zinc-900 dark:text-zinc-100 " +
             "focus:outline-none pr-5 py-2.5 cursor-pointer disabled:cursor-not-allowed"
           }
         >
@@ -178,14 +178,14 @@ export default function ServerAddressInput({
         spellCheck={false}
         inputMode="url"
         className={
-          "flex-1 min-w-0 bg-transparent py-2.5 pr-2 text-sm " +
+          "flex-1 min-w-0 bg-transparent py-2.5 pr-2 text-base md:text-sm " +
           "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
           "focus:outline-none disabled:cursor-not-allowed"
         }
       />
 
       {/* : 分隔 + Port */}
-      <span className="select-none flex items-center px-1 text-sm text-zinc-400 dark:text-zinc-500 border-l border-zinc-200 dark:border-zinc-700">
+      <span className="select-none flex items-center px-1 text-base md:text-sm text-zinc-400 dark:text-zinc-500 border-l border-zinc-200 dark:border-zinc-700">
         :
       </span>
       <input
@@ -204,7 +204,7 @@ export default function ServerAddressInput({
         maxLength={5}
         aria-label={t("server.portLabel")}
         className={
-          "w-[72px] bg-transparent py-2.5 pr-2 text-sm text-center " +
+          "w-[72px] bg-transparent py-2.5 pr-2 text-base md:text-sm text-center " +
           "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
           "focus:outline-none disabled:cursor-not-allowed"
         }

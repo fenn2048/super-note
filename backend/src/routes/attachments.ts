@@ -197,6 +197,10 @@ export const MIME_TO_EXT: Record<string, string> = {
   "audio/m4a": "m4a",
   "audio/x-m4a": "m4a",
   "audio/mp4": "m4a",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+  "video/ogg": "ogv",
 };
 
 // 判断附件是否属于「图片」——供 handleDownloadAttachment / 响应 category 字段共用。

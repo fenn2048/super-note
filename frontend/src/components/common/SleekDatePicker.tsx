@@ -27,6 +27,7 @@ interface SleekDatePickerProps {
   placeholder?: string;
   className?: string;
   align?: "left" | "right";
+  variant?: "default" | "mobile-form";
 }
 
 export default function SleekDatePicker({
@@ -34,7 +35,8 @@ export default function SleekDatePicker({
   onChange,
   placeholder = "选择日期",
   className,
-  align = "left"
+  align = "left",
+  variant = "default"
 }: SleekDatePickerProps) {
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language.startsWith("zh") ? zhCN : enUS;
@@ -181,12 +183,14 @@ export default function SleekDatePicker({
   ];
 
   return (
-    <div ref={containerRef} className={cn("relative inline-block select-none", className)}>
+    <div ref={containerRef} className={cn("relative select-none", variant === "mobile-form" ? "block w-full" : "inline-block", className)}>
       {/* Trigger Button */}
       <div
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-border bg-app-sidebar/80 text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 min-w-[90px]",
+          variant === "mobile-form"
+            ? "flex items-center gap-2 px-3 py-2.5 rounded-xl border border-app-border bg-app-surface text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 w-full min-w-0"
+            : "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-border bg-app-sidebar/80 text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 min-w-[90px]",
           isOpen && "border-accent-primary ring-1 ring-accent-primary/20"
         )}
       >

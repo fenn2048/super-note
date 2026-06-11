@@ -1,7 +1,7 @@
 import React from "react";
 import { useAppActions } from "@/store/AppContext";
 import { broadcastLogout } from "@/lib/api";
-import { FolderOpen, Heart, Bot, Bell, Settings, LogOut, Briefcase } from "lucide-react";
+import { FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 
@@ -17,11 +17,14 @@ export default function MobileMorePage() {
 
   const menuItems = [
     {
-      id: "projects",
-      label: "项目管理",
-      icon: <Briefcase className="w-6 h-6 text-blue-500" />,
-      desc: "项目任务管理，看板与团队协作",
-      onClick: () => handleNavigate("projects"),
+      id: "trash",
+      label: "回收站",
+      icon: <Trash2 className="w-6 h-6 text-red-500" />,
+      desc: "查看和恢复已删除的笔记",
+      onClick: () => {
+        actions.setViewMode("trash");
+        actions.setMobileView("list");
+      },
     },
     {
       id: "files",
@@ -64,6 +67,7 @@ export default function MobileMorePage() {
 
   const handleLogout = () => {
     broadcastLogout("user_logout");
+    window.location.reload();
   };
 
   return (

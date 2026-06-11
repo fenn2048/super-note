@@ -22,12 +22,14 @@ import {
   VolumeX,
   Sparkles,
   Search,
+  Star,
 } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { Diary, DiaryStats, Tag } from "@/types";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/lib/toast";
 import DOMPurify from "dompurify";
@@ -607,7 +609,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             onPaste={handlePaste}
             placeholder={t("diary.placeholder")}
             rows={4}
-            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none min-h-[100px]"
+            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px]"
           />
         </div>
 
@@ -908,9 +910,11 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
  */
 function ImageGrid({
   ids,
+  attachments = [],
   onOpen,
 }: {
   ids: string[];
+  attachments?: { id: string; mimeType: string }[];
   onOpen: (idx: number) => void;
 }) {
   if (!ids.length) return null;
@@ -925,28 +929,49 @@ function ImageGrid({
         cols === 3 && "grid-cols-3",
       )}
     >
-      {ids.map((id, i) => (
-        <button
-          key={id}
-          onClick={() => onOpen(i)}
-          className={cn(
-            "relative overflow-hidden rounded-lg border border-app-border bg-app-hover/30 hover:opacity-90 transition-opacity",
-            // 单图按宽高自然比；多图统一正方形避免参差
-            count === 1 ? "max-h-[320px]" : "aspect-square",
-          )}
-        >
-          <img
-            src={api.diaryImages.urlFor(id)}
-            alt=""
-            loading="lazy"
+      {ids.map((id, i) => {
+        const att = attachments.find((a) => a.id === id);
+        const isVideo = att && att.mimeType && att.mimeType.startsWith("video/");
+        return (
+          <button
+            key={id}
+            onClick={() => onOpen(i)}
             className={cn(
-              "w-full h-full",
-              count === 1 ? "object-contain" : "object-cover",
+              "relative overflow-hidden rounded-lg border border-app-border bg-app-hover/30 hover:opacity-90 transition-opacity",
+              // 单图按宽高自然比；多图统一正方形避免参差
+              count === 1 ? "max-h-[320px]" : "aspect-square",
             )}
-            draggable={false}
-          />
-        </button>
-      ))}
+          >
+            {isVideo ? (
+              <div className="w-full h-full relative flex items-center justify-center bg-black">
+                <video
+                  src={api.diaryImages.urlFor(id)}
+                  className={cn(
+                    "w-full h-full pointer-events-none",
+                    count === 1 ? "object-contain" : "object-cover",
+                  )}
+                  muted
+                  playsInline
+                />
+                <div className="absolute w-10 h-10 rounded-full bg-black/55 flex items-center justify-center text-white">
+                  <Play size={18} fill="white" className="ml-0.5" />
+                </div>
+              </div>
+            ) : (
+              <img
+                src={api.diaryImages.urlFor(id)}
+                alt=""
+                loading="lazy"
+                className={cn(
+                  "w-full h-full",
+                  count === 1 ? "object-contain" : "object-cover",
+                )}
+                draggable={false}
+              />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -957,11 +982,13 @@ function ImageGrid({
  */
 function Lightbox({
   ids,
+  attachments = [],
   index,
   onClose,
   onIndexChange,
 }: {
   ids: string[];
+  attachments?: { id: string; mimeType: string }[];
   index: number;
   onClose: () => void;
   onIndexChange: (idx: number) => void;
@@ -989,6 +1016,8 @@ function Lightbox({
 
   if (!ids.length) return null;
   const id = ids[index];
+  const att = attachments.find((a) => a.id === id);
+  const isVideo = att && att.mimeType && att.mimeType.startsWith("video/");
 
   return (
     <motion.div
@@ -1031,15 +1060,26 @@ function Lightbox({
           ›
         </button>
       )}
-      {/* 图片本体：阻止冒泡，避免点图也关闭 */}
-      <img
-        key={id}
-        src={api.diaryImages.urlFor(id)}
-        alt=""
-        onClick={(e) => e.stopPropagation()}
-        className="max-w-[92vw] max-h-[88vh] object-contain"
-        draggable={false}
-      />
+      {/* 媒体本体：阻止冒泡，避免点/播放也关闭 */}
+      {isVideo ? (
+        <video
+          key={id}
+          src={api.diaryImages.urlFor(id)}
+          controls
+          autoPlay
+          onClick={(e) => e.stopPropagation()}
+          className="max-w-[92vw] max-h-[88vh] object-contain"
+        />
+      ) : (
+        <img
+          key={id}
+          src={api.diaryImages.urlFor(id)}
+          alt=""
+          onClick={(e) => e.stopPropagation()}
+          className="max-w-[92vw] max-h-[88vh] object-contain"
+          draggable={false}
+        />
+      )}
       {/* 计数 */}
       {ids.length > 1 && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white/10 text-white text-xs tabular-nums">
@@ -1371,6 +1411,43 @@ function DiaryCard({
   const [showConfirm, setShowConfirm] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
+      return favs.some((f: any) => f.id === item.id);
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleFavChange = () => {
+      try {
+        const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
+        setIsFavorited(favs.some((f: any) => f.id === item.id));
+      } catch {}
+    };
+    window.addEventListener("super:diary-favorite-changed", handleFavChange);
+    return () => window.removeEventListener("super:diary-favorite-changed", handleFavChange);
+  }, [item.id]);
+
+  const handleToggleFavorite = () => {
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
+      const exists = favs.some((f: any) => f.id === item.id);
+      let newFavs;
+      if (exists) {
+        newFavs = favs.filter((f: any) => f.id !== item.id);
+      } else {
+        newFavs = [...favs, { id: item.id, text: item.contentText || "", createdAt: item.createdAt }];
+      }
+      localStorage.setItem("super-fav-diaries", JSON.stringify(newFavs));
+      window.dispatchEvent(new CustomEvent("super:diary-favorite-changed"));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const moodEmoji = getMoodEmoji(item.mood);
   // 工作区下展示发布者；个人空间下省略（一定是自己）。
   const showCreator =
@@ -1429,7 +1506,7 @@ function DiaryCard({
 
             {/* 图片网格 */}
             {item.images && item.images.length > 0 && (
-              <ImageGrid ids={item.images} onOpen={setLightboxIdx} />
+              <ImageGrid ids={item.images} attachments={item.attachments} onOpen={setLightboxIdx} />
             )}
 
             {/* 标签列表 */}
@@ -1457,25 +1534,29 @@ function DiaryCard({
                 {moodEmoji && <span className="text-sm">{moodEmoji}</span>}
                 <span className="shrink-0">{timeAgo(item.createdAt, t)}</span>
                 {/* 空间可见性标识 */}
-                <span className="text-tx-tertiary/60 shrink-0">·</span>
-                <span className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
-                  item.visibility === "PUBLIC"
-                    ? "bg-blue-500/5 text-blue-500 border border-blue-500/10 dark:bg-blue-500/10 dark:border-blue-500/20"
-                    : "bg-zinc-500/5 text-zinc-500 border border-zinc-500/10 dark:bg-zinc-500/10 dark:border-zinc-500/20"
-                )} title={item.visibility === "PUBLIC" ? "公开的说说" : "仅自己可见的说说"}>
-                  {item.visibility === "PUBLIC" ? (
-                    <>
-                      <Globe size={10} />
-                      <span>公开</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock size={10} />
-                      <span>仅自己可见</span>
-                    </>
-                  )}
-                </span>
+                {getCurrentWorkspace() !== "personal" && (
+                  <>
+                    <span className="text-tx-tertiary/60 shrink-0">·</span>
+                    <span className={cn(
+                      "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
+                      item.visibility === "PUBLIC"
+                        ? "bg-blue-500/5 text-blue-500 border border-blue-500/10 dark:bg-blue-500/10 dark:border-blue-500/20"
+                        : "bg-zinc-500/5 text-zinc-500 border border-zinc-500/10 dark:bg-zinc-500/10 dark:border-zinc-500/20"
+                    )} title={item.visibility === "PUBLIC" ? "公开的说说" : "仅自己可见的说说"}>
+                      {item.visibility === "PUBLIC" ? (
+                        <>
+                          <Globe size={10} />
+                          <span>公开</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock size={10} />
+                          <span>仅自己可见</span>
+                        </>
+                      )}
+                    </span>
+                  </>
+                )}
                 {/* 工作区下追加发布者；与时间用「·」分隔，弱化视觉权重 */}
                 {showCreator && (
                   <>
@@ -1493,6 +1574,22 @@ function DiaryCard({
 
               {/* 操作按钮：编辑 + 删除 */}
               <div className="flex items-center gap-1">
+                {/* 收藏按钮 */}
+                <button
+                  onClick={handleToggleFavorite}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-all",
+                    "opacity-100 md:opacity-0 md:group-hover:opacity-100",
+                    isFavorited
+                      ? "text-amber-500 hover:bg-amber-500/10"
+                      : "text-tx-tertiary hover:text-amber-500 hover:bg-amber-500/10",
+                  )}
+                  title={isFavorited ? "取消收藏" : "收藏说说"}
+                >
+                  <Star size={12} className={cn(isFavorited && "fill-amber-500")} />
+                  <span>{isFavorited ? "已收藏" : "收藏"}</span>
+                </button>
+
                 <button
                   onClick={() => setIsEditing(true)}
                   className={cn(
@@ -1528,6 +1625,7 @@ function DiaryCard({
         {lightboxIdx !== null && (
           <Lightbox
             ids={item.images}
+            attachments={item.attachments}
             index={lightboxIdx}
             onClose={() => setLightboxIdx(null)}
             onIndexChange={setLightboxIdx}
@@ -1765,7 +1863,7 @@ function DiaryEditor({
           onKeyDown={handleKeyDown}
           placeholder={t("diary.editPlaceholder")}
           rows={4}
-          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none min-h-[100px]"
+          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px]"
           autoFocus
         />
 
@@ -2162,6 +2260,24 @@ function FilterBar({
   );
 }
 
+const ScrollContainer = React.forwardRef<HTMLDivElement, { children: React.ReactNode; className?: string }>(
+  ({ children, className }, ref) => {
+    if (window.innerWidth < 768) {
+      return (
+        <div ref={ref} className={cn("overflow-y-auto min-h-0", className)}>
+          {children}
+        </div>
+      );
+    }
+    return (
+      <ScrollArea ref={ref} className={className}>
+        {children}
+      </ScrollArea>
+    );
+  }
+);
+ScrollContainer.displayName = "ScrollContainer";
+
 // ============================================================
 // 主组件：DiaryCenter
 // ============================================================
@@ -2194,6 +2310,8 @@ export default function DiaryCenter() {
     }
   });
 
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   useEffect(() => {
@@ -2202,6 +2320,46 @@ export default function DiaryCenter() {
     }, 300);
     return () => clearTimeout(timer);
   }, [diarySearchQuery]);
+
+  const [favoriteDiaries, setFavoriteDiaries] = useState<{ id: string; text: string; createdAt: string }[]>([]);
+  const [favsExpanded, setFavsExpanded] = useState(true);
+
+  const loadFavoriteDiaries = useCallback(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
+      favs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setFavoriteDiaries(favs);
+    } catch {
+      setFavoriteDiaries([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFavoriteDiaries();
+    window.addEventListener("super:diary-favorite-changed", loadFavoriteDiaries);
+    return () => window.removeEventListener("super:diary-favorite-changed", loadFavoriteDiaries);
+  }, [loadFavoriteDiaries]);
+
+  const handleSelectFavoriteDiary = (id: string) => {
+    const element = document.getElementById(`diary-card-${id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedId(id);
+      setTimeout(() => setHighlightedId(null), 3000);
+    } else {
+      const fav = favoriteDiaries.find(f => f.id === id);
+      if (fav) {
+        const queryText = fav.text.replace(/<[^>]*>/g, '').slice(0, 30).trim();
+        if (queryText) {
+          setDiarySearchQuery(queryText);
+          sessionStorage.setItem("super-diary-search-query", JSON.stringify(queryText));
+          window.dispatchEvent(new CustomEvent("super:diary-search-changed", { detail: { query: queryText } }));
+          setHighlightedId(id);
+          setTimeout(() => setHighlightedId(null), 5000);
+        }
+      }
+    }
+  };
 
   // 处理搜索输入变化
   const handleDiarySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2301,6 +2459,25 @@ export default function DiaryCenter() {
     };
   }, [items]);
 
+  // 移动端滚动到底部分页加载说说
+  useEffect(() => {
+    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') || scrollRef.current;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      if (window.innerWidth >= 768) return;
+      const { scrollHeight, scrollTop, clientHeight } = viewport;
+      if (scrollHeight - scrollTop - clientHeight < 100) {
+        if (hasMore && !loadingMore && !loading) {
+          loadTimeline(false);
+        }
+      }
+    };
+
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [hasMore, loadingMore, loading, loadTimeline]);
+
   useEffect(() => {
     const onWs = () => {
       setNextCursor(null);
@@ -2312,7 +2489,7 @@ export default function DiaryCenter() {
   }, [loadTimeline, loadStats]);
 
   useEffect(() => {
-    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') || scrollRef.current;
     if (!viewport) return;
     
     let lastScrollTop = 0;
@@ -2389,7 +2566,7 @@ export default function DiaryCenter() {
   const groupedItems = groupByDate(items, t);
 
   return (
-    <div className="flex-1 flex h-full overflow-hidden bg-app-bg">
+    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-app-bg">
       {/* 左侧边栏：空间切换 + 搜索框 + 热力图 + 标签筛选 */}
       <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col border-r border-app-border bg-app-sidebar overflow-hidden">
         {/* 顶部区域：空间切换 + 搜索框 */}
@@ -2425,200 +2602,324 @@ export default function DiaryCenter() {
           />
         </div>
 
-        {/* 标签筛选区域 */}
-        <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-tx-tertiary px-1 mb-2">
-            {t('diary.tagFilter') || "标签筛选"}
-          </div>
-          <div className="space-y-1">
-            {/* "全部"按钮 */}
+        {/* 说说收藏与标签筛选 */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-4">
+          {/* 我的收藏 */}
+          <div className="space-y-2 pb-2 border-b border-app-border/40">
             <button
-              onClick={() => setSelectedTagId("all")}
-              className={cn(
-                "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
-                selectedTagId === "all" || !selectedTagId
-                  ? "bg-accent-primary/10 text-accent-primary font-medium"
-                  : "text-tx-secondary hover:bg-app-hover"
-              )}
+              onClick={() => setFavsExpanded(!favsExpanded)}
+              className="w-full flex items-center justify-between px-1 text-xs font-semibold uppercase tracking-wider text-tx-tertiary hover:text-tx-secondary transition-colors"
             >
-              <span className="w-2 h-2 rounded-full bg-accent-primary shrink-0" />
-              <span>{t('diary.allTags') || "全部标签"}</span>
+              <span>{t('diary.favorites') || "我的收藏"}</span>
+              <ChevronDown
+                size={12}
+                className={cn(
+                  "text-tx-tertiary transition-transform duration-200",
+                  !favsExpanded && "-rotate-90"
+                )}
+              />
             </button>
-            {/* 标签列表 */}
-            {state.tags.map((tag) => (
+            <AnimatePresence initial={false}>
+              {favsExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="space-y-1 mt-1 max-h-[160px] overflow-y-auto pr-1">
+                    {favoriteDiaries.length === 0 ? (
+                      <p className="text-[10px] text-tx-tertiary px-3 py-1">{t('diary.noFavorites') || "暂无收藏说说"}</p>
+                    ) : (
+                      favoriteDiaries.map((fav) => (
+                        <button
+                          key={fav.id}
+                          onClick={() => handleSelectFavoriteDiary(fav.id)}
+                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-app-hover transition-colors flex flex-col gap-0.5 group"
+                        >
+                          <span className="text-[11px] text-tx-secondary font-medium truncate w-full group-hover:text-accent-primary">
+                            {fav.text.replace(/<[^>]*>/g, '').trim() || "语音说说"}
+                          </span>
+                          <span className="text-[9px] text-tx-tertiary shrink-0">
+                            {fav.createdAt.split(' ')[0]}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 标签筛选区域 */}
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-tx-tertiary px-1 mb-2">
+              {t('diary.tagFilter') || "标签筛选"}
+            </div>
+            <div className="space-y-1">
+              {/* "全部"按钮 */}
               <button
-                key={tag.id}
-                onClick={() => setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id)}
+                onClick={() => setSelectedTagId("all")}
                 className={cn(
                   "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
-                  selectedTagId === tag.id
+                  selectedTagId === "all" || !selectedTagId
                     ? "bg-accent-primary/10 text-accent-primary font-medium"
                     : "text-tx-secondary hover:bg-app-hover"
                 )}
               >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                <span className="truncate">{tag.name}</span>
+                <span className="w-2 h-2 rounded-full bg-accent-primary shrink-0" />
+                <span>{t('diary.allTags') || "全部标签"}</span>
               </button>
-            ))}
+              {/* 标签列表 */}
+              {state.tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                    selectedTagId === tag.id
+                      ? "bg-accent-primary/10 text-accent-primary font-medium"
+                      : "text-tx-secondary hover:bg-app-hover"
+                  )}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                  <span className="truncate">{tag.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <ScrollArea className="flex-1" ref={scrollRef}>
-          <div className="max-w-[640px] mx-auto px-4 py-6 space-y-6">
-          {/* 顶部标题 + 统计 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
-                <MessageCircle size={18} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-tx-primary leading-tight">{t("diary.title")}</h1>
-                {stats && (
-                  <p className="text-[11px] text-tx-tertiary mt-0.5">
-                    {t("diary.statsLine")
-                      .replace("{{total}}", String(stats.total))
-                      .replace("{{today}}", String(stats.todayCount))}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 筛选时间 + 可见性 */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <FilterBar
-              preset={preset}
-              customRange={customRange}
-              onChange={handleFilterChange}
-            />
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* 可见性筛选 */}
-              <div className="flex items-center gap-1 bg-app-hover/40 p-0.5 rounded-full border border-app-border/40 select-none">
-                <button
-                  onClick={() => setVisibilityFilter("all")}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
-                    visibilityFilter === "all"
-                      ? "bg-accent-primary text-white shadow-sm"
-                      : "text-tx-tertiary hover:text-tx-secondary"
-                  )}
-                >
-                  全部
-                </button>
-                <button
-                  onClick={() => setVisibilityFilter("private")}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
-                    visibilityFilter === "private"
-                      ? "bg-accent-primary text-white shadow-sm"
-                      : "text-tx-tertiary hover:text-tx-secondary"
-                  )}
-                >
-                  <Lock size={10} />
-                  自己可见
-                </button>
-                <button
-                  onClick={() => setVisibilityFilter("public")}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
-                    visibilityFilter === "public"
-                      ? "bg-accent-primary text-white shadow-sm"
-                      : "text-tx-tertiary hover:text-tx-secondary"
-                  )}
-                >
-                  <Globe size={10} />
-                  公开
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 发布框 — 列表模式下显示 */}
-          {viewMode === "list" && (
-            <div className="hidden md:block">
-              <ComposeBox onPost={handlePost} />
-            </div>
-          )}
-
-          {/* 日历视图 / 时间线 */}
-          {viewMode === "calendar" ? (
-            <div className="py-4">
-              <DiaryCalendar
-                onDateSelect={handleCalendarDateSelect}
-                tagId={selectedTagId !== "all" ? selectedTagId : undefined}
-                search={debouncedSearch || undefined}
-              />
-            </div>
-          ) : loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 size={24} className="animate-spin text-accent-primary" />
-            </div>
-          ) : items.length === 0 ? (
-            <div className="flex flex-col items-center py-20 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-app-hover/60 flex items-center justify-center mb-4">
-                <MessageCircle size={28} className="text-tx-tertiary" />
-              </div>
-              <p className="text-sm text-tx-secondary font-medium">
-                {isFiltering ? t("diary.emptyFiltered") : t("diary.empty")}
-              </p>
-              <p className="text-xs text-tx-tertiary mt-1">
-                {isFiltering ? t("diary.emptyFilteredHint") : t("diary.emptyHint")}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {groupedItems.map(({ label, items: dayItems }) => (
-                <div key={label}>
-                  {/* 日期分割 */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-[11px] font-medium text-tx-tertiary bg-app-hover/60 px-2.5 py-1 rounded-full">
-                      {label}
-                    </span>
-                    <div className="flex-1 h-px bg-app-border/50" />
+        {window.innerWidth < 768 && (
+          <header
+            className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0 z-40"
+            style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)', height: '56px' }}
+          >
+            {!showMobileSearch ? (
+              <>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-accent-primary flex items-center justify-center shrink-0">
+                    <MessageCircle size={16} className="text-white" />
                   </div>
-
-                  {/* 当天动态 */}
-                  <div className="space-y-3">
-                    <AnimatePresence mode="popLayout">
-                      {dayItems.map((item) => (
-                        <DiaryCard
-                          key={item.id}
-                          item={item}
-                          onDelete={handleDelete}
-                          onUpdate={handleUpdate}
-                          isHighlighted={highlightedId === item.id}
-                        />
-                      ))}
-                    </AnimatePresence>
+                  <div className="min-w-0">
+                    <h1 className="text-sm font-bold text-tx-primary leading-tight truncate">{t("diary.title") || "说说"}</h1>
+                    {stats && (
+                      <p className="text-[10px] text-tx-tertiary mt-0.5 leading-none">
+                        {t("diary.statsLine")
+                          .replace("{{total}}", String(stats.total))
+                          .replace("{{today}}", String(stats.todayCount))}
+                      </p>
+                    )}
                   </div>
                 </div>
-              ))}
+                <button
+                  onClick={() => setShowMobileSearch(true)}
+                  className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
+                >
+                  <Search size={18} />
+                </button>
+              </>
+            ) : (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: "100%", opacity: 1 }}
+                className="flex items-center gap-2 w-full"
+              >
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+                  <Input
+                    autoFocus
+                    placeholder="搜索说说..."
+                    value={diarySearchQuery}
+                    onChange={handleDiarySearchChange}
+                    className="pl-8 pr-8 h-8 w-full rounded-full bg-app-hover border-none text-xs focus-visible:ring-1 focus-visible:ring-accent-primary"
+                  />
+                  {diarySearchQuery && (
+                    <button
+                      onClick={() => setDiarySearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-tx-tertiary hover:text-tx-secondary"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setShowMobileSearch(false);
+                    setDiarySearchQuery("");
+                  }}
+                  className="text-xs font-medium text-accent-primary px-2 py-1 active:scale-95"
+                >
+                  取消
+                </button>
+              </motion.div>
+            )}
+          </header>
+        )}
 
-              {/* 加载更多 */}
-              {hasMore && (
-                <div className="flex justify-center pt-2 pb-4">
-                  <button
-                    onClick={() => loadTimeline(false)}
-                    disabled={loadingMore}
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-full text-xs font-medium text-tx-secondary bg-app-hover/60 hover:bg-app-hover transition-colors"
-                  >
-                    {loadingMore ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <ChevronDown size={13} />
-                    )}
-                    <span>{loadingMore ? t("diary.loadingMore") : t("diary.loadMore")}</span>
-                  </button>
+        <PullToRefresh onRefresh={async () => { await Promise.all([loadTimeline(true), loadStats()]); }}>
+          <ScrollContainer className="flex-1" ref={scrollRef}>
+            <div className={cn("max-w-[640px] mx-auto px-4 space-y-6", window.innerWidth < 768 ? "pt-2 pb-6" : "py-6")}>
+              {/* 顶部标题 + 统计 (仅在桌面端展示) */}
+              {window.innerWidth >= 768 && (
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-accent-primary flex items-center justify-center">
+                      <MessageCircle size={18} className="text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-bold text-tx-primary leading-tight">{t("diary.title")}</h1>
+                      {stats && (
+                        <p className="text-[11px] text-tx-tertiary mt-0.5">
+                          {t("diary.statsLine")
+                            .replace("{{total}}", String(stats.total))
+                            .replace("{{today}}", String(stats.todayCount))}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+
+            {/* 筛选时间 + 可见性 */}
+            {window.innerWidth >= 768 && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <FilterBar
+                  preset={preset}
+                  customRange={customRange}
+                  onChange={handleFilterChange}
+                />
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* 可见性筛选 */}
+                  {getCurrentWorkspace() !== "personal" && (
+                    <div className="flex items-center gap-1 bg-app-hover/40 p-0.5 rounded-full border border-app-border/40 select-none">
+                      <button
+                        onClick={() => setVisibilityFilter("all")}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
+                          visibilityFilter === "all"
+                            ? "bg-accent-primary text-white shadow-sm"
+                            : "text-tx-tertiary hover:text-tx-secondary"
+                        )}
+                      >
+                        全部
+                      </button>
+                      <button
+                        onClick={() => setVisibilityFilter("private")}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
+                          visibilityFilter === "private"
+                            ? "bg-accent-primary text-white shadow-sm"
+                            : "text-tx-tertiary hover:text-tx-secondary"
+                        )}
+                      >
+                        <Lock size={10} />
+                        自己可见
+                      </button>
+                      <button
+                        onClick={() => setVisibilityFilter("public")}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
+                          visibilityFilter === "public"
+                            ? "bg-accent-primary text-white shadow-sm"
+                            : "text-tx-tertiary hover:text-tx-secondary"
+                        )}
+                      >
+                        <Globe size={10} />
+                        公开
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 发布框 — 列表模式下显示 (仅在桌面端或宽度大时渲染，避免 mobile DOM 占据 space-y 空间) */}
+            {viewMode === "list" && window.innerWidth >= 768 && (
+              <ComposeBox onPost={handlePost} />
+            )}
+
+            {/* 日历视图 / 时间线 */}
+            {viewMode === "calendar" ? (
+              <div className="py-4">
+                <DiaryCalendar
+                  onDateSelect={handleCalendarDateSelect}
+                  tagId={selectedTagId !== "all" ? selectedTagId : undefined}
+                  search={debouncedSearch || undefined}
+                />
+              </div>
+            ) : loading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 size={24} className="animate-spin text-accent-primary" />
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-col items-center py-20 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-app-hover/60 flex items-center justify-center mb-4">
+                  <MessageCircle size={28} className="text-tx-tertiary" />
+                </div>
+                <p className="text-sm text-tx-secondary font-medium">
+                  {isFiltering ? t("diary.emptyFiltered") : t("diary.empty")}
+                </p>
+                <p className="text-xs text-tx-tertiary mt-1">
+                  {isFiltering ? t("diary.emptyFilteredHint") : t("diary.emptyHint")}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {groupedItems.map(({ label, items: dayItems }) => (
+                  <div key={label}>
+                    {/* 日期分割 */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-[11px] font-medium text-tx-tertiary bg-app-hover/60 px-2.5 py-1 rounded-full">
+                        {label}
+                      </span>
+                      <div className="flex-1 h-px bg-app-border/50" />
+                    </div>
+
+                    {/* 当天动态 */}
+                    <div className="space-y-3">
+                      <AnimatePresence mode="popLayout">
+                        {dayItems.map((item) => (
+                          <DiaryCard
+                            key={item.id}
+                            item={item}
+                            onDelete={handleDelete}
+                            onUpdate={handleUpdate}
+                            isHighlighted={highlightedId === item.id}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                ))}
+
+                {/* 加载更多 */}
+                {hasMore && (
+                  <div className="flex justify-center pt-2 pb-4">
+                    <button
+                      onClick={() => loadTimeline(false)}
+                      disabled={loadingMore}
+                      className="flex items-center gap-1.5 px-5 py-2 rounded-full text-xs font-medium text-tx-secondary bg-app-hover/60 hover:bg-app-hover transition-colors"
+                    >
+                      {loadingMore ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <ChevronDown size={13} />
+                      )}
+                      <span>{loadingMore ? t("diary.loadingMore") : t("diary.loadMore")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </ScrollContainer>
+      </PullToRefresh>
     </div>
     </div>
   );

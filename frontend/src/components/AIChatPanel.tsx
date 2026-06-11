@@ -575,7 +575,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
       <aside
         className={cn(
           "flex flex-col border-r border-app-border bg-app-surface/30 transition-[width] duration-150 overflow-hidden shrink-0",
-          sidebarOpen ? "w-52" : "w-0"
+          window.innerWidth < 768 ? "hidden" : (sidebarOpen ? "w-52" : "w-0")
         )}
       >
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-app-border">
@@ -658,53 +658,65 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
       {/* ===== 右侧：消息主区 ===== */}
       <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSidebarOpen(v => !v)}
-            title={sidebarOpen ? t("aiChat.collapseSidebar") : t("aiChat.expandSidebar")}
-            className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
-          >
-            <Menu size={14} />
-          </button>
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center">
-            <Bot size={14} className="text-white" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-tx-primary">{t("aiChat.title")}</span>
-            {stats && (
-              <span className="text-[10px] text-tx-tertiary bg-app-hover px-1.5 py-0.5 rounded-full">
-                {t("aiChat.statsNotes", { count: stats.noteCount })}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleNewConversation}
-            disabled={isLoading}
-            title={t("aiChat.newConversation")}
-            className="p-1.5 rounded-md text-tx-tertiary hover:text-accent-primary hover:bg-app-hover transition-colors disabled:opacity-50"
-          >
-            <Plus size={14} />
-          </button>
-          {messages.length > 0 && (
-            <button
-              onClick={clearChat}
-              className="p-1.5 rounded-md text-tx-tertiary hover:text-red-500 hover:bg-app-hover transition-colors"
-              title={t("aiChat.clearChat")}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
+      {window.innerWidth < 768 ? (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0">
+          <span className="text-sm font-semibold text-tx-primary">AI问答</span>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
           >
-            <X size={14} />
+            <X size={16} />
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSidebarOpen(v => !v)}
+              title={sidebarOpen ? t("aiChat.collapseSidebar") : t("aiChat.expandSidebar")}
+              className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
+            >
+              <Menu size={14} />
+            </button>
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center">
+              <Bot size={14} className="text-white" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-tx-primary">{t("aiChat.title")}</span>
+              {stats && (
+                <span className="text-[10px] text-tx-tertiary bg-app-hover px-1.5 py-0.5 rounded-full">
+                  {t("aiChat.statsNotes", { count: stats.noteCount })}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleNewConversation}
+              disabled={isLoading}
+              title={t("aiChat.newConversation")}
+              className="p-1.5 rounded-md text-tx-tertiary hover:text-accent-primary hover:bg-app-hover transition-colors disabled:opacity-50"
+            >
+              <Plus size={14} />
+            </button>
+            {messages.length > 0 && (
+              <button
+                onClick={clearChat}
+                className="p-1.5 rounded-md text-tx-tertiary hover:text-red-500 hover:bg-app-hover transition-colors"
+                title={t("aiChat.clearChat")}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1">
@@ -1026,7 +1038,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
             onKeyDown={handleKeyDown}
             placeholder={t("aiChat.placeholder")}
             rows={1}
-            className="flex-1 resize-none px-3 py-2 bg-app-bg border border-app-border rounded-xl text-sm text-tx-primary placeholder:text-tx-tertiary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all max-h-24"
+            className="flex-1 resize-none px-3 py-2 bg-app-bg border border-app-border rounded-xl text-base md:text-sm text-tx-primary placeholder:text-tx-tertiary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all max-h-24"
             style={{ minHeight: "38px" }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;

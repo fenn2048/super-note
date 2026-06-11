@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, Globe, Bot, Users, Info, ExternalLink, Heart, Sparkles, RefreshCw, Wrench, ZoomIn, Key, Building2, BookOpen, ToggleLeft, Download } from "lucide-react";
+import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, Heart, Sparkles, RefreshCw, Wrench, ZoomIn, Key, Building2, BookOpen, ToggleLeft, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import SkinSwitcher from "@/components/SkinSwitcher";
@@ -1332,6 +1332,9 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
   function SettingsModal({ onClose, defaultTab = "appearance" }, ref) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
+  const [currentMobilePage, setCurrentMobilePage] = useState<"menu" | TabId>(() => {
+    return window.innerWidth < 768 ? "menu" : defaultTab;
+  });
   const { siteConfig } = useSiteSettings();
   const [currentUser, setCurrentUser] = useState<{ id: string; role?: string } | null>(null);
 
@@ -1434,102 +1437,85 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
         onClick={(e) => e.stopPropagation()}
         onPointerDownCapture={(e) => e.stopPropagation()}
       >
-        {/* 移动端：顶部标签栏 + 关闭按钮
-            - sticky top-0：避免内容滚动时 tab 栏跟着上移露出后面的遮罩；
-            - touch-action: pan-x：仅允许横向滑动（tab 多时可滑），杜绝竖向手势
-              漂移到外层被识别为关闭/系统手势。 */}
-        <div
-          className="md:hidden sticky top-0 z-10 flex items-center border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/95 backdrop-blur"
-          style={{ paddingTop: 'var(--safe-area-top)', touchAction: 'pan-x' }}
-        >
-          <div className="flex-1 flex items-center gap-1 px-3 py-2 overflow-x-auto no-scrollbar" style={{ touchAction: 'pan-x' }}>
-            {SETTING_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0",
-                    isActive
-                      ? "bg-zinc-200/70 dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400"
-                      : "text-zinc-500 dark:text-zinc-400 active:bg-zinc-200/40 dark:active:bg-zinc-800/50"
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 mr-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg transition-colors shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* 桌面端：左侧导航栏 */}
-        <div className="hidden md:flex w-56 flex-shrink-0 bg-zinc-50 dark:bg-zinc-900/50 border-r border-zinc-200 dark:border-zinc-800 p-4 flex-col">
-          <div className="flex items-center gap-2 mb-6 px-2">
-            <Settings className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-            <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{t('settings.title')}</span>
-          </div>
-
-          <nav className="flex-1 space-y-0.5">
-            {SETTING_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-zinc-200/70 dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400"
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* 底部版本信息：版本号由 vite.config.ts 从根 package.json 注入 */}
-          <div className="mt-auto pt-4 border-t border-zinc-200 dark:border-zinc-800 px-2">
-            <p className="text-xs text-zinc-400 dark:text-zinc-600">{siteConfig.title} v{__APP_VERSION__}</p>
-          </div>
-        </div>
-
-        {/* 右侧内容区 */}
-        <div className="flex-1 overflow-y-auto relative">
-          {/* 关闭按钮 — 桌面端 */}
-          <button
-            onClick={onClose}
-            className="hidden md:block absolute top-4 right-4 p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors z-10"
-          >
-            <X className="w-4 h-4" />
-          </button>
-
-          {/* 动态渲染内容 */}
-          <div className="p-4 md:p-8 md:pr-14">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.15 }}
+        {window.innerWidth < 768 ? (
+          // Mobile H5 UI Flow (Menu -> Subpage)
+          currentMobilePage === "menu" ? (
+            <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden h-full">
+              {/* Mobile Header */}
+              <div 
+                className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 shrink-0"
+                style={{ paddingTop: 'calc(var(--safe-area-top) + 12px)' }}
               >
-                {/*
-                  PanelErrorBoundary 用 activeTab 做 key：每次切 tab 都重新创建一个
-                  Boundary 实例，已经"中过招"的 panel 不会污染下一个 panel 的状态；
-                  同时把"模态框被整个卸掉退回笔记页"的灾难性体验降级成局部错误提示。
-                */}
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{t('settings.title')}</h2>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Menu List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {SETTING_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setCurrentMobilePage(tab.id);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-left transition-colors active:bg-zinc-100 dark:active:bg-zinc-800"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                            <Icon className="w-4 h-4" />
+                          </span>
+                          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{tab.label}</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-zinc-400" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mobile Footer */}
+              <div className="py-6 text-center text-xs text-zinc-400 dark:text-zinc-600 border-t border-zinc-100 dark:border-zinc-900 shrink-0">
+                <p>{siteConfig.title} v{__APP_VERSION__}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col bg-white dark:bg-zinc-950 overflow-hidden h-full">
+              {/* Mobile Subpage Header */}
+              <div 
+                className="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-3 shrink-0"
+                style={{ paddingTop: 'calc(var(--safe-area-top) + 12px)' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setCurrentMobilePage("menu")}
+                  className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 rounded-lg active:scale-95 transition-transform"
+                >
+                  <ChevronRight className="w-5 h-5 rotate-180" />
+                </button>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex-1">
+                  {SETTING_TABS.find(t => t.id === currentMobilePage)?.label || "设置"}
+                </h2>
+                <button
+                  onClick={onClose}
+                  className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Subpage Content */}
+              <div className="flex-1 overflow-y-auto p-4">
                 <PanelErrorBoundary
                   key={activeTab}
                   fallback={
@@ -1543,23 +1529,104 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                     </div>
                   }
                 >
-            {activeTab === "appearance" && <AppearancePanel />}
-            {activeTab === "switches" && <SwitchesPanel />}
-            {activeTab === "manual" && <ManualPanel />}
-            {activeTab === "ai" && <AISettingsPanel />}
-            {activeTab === "security" && <SecuritySettings />}
-            {activeTab === "tokens" && <TokenManagement />}
+                  {activeTab === "appearance" && <AppearancePanel />}
+                  {activeTab === "switches" && <SwitchesPanel />}
+                  {activeTab === "manual" && <ManualPanel />}
+                  {activeTab === "ai" && <AISettingsPanel />}
+                  {activeTab === "security" && <SecuritySettings />}
+                  {activeTab === "tokens" && <TokenManagement />}
                   {activeTab === "users" && isAdmin && <UserManagement currentUserId={currentUser?.id ?? null} />}
                   {activeTab === "workspaces" && isAdmin && <WorkspaceManagement />}
-                  {/* data tab 对所有用户可见：DataManager 内部会按 isAdmin 自动分流
-                       —— 管理员看到完整三 scope；普通用户只看"个人空间"的导出/导入。 */}
                   {activeTab === "data" && <DataManager />}
                   {activeTab === "developer" && isAdmin && <DeveloperPanel />}
                 </PanelErrorBoundary>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
+              </div>
+            </div>
+          )
+        ) : (
+          // Desktop Layout (unchanged)
+          <>
+            {/* 桌面端：左侧导航栏 */}
+            <div className="hidden md:flex w-56 flex-shrink-0 bg-zinc-50 dark:bg-zinc-900/50 border-r border-zinc-200 dark:border-zinc-800 p-4 flex-col">
+              <div className="flex items-center gap-2 mb-6 px-2">
+                <Settings className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{t('settings.title')}</span>
+              </div>
+
+              <nav className="flex-1 space-y-0.5">
+                {SETTING_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-zinc-200/70 dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <div className="mt-auto pt-4 border-t border-zinc-200 dark:border-zinc-800 px-2">
+                <p className="text-xs text-zinc-400 dark:text-zinc-600">{siteConfig.title} v{__APP_VERSION__}</p>
+              </div>
+            </div>
+
+            {/* 右侧内容区 */}
+            <div className="flex-1 overflow-y-auto relative">
+              <button
+                onClick={onClose}
+                className="hidden md:block absolute top-4 right-4 p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors z-10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="p-4 md:p-8 md:pr-14">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -12 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <PanelErrorBoundary
+                      key={activeTab}
+                      fallback={
+                        <div className="py-12 px-4 text-center">
+                          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                            {t('settings.panelLoadFailed')}
+                          </p>
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2">
+                            {t('settings.panelLoadFailedHint')}
+                          </p>
+                        </div>
+                      }
+                    >
+                      {activeTab === "appearance" && <AppearancePanel />}
+                      {activeTab === "switches" && <SwitchesPanel />}
+                      {activeTab === "manual" && <ManualPanel />}
+                      {activeTab === "ai" && <AISettingsPanel />}
+                      {activeTab === "security" && <SecuritySettings />}
+                      {activeTab === "tokens" && <TokenManagement />}
+                      {activeTab === "users" && isAdmin && <UserManagement currentUserId={currentUser?.id ?? null} />}
+                      {activeTab === "workspaces" && isAdmin && <WorkspaceManagement />}
+                      {activeTab === "data" && <DataManager />}
+                      {activeTab === "developer" && isAdmin && <DeveloperPanel />}
+                    </PanelErrorBoundary>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            </div>
+          </>
+        )}
       </motion.div>
     </motion.div>,
     document.body

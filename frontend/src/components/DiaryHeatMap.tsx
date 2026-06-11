@@ -55,13 +55,13 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
     statMap.set(s.date, s.count);
   }
 
-  // ---- 颜色等级（更温润的渐变色阶） ----
+  // ---- 颜色等级（更温润的渐变色阶，使用动态主题色） ----
   const getColorClass = (count: number): string => {
     if (count === 0) return "bg-app-hover/30";
-    if (count === 1) return "bg-emerald-200 dark:bg-emerald-800";
-    if (count === 2) return "bg-emerald-300 dark:bg-emerald-700";
-    if (count === 3) return "bg-emerald-400 dark:bg-emerald-600";
-    return "bg-emerald-500 dark:bg-emerald-500";
+    if (count === 1) return "bg-accent-primary/20";
+    if (count === 2) return "bg-accent-primary/45";
+    if (count === 3) return "bg-accent-primary/70";
+    return "bg-accent-primary";
   };
 
   // ---- 统计 ----
@@ -150,10 +150,10 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
         <div className="flex items-center gap-0.5">
           <span className="text-[8px] text-tx-tertiary/50 mr-0.5">少</span>
           <div className="w-3 h-3 rounded-[2px] bg-app-hover/20 border border-app-border/20" />
-          <div className="w-3 h-3 rounded-[2px] bg-emerald-200 dark:bg-emerald-800" />
-          <div className="w-3 h-3 rounded-[2px] bg-emerald-300 dark:bg-emerald-700" />
-          <div className="w-3 h-3 rounded-[2px] bg-emerald-400 dark:bg-emerald-600" />
-          <div className="w-3 h-3 rounded-[2px] bg-emerald-500 dark:bg-emerald-500" />
+          <div className="w-3 h-3 rounded-[2px] bg-accent-primary/20" />
+          <div className="w-3 h-3 rounded-[2px] bg-accent-primary/45" />
+          <div className="w-3 h-3 rounded-[2px] bg-accent-primary/70" />
+          <div className="w-3 h-3 rounded-[2px] bg-accent-primary" />
           <span className="text-[8px] text-tx-tertiary/50 ml-0.5">多</span>
         </div>
 

@@ -315,7 +315,7 @@ export default function AISettingsPanel() {
             value={settings.ai_api_url}
             onChange={(e) => setSettings(prev => ({ ...prev, ai_api_url: e.target.value }))}
             placeholder={currentPreset?.url || "https://api.openai.com/v1"}
-            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
           />
         </div>
 
@@ -329,7 +329,7 @@ export default function AISettingsPanel() {
                 value={localKey}
                 onChange={(e) => { setLocalKey(e.target.value); setTestResult(null); }}
                 placeholder={settings.ai_api_key_set ? t("ai.apiKeySet") : "sk-..."}
-                className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
               />
               <button
                 onClick={() => setShowKey(!showKey)}
@@ -358,7 +358,7 @@ export default function AISettingsPanel() {
                   }
                 }}
                 placeholder={currentPreset?.defaultModel || "gpt-4o-mini"}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
               />
               {modelDropdownOpen && models.length > 0 && (
                 <>
@@ -395,11 +395,11 @@ export default function AISettingsPanel() {
       </div>
 
       {/* 操作按钮 */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-1.5 px-4 py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-sm md:text-xs font-medium transition-all disabled:opacity-40"
         >
           {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           {t("ai.saveSettings")}
@@ -408,14 +408,14 @@ export default function AISettingsPanel() {
         <button
           onClick={handleTest}
           disabled={isTesting || !settings.ai_api_url}
-          className="flex items-center gap-1.5 px-4 py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:border-accent-primary/50 transition-all disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm md:text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:border-accent-primary/50 transition-all disabled:opacity-40"
         >
           {isTesting ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
           {t("ai.testConnection")}
         </button>
 
         {saveMsg && (
-          <span className={cn("text-xs", saveMsg === t("ai.saveSuccess") ? "text-emerald-500" : "text-red-500")}>
+          <span className={cn("text-xs text-center sm:text-left", saveMsg === t("ai.saveSuccess") ? "text-emerald-500" : "text-red-500")}>
             {saveMsg}
           </span>
         )}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
@@ -276,9 +278,30 @@ const compressImageToBase64 = (file: File): Promise<string> => {
   });
 };
 
+const ScrollContainer = React.forwardRef<HTMLDivElement, { children: React.ReactNode; className?: string }>(
+  ({ children, className }, ref) => {
+    if (window.innerWidth < 768) {
+      return (
+        <div ref={ref} className={cn("overflow-y-auto min-h-0", className)}>
+          {children}
+        </div>
+      );
+    }
+    return (
+      <ScrollArea ref={ref} className={className}>
+        {children}
+      </ScrollArea>
+    );
+  }
+);
+ScrollContainer.displayName = "ScrollContainer";
+
 export default function ProjectCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
+
+  const [showMobileMyTasksSearch, setShowMobileMyTasksSearch] = useState(false);
+  const [showMobileRoleSelector, setShowMobileRoleSelector] = useState(false);
 
   // Make workspaceId a reactive state
   const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
@@ -376,6 +399,13 @@ export default function ProjectCenter() {
     pending: true,
     completed: true,
     today: true
+  });
+
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({
+    overdue: 15,
+    today: 15,
+    pending: 15,
+    completed: 15
   });
 
   const [workspaceStages, setWorkspaceStages] = useState<ProjectStage[]>([]);
@@ -950,7 +980,10 @@ export default function ProjectCenter() {
       {selectedProject ? (
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* Top Nav Bar */}
-          <div className="px-4 py-3 border-b border-app-border bg-app-sidebar flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-2">
+          <div
+            className="px-4 py-3 border-b border-app-border bg-app-sidebar flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-2"
+            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
+          >
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={closeProjectDetail} className="h-8 w-8">
                 <ArrowLeft size={16} />
@@ -1080,140 +1113,222 @@ export default function ProjectCenter() {
         /* 2. Global "My Tasks" aggregated board */
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <ListTodo size={18} className="text-accent-primary" />
-              <h1 className="text-base font-bold text-tx-primary">{t("projects.myTasks") || "我的任务"}</h1>
-              <span className="text-xs text-tx-tertiary">({t("projects.myTasksDesc") || "跨项目指派给我的任务"})</span>
-            </div>
-
-            {/* Role Filter Tabs */}
-            <div className="flex items-center bg-app-hover/50 p-0.5 rounded-lg border border-app-border/40 text-xs font-semibold shrink-0">
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  roleFilter === "assigned" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setRoleFilter("assigned")}
+          <div
+            className={cn(
+              "border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between gap-4",
+              window.innerWidth < 768 ? "px-4 py-3 h-[56px]" : "px-6 py-4"
+            )}
+            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
+          >
+            {showMobileMyTasksSearch ? (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: "100%", opacity: 1 }}
+                className="flex items-center gap-2 w-full"
               >
-                {t("projects.roleAssigned") || "我负责的"}
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  roleFilter === "created" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setRoleFilter("created")}
-              >
-                {t("projects.roleCreated") || "我创建的"}
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  roleFilter === "participating" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setRoleFilter("participating")}
-              >
-                {t("projects.roleParticipating") || "我参与的"}
-              </button>
-            </div>
-          </div>
-
-          {/* Scrollable Container */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-            <div className="space-y-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
                   <Input
+                    autoFocus
                     placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
-                    className="pl-9 h-10 text-sm"
+                    className={cn(
+                      "pl-9 pr-8 w-full rounded-full bg-app-hover border-none",
+                      window.innerWidth < 768 ? "h-8 text-xs" : "h-10 text-sm"
+                    )}
                     value={projectSearchQuery}
                     onChange={(e) => setProjectSearchQuery(e.target.value)}
                   />
-                </div>
-                {selectedProjectTagId ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedProjectTagId(null)}
-                    className="shrink-0"
-                  >
-                    {t("projects.clearTagFilter") || "清除标签"}
-                  </Button>
-                ) : null}
-              </div>
-              {availableProjectTags.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => setSelectedProjectTagId(null)}
-                    className={cn(
-                      "w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all border",
-                      !selectedProjectTagId
-                        ? "bg-accent-primary text-white border-accent-primary"
-                        : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
-                    )}
-                  >
-                    {t("projects.allTags") || "全部标签"}
-                  </button>
-                  {availableProjectTags.map((tag) => (
+                  {projectSearchQuery && (
                     <button
-                      key={tag.id}
-                      onClick={() => setSelectedProjectTagId(tag.id)}
+                      onClick={() => setProjectSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-tx-tertiary"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setShowMobileMyTasksSearch(false);
+                    setProjectSearchQuery("");
+                  }}
+                  className="text-xs font-medium text-accent-primary px-2 py-1 active:scale-95"
+                >
+                  取消
+                </button>
+              </motion.div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {window.innerWidth < 768 ? (
+                    <div className="flex items-center gap-1.5">
+                      <h1 className="text-base font-bold text-tx-primary">项目管理</h1>
+                      <button
+                        onClick={() => setShowMobileRoleSelector(true)}
+                        className="flex items-center gap-0.5 text-xs font-semibold text-accent-primary py-1 px-1.5 rounded-lg hover:bg-accent-primary/5 active:scale-95 transition-all"
+                      >
+                        <span>
+                          {roleFilter === "assigned"
+                            ? "我负责的"
+                            : roleFilter === "created"
+                            ? "我创建的"
+                            : "我参与的"}
+                        </span>
+                        <ChevronDown size={14} className="mt-0.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <ListTodo size={18} className="text-accent-primary" />
+                      <h1 className="text-base font-bold text-tx-primary">{t("projects.myTasks") || "我的任务"}</h1>
+                      <span className="text-xs text-tx-tertiary">({t("projects.myTasksDesc") || "跨项目指派给我的任务"})</span>
+                    </>
+                  )}
+                </div>
+
+                {window.innerWidth < 768 && (
+                  <button
+                    onClick={() => setShowMobileMyTasksSearch(true)}
+                    className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
+                  >
+                    <Search size={18} />
+                  </button>
+                )}
+
+                {/* Role Filter Tabs */}
+                {window.innerWidth >= 768 && (
+                  <div className="flex items-center bg-app-hover/50 p-0.5 rounded-lg border border-app-border/40 text-xs font-semibold shrink-0">
+                    <button
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        roleFilter === "assigned" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
+                      }`}
+                      onClick={() => setRoleFilter("assigned")}
+                    >
+                      {t("projects.roleAssigned") || "我负责的"}
+                    </button>
+                    <button
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        roleFilter === "created" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
+                      }`}
+                      onClick={() => setRoleFilter("created")}
+                    >
+                      {t("projects.roleCreated") || "我创建的"}
+                    </button>
+                    <button
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        roleFilter === "participating" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
+                      }`}
+                      onClick={() => setRoleFilter("participating")}
+                    >
+                      {t("projects.roleParticipating") || "我参与的"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Scrollable Container */}
+          <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+            {window.innerWidth >= 768 && (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
+                    <Input
+                      placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
+                      className="pl-9 h-10 text-sm"
+                      value={projectSearchQuery}
+                      onChange={(e) => setProjectSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  {selectedProjectTagId ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedProjectTagId(null)}
+                      className="shrink-0"
+                    >
+                      {t("projects.clearTagFilter") || "清除标签"}
+                    </Button>
+                  ) : null}
+                </div>
+                {availableProjectTags.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => setSelectedProjectTagId(null)}
                       className={cn(
-                        "flex w-full items-center gap-2 text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all",
-                        selectedProjectTagId === tag.id
+                        "w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all border",
+                        !selectedProjectTagId
                           ? "bg-accent-primary text-white border-accent-primary"
                           : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
                       )}
                     >
-                      <span
-                        className="inline-block rounded-full"
-                        style={{ width: 10, height: 10, backgroundColor: tag.color }}
-                      />
-                      {tag.name}
+                      {t("projects.allTags") || "全部标签"}
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                    {availableProjectTags.map((tag) => (
+                      <button
+                        key={tag.id}
+                        onClick={() => setSelectedProjectTagId(tag.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2 text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all",
+                          selectedProjectTagId === tag.id
+                            ? "bg-accent-primary text-white border-accent-primary"
+                            : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+                        )}
+                      >
+                        <span
+                          className="inline-block rounded-full"
+                          style={{ width: 10, height: 10, backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Stats Cards Row */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-1.5 md:gap-4 shrink-0 sticky top-0 z-30 bg-app-bg/95 backdrop-blur-xs py-2 -my-2">
               {/* Card 1: 今日到期 */}
               <div
                 onClick={() => setStatusFilter("today")}
-                className={`cursor-pointer p-4 rounded-2xl border transition-all flex flex-col justify-between h-24 ${
+                className={`cursor-pointer p-2 md:p-4 rounded-xl md:rounded-2xl border transition-all flex flex-col justify-between h-16 md:h-24 min-w-0 flex-1 shrink-0 ${
                   statusFilter === "today"
                     ? "bg-blue-500/15 border-blue-500 text-blue-400 ring-1 ring-blue-500/20"
                     : "bg-app-sidebar/40 border-app-border hover:bg-blue-500/5 hover:border-blue-500/40 text-tx-secondary"
                 }`}
               >
-                <span className="text-xs font-bold font-mono tracking-wide uppercase opacity-80">{t("projects.statusToday") || "今日到期"}</span>
-                <span className="text-2xl font-black font-mono mt-1 text-blue-400">{myTasksCategorized.today.length}</span>
+                <span className="text-[9px] md:text-xs font-bold font-mono tracking-tight uppercase opacity-80 truncate">{t("projects.statusToday") || "今日到期"}</span>
+                <span className="text-base md:text-2xl font-black font-mono mt-0.5 text-blue-400">{myTasksCategorized.today.length}</span>
               </div>
 
               {/* Card 2: 逾期任务 */}
               <div
                 onClick={() => setStatusFilter("overdue")}
-                className={`cursor-pointer p-4 rounded-2xl border transition-all flex flex-col justify-between h-24 ${
+                className={`cursor-pointer p-2 md:p-4 rounded-xl md:rounded-2xl border transition-all flex flex-col justify-between h-16 md:h-24 min-w-0 flex-1 shrink-0 ${
                   statusFilter === "overdue"
                     ? "bg-red-500/15 border-red-500 text-red-400 ring-1 ring-red-500/20"
                     : "bg-app-sidebar/40 border-app-border hover:bg-red-500/5 hover:border-red-500/40 text-tx-secondary"
                 }`}
               >
-                <span className="text-xs font-bold font-mono tracking-wide uppercase opacity-80">{t("projects.statusOverdue") || "逾期任务"}</span>
-                <span className="text-2xl font-black font-mono mt-1 text-red-400">{myTasksCategorized.overdue.length}</span>
+                <span className="text-[9px] md:text-xs font-bold font-mono tracking-tight uppercase opacity-80 truncate">{t("projects.statusOverdue") || "逾期任务"}</span>
+                <span className="text-base md:text-2xl font-black font-mono mt-0.5 text-red-400">{myTasksCategorized.overdue.length}</span>
               </div>
 
               {/* Card 3: 待完成 */}
               <div
                 onClick={() => setStatusFilter("pending")}
-                className={`cursor-pointer p-4 rounded-2xl border transition-all flex flex-col justify-between h-24 ${
+                className={`cursor-pointer p-2 md:p-4 rounded-xl md:rounded-2xl border transition-all flex flex-col justify-between h-16 md:h-24 min-w-0 flex-1 shrink-0 ${
                   statusFilter === "pending"
                     ? "bg-amber-500/15 border-amber-500 text-amber-400 ring-1 ring-amber-500/20"
                     : "bg-app-sidebar/40 border-app-border hover:bg-amber-500/5 hover:border-amber-500/40 text-tx-secondary"
                 }`}
               >
-                <span className="text-xs font-bold font-mono tracking-wide uppercase opacity-80">{t("projects.statusPending") || "待完成"}</span>
-                <span className="text-2xl font-black font-mono mt-1 text-amber-400">
+                <span className="text-[9px] md:text-xs font-bold font-mono tracking-tight uppercase opacity-80 truncate">{t("projects.statusPending") || "待完成"}</span>
+                <span className="text-base md:text-2xl font-black font-mono mt-0.5 text-amber-400">
                   {myTasksCategorized.today.length + myTasksCategorized.overdue.length + myTasksCategorized.pending.length}
                 </span>
               </div>
@@ -1221,22 +1336,23 @@ export default function ProjectCenter() {
               {/* Card 4: 已完成 */}
               <div
                 onClick={() => setStatusFilter("completed")}
-                className={`cursor-pointer p-4 rounded-2xl border transition-all flex flex-col justify-between h-24 ${
+                className={`cursor-pointer p-2 md:p-4 rounded-xl md:rounded-2xl border transition-all flex flex-col justify-between h-16 md:h-24 min-w-0 flex-1 shrink-0 ${
                   statusFilter === "completed"
                     ? "bg-green-500/15 border-green-500 text-green-400 ring-1 ring-green-500/20"
                     : "bg-app-sidebar/40 border-app-border hover:bg-green-500/5 hover:border-green-500/40 text-tx-secondary"
                 }`}
               >
-                <span className="text-xs font-bold font-mono tracking-wide uppercase opacity-80">{t("projects.statusCompleted") || "已完成"}</span>
-                <span className="text-2xl font-black font-mono mt-1 text-green-400">{myTasksCategorized.completed.length}</span>
+                <span className="text-[9px] md:text-xs font-bold font-mono tracking-tight uppercase opacity-80 truncate">{t("projects.statusCompleted") || "已完成"}</span>
+                <span className="text-base md:text-2xl font-black font-mono mt-0.5 text-green-400">{myTasksCategorized.completed.length}</span>
               </div>
             </div>
 
             {/* Quick Add Form Panel */}
-            <form
-              onSubmit={handleQuickAddTask}
-              className="bg-app-sidebar/35 border border-app-border rounded-2xl p-4 space-y-3 shadow-sm max-w-4xl mx-auto"
-            >
+            {window.innerWidth >= 768 && (
+              <form
+                onSubmit={handleQuickAddTask}
+                className="bg-app-sidebar/35 border border-app-border rounded-2xl p-4 space-y-3 shadow-sm max-w-4xl mx-auto"
+              >
               <div className="flex items-center gap-3 relative">
                 <div className="w-6 h-6 rounded-full border border-app-border flex items-center justify-center shrink-0">
                   <Plus size={14} className="text-tx-tertiary" />
@@ -1371,7 +1487,8 @@ export default function ProjectCenter() {
                   {t("common.add") || "添加"}
                 </Button>
               </div>
-            </form>
+              </form>
+            )}
 
             {/* Tasks Lists Sections */}
             <div className="space-y-4 max-w-4xl mx-auto pb-12">
@@ -1404,15 +1521,28 @@ export default function ProjectCenter() {
                           {myTasksCategorized.overdue.length === 0 ? (
                             <div className="p-4 text-center text-xs text-tx-tertiary">{t("projects.noOverdueTasks") || "没有逾期的任务"}</div>
                           ) : (
-                            myTasksCategorized.overdue.map((task) => (
-                              <TaskRow
-                                key={task.id}
-                                task={task}
-                                onToggleComplete={handleToggleTaskComplete}
-                                onDelete={handleDeleteProjectTask}
-                                onSelectProject={selectProject}
-                              />
-                            ))
+                            <>
+                              {myTasksCategorized.overdue.slice(0, visibleCounts.overdue).map((task) => (
+                                <TaskRow
+                                  key={task.id}
+                                  task={task}
+                                  onToggleComplete={handleToggleTaskComplete}
+                                  onDelete={handleDeleteProjectTask}
+                                  onSelectProject={selectProject}
+                                />
+                              ))}
+                              {myTasksCategorized.overdue.length > visibleCounts.overdue && (
+                                <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
+                                  <button
+                                    onClick={() => setVisibleCounts(prev => ({ ...prev, overdue: prev.overdue + 15 }))}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                  >
+                                    <ChevronDown size={12} />
+                                    <span>加载更多 ({myTasksCategorized.overdue.length - visibleCounts.overdue})</span>
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -1442,15 +1572,28 @@ export default function ProjectCenter() {
                           {myTasksCategorized.today.length === 0 ? (
                             <div className="p-4 text-center text-xs text-tx-tertiary">{t("projects.noTodayTasks") || "今日无到期任务"}</div>
                           ) : (
-                            myTasksCategorized.today.map((task) => (
-                              <TaskRow
-                                key={task.id}
-                                task={task}
-                                onToggleComplete={handleToggleTaskComplete}
-                                onDelete={handleDeleteProjectTask}
-                                onSelectProject={selectProject}
-                              />
-                            ))
+                            <>
+                              {myTasksCategorized.today.slice(0, visibleCounts.today).map((task) => (
+                                <TaskRow
+                                  key={task.id}
+                                  task={task}
+                                  onToggleComplete={handleToggleTaskComplete}
+                                  onDelete={handleDeleteProjectTask}
+                                  onSelectProject={selectProject}
+                                />
+                              ))}
+                              {myTasksCategorized.today.length > visibleCounts.today && (
+                                <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
+                                  <button
+                                    onClick={() => setVisibleCounts(prev => ({ ...prev, today: prev.today + 15 }))}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                  >
+                                    <ChevronDown size={12} />
+                                    <span>加载更多 ({myTasksCategorized.today.length - visibleCounts.today})</span>
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -1480,15 +1623,28 @@ export default function ProjectCenter() {
                           {myTasksCategorized.pending.length === 0 ? (
                             <div className="p-4 text-center text-xs text-tx-tertiary">{t("projects.noPendingTasks") || "没有其他待完成任务"}</div>
                           ) : (
-                            myTasksCategorized.pending.map((task) => (
-                              <TaskRow
-                                key={task.id}
-                                task={task}
-                                onToggleComplete={handleToggleTaskComplete}
-                                onDelete={handleDeleteProjectTask}
-                                onSelectProject={selectProject}
-                              />
-                            ))
+                            <>
+                              {myTasksCategorized.pending.slice(0, visibleCounts.pending).map((task) => (
+                                <TaskRow
+                                  key={task.id}
+                                  task={task}
+                                  onToggleComplete={handleToggleTaskComplete}
+                                  onDelete={handleDeleteProjectTask}
+                                  onSelectProject={selectProject}
+                                />
+                              ))}
+                              {myTasksCategorized.pending.length > visibleCounts.pending && (
+                                <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
+                                  <button
+                                    onClick={() => setVisibleCounts(prev => ({ ...prev, pending: prev.pending + 15 }))}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                  >
+                                    <ChevronDown size={12} />
+                                    <span>加载更多 ({myTasksCategorized.pending.length - visibleCounts.pending})</span>
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -1518,15 +1674,28 @@ export default function ProjectCenter() {
                           {myTasksCategorized.completed.length === 0 ? (
                             <div className="p-4 text-center text-xs text-tx-tertiary">{t("projects.noCompletedTasks") || "没有已完成的任务"}</div>
                           ) : (
-                            myTasksCategorized.completed.map((task) => (
-                              <TaskRow
-                                key={task.id}
-                                task={task}
-                                onToggleComplete={handleToggleTaskComplete}
-                                onDelete={handleDeleteProjectTask}
-                                onSelectProject={selectProject}
-                              />
-                            ))
+                            <>
+                              {myTasksCategorized.completed.slice(0, visibleCounts.completed).map((task) => (
+                                <TaskRow
+                                  key={task.id}
+                                  task={task}
+                                  onToggleComplete={handleToggleTaskComplete}
+                                  onDelete={handleDeleteProjectTask}
+                                  onSelectProject={selectProject}
+                                />
+                              ))}
+                              {myTasksCategorized.completed.length > visibleCounts.completed && (
+                                <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
+                                  <button
+                                    onClick={() => setVisibleCounts(prev => ({ ...prev, completed: prev.completed + 15 }))}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                  >
+                                    <ChevronDown size={12} />
+                                    <span>加载更多 ({myTasksCategorized.completed.length - visibleCounts.completed})</span>
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -1536,11 +1705,18 @@ export default function ProjectCenter() {
               )}
             </div>
           </div>
-        </div>
+        </PullToRefresh>
+      </div>
       ) : activeFilter.type === "calendar" ? (
         /* 3. Global "Calendar" aggregated view */
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          <div className="px-6 py-4 border-b border-app-border bg-app-sidebar shrink-0 space-y-3">
+          <div
+            className={cn(
+              "border-b border-app-border bg-app-sidebar shrink-0 space-y-3",
+              window.innerWidth < 768 ? "px-4 py-3" : "px-6 py-4"
+            )}
+            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
+          >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2">
                 <Calendar size={18} className="text-accent-primary" />
@@ -1613,7 +1789,13 @@ export default function ProjectCenter() {
         /* 4. Projects Dashboard Grid View */
         <div className="flex-1 flex flex-col h-full overflow-hidden select-text">
           {/* Top Toolbar */}
-          <div className="px-6 py-4 border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between">
+          <div
+            className={cn(
+              "border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between",
+              window.innerWidth < 768 ? "px-4 py-3 h-[56px]" : "px-6 py-4"
+            )}
+            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
+          >
             <div className="flex items-center gap-2">
               <Briefcase size={18} className="text-accent-primary shrink-0" />
               <h1 className="text-base font-bold text-tx-primary">
@@ -1632,7 +1814,7 @@ export default function ProjectCenter() {
           </div>
 
           {/* Project Cards Grid Scroll */}
-          <ScrollArea className="flex-1 min-h-0 p-4 md:p-6">
+          <ScrollContainer className="flex-1 min-h-0 p-4 md:p-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={24} className="animate-spin text-accent-primary" />
@@ -1726,7 +1908,7 @@ export default function ProjectCenter() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </ScrollContainer>
         </div>
       )}
 
@@ -2101,6 +2283,65 @@ export default function ProjectCenter() {
           </div>
         </div>
       )}
+
+      {/* 移动端角色筛选器 Bottom Sheet Drawer */}
+      <AnimatePresence>
+        {showMobileRoleSelector && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileRoleSelector(false)}
+              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs md:hidden"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              className="fixed bottom-0 left-0 right-0 z-[101] bg-app-surface rounded-t-2xl border-t border-app-border p-4 pb-[calc(var(--safe-area-bottom)+16px)] md:hidden flex flex-col gap-2.5 max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-app-border/40 shrink-0">
+                <span className="text-sm font-bold text-tx-primary">切换筛选角色</span>
+                <button
+                  onClick={() => setShowMobileRoleSelector(false)}
+                  className="p-1 rounded-lg text-tx-secondary hover:bg-app-hover"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="flex flex-col gap-1.5 py-2">
+                {[
+                  { value: "assigned", label: "我负责的" },
+                  { value: "created", label: "我创建的" },
+                  { value: "participating", label: "我参与的" }
+                ].map((item) => {
+                  const active = roleFilter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      onClick={() => {
+                        setRoleFilter(item.value as any);
+                        setShowMobileRoleSelector(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold transition-all border text-left",
+                        active
+                          ? "bg-accent-primary/10 border-accent-primary/30 text-accent-primary"
+                          : "bg-app-sidebar/40 border-app-border/40 text-tx-secondary hover:bg-app-hover"
+                      )}
+                    >
+                      <span>{item.label}</span>
+                      {active && <Check size={14} className="text-accent-primary shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

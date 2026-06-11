@@ -8,7 +8,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.super.note"
+    namespace "com.nowen.note"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.super.note"

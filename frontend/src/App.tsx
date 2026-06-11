@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase } from "lucide-react";
+import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
@@ -28,12 +28,15 @@ const EditorPane = React.lazy(() => import("@/components/EditorPane"));
 const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
 const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
+import MobileCameraModal from "@/components/MobileCameraModal";
+import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
 import { AppProvider, useApp, useAppActions, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from "@/store/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SiteSettingsProvider, useSiteSettings } from "@/hooks/useSiteSettings";
 import { UserPreferencesProvider, useUserPreferences } from "@/hooks/useUserPreferences";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmProvider } from "@/components/ui/confirm";
+import { toast } from "@/lib/toast";
 import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
@@ -308,7 +311,11 @@ function AppLayout() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TabId>("appearance");
   const [barsVisible, setBarsVisible] = useState(true);
+  const [fabHiddenForce, setFabHiddenForce] = useState(false);
   const [showDiaryComposer, setShowDiaryComposer] = useState(false);
+  const [composerInitialImages, setComposerInitialImages] = useState<{ id: string; url: string }[]>([]);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [showTaskComposer, setShowTaskComposer] = useState(false);
 
   useEffect(() => {
     const show = () => setBarsVisible(true);
@@ -319,6 +326,24 @@ function AppLayout() {
       window.removeEventListener("super:scroll-show-bars", show);
       window.removeEventListener("super:scroll-hide-bars", hide);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleDoubleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable ||
+        target.closest("input") ||
+        target.closest("textarea")
+      ) {
+        return;
+      }
+      setFabHiddenForce(prev => !prev);
+    };
+    window.addEventListener("dblclick", handleDoubleClick);
+    return () => window.removeEventListener("dblclick", handleDoubleClick);
   }, []);
 
   // 太空飞船健康提醒
@@ -358,6 +383,7 @@ function AppLayout() {
   const isHomeView = state.viewMode === "home";
   const isDiaryView = state.viewMode === "diary";
   const isProjectsView = state.viewMode === "projects";
+  const isTasksView = state.viewMode === "tasks";
   const isNotesView = ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode);
   const isFilesView = state.viewMode === "files";
   const isMentionsView = state.viewMode === "mentions";
@@ -795,15 +821,14 @@ function AppLayout() {
         showMobileTabBar && barsVisible ? "pb-[calc(56px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
       )}>
         {isMindMapView ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <MobileTopBar />
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <MindMapCenter />
             </Suspense>
           </div>
         ) : isAIChatView ? (
-          <div className="flex-1 flex flex-col">
-            <MobileTopBar />
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <AIChatPanel
                 onClose={() => actions.setViewMode("all")}
@@ -824,21 +849,28 @@ function AppLayout() {
             </Suspense>
           </div>
         ) : isDiaryView ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <MobileTopBar />
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <DiaryCenter />
             </Suspense>
           </div>
         ) : isProjectsView ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <MobileTopBar />
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <ProjectCenter />
             </Suspense>
           </div>
+        ) : isTasksView ? (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <MobileTopBar />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+              <TaskCenter />
+            </Suspense>
+          </div>
         ) : isFilesView ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <MobileTopBar />
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <FileManager />
@@ -889,21 +921,58 @@ function AppLayout() {
 
       {showMobileTabBar && <MobileTabBar />}
 
-      {showMobileTabBar && barsVisible && (
+      {showMobileTabBar && barsVisible && !fabHiddenForce && (
         <MobileFAB
           onNewNote={quickCreateNote}
-          onNewDiary={() => setShowDiaryComposer(true)}
+          onNewDiary={() => {
+            setComposerInitialImages([]);
+            setShowDiaryComposer(true);
+          }}
+          onNewTask={() => {
+            setShowTaskComposer(true);
+          }}
+          onCameraClick={() => {
+            setShowCameraModal(true);
+          }}
         />
       )}
+
+      <MobileCameraModal
+        isOpen={showCameraModal}
+        onClose={() => setShowCameraModal(false)}
+        onCapture={async (file) => {
+          const toastId = toast.info("正在处理并上传照片...", 0);
+          try {
+            const res = await api.diaryImages.upload(file);
+            setComposerInitialImages([{ id: res.id, url: api.diaryImages.urlFor(res.id) }]);
+            setShowDiaryComposer(true);
+            toast.dismiss(toastId);
+            toast.success("照片已添加至说说");
+          } catch (err: any) {
+            toast.dismiss(toastId);
+            toast.error(err?.message || "照片上传失败");
+          }
+        }}
+      />
+
+      <MobileTaskCreateModal
+        isOpen={showTaskComposer}
+        onClose={() => setShowTaskComposer(false)}
+      />
 
       <Suspense fallback={null}>
         <AnimatePresence>
           {showDiaryComposer && (
             <DiaryComposeModal
               isOpen={showDiaryComposer}
-              onClose={() => setShowDiaryComposer(false)}
+              initialImages={composerInitialImages}
+              onClose={() => {
+                setShowDiaryComposer(false);
+                setComposerInitialImages([]);
+              }}
               onPost={() => {
                 window.dispatchEvent(new CustomEvent("super:workspace-changed"));
+                actions.setViewMode("diary");
               }}
             />
           )}
@@ -953,6 +1022,7 @@ function AppLayout() {
 }
 
 function MobileTopBar() {
+  const { state } = useApp();
   const actions = useAppActions();
   const { siteConfig } = useSiteSettings();
   const [visible, setVisible] = useState(true);
@@ -967,6 +1037,10 @@ function MobileTopBar() {
       window.removeEventListener("super:scroll-hide-bars", hide);
     };
   }, []);
+
+  if (state.viewMode === "projects" || state.viewMode === "diary") {
+    return null;
+  }
 
   return (
     <header
@@ -1090,21 +1164,47 @@ function MobileTabBar() {
   );
 }
 
-function MobileFAB({ onNewNote, onNewDiary }: { onNewNote: () => void; onNewDiary: () => void }) {
+function MobileFAB({
+  onNewNote,
+  onNewDiary,
+  onNewTask,
+  onCameraClick,
+}: {
+  onNewNote: () => void;
+  onNewDiary: () => void;
+  onNewTask: () => void;
+  onCameraClick: () => void;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="fixed bottom-20 right-4 z-40 md:hidden flex flex-col items-end gap-2">
+    <>
       <AnimatePresence>
         {open && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setOpen(false)}
-              className="fixed inset-0 z-30 bg-black/10 backdrop-blur-[1px]"
-            />
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-30 bg-black/10 backdrop-blur-[1px] md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        drag
+        dragConstraints={{
+          left: -window.innerWidth + 72,
+          right: 0,
+          top: -window.innerHeight + 160,
+          bottom: 0,
+        }}
+        dragElastic={0.6}
+        dragMomentum={false}
+        className="fixed bottom-20 right-4 z-40 md:hidden flex flex-col items-end gap-2 touch-none select-none"
+      >
+        <AnimatePresence>
+          {open && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1135,23 +1235,50 @@ function MobileFAB({ onNewNote, onNewDiary }: { onNewNote: () => void; onNewDiar
                   <NotebookPen size={16} />
                 </div>
               </button>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onNewTask();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+              >
+                <span>新建待办</span>
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                  <ListTodo size={16} />
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onCameraClick();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+              >
+                <span>拍照</span>
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                  <Camera size={16} />
+                </div>
+              </button>
             </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-xl z-40 hover:scale-105 active:scale-95 transition-all duration-200"
-      >
-        <motion.div
-          animate={{ rotate: open ? 45 : 0 }}
-          transition={{ duration: 0.2 }}
+        <motion.button
+          onClick={() => setOpen(!open)}
+          whileTap={{ scale: 0.9 }}
+          whileDrag={{ scale: 1.1 }}
+          transition={{ type: "spring", stiffness: 400, damping: 15 }}
+          className="w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-xl z-40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing"
         >
-          <Plus size={28} />
-        </motion.div>
-      </button>
-    </div>
+          <motion.div
+            animate={{ rotate: open ? 45 : 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Plus size={28} />
+          </motion.div>
+        </motion.button>
+      </motion.div>
+    </>
   );
 }
 

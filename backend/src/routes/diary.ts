@@ -91,6 +91,10 @@ const ALLOWED_DIARY_MIMES = new Set([
   "audio/m4a",
   "audio/x-m4a",
   "audio/mp4",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/ogg",
 ]);
 
 // 上传超过这么久仍未绑定 diaryId 视为孤儿，会被清理器扫除
@@ -135,6 +139,22 @@ function rowToDiary(row: DiaryRow) {
 
   const tags = row.tagsJson ? JSON.parse(row.tagsJson) : [];
 
+  let attachments: { id: string; mimeType: string }[] = [];
+  if (images.length > 0) {
+    try {
+      const db = getDb();
+      const placeholders = images.map(() => "?").join(",");
+      const rows = db.prepare(`SELECT id, mimeType FROM diary_attachments WHERE id IN (${placeholders})`).all(...images) as { id: string; mimeType: string }[];
+      // Keep the frontend order of images
+      attachments = images.map(id => {
+        const found = rows.find(r => r.id === id);
+        return { id, mimeType: found ? found.mimeType : "image/jpeg" };
+      });
+    } catch (e) {
+      console.warn("Failed to fetch diary attachments metadata:", e);
+    }
+  }
+
   return {
     id: row.id,
     userId: row.userId,
@@ -142,6 +162,7 @@ function rowToDiary(row: DiaryRow) {
     contentText: row.contentText,
     mood: row.mood,
     images,
+    attachments,
     visibility: row.visibility || "PRIVATE",
     voice,
     createdAt: row.createdAt,

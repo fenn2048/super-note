@@ -4,7 +4,7 @@ import {
   CheckCircle2, Circle, Flag, Calendar, Plus, ListTodo,
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
   Trash2, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
-  User as UserIcon, CheckSquare, Square, ChevronDown
+  User as UserIcon, CheckSquare, Square, ChevronDown, Star
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -223,6 +223,46 @@ const TaskRow = React.forwardRef<HTMLDivElement, {
 }>(({ task, onToggle, onSelect, onDelete }, ref) => {
   const { t } = useTranslation();
   const isCompleted = task.isCompleted === 1;
+
+  const [isStarred, setIsStarred] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+      return favs.includes(task.id);
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const updateStar = () => {
+      try {
+        const favs = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+        setIsStarred(favs.includes(task.id));
+      } catch {
+        setIsStarred(false);
+      }
+    };
+    window.addEventListener("super:task-favorite-changed", updateStar);
+    return () => window.removeEventListener("super:task-favorite-changed", updateStar);
+  }, [task.id]);
+
+  const handleToggleStar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+      let nextFavs: string[];
+      if (favs.includes(task.id)) {
+        nextFavs = favs.filter((id: string) => id !== task.id);
+      } else {
+        nextFavs = [...favs, task.id];
+      }
+      localStorage.setItem("super-fav-tasks", JSON.stringify(nextFavs));
+      setIsStarred(nextFavs.includes(task.id));
+      window.dispatchEvent(new CustomEvent("super:task-favorite-changed"));
+    } catch (err) {
+      console.error(err);
+    }
+  };
   const PRIORITY_CONFIG: Record<number, { label: string; color: string; flagClass: string }> = {
     3: { label: t('tasks.high'), color: "text-red-500", flagClass: "text-red-500" },
     2: { label: t('tasks.medium'), color: "text-amber-500", flagClass: "text-amber-500" },
@@ -351,6 +391,17 @@ const TaskRow = React.forwardRef<HTMLDivElement, {
           <DateBadge dateStr={task.dueDate} />
         </span>
         <Flag size={14} className={pri.flagClass} />
+        {window.innerWidth < 768 && (
+          <button
+            onClick={handleToggleStar}
+            className="p-1 rounded text-tx-tertiary hover:text-accent-primary transition-all shrink-0 active:scale-95"
+          >
+            <Star
+              size={14}
+              className={isStarred ? "fill-accent-primary text-accent-primary" : ""}
+            />
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
           className="opacity-100 md:opacity-0 md:group-hover:opacity-100 text-tx-tertiary hover:text-accent-danger transition-all"
@@ -380,6 +431,42 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate || "");
   const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  const [isStarred, setIsStarred] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+      return favs.includes(task.id);
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+      setIsStarred(favs.includes(task.id));
+    } catch {
+      setIsStarred(false);
+    }
+  }, [task.id]);
+
+  const handleToggleStar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const favs = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+      let nextFavs: string[];
+      if (favs.includes(task.id)) {
+        nextFavs = favs.filter((id: string) => id !== task.id);
+      } else {
+        nextFavs = [...favs, task.id];
+      }
+      localStorage.setItem("super-fav-tasks", JSON.stringify(nextFavs));
+      setIsStarred(nextFavs.includes(task.id));
+      window.dispatchEvent(new CustomEvent("super:task-favorite-changed"));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // @提及选择器状态
   const [cursorPos, setCursorPos] = useState(0);
@@ -437,9 +524,22 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-app-border" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
         <span className="text-sm font-semibold text-tx-primary">{t('tasks.taskDetail')}</span>
-        <button onClick={onClose} className="p-1 rounded-md hover:bg-app-hover transition-colors">
-          <X size={16} className="text-tx-secondary" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {window.innerWidth < 768 && (
+            <button
+              onClick={handleToggleStar}
+              className="p-1 rounded-md hover:bg-app-hover transition-colors"
+            >
+              <Star
+                size={16}
+                className={isStarred ? "fill-accent-primary text-accent-primary" : "text-tx-secondary"}
+              />
+            </button>
+          )}
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-app-hover transition-colors">
+            <X size={16} className="text-tx-secondary" />
+          </button>
+        </div>
       </div>
 
       {/* Body */}

@@ -134,9 +134,7 @@ export default function GenericTagInput<T extends TagLike>({
   return (
     <div className={`relative w-full tag-input-area ${className || ""}`}>
       <div
-        className={`flex flex-wrap items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 transition-colors rounded border bg-transparent ${
-          isFocused ? "border-accent-primary/40 ring-1 ring-accent-primary/20" : "border-app-border hover:border-app-border-hover"
-        }`}
+        className="flex flex-wrap items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 transition-colors rounded border bg-transparent border-app-border hover:border-app-border-hover"
         onClick={() => inputRef.current?.focus()}
       >
         <Hash className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-tx-tertiary shrink-0" />

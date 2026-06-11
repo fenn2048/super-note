@@ -431,6 +431,7 @@ export interface Diary {
   mood: string;
   /** 已绑定的说说图片 id 数组（顺序即展示顺序）。需要 URL 时拼 /api/diary/attachments/<id>。 */
   images: string[];
+  attachments?: { id: string; mimeType: string }[];
   visibility: string;
   voice?: { id: string; duration: number; text?: string } | null;
   createdAt: string;

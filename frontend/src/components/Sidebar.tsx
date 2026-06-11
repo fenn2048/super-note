@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Plus, Star, Trash2, Search, ChevronRight, FileText,
-  ChevronDown, ListTodo,
+  ChevronDown, ListTodo, CheckSquare,
   Settings, LogOut, FilePlus, FolderPlus, Edit2, X, BrainCircuit,
   Sparkles, NotebookPen, Smile, GripVertical,
   FolderInput, Check, Home, Download, FolderOpen,
@@ -779,6 +779,7 @@ function ProjectSidebar() {
   });
   const [groupsExpanded, setGroupsExpanded] = useState(true);
   const [favsExpanded, setFavsExpanded] = useState(true);
+  const [projectTagsExpanded, setProjectTagsExpanded] = useState(true);
   const [workspaceId, setWorkspaceId] = useState(getCurrentWorkspace());
 
   useEffect(() => {
@@ -859,6 +860,25 @@ function ProjectSidebar() {
     sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
     window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
     actions.setMobileSidebar(false);
+  };
+
+  const handlePersonalTodoClick = async () => {
+    let todoProj = projects.find(p => p.name === "个人TODO");
+    if (!todoProj) {
+      try {
+        todoProj = await api.createProject({
+          name: "个人TODO",
+          visibility: "PRIVATE"
+        });
+        await fetchGroupsAndProjects();
+        window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
+      } catch (err) {
+        console.error("Failed to create 个人TODO project:", err);
+        toast.error("创建个人TODO项目失败");
+        return;
+      }
+    }
+    selectFilter({ type: "detail", projectId: todoProj.id });
   };
 
   const selectTagFilter = (tagId: string | null) => {
@@ -951,6 +971,18 @@ function ProjectSidebar() {
         >
           <ListTodo size={16} />
           <span>{t("projects.myTasks") || "我的任务"}</span>
+        </div>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "个人TODO"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={handlePersonalTodoClick}
+        >
+          <CheckSquare size={16} />
+          <span>{t("projects.personalTodo") || "个人TODO"}</span>
         </div>
         <div
           className={cn(
@@ -1081,45 +1113,83 @@ function ProjectSidebar() {
       </div>
 
       {/* Project Tag Filter */}
-      <div className="space-y-2 border-t border-app-border/50 pt-3">
-        <div className="px-3 text-xs font-semibold uppercase tracking-wider text-tx-tertiary">
-          {t("projects.tagFilter") || "标签筛选"}
-        </div>
-        <div className="flex flex-wrap gap-2 px-3 pb-3">
-          <button
-            onClick={() => selectTagFilter(null)}
+      <div className="border-t border-app-border/50 shrink-0">
+        <button
+          onClick={() => setProjectTagsExpanded(!projectTagsExpanded)}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
+        >
+          <span className="text-xs font-semibold text-tx-tertiary uppercase tracking-wider">
+            {t("projects.tagFilter") || "标签筛选"}
+          </span>
+          <ChevronDown
+            size={14}
             className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition-all",
-              !selectedProjectTagId
-                ? "bg-accent-primary text-white border-accent-primary"
-                : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
+              "text-tx-tertiary transition-transform duration-200",
+              !projectTagsExpanded && "-rotate-90"
             )}
-          >
-            {t("projects.allTags") || "全部"}
-          </button>
-          {projectTags.length === 0 ? (
-            <span className="text-[11px] text-tx-tertiary">{t("projects.noTags") || "暂无标签"}</span>
-          ) : (
-            projectTags.map((tag) => (
-              <button
-                key={tag.id}
-                onClick={() => selectTagFilter(tag.id)}
-                className={cn(
-                  "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-all",
-                  selectedProjectTagId === tag.id
-                    ? "bg-accent-primary text-white border-accent-primary"
-                    : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
-                )}
+          />
+        </button>
+        <AnimatePresence initial={false}>
+          {projectTagsExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+              transition={{ duration: 0.2 }}
+              style={{ overflow: "hidden" }}
+            >
+              <div
+                className="px-2 pb-2 space-y-0.5 overflow-y-auto"
+                style={{ maxHeight: "min(35vh, 260px)" }}
               >
-                <span
-                  className="inline-block rounded-full"
-                  style={{ width: 10, height: 10, backgroundColor: tag.color || "#8b5cf6" }}
-                />
-                {tag.name}
-              </button>
-            ))
+                <div
+                  className={cn(
+                    "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer",
+                    !selectedProjectTagId
+                      ? "bg-app-active text-tx-primary font-medium"
+                      : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                  )}
+                  onClick={() => selectTagFilter(null)}
+                >
+                  <span
+                    className="shrink-0 inline-block rounded-full bg-tx-tertiary"
+                    style={{ width: 6, height: 6 }}
+                  />
+                  <span className="flex-1 truncate text-left">{t("projects.allTags") || "全部"}</span>
+                </div>
+                {projectTags.length === 0 ? (
+                  <p className="text-[10px] text-tx-tertiary px-2 py-1">{t("projects.noTags") || "暂无标签"}</p>
+                ) : (
+                  projectTags.map((tag) => {
+                    const isActive = selectedProjectTagId === tag.id;
+                    return (
+                      <div
+                        key={tag.id}
+                        className={cn(
+                          "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer",
+                          isActive
+                            ? "bg-app-active text-tx-primary font-medium"
+                            : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                        )}
+                        onClick={() => selectTagFilter(tag.id)}
+                      >
+                        <span
+                          className="shrink-0 inline-block rounded-full"
+                          style={{
+                            width: 6,
+                            height: 6,
+                            backgroundColor: tag.color || "#8b5cf6",
+                          }}
+                        />
+                        <span className="flex-1 truncate text-left">{tag.name}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
     </ScrollArea>
   );
@@ -1192,6 +1262,38 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       return true;
     }
   });
+
+  const [favoriteNotes, setFavoriteNotes] = useState<NoteListItem[]>([]);
+  const [favoritesExpanded, setFavoritesExpanded] = useState(() => {
+    try {
+      const saved = localStorage.getItem("super-favorites-expanded");
+      return saved === null ? true : saved === "true";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleFavoritesExpanded = useCallback(() => {
+    setFavoritesExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("super-favorites-expanded", String(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api.getNotes({ isFavorite: "1" })
+      .then((notes) => {
+        if (active) {
+          setFavoriteNotes(notes);
+        }
+      })
+      .catch((err) => console.error("Failed to load favorite notes:", err));
+    return () => {
+      active = false;
+    };
+  }, [state.notes, state.notesRefreshToken]);
 
   // v15 信息架构改造前：导航区是一个可折叠的扁平 8 项列表（与笔记本/标签的折叠策略一致），
   // 用 navExpanded + super-nav-expanded localStorage 控制。改造后导航被拆为
@@ -2304,6 +2406,63 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* 我的收藏 (My Favorites) */}
+          <div className="border-t border-app-border shrink-0">
+            <button
+              onClick={toggleFavoritesExpanded}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
+            >
+              <span className="text-xs font-semibold text-tx-tertiary uppercase tracking-wider">{t('sidebar.favorites') || "我的收藏"}</span>
+              <ChevronDown
+                size={14}
+                className={cn(
+                  "text-tx-tertiary transition-transform duration-200",
+                  !favoritesExpanded && "-rotate-90"
+                )}
+              />
+            </button>
+            <AnimatePresence initial={false}>
+              {favoritesExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+                  transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div
+                    className="px-2 pb-2 space-y-0.5 overflow-y-auto"
+                    style={{ maxHeight: "min(30vh, 200px)" }}
+                  >
+                    {favoriteNotes.length === 0 ? (
+                      <p className="text-[10px] text-tx-tertiary px-2 py-1">{t('sidebar.noFavorites') || "暂无收藏"}</p>
+                    ) : (
+                      favoriteNotes.map((note) => (
+                        <NoteNoteItem
+                          key={`fav-${note.id}`}
+                          note={note}
+                          depth={1}
+                          isActive={state.activeNote?.id === note.id}
+                          onSelect={(noteId) => {
+                            import("@/lib/api").then(({ api }) => {
+                              api.getNote(noteId).then((fullNote) => {
+                                window.dispatchEvent(new CustomEvent("super:open-note", { detail: { noteId, note: fullNote } }));
+                              });
+                            });
+                          }}
+                          onDelete={(noteId) => handleDeleteNote(noteId, note.notebookId)}
+                          onRename={(noteId, newTitle) => handleRenameNote(noteId, note.notebookId, newTitle)}
+                          onToggleFavorite={(noteId) => handleToggleFavorite(noteId, note.notebookId)}
+                          onTogglePin={(noteId) => handleTogglePin(noteId, note.notebookId)}
+                        />
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* Tags —— 使用 shrink-0 + 内部 max-height + scroll，避免在小屏（如 1366x768）挤压上方 Notebooks 或与 Footer 交叠 */}
           <div className="border-t border-app-border shrink-0">

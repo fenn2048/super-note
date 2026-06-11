@@ -63,15 +63,11 @@ const NAV_CONFIG: NavConfigItem[] = [
   // ─── 工作台 ───
   { icon: <Home size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.home",       mode: "home",                                 group: "workspace" },
   { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "workspace" },
+  { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "workspace" },
   { icon: <BookOpen size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.allNotes",    mode: "all",        feature: "notes",     group: "workspace" },
-  { icon: <Star size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.favorites",   mode: "favorites",  feature: "favorites", group: "workspace" },
+  { icon: <BrainCircuit size={RAIL_ICON_SIZE} />,labelKey: "sidebar.mindMaps",    mode: "mindmaps",   feature: "mindmaps",  group: "workspace" },
+  { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "workspace" },
   { icon: <FolderOpen size={RAIL_ICON_SIZE} />,  labelKey: "sidebar.fileManager", mode: "files",      feature: "files",     group: "workspace" },
-  { icon: <Trash2 size={RAIL_ICON_SIZE} />,      labelKey: "sidebar.trash",       mode: "trash",                            group: "workspace" },
-  // ─── 内容模块 ───
-  { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "modules" },
-  { icon: <BrainCircuit size={RAIL_ICON_SIZE} />,labelKey: "sidebar.mindMaps",    mode: "mindmaps",   feature: "mindmaps",  group: "modules" },
-  // ─── 工具 ───
-  { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "tools" },
 ];
 
 /**
@@ -326,22 +322,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
       <div className={cn("my-2 border-t border-app-border/60", showLabel ? "w-8" : "w-6")} aria-hidden />
 
-      {/* 当前空间名称 — 置于导航最上方，显示完整名称 */}
-      <button
-        onClick={actions.toggleSidebar}
-        title="切换空间"
-        className={cn(
-          itemBaseClass,
-          "text-tx-primary hover:bg-app-hover mb-1",
-        )}
-      >
-        <span className="text-base leading-none">{getCurrentWorkspace() === "personal" ? "🏠" : "🏢"}</span>
-        {showLabel && (
-          <span className="text-[9px] leading-none mt-0.5 max-w-full truncate px-1 font-medium text-tx-primary">
-            {getCurrentWorkspace() === "personal" ? "个人空间" : "家庭空间"}
-          </span>
-        )}
-      </button>
+
 
       {/* 主导航：3 组，组间细线分隔。
           v16 P3 后续：用 .no-scrollbar 隐藏 native 滚动条——Rail 是极简导航栏，

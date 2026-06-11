@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pin, PinOff, Star, StarOff, Clock, FileText, FileType2, Trash2, ArchiveRestore, Menu, FolderInput, ChevronRight, ChevronDown, ChevronLeft, Folder, X, Check, Lock, Unlock, CalendarDays, RefreshCw, Share2, GripVertical, Download, ArrowUpDown, ArrowUp, ArrowDown, Image as ImageIcon, Printer, User as UserIcon, Sparkles, Tag as TagIcon, Loader2, FileUp, PanelLeftClose } from "lucide-react";
+import { Plus, Pin, PinOff, Star, StarOff, Clock, FileText, FileType2, Trash2, ArchiveRestore, Menu, FolderInput, ChevronRight, ChevronDown, ChevronLeft, Folder, X, Check, Lock, Unlock, CalendarDays, RefreshCw, Share2, GripVertical, Download, ArrowUpDown, ArrowUp, ArrowDown, Image as ImageIcon, Printer, User as UserIcon, Sparkles, Tag as TagIcon, Loader2, FileUp, PanelLeftClose, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
 import { toast } from "@/lib/toast";
 import { exportSingleNote, exportSingleNoteAsPDF, exportSingleNoteAsImage } from "@/lib/exportService";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { realtime } from "@/lib/realtime";
 // "导入 Word 文档" 走 dynamic import（见 createNoteInNotebook），减少首屏 bundle 体积。
 
@@ -868,125 +869,7 @@ function MiniCalendarFilter({
 }
 
 /* ===== P6: 下拉刷新组件 ===== */
-function PullToRefresh({
-  onRefresh,
-  children,
-}: {
-  onRefresh: () => Promise<void>;
-  children: React.ReactNode;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [pulling, setPulling] = useState(false);
-  const [pullDistance, setPullDistance] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const touchStartY = useRef(0);
-  const isAtTop = useRef(false);
-  const { t } = useTranslation();
-
-  const THRESHOLD = 70; // 触发刷新的下拉距离
-  const MAX_PULL = 120; // 最大下拉距离
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (refreshing) return;
-    const scrollContainer = containerRef.current?.querySelector("[data-radix-scroll-area-viewport]");
-    isAtTop.current = !scrollContainer || scrollContainer.scrollTop <= 0;
-    if (isAtTop.current) {
-      touchStartY.current = e.touches[0].clientY;
-    }
-  }, [refreshing]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isAtTop.current || refreshing) return;
-    const deltaY = e.touches[0].clientY - touchStartY.current;
-    if (deltaY > 0) {
-      // 应用阻尼效果：越往下拉越难拉
-      const dampedDistance = Math.min(MAX_PULL, deltaY * 0.45);
-      setPullDistance(dampedDistance);
-      setPulling(true);
-
-      // 达到阈值时触发触觉反馈
-      if (dampedDistance >= THRESHOLD && pullDistance < THRESHOLD) {
-        haptic.light();
-      }
-    } else {
-      setPulling(false);
-      setPullDistance(0);
-    }
-  }, [refreshing, pullDistance]);
-
-  const handleTouchEnd = useCallback(async () => {
-    if (!pulling) return;
-
-    if (pullDistance >= THRESHOLD) {
-      setRefreshing(true);
-      setPullDistance(THRESHOLD * 0.6); // 刷新时保持一定偏移显示 loading
-      haptic.medium();
-      try {
-        await onRefresh();
-        haptic.success();
-      } catch {
-        haptic.error();
-      }
-      setRefreshing(false);
-    }
-
-    setPulling(false);
-    setPullDistance(0);
-  }, [pulling, pullDistance, onRefresh]);
-
-  return (
-    <div
-      ref={containerRef}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      className="relative flex-1 flex flex-col overflow-hidden"
-    >
-      {/* 下拉刷新指示器 */}
-      <div
-        className="absolute top-0 left-0 right-0 flex items-center justify-center z-10 pointer-events-none transition-opacity"
-        style={{
-          height: `${Math.max(pullDistance, 0)}px`,
-          opacity: pullDistance > 10 ? 1 : 0,
-        }}
-      >
-        <div className="flex items-center gap-2 text-tx-tertiary">
-          <RefreshCw
-            size={16}
-            className={cn(
-              "transition-transform",
-              refreshing && "animate-spin",
-              pullDistance >= THRESHOLD && !refreshing && "text-accent-primary"
-            )}
-            style={{
-              transform: refreshing
-                ? undefined
-                : `rotate(${Math.min(pullDistance / THRESHOLD, 1) * 360}deg)`,
-            }}
-          />
-          <span className="text-xs">
-            {refreshing
-              ? t("noteList.refreshing")
-              : pullDistance >= THRESHOLD
-              ? t("noteList.releaseToRefresh")
-              : t("noteList.pullToRefresh")}
-          </span>
-        </div>
-      </div>
-
-      {/* 内容区域 */}
-      <div
-        className="flex-1 flex flex-col min-h-0 transition-transform"
-        style={{
-          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
-          transition: pulling ? "none" : "transform 0.3s ease-out",
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
+// PullToRefresh component removed in favor of imported shared component
 
 // 这里刻意不用 React.forwardRef：framer-motion v12 的 <AnimatePresence> 内部
 // PopChild 会通过 `child.ref` 读取子元素 ref 转交给自己的 wrapper，而 React 18.3
@@ -1325,6 +1208,57 @@ export default function NoteList() {
     ghostEl: HTMLDivElement | null;
   } | null>(null);
   const noteCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Mobile search state
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileSearchText, setMobileSearchText] = useState("");
+
+  // Mobile favorites segment/tab selection: "notes" | "tasks" | "talks"
+  const [favSegmentTab, setFavSegmentTab] = useState<"notes" | "tasks" | "talks">("notes");
+  
+  // Local states for loaded favorite tasks and talks
+  const [favTasks, setFavTasks] = useState<any[]>([]);
+  const [favDiaries, setFavDiaries] = useState<any[]>([]);
+  const [loadingFavs, setLoadingFavs] = useState(false);
+  const [activeFavDiary, setActiveFavDiary] = useState<any | null>(null);
+
+  // Load favorite tasks and talks
+  const loadMobileFavs = useCallback(async () => {
+    if (state.viewMode !== "favorites" || window.innerWidth >= 768) return;
+    setLoadingFavs(true);
+    try {
+      // 1. Fetch favorite tasks
+      const favTaskIds = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+      if (favTaskIds.length > 0) {
+        const allTasks = await api.getTasks("all");
+        const filtered = allTasks.filter((t: any) => favTaskIds.includes(t.id));
+        setFavTasks(filtered);
+      } else {
+        setFavTasks([]);
+      }
+
+      // 2. Fetch favorite talks
+      const favTalksList = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
+      setFavDiaries(favTalksList);
+    } catch (err) {
+      console.error("Failed to load mobile favorites:", err);
+    } finally {
+      setLoadingFavs(false);
+    }
+  }, [state.viewMode]);
+
+  useEffect(() => {
+    loadMobileFavs().catch(console.error);
+    const handleFavChange = () => {
+      loadMobileFavs().catch(console.error);
+    };
+    window.addEventListener("super:diary-favorite-changed", handleFavChange);
+    window.addEventListener("super:task-favorite-changed", handleFavChange);
+    return () => {
+      window.removeEventListener("super:diary-favorite-changed", handleFavChange);
+      window.removeEventListener("super:task-favorite-changed", handleFavChange);
+    };
+  }, [loadMobileFavs]);
   // 非虚拟列表分支用 Radix ScrollArea 包裹，需要在切换筛选条件时把内部 viewport
   // 滚动复位。Radix 的 ScrollArea forwardRef 暴露的是 Root 节点，真正的滚动容器
   // 是它内部带 data-radix-scroll-area-viewport 的子节点。
@@ -2629,97 +2563,129 @@ export default function NoteList() {
     <div className="w-full h-full bg-app-surface border-r border-app-border flex flex-col transition-colors relative">
       {/* Mobile Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-app-border md:hidden relative z-40" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
-        <button
-          onClick={() => actions.setMobileSidebar(true)}
-          className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active"
-        >
-          <Menu size={24} />
-        </button>
-        <h2 className="text-sm font-semibold text-tx-primary">{viewTitles[state.viewMode]}</h2>
-        <div className="flex items-center gap-1 relative">
-          {/* 移动端排序按钮（搜索/回收站不显示） */}
-          {state.viewMode !== "trash" && state.viewMode !== "search" && (
-            <button
-              ref={sortBtnRef}
-              onClick={() => setShowSortMenu((v) => !v)}
-              className={cn(
-                "p-1.5 rounded-md transition-colors relative",
-                sortPref.by !== "manual"
-                  ? "text-accent-primary bg-accent-primary/10"
-                  : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-              )}
-              title={t("noteList.sortBy")}
-            >
-              <ArrowUpDown size={18} />
-            </button>
-          )}
-          {/* 移动端日历筛选按钮 */}
-          {state.viewMode !== "trash" && state.viewMode !== "search" && (
-            <button
-              onClick={() => setShowCalendar(!showCalendar)}
-              className={cn(
-                "p-1.5 rounded-md transition-colors relative",
-                showCalendar || dateFilter
-                  ? "text-accent-primary bg-accent-primary/10"
-                  : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-              )}
-            >
-              <CalendarDays size={18} />
-              {dateFilter && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-primary" />
-              )}
-            </button>
-          )}
-          {state.viewMode === "trash" ? (
-            // 回收站视图下用"一键清空"按钮替换"新建"——后者在回收站语义不通且会被禁止；
-            // 通过自定义事件复用 Sidebar 已有的清空确认弹窗（含锁定检测 / 体量统计 / VACUUM 提示）。
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-accent-danger hover:bg-accent-danger/10"
-              title={t('sidebar.emptyTrash')}
-              aria-label={t('sidebar.emptyTrash')}
-              onClick={() => {
-                try {
-                  window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
-                } catch { /* ignore */ }
+        {mobileSearchOpen ? (
+          <div className="flex-1 flex items-center gap-2 h-9 px-2 bg-app-bg rounded-lg border border-app-border">
+            <Search size={16} className="text-tx-tertiary" />
+            <input
+              type="text"
+              placeholder="搜索笔记..."
+              className="flex-1 min-w-0 bg-transparent border-none text-xs text-tx-primary focus:ring-0 placeholder:text-tx-tertiary p-0"
+              value={mobileSearchText}
+              onChange={(e) => {
+                setMobileSearchText(e.target.value);
+                actions.setViewMode("search");
+                actions.setSearchQuery(e.target.value);
               }}
-            >
-              <Trash2 size={18} />
-            </Button>
-          ) : (
-            // split-button：左侧 + 依然是"新建普通笔记"保留肉记忆；右侧箭头弹类型选择。
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreateNote("normal")}>
-                <Plus size={18} />
-              </Button>
-              <button
-                ref={createMenuAnchorDesktopRef}
-                type="button"
-                aria-label="选择新建类型"
-                onClick={() => {
-                  setCreateMenuSource("desktop");
-                  setCreateMenuOpen((v) => !v);
-                }}
-                className="h-8 w-5 flex items-center justify-center rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-              >
-                <ChevronDown size={12} />
-              </button>
-            </div>
-          )}
-          {/* 排序下拉（移动端） */}
-          {showSortMenu && (
-            <SortMenu
-              value={sortPref}
-              anchorRef={sortBtnRef}
-              onChange={(next) => {
-                setSortPref(next);
-                saveSortPref(next);
-              }}
-              onClose={() => setShowSortMenu(false)}
+              autoFocus
             />
-          )}
-        </div>
+            <button
+              onClick={() => {
+                setMobileSearchOpen(false);
+                setMobileSearchText("");
+                actions.setViewMode("all");
+                actions.setSearchQuery("");
+              }}
+              className="p-1 rounded text-tx-secondary hover:bg-app-hover"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-base font-bold text-tx-primary pl-1">{viewTitles[state.viewMode]}</h2>
+            <div className="flex items-center gap-1.5 relative">
+              {/* 移动端排序按钮（搜索/回收站不显示） */}
+              {state.viewMode !== "trash" && state.viewMode !== "search" && (
+                <button
+                  ref={sortBtnRef}
+                  onClick={() => setShowSortMenu((v) => !v)}
+                  className={cn(
+                    "p-1.5 rounded-md transition-colors relative",
+                    sortPref.by !== "manual"
+                      ? "text-accent-primary bg-accent-primary/10"
+                      : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+                  )}
+                  title={t("noteList.sortBy")}
+                >
+                  <ArrowUpDown size={18} />
+                </button>
+              )}
+              {/* 移动端日历筛选按钮 */}
+              {state.viewMode !== "trash" && state.viewMode !== "search" && (
+                <button
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className={cn(
+                    "p-1.5 rounded-md transition-colors relative",
+                    showCalendar || dateFilter
+                      ? "text-accent-primary bg-accent-primary/10"
+                      : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+                  )}
+                >
+                  <CalendarDays size={18} />
+                  {dateFilter && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-primary" />
+                  )}
+                </button>
+              )}
+              {state.viewMode === "trash" ? (
+                // 回收站视图下用"一键清空"按钮替换"新建"；
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-accent-danger hover:bg-accent-danger/10"
+                  title={t('sidebar.emptyTrash')}
+                  aria-label={t('sidebar.emptyTrash')}
+                  onClick={() => {
+                    try {
+                      window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
+                    } catch { /* ignore */ }
+                  }}
+                >
+                  <Trash2 size={18} />
+                </Button>
+              ) : (
+                // split-button
+                <div className="flex items-center">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreateNote("normal")}>
+                    <Plus size={18} />
+                  </Button>
+                  <button
+                    ref={createMenuAnchorMobileRef}
+                    type="button"
+                    aria-label="选择新建类型"
+                    onClick={() => {
+                      setCreateMenuSource("mobile");
+                      setCreateMenuOpen((v) => !v);
+                    }}
+                    className="h-8 w-5 flex items-center justify-center rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+                  >
+                    <ChevronDown size={12} />
+                  </button>
+                </div>
+              )}
+              {/* 移动端搜索按钮 (置于最右侧) */}
+              <button
+                onClick={() => setMobileSearchOpen(true)}
+                className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+                title="搜索"
+              >
+                <Search size={18} />
+              </button>
+              {/* 排序下拉（移动端） */}
+              {showSortMenu && (
+                <SortMenu
+                  value={sortPref}
+                  anchorRef={sortBtnRef}
+                  onChange={(next) => {
+                    setSortPref(next);
+                    saveSortPref(next);
+                  }}
+                  onClose={() => setShowSortMenu(false)}
+                />
+              )}
+            </div>
+          </>
+        )}
       </header>
 
       {/* Desktop Header */}
@@ -2733,12 +2699,24 @@ export default function NoteList() {
               与Rail上的 toggleSidebar 互不干扰，均有独立状态。 */}
           <button
             type="button"
-            onClick={() => actions.toggleNoteListCollapsed()}
-            title={t("common.collapseList")}
-            aria-label={t("common.collapseList")}
-            className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+            onClick={() => {
+              if (state.viewMode === "trash") {
+                actions.setViewMode("all");
+              } else {
+                actions.setViewMode("trash");
+                actions.setSelectedNotebook(null);
+              }
+            }}
+            title={state.viewMode === "trash" ? t("sidebar.allNotes") : t("sidebar.trash")}
+            aria-label={state.viewMode === "trash" ? t("sidebar.allNotes") : t("sidebar.trash")}
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              state.viewMode === "trash"
+                ? "text-accent-primary bg-accent-primary/10"
+                : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+            )}
           >
-            <PanelLeftClose size={15} />
+            <Trash2 size={15} />
           </button>
           {/* 桌面端排序按钮 */}
           {state.viewMode !== "trash" && state.viewMode !== "search" && (
@@ -3037,114 +3015,283 @@ export default function NoteList() {
               </p>
             </div>
           </div>
-        )}      <PullToRefresh onRefresh={fetchNotes}>
-        {/* 笔记数量较少时使用普通渲染，较多时使用虚拟滚动 */}
-        {sortedNotes.length > 100 ? (
-          <VirtualNoteList
-            notes={sortedNotes}
-            activeNoteId={state.activeNote?.id}
-            menuState={{ isOpen: menu.isOpen, targetId: menu.targetId }}
-            sharedNoteIds={sharedNoteIds}
-            selectedIds={selectedIds}
-            onSelectNote={handleSelectNote}
-            onContextMenu={(e, noteId) => openMenu(e, noteId, "note")}
-            canDragSort={canDragSort}
-            dragOverNoteId={dragOverNoteId}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-            onDrop={handleDrop}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            noteCardRefs={noteCardRefs}
-          />
-        ) : (
-        <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
-        <div className="px-2 pb-2 space-y-1">
-          <AnimatePresence>
-            {sortedNotes.map((note) => (
-              <NoteCard
-                key={note.id}
-                cardRef={(el) => {
-                  if (el) noteCardRefs.current.set(note.id, el);
-                  else noteCardRefs.current.delete(note.id);
-                }}
-                note={note}
-                isActive={state.activeNote?.id === note.id}
-                isContextTarget={menu.isOpen && menu.targetId === note.id}
-                isShared={sharedNoteIds.has(note.id)}
-                isSelected={selectedIds.has(note.id)}
-                onClick={(e) => handleSelectNote(note.id, e)}
-                onContextMenu={(e) => openMenu(e, note.id, "note")}
-                draggable={canDragSort}
-                onDragStart={(e) => handleDragStart(e, note.id)}
-                onDragOver={(e) => handleDragOver(e, note.id)}
-                onDragEnd={handleDragEnd}
-                onDrop={(e) => handleDrop(e, note.id)}
-                isDragOver={dragOverNoteId === note.id}
-                onTouchStart={(e) => handleTouchStart(note.id, e)}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              />
-            ))}
-          </AnimatePresence>
-          {state.notes.length === 0 && !state.isLoading && (
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-accent-primary/10 flex items-center justify-center mb-4">
-                <FileText size={28} className="text-accent-primary/40" />
-              </div>
-              <p className="text-sm font-medium text-tx-secondary mb-1">{t('common.noNotes')}</p>
-              <p className="text-xs text-tx-tertiary mb-5 max-w-[200px] leading-relaxed">
-                {t('common.noNotesHint')}
-              </p>
-              <button
-                onClick={() => handleCreateNote("normal")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 active:scale-95 transition-all shadow-sm"
-              >
-                <Plus size={14} />
-                {t('common.newNote')}
-              </button>
-            </div>
-          )}
-          {/* 骨架屏 Loading */}
-          {state.isLoading && state.notes.length === 0 && (
-            <div className="space-y-2 px-1">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="rounded-lg border border-transparent p-3 animate-pulse">
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 bg-app-hover rounded w-3/5" />
-                    <div className="h-3 bg-app-hover rounded w-4 ml-auto" />
-                  </div>
-                  <div className="h-3 bg-app-hover/70 rounded w-full mt-2.5" />
-                  <div className="h-3 bg-app-hover/50 rounded w-4/5 mt-1.5" />
-                  <div className="flex items-center gap-1.5 mt-2.5">
-                    <div className="h-2.5 w-2.5 bg-app-hover/60 rounded-full" />
-                    <div className="h-2.5 bg-app-hover/40 rounded w-16" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-        )}
-      </PullToRefresh>
-      </div>
+        )}      {state.viewMode === "favorites" && window.innerWidth < 768 ? (
+        <div className="flex-1 flex flex-col min-h-0 bg-app-bg">
+          {/* Tabs */}
+          <div className="flex border-b border-app-border bg-app-surface px-4 py-2 gap-2 shrink-0">
+            <button
+              onClick={() => setFavSegmentTab("notes")}
+              className={cn(
+                "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center",
+                favSegmentTab === "notes"
+                  ? "bg-accent-primary text-white shadow-sm"
+                  : "text-tx-secondary hover:bg-app-hover"
+              )}
+            >
+              笔记
+            </button>
+            <button
+              onClick={() => setFavSegmentTab("tasks")}
+              className={cn(
+                "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center",
+                favSegmentTab === "tasks"
+                  ? "bg-accent-primary text-white shadow-sm"
+                  : "text-tx-secondary hover:bg-app-hover"
+              )}
+            >
+              待办
+            </button>
+            <button
+              onClick={() => setFavSegmentTab("talks")}
+              className={cn(
+                "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center",
+                favSegmentTab === "talks"
+                  ? "bg-accent-primary text-white shadow-sm"
+                  : "text-tx-secondary hover:bg-app-hover"
+              )}
+            >
+              说说
+            </button>
+          </div>
 
-      {/* Mobile FAB - 新建笔记（点击默认普通笔记，长按弹类型选择） */}
-      <button
-        ref={createMenuAnchorFabRef}
-        onClick={() => handleCreateNote("normal")}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setCreateMenuSource("fab");
-          setCreateMenuOpen(true);
-        }}
-        className="md:hidden absolute bottom-6 right-6 w-14 h-14 bg-accent-primary rounded-2xl shadow-lg shadow-accent-primary/30 flex items-center justify-center text-white active:scale-95 transition-transform z-10"
-      >
-        <Plus size={24} />
-      </button>
+          {/* List Content */}
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-3 space-y-2">
+              {loadingFavs ? (
+                <div className="py-8 text-center text-xs text-tx-tertiary">正在加载收藏...</div>
+              ) : favSegmentTab === "notes" ? (
+                sortedNotes.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-tx-tertiary">暂无收藏笔记</div>
+                ) : (
+                  sortedNotes.map((note) => (
+                    <NoteCard
+                      key={note.id}
+                      cardRef={(el) => {
+                        if (el) noteCardRefs.current.set(note.id, el);
+                        else noteCardRefs.current.delete(note.id);
+                      }}
+                      note={note}
+                      isActive={state.activeNote?.id === note.id}
+                      isContextTarget={menu.isOpen && menu.targetId === note.id}
+                      isShared={sharedNoteIds.has(note.id)}
+                      isSelected={selectedIds.has(note.id)}
+                      onClick={(e) => handleSelectNote(note.id, e)}
+                      onContextMenu={(e) => openMenu(e, note.id, "note")}
+                      draggable={false}
+                    />
+                  ))
+                )
+              ) : favSegmentTab === "tasks" ? (
+                favTasks.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-tx-tertiary">暂无收藏待办</div>
+                ) : (
+                  favTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      onClick={() => {
+                        sessionStorage.setItem("super:pending-navigate", JSON.stringify({ sourceType: "task", sourceId: task.id }));
+                        window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
+                      }}
+                      className="flex items-center justify-between p-3 rounded-xl border border-app-border bg-app-surface/40 hover:bg-app-hover active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={task.isCompleted === 1 || task.status === "COMPLETED"}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={async () => {
+                            try {
+                              await api.toggleTask(task.id);
+                              loadMobileFavs();
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-accent-primary focus:ring-accent-primary border-app-border"
+                        />
+                        <span className={cn(
+                          "text-xs font-medium text-tx-primary truncate",
+                          (task.isCompleted === 1 || task.status === "COMPLETED") && "line-through text-tx-tertiary"
+                        )}>
+                          {task.title}
+                        </span>
+                      </div>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const ids = JSON.parse(localStorage.getItem("super-fav-tasks") || "[]");
+                            const next = ids.filter((id: string) => id !== task.id);
+                            localStorage.setItem("super-fav-tasks", JSON.stringify(next));
+                            window.dispatchEvent(new CustomEvent("super:task-favorite-changed"));
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                        className="p-1 rounded text-amber-500 hover:bg-app-hover"
+                      >
+                        <Star size={14} fill="currentColor" />
+                      </button>
+                    </div>
+                  ))
+                )
+              ) : (
+                favDiaries.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-tx-tertiary">暂无收藏说说</div>
+                ) : (
+                  favDiaries.map((diary) => (
+                    <div
+                      key={diary.id}
+                      onClick={async () => {
+                        try {
+                          const listRes = await api.getDiaryTimeline(undefined, 1, { from: diary.createdAt, to: diary.createdAt });
+                          const found = listRes.items.find((it: any) => it.id === diary.id);
+                          if (found) {
+                            setActiveFavDiary(found);
+                          } else {
+                            setActiveFavDiary({
+                              id: diary.id,
+                              contentText: diary.text || "",
+                              createdAt: diary.createdAt,
+                              images: [],
+                            });
+                          }
+                        } catch {
+                          setActiveFavDiary({
+                            id: diary.id,
+                            contentText: diary.text || "",
+                            createdAt: diary.createdAt,
+                            images: [],
+                          });
+                        }
+                      }}
+                      className="p-3 rounded-xl border border-app-border bg-app-surface/40 hover:bg-app-hover active:scale-[0.98] transition-all cursor-pointer space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-tx-tertiary">
+                        <span>{diary.createdAt}</span>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const ids = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
+                              const next = ids.filter((d: any) => d.id !== diary.id);
+                              localStorage.setItem("super-fav-diaries", JSON.stringify(next));
+                              window.dispatchEvent(new CustomEvent("super:diary-favorite-changed"));
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="p-1 rounded text-red-500 hover:bg-app-hover"
+                        >
+                          <Star size={14} fill="currentColor" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-tx-primary line-clamp-2 leading-relaxed">
+                        {diary.text}
+                      </p>
+                    </div>
+                  ))
+                )
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      ) : (
+        <PullToRefresh onRefresh={fetchNotes}>
+          {/* 笔记数量较少时使用普通渲染，较多时使用虚拟滚动 */}
+          {sortedNotes.length > 100 ? (
+            <VirtualNoteList
+              notes={sortedNotes}
+              activeNoteId={state.activeNote?.id}
+              menuState={{ isOpen: menu.isOpen, targetId: menu.targetId }}
+              sharedNoteIds={sharedNoteIds}
+              selectedIds={selectedIds}
+              onSelectNote={handleSelectNote}
+              onContextMenu={(e, noteId) => openMenu(e, noteId, "note")}
+              canDragSort={canDragSort}
+              dragOverNoteId={dragOverNoteId}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              onDrop={handleDrop}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              noteCardRefs={noteCardRefs}
+            />
+          ) : (
+            <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
+              <div className="px-2 pb-2 space-y-1">
+                <AnimatePresence>
+                  {sortedNotes.map((note) => (
+                    <NoteCard
+                      key={note.id}
+                      cardRef={(el) => {
+                        if (el) noteCardRefs.current.set(note.id, el);
+                        else noteCardRefs.current.delete(note.id);
+                      }}
+                      note={note}
+                      isActive={state.activeNote?.id === note.id}
+                      isContextTarget={menu.isOpen && menu.targetId === note.id}
+                      isShared={sharedNoteIds.has(note.id)}
+                      isSelected={selectedIds.has(note.id)}
+                      onClick={(e) => handleSelectNote(note.id, e)}
+                      onContextMenu={(e) => openMenu(e, note.id, "note")}
+                      draggable={canDragSort}
+                      onDragStart={(e) => handleDragStart(e, note.id)}
+                      onDragOver={(e) => handleDragOver(e, note.id)}
+                      onDragEnd={handleDragEnd}
+                      onDrop={(e) => handleDrop(e, note.id)}
+                      isDragOver={dragOverNoteId === note.id}
+                      onTouchStart={(e) => handleTouchStart(note.id, e)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                    />
+                  ))}
+                </AnimatePresence>
+                {state.notes.length === 0 && !state.isLoading && (
+                  <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-accent-primary/10 flex items-center justify-center mb-4">
+                      <FileText size={28} className="text-accent-primary/40" />
+                    </div>
+                    <p className="text-sm font-medium text-tx-secondary mb-1">{t('common.noNotes')}</p>
+                    <p className="text-xs text-tx-tertiary mb-5 max-w-[200px] leading-relaxed">
+                      {t('common.noNotesHint')}
+                    </p>
+                    <button
+                      onClick={() => handleCreateNote("normal")}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 active:scale-95 transition-all shadow-sm"
+                    >
+                      <Plus size={14} />
+                      {t('common.newNote')}
+                    </button>
+                  </div>
+                )}
+                {/* 骨架屏 Loading */}
+                {state.isLoading && state.notes.length === 0 && (
+                  <div className="space-y-2 px-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="rounded-lg border border-transparent p-3 animate-pulse">
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 bg-app-hover rounded w-3/5" />
+                          <div className="h-3 bg-app-hover rounded w-4 ml-auto" />
+                        </div>
+                        <div className="h-3 bg-app-hover/70 rounded w-full mt-2.5" />
+                        <div className="h-3 bg-app-hover/50 rounded w-4/5 mt-1.5" />
+                        <div className="flex items-center gap-1.5 mt-2.5">
+                          <div className="h-2.5 w-2.5 bg-app-hover/60 rounded-full" />
+                          <div className="h-2.5 bg-app-hover/40 rounded w-16" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          )}
+        </PullToRefresh>
+      )}
+      </div>
 
       {/* Note Context Menu */}
       <ContextMenu
@@ -3176,7 +3323,7 @@ export default function NoteList() {
         onPick={async (nbId) => {
           setPickerOpen(false);
           await createNoteInNotebook(nbId, pendingNoteType);
-          setPendingNoteType("normal"); // 用完归位，避免下次默认到 word
+          setPendingNoteType("normal"); // 用完归位，避免下次默认 to word
         }}
         onClose={() => {
           setPickerOpen(false);
@@ -3190,9 +3337,7 @@ export default function NoteList() {
           anchorRef={
             createMenuSource === "desktop"
               ? createMenuAnchorDesktopRef
-              : createMenuSource === "mobile"
-                ? createMenuAnchorMobileRef
-                : createMenuAnchorFabRef
+              : createMenuAnchorMobileRef
           }
           onPick={(type) => {
             void handleCreateNote(type);
@@ -3218,6 +3363,51 @@ export default function NoteList() {
         }}
         onConfirm={confirmClassifyPlan}
       />
+
+      {activeFavDiary && (
+        <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-app-surface w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-app-border shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-200">
+            <header className="flex items-center justify-between px-4 py-3 border-b border-app-border shrink-0">
+              <span className="text-xs font-semibold text-tx-secondary">{activeFavDiary.createdAt}</span>
+              <button
+                onClick={() => setActiveFavDiary(null)}
+                className="p-1.5 rounded-lg text-tx-secondary hover:bg-app-hover"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <p className="text-sm text-tx-primary whitespace-pre-wrap leading-relaxed">{activeFavDiary.contentText}</p>
+              {activeFavDiary.images && activeFavDiary.images.length > 0 && (
+                <div className="grid gap-2 grid-cols-2 mt-2">
+                  {activeFavDiary.images.map((imgId: string) => {
+                    const att = activeFavDiary.attachments?.find((a: any) => a.id === imgId);
+                    const isVideo = att ? att.mimeType.startsWith("video/") : false;
+                    return (
+                      <div key={imgId} className="relative aspect-square rounded-xl overflow-hidden border border-app-border bg-app-hover/30">
+                        {isVideo ? (
+                          <video
+                            src={api.diaryImages.urlFor(imgId)}
+                            className="w-full h-full object-cover"
+                            controls
+                            playsInline
+                          />
+                        ) : (
+                          <img
+                            src={api.diaryImages.urlFor(imgId)}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

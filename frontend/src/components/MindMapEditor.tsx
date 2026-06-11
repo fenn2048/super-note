@@ -91,16 +91,30 @@ function flattenNodes(node: LayoutNode): LayoutNode[] {
 
 /* ===== 颜色方案 ===== */
 const DEPTH_COLORS = [
-  { bg: "rgb(99,102,241)", text: "#fff", border: "rgb(79,82,221)" },       // indigo (root)
-  { bg: "rgb(236,242,255)", text: "rgb(55,65,81)", border: "rgb(165,180,252)" }, // light indigo
-  { bg: "rgb(240,253,244)", text: "rgb(55,65,81)", border: "rgb(134,239,172)" }, // light green
-  { bg: "rgb(255,247,237)", text: "rgb(55,65,81)", border: "rgb(253,186,116)" }, // light orange
-  { bg: "rgb(245,243,255)", text: "rgb(55,65,81)", border: "rgb(196,181,253)" }, // light purple
-  { bg: "rgb(254,242,242)", text: "rgb(55,65,81)", border: "rgb(252,165,165)" }, // light red
+  { bg: "var(--color-accent-primary)", text: "#fff", border: "color-mix(in srgb, var(--color-accent-primary) 85%, black)" },       // root
+  { bg: "color-mix(in srgb, var(--color-accent-primary) 12%, var(--color-bg, #ffffff))", text: "var(--color-text-primary, #1a1a1a)", border: "color-mix(in srgb, var(--color-accent-primary) 35%, var(--color-bg, #ffffff))" }, // tier 1
+  { bg: "color-mix(in srgb, var(--color-accent-primary) 6%, var(--color-bg, #ffffff))", text: "var(--color-text-secondary, #5a5a5a)", border: "color-mix(in srgb, var(--color-accent-primary) 20%, var(--color-bg, #ffffff))" }, // tier 2
 ];
 
 function getNodeColor(depth: number) {
   return DEPTH_COLORS[Math.min(depth, DEPTH_COLORS.length - 1)];
+}
+
+function resolveCssColor(colorStr: string): string {
+  if (!colorStr.includes("var") && !colorStr.includes("color-mix")) {
+    return colorStr;
+  }
+  try {
+    const tempEl = document.createElement("div");
+    tempEl.style.display = "none";
+    tempEl.style.color = colorStr;
+    document.body.appendChild(tempEl);
+    const computedColor = window.getComputedStyle(tempEl).color;
+    document.body.removeChild(tempEl);
+    return computedColor || colorStr;
+  } catch {
+    return colorStr;
+  }
 }
 
 function escapeXml(str: string): string {
@@ -191,7 +205,7 @@ function NodeBox({
         <div
           className={cn(
             "flex items-center h-full px-3 rounded-lg cursor-pointer select-none transition-shadow text-sm font-medium whitespace-nowrap overflow-hidden",
-            isSelected && "ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900"
+            isSelected && "ring-2 ring-accent-primary ring-offset-1 dark:ring-offset-zinc-900"
           )}
           style={{
             background: color.bg,
@@ -276,7 +290,7 @@ function NodeBox({
           <div className="flex items-center gap-1">
             <button
               className={cn(
-                "flex items-center gap-1 rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors",
+                "flex items-center gap-1 rounded bg-accent-primary text-white hover:opacity-90 transition-colors",
                 isMobile ? "px-3 py-2 text-xs" : "px-2 py-1 text-[11px]"
               )}
               onClick={(e) => { e.stopPropagation(); onAddChild(); }}
@@ -333,8 +347,8 @@ function MindMapListRow({
       className={cn(
         "group flex items-center gap-3 px-4 py-3 rounded-lg border transition-all cursor-pointer",
         isActive
-          ? "border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-500/5"
-          : "border-app-border bg-app-elevated hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800"
+          ? "border-accent-primary/40 dark:border-accent-primary/70 bg-accent-primary/5 dark:bg-accent-primary/10"
+          : "border-app-border bg-app-elevated hover:shadow-md hover:border-accent-primary/30 dark:hover:border-accent-primary/55"
       )}
       onClick={onSelect}
       onContextMenu={onContextMenu}
@@ -366,7 +380,7 @@ function MindMapListRow({
         }
       }}
     >
-      <BrainCircuit size={18} className="text-indigo-500 flex-shrink-0" />
+      <BrainCircuit size={18} className="text-accent-primary flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-tx-primary truncate">{item.title}</div>
         <div className="flex items-center gap-2 text-xs text-tx-tertiary mt-0.5 min-w-0">
@@ -828,8 +842,11 @@ export default function MindMapCenter() {
       const isRoot = n.depth === 0;
       const fontSize = isRoot ? 14 : 13;
       const fontWeight = isRoot ? 700 : 500;
-      svgContent += `  <rect x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="8" fill="${color.bg}" stroke="${color.border}" stroke-width="1.5"/>\n`;
-      svgContent += `  <text x="${n.x + 12}" y="${n.y + n.height / 2}" dominant-baseline="central" font-family="system-ui,-apple-system,sans-serif" font-size="${fontSize}" font-weight="${fontWeight}" fill="${color.text}">${escapeXml(n.text)}</text>\n`;
+      const resolvedBg = resolveCssColor(color.bg);
+      const resolvedBorder = resolveCssColor(color.border);
+      const resolvedText = resolveCssColor(color.text);
+      svgContent += `  <rect x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="8" fill="${resolvedBg}" stroke="${resolvedBorder}" stroke-width="1.5"/>\n`;
+      svgContent += `  <text x="${n.x + 12}" y="${n.y + n.height / 2}" dominant-baseline="central" font-family="system-ui,-apple-system,sans-serif" font-size="${fontSize}" font-weight="${fontWeight}" fill="${resolvedText}">${escapeXml(n.text)}</text>\n`;
     });
 
     svgContent += `</svg>`;
@@ -1059,13 +1076,13 @@ export default function MindMapCenter() {
         <div className="px-4 py-4 border-b border-app-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <BrainCircuit size={18} className="text-indigo-500" />
+              <BrainCircuit size={18} className="text-accent-primary" />
               <h2 className="text-sm font-bold text-tx-primary">{t("mindMap.title")}</h2>
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={handleCreate}
-                className="p-1.5 rounded-md hover:bg-app-hover transition-colors text-tx-secondary hover:text-indigo-500"
+                className="p-1.5 rounded-md hover:bg-app-hover transition-colors text-tx-secondary hover:text-accent-primary"
                 title={t("mindMap.create")}
               >
                 <Plus size={16} />
@@ -1096,7 +1113,7 @@ export default function MindMapCenter() {
               <span className="text-xs">{t("mindMap.empty")}</span>
               <button
                 onClick={handleCreate}
-                className="mt-3 text-xs text-indigo-500 hover:text-indigo-600 font-medium"
+                className="mt-3 text-xs text-accent-primary hover:opacity-90 font-medium"
               >
                 {t("mindMap.createFirst")}
               </button>
@@ -1177,7 +1194,7 @@ export default function MindMapCenter() {
                   className={cn(
                     "p-1.5 rounded-md transition-colors",
                     showMiniMap
-                      ? "bg-indigo-100 dark:bg-indigo-500/20 text-indigo-500"
+                      ? "bg-accent-primary/10 dark:bg-accent-primary/20 text-accent-primary"
                       : "hover:bg-app-hover text-tx-secondary"
                   )}
                   title={t("mindMap.miniMap")}
@@ -1345,7 +1362,7 @@ export default function MindMapCenter() {
             <span className="text-sm">{t("mindMap.selectOrCreate")}</span>
             <button
               onClick={handleCreate}
-              className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 transition-colors"
+              className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-primary text-white text-sm font-medium hover:opacity-90 transition-colors"
             >
               <Plus size={16} />
               {t("mindMap.create")}
@@ -1417,7 +1434,7 @@ function MindMapContextMenuOverlay({
         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-primary hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
         onClick={onDownloadPNG}
       >
-        <Image size={15} className="text-indigo-500" />
+        <Image size={15} className="text-accent-primary" />
         {t("mindMap.downloadPNG")}
       </button>
       <button

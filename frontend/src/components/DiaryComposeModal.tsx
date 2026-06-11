@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2 } from "lucide-react";
+import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/AppContext";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
+import ComposerCameraModal from "@/components/ComposerCameraModal";
 
 interface DiaryComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPost: () => void;
+  initialImages?: { id: string; url: string }[];
 }
 
-export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComposeModalProps) {
+export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImages = [] }: DiaryComposeModalProps) {
   const { t } = useTranslation();
   const { state } = useApp();
   const [text, setText] = useState("");
@@ -27,13 +29,28 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
   });
   const [posting, setPosting] = useState(false);
 
+  // Mobile viewport stickiness
+  const isMobile = window.innerWidth < 768;
+  const [viewportHeight, setViewportHeight] = useState<number | string>("100%");
+  const [showCamera, setShowCamera] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [tempAudioBlob, setTempAudioBlob] = useState<Blob | null>(null);
+
   // Images Grid (说说支持拍照上传图片，支持图片九宫格展示)
-  const [images, setImages] = useState<{ id: string; url: string }[]>([]);
+  const [images, setImages] = useState<{ id: string; url: string; isVideo?: boolean }[]>(initialImages);
+
+  useEffect(() => {
+    if (initialImages && initialImages.length > 0) {
+      setImages(initialImages);
+    }
+  }, [initialImages]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Audio Recording States
   const [recording, setRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [waveValues, setWaveValues] = useState<number[]>(new Array(25).fill(0.05));
   const [recordDuration, setRecordDuration] = useState(0);
   const [pendingVoice, setPendingVoice] = useState<{ id: string; duration: number } | null>(null);
   const [voiceUploading, setVoiceUploading] = useState(false);
@@ -46,6 +63,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const animationFrameIdRef = useRef<number | null>(null);
 
   // Textarea & Selection states
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -59,6 +80,19 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
   // Heartbeat/flash recording status
   const [recordBlink, setRecordBlink] = useState(false);
 
+  // Live Audio Transcription States & Refs
+  const [transcriptionText, setTranscriptionText] = useState("");
+  const recognitionRef = useRef<any>(null);
+  const transcriptionScrollRef = useRef<HTMLDivElement>(null);
+  const accumulatedTranscriptRef = useRef("");
+  const currentSessionFinalRef = useRef("");
+
+  useEffect(() => {
+    if (transcriptionScrollRef.current) {
+      transcriptionScrollRef.current.scrollTop = transcriptionScrollRef.current.scrollHeight;
+    }
+  }, [transcriptionText]);
+
   useEffect(() => {
     if (isOpen) {
       // Auto focus textarea
@@ -67,6 +101,25 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
       }, 100);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isMobile || !isOpen) return;
+
+    const handleResize = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+      }
+    };
+
+    window.visualViewport?.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("scroll", handleResize);
+    handleResize();
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("scroll", handleResize);
+    };
+  }, [isOpen, isMobile]);
 
   // Blink recording indicator
   useEffect(() => {
@@ -83,16 +136,17 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
 
   // Track recording duration
   useEffect(() => {
-    if (recording) {
+    if (recording && !isPaused) {
       recordTimerRef.current = setInterval(() => {
         setRecordDuration((d) => d + 1);
       }, 1000);
     } else {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      setRecordDuration(0);
     }
-    return () => clearInterval(recordTimerRef.current);
-  }, [recording]);
+    return () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    };
+  }, [recording, isPaused]);
 
   // Audio preview play/pause tracker
   useEffect(() => {
@@ -193,6 +247,337 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
     setPlayingVoice(false);
     api.diaryImages.remove(pendingVoice.id).catch(() => {});
     setPendingVoice(null);
+  };
+
+  // ----------------- Mobile Recording & Camera -----------------
+  const handleCameraComplete = async (files: File[]) => {
+    setUploadingImage(true);
+    try {
+      for (const file of files) {
+        const res = await api.diaryImages.upload(file);
+        const isVideo = file.type.startsWith("video/");
+        setImages((prev) => [
+          ...prev,
+          {
+            id: res.id,
+            url: api.diaryImages.urlFor(res.id),
+            isVideo,
+          },
+        ]);
+      }
+      toast.success("媒体上传成功");
+    } catch (err: any) {
+      toast.error(err?.message || "媒体上传失败");
+    } finally {
+      setUploadingImage(false);
+      setShowCamera(false);
+    }
+  };
+
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition not supported in this browser.");
+      return;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "zh-CN";
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = "";
+      let interimTranscript = "";
+      for (let i = 0; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      currentSessionFinalRef.current = finalTranscript;
+      setTranscriptionText(accumulatedTranscriptRef.current + finalTranscript + interimTranscript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+    };
+
+    recognition.onend = () => {
+      accumulatedTranscriptRef.current += currentSessionFinalRef.current;
+      currentSessionFinalRef.current = "";
+      
+      if (recognitionRef.current === recognition) {
+        try {
+          startSpeechRecognition();
+        } catch (e) {
+          console.error("Failed to restart speech recognition on end:", e);
+        }
+      }
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error("Failed to start speech recognition:", e);
+    }
+  };
+
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      try {
+        rec.stop();
+      } catch (e) {
+        console.error("Failed to stop speech recognition:", e);
+      }
+      accumulatedTranscriptRef.current += currentSessionFinalRef.current;
+      currentSessionFinalRef.current = "";
+    }
+  };
+
+  const handleCopyTranscription = () => {
+    if (!transcriptionText) return;
+    navigator.clipboard.writeText(transcriptionText)
+      .then(() => {
+        toast.success("已复制到剪贴板");
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        toast.error("复制失败");
+      });
+  };
+
+  const startRecordingProcess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        if (animationFrameIdRef.current) {
+          cancelAnimationFrame(animationFrameIdRef.current);
+          animationFrameIdRef.current = null;
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+          audioContextRef.current.close().catch(() => {});
+          audioContextRef.current = null;
+        }
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setTempAudioBlob(audioBlob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      // Web Audio Analyser for real-time waveform visualization
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new AudioContextClass();
+        audioContextRef.current = audioCtx;
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        analyserRef.current = analyser;
+        source.connect(analyser);
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        dataArrayRef.current = dataArray;
+
+        const updateWave = () => {
+          if (mediaRecorder.state === "paused") {
+            setWaveValues(prev => prev.map(v => Math.max(0.05, v * 0.85)));
+          } else {
+            analyser.getByteFrequencyData(dataArray);
+            const nextValues: number[] = [];
+            for (let i = 0; i < 25; i++) {
+              const val = dataArray[i] || 0;
+              nextValues.push(Math.max(0.05, val / 255));
+            }
+            setWaveValues(nextValues);
+          }
+          animationFrameIdRef.current = requestAnimationFrame(updateWave);
+        };
+        animationFrameIdRef.current = requestAnimationFrame(updateWave);
+      } catch (ae) {
+        console.error("Failed to initialize audio analyser:", ae);
+      }
+
+      mediaRecorder.start(200);
+      setRecording(true);
+      setTranscriptionText("");
+      accumulatedTranscriptRef.current = "";
+      currentSessionFinalRef.current = "";
+      startSpeechRecognition();
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+      toast.error("无法访问录音设备");
+      setShowVoiceRecorder(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showVoiceRecorder) {
+      setRecordDuration(0);
+      setIsPaused(false);
+      setTranscriptionText("");
+      accumulatedTranscriptRef.current = "";
+      currentSessionFinalRef.current = "";
+      startRecordingProcess();
+    } else {
+      stopSpeechRecognition();
+      setRecording(false);
+      setIsPaused(false);
+      setTempAudioBlob(null);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+    }
+  }, [showVoiceRecorder]);
+
+  const handleToggleVoiceRecord = () => {
+    // Keep standard click toggle behavior on the central button
+    if (recording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      setRecording(false);
+      setIsPaused(false);
+    } else {
+      setTempAudioBlob(null);
+      setRecordDuration(0);
+      setIsPaused(false);
+      startRecordingProcess();
+    }
+  };
+
+  const handleTogglePauseVoiceRecord = () => {
+    if (!recording) return;
+    const recorder = mediaRecorderRef.current;
+    if (recorder) {
+      if (isPaused) {
+        recorder.resume();
+        setIsPaused(false);
+        startSpeechRecognition();
+      } else {
+        recorder.pause();
+        setIsPaused(true);
+        stopSpeechRecognition();
+      }
+    }
+  };
+
+  const handleCancelVoiceRecord = () => {
+    stopSpeechRecognition();
+    setTranscriptionText("");
+    accumulatedTranscriptRef.current = "";
+    currentSessionFinalRef.current = "";
+    if (animationFrameIdRef.current) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
+    setIsPaused(false);
+    setTempAudioBlob(null);
+    setShowVoiceRecorder(false);
+  };
+
+  const handleFinishVoiceRecord = async () => {
+    stopSpeechRecognition();
+    if (transcriptionText.trim()) {
+      setText((prev) => {
+        const spacer = prev ? "\n" : "";
+        return prev + spacer + transcriptionText.trim();
+      });
+    }
+
+    if (animationFrameIdRef.current) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setVoiceUploading(true);
+    setShowVoiceRecorder(false);
+    setIsPaused(false);
+
+    const uploadBlob = async (blob: Blob, duration: number) => {
+      const file = new File([blob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
+      try {
+        const uploadRes = await api.diaryImages.upload(file);
+        setPendingVoice({
+          id: uploadRes.id,
+          duration: duration || 1,
+        });
+        toast.success("录音生成成功");
+      } catch (e) {
+        console.error("Voice upload failed:", e);
+        toast.error("录音上传失败");
+      } finally {
+        setVoiceUploading(false);
+      }
+    };
+
+    if (recording) {
+      if (mediaRecorderRef.current) {
+        const currentDuration = recordDuration;
+        mediaRecorderRef.current.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          await uploadBlob(audioBlob, currentDuration);
+        };
+        mediaRecorderRef.current.stop();
+        setRecording(false);
+      } else {
+        setVoiceUploading(false);
+      }
+    } else if (tempAudioBlob) {
+      await uploadBlob(tempAudioBlob, recordDuration);
+    } else {
+      setVoiceUploading(false);
+    }
+  };
+
+  const handleMicButtonClick = () => {
+    if (isMobile) {
+      setShowVoiceRecorder(true);
+    } else {
+      handleRecordClick();
+    }
   };
 
   // ----------------- Image upload -----------------
@@ -430,7 +815,13 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-app-bg flex flex-col overflow-hidden">
+    <div
+      className={cn(
+        "fixed z-[60] bg-app-bg flex flex-col overflow-hidden",
+        isMobile ? "inset-x-0 top-0" : "inset-0"
+      )}
+      style={isMobile ? { height: viewportHeight, bottom: "auto" } : undefined}
+    >
       {/* 顶栏 */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface shrink-0" style={{ paddingTop: "calc(var(--safe-area-top) + 8px)" }}>
         <button
@@ -513,34 +904,36 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
           </div>
         )}
         
-        {images.length > 0 && (
+        {images.filter((img) => !img.isVideo).length > 0 && (
           <div className={cn(
             "grid gap-2",
-            images.length === 1 && "grid-cols-1",
-            images.length === 2 && "grid-cols-2",
-            images.length >= 3 && "grid-cols-3"
+            images.filter((img) => !img.isVideo).length === 1 && "grid-cols-1",
+            images.filter((img) => !img.isVideo).length === 2 && "grid-cols-2",
+            images.filter((img) => !img.isVideo).length >= 3 && "grid-cols-3"
           )}>
-            {images.map((img) => (
-              <div
-                key={img.id}
-                className={cn(
-                  "relative overflow-hidden rounded-xl border border-app-border bg-app-hover/30 group",
-                  images.length === 1 ? "max-h-[240px] aspect-[4/3]" : "aspect-square"
-                )}
-              >
-                <img
-                  src={img.url}
-                  alt="Upload preview"
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  onClick={() => handleRemoveImage(img.id)}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center"
+            {images
+              .filter((img) => !img.isVideo)
+              .map((img) => (
+                <div
+                  key={img.id}
+                  className={cn(
+                    "relative overflow-hidden rounded-xl border border-app-border bg-app-hover/30 group",
+                    images.filter((img) => !img.isVideo).length === 1 ? "max-h-[240px] aspect-[4/3]" : "aspect-square"
+                  )}
                 >
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
+                  <img
+                    src={img.url}
+                    alt="Upload preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={() => handleRemoveImage(img.id)}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
           </div>
         )}
 
@@ -703,28 +1096,53 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
         )}
       </AnimatePresence>
 
+      {/* 视频缩略图预览条 (出现在下侧工具栏的上方) */}
+      {images.some((img) => img.isVideo) && (
+        <div className="px-4 py-2 border-t border-app-border bg-app-surface flex items-center gap-3 overflow-x-auto shrink-0">
+          {images
+            .filter((img) => img.isVideo)
+            .map((img) => (
+              <div key={img.id} className="relative w-16 h-16 rounded-lg overflow-hidden border border-app-border bg-black shrink-0">
+                <video src={img.url} className="w-full h-full object-cover" muted playsInline />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <Play size={12} className="text-white" />
+                </div>
+                <button
+                  onClick={() => handleRemoveImage(img.id)}
+                  className="absolute top-0.5 right-0.5 w-[18px] h-[18px] rounded-full bg-black/60 hover:bg-red-500 text-white flex items-center justify-center active:scale-90"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
+
       {/* 底部操作工具栏 (紧挨着键盘上方右侧，屏幕底端对齐) */}
       <div className="p-3 bg-app-surface border-t border-app-border flex items-center justify-between shrink-0" style={{ paddingBottom: "calc(var(--safe-area-bottom) + 8px)" }}>
         {/* 左侧：可见性权限 */}
-        <button
-          onClick={() => setVisibility((v) => (v === "PRIVATE" ? "PUBLIC" : "PRIVATE"))}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border border-app-border/60 bg-app-surface",
-            visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
-          )}
-        >
-          {visibility === "PUBLIC" ? (
-            <>
-              <Globe size={13} />
-              <span>公开可见</span>
-            </>
-          ) : (
-            <>
-              <Lock size={13} />
-              <span>自己可见</span>
-            </>
-          )}
-        </button>
+        {getCurrentWorkspace() && getCurrentWorkspace() !== "personal" && (
+          <button
+            onClick={() => setVisibility((v) => (v === "PRIVATE" ? "PUBLIC" : "PRIVATE"))}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border border-app-border/60 bg-app-surface",
+              visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
+            )}
+          >
+            {visibility === "PUBLIC" ? (
+              <>
+                <Globe size={13} />
+                <span>公开可见</span>
+              </>
+            ) : (
+              <>
+                <Lock size={13} />
+                <span>自己可见</span>
+              </>
+            )}
+          </button>
+        )}
+        {!getCurrentWorkspace() || getCurrentWorkspace() === "personal" ? <div /> : null}
 
         {/* 右侧：标签、表情/心情、录音、拍照/上传 */}
         <div className="flex items-center gap-2">
@@ -737,6 +1155,18 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
           >
             <span className="text-base">📷</span>
           </button>
+
+          {/* 拍照按钮 (仅在移动端展示) */}
+          {isMobile && (
+            <button
+              onClick={() => setShowCamera(true)}
+              disabled={images.length >= 9}
+              className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
+              title="拍照/录像"
+            >
+              <Camera size={18} />
+            </button>
+          )}
 
           {/* 标签按钮 */}
           <button
@@ -767,7 +1197,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
 
           {/* 录音按钮 */}
           <button
-            onClick={handleRecordClick}
+            onClick={handleMicButtonClick}
             disabled={voiceUploading || !!pendingVoice}
             className={cn(
               "p-2.5 rounded-xl transition-all duration-200",
@@ -787,6 +1217,158 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost }: DiaryComp
           </button>
         </div>
       </div>
+
+      {/* 拍照录像弹窗 */}
+      <ComposerCameraModal
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onComplete={handleCameraComplete}
+      />
+
+      {/* 全屏录音遮罩 */}
+      {showVoiceRecorder && (
+        <div className="fixed inset-0 z-[80] bg-app-bg flex flex-col justify-between p-6 overflow-hidden">
+          {/* 顶栏 */}
+          <div className="flex items-center justify-between" style={{ paddingTop: "var(--safe-area-top)" }}>
+            <button
+              onClick={handleCancelVoiceRecord}
+              className="p-2 rounded-full bg-app-hover text-tx-secondary active:scale-95"
+            >
+              <X size={20} />
+            </button>
+            <span className="text-sm font-semibold text-tx-primary">录音说说</span>
+            <div className="w-9" />
+          </div>
+
+          {/* 中间麦克风 (Area 1 - Waveform + Mic status) */}
+          <div className="flex-1 flex flex-col items-center justify-center space-y-8 min-h-0">
+            {/* Live Transcription Box */}
+            <div className="relative w-full max-w-sm flex-1 min-h-[160px] max-h-[32vh] bg-app-surface/50 border border-app-border/80 rounded-2xl p-4 flex flex-col overflow-hidden shadow-inner">
+              <div 
+                ref={transcriptionScrollRef}
+                className="flex-1 overflow-y-auto pr-8 space-y-1.5 scroll-smooth"
+              >
+                {transcriptionText ? (
+                  <p className="text-sm font-semibold text-tx-primary leading-relaxed whitespace-pre-wrap text-left">
+                    {transcriptionText}
+                  </p>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center gap-2">
+                    <Mic className="text-tx-tertiary/50 animate-pulse" size={22} />
+                    <p className="text-xs text-tx-tertiary italic text-center">
+                      {recording && !isPaused ? "开始说话，实时转文字将在此处显示..." : "等待说话..."}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Copy Button on the middle-right side of the overlay / box */}
+              {transcriptionText && (
+                <button
+                  type="button"
+                  onClick={handleCopyTranscription}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-4 rounded-xl bg-accent-primary text-white text-[10px] font-bold shadow-md hover:bg-accent-primary/95 active:scale-95 transition-all flex flex-col items-center justify-center"
+                  style={{ writingMode: "vertical-rl", letterSpacing: "2px" }}
+                >
+                  复制
+                </button>
+              )}
+            </div>
+
+            <div className="relative flex items-center justify-center">
+              {recording && !isPaused && (
+                <motion.div
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0.1, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  className="absolute w-32 h-32 rounded-full"
+                  style={{ backgroundColor: "var(--color-accent-primary)" }}
+                />
+              )}
+              <div
+                className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-lg"
+                style={{
+                  backgroundColor: recording && !isPaused ? "var(--color-accent-primary)" : "var(--app-surface)",
+                  border: "3px solid var(--color-accent-primary)",
+                  color: recording && !isPaused ? "white" : "var(--color-accent-primary)"
+                }}
+              >
+                {recording && !isPaused ? (
+                  <div className="flex items-end justify-center gap-[3px] h-10 px-2">
+                    {[3, 5, 7, 9, 11, 13, 15, 17, 19].map((waveIdx) => {
+                      const val = waveValues[waveIdx] || 0.05;
+                      return (
+                        <motion.div
+                          key={waveIdx}
+                          animate={{ height: `${Math.max(4, val * 32)}px` }}
+                          transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                          className="w-1 rounded-full bg-white"
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Mic size={36} />
+                )}
+              </div>
+            </div>
+
+            <div className="text-center space-y-2">
+              <span className="text-2xl font-bold text-tx-primary font-mono">
+                {Math.floor(recordDuration / 60).toString().padStart(2, "0")}:{(recordDuration % 60).toString().padStart(2, "0")}
+              </span>
+              <p className="text-xs text-tx-secondary">
+                {isPaused ? "录音已暂停" : recording ? "正在录音，点击下方按钮暂停或完成" : "已停止，点击下方完成保存"}
+              </p>
+            </div>
+          </div>
+
+          {/* 底部动作 (Area 2 - Cancel, Pause/Resume, Finish) */}
+          <div className="flex items-center justify-center gap-6 pb-[calc(var(--safe-area-bottom)+24px)] shrink-0">
+            {/* 取消按钮 */}
+            <button
+              onClick={handleCancelVoiceRecord}
+              className="w-14 h-14 rounded-full border border-app-border bg-app-surface text-tx-secondary flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-sm hover:bg-app-hover"
+            >
+              <X size={18} className="mb-0.5" />
+              <span>取消</span>
+            </button>
+
+            {/* 暂停/继续按钮 */}
+            <button
+              onClick={handleTogglePauseVoiceRecord}
+              disabled={!recording}
+              className={cn(
+                "w-16 h-16 rounded-full flex flex-col items-center justify-center active:scale-95 transition-all text-xs font-bold shadow-md disabled:opacity-40 disabled:pointer-events-none",
+                isPaused
+                  ? "bg-accent-primary text-white"
+                  : "bg-app-surface border border-accent-primary text-accent-primary"
+              )}
+            >
+              {isPaused ? (
+                <>
+                  <Play size={20} className="mb-0.5" fill="currentColor" />
+                  <span>继续</span>
+                </>
+              ) : (
+                <>
+                  <Pause size={20} className="mb-0.5" fill="currentColor" />
+                  <span>暂停</span>
+                </>
+              )}
+            </button>
+
+            {/* 完成按钮 */}
+            <button
+              onClick={handleFinishVoiceRecord}
+              disabled={recordDuration === 0 && !recording}
+              className="w-14 h-14 rounded-full text-white bg-accent-primary hover:bg-accent-primary/95 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-md disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <Check size={18} className="mb-0.5" />
+              <span>完成</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

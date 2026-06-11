@@ -87,16 +87,16 @@ export default function RecordingPanel({
         <div className="flex items-center gap-3 min-w-0">
           {/* 呼吸灯效果 */}
           <div className="relative shrink-0">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <div className="w-3 h-3 rounded-full bg-accent-primary" />
             <motion.div
               animate={{ scale: [1, 1.5, 1], opacity: [0.7, 0, 0.7] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute inset-0 w-3 h-3 rounded-full bg-red-500"
+              className="absolute inset-0 w-3 h-3 rounded-full bg-accent-primary"
             />
           </div>
 
           {/* 录音中文字 */}
-          <span className="text-sm font-medium text-red-500 whitespace-nowrap">
+          <span className="text-sm font-medium text-accent-primary whitespace-nowrap">
             录音中...
           </span>
 
@@ -107,7 +107,7 @@ export default function RecordingPanel({
                 key={index}
                 animate={{ height: `${Math.max(3, value * 28)}px` }}
                 transition={{ duration: 0.08, ease: "easeOut" }}
-                className="w-[3px] rounded-full bg-red-400/80"
+                className="w-[3px] rounded-full bg-accent-primary/80"
               />
             ))}
           </div>
@@ -131,7 +131,7 @@ export default function RecordingPanel({
           {/* 停止并保存按钮 */}
           <button
             onClick={onRecordingComplete}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium bg-red-500 text-white hover:bg-red-600 active:scale-95 transition-all shadow-md shadow-red-500/20"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium bg-accent-primary text-white hover:opacity-90 active:scale-95 transition-all shadow-md shadow-accent-primary/20"
           >
             <Square size={12} fill="currentColor" />
             <span>停止并保存</span>
