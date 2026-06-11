@@ -1110,6 +1110,20 @@ setTimeout(sweepOrphanDiaryImages, 30_000);
 setInterval(sweepOrphanDiaryImages, 6 * 60 * 60 * 1000);
 
 /**
+ * 预热语音服务 (Pre-warm Speech Service)
+ *   POST /api/diary/prewarm
+ */
+diary.post("/prewarm", async (c) => {
+  try {
+    // 异步拉起容器，不阻塞请求返回
+    ensureRunning().catch((e) => console.warn("[sensevoice] Pre-warm failed:", e));
+    return c.json({ status: "warming" });
+  } catch (e: any) {
+    return c.json({ error: e?.message || e }, 500);
+  }
+});
+
+/**
  * 语音消息转文字 (Speech-to-Text)
  *   POST /api/diary/transcribe
  *   body: { diaryId: string, voiceId: string }
@@ -1180,6 +1194,7 @@ diary.post("/transcribe", async (c) => {
     const formData = new FormData();
     formData.append("file", blob, path.basename(attachRow.path));
     formData.append("model", "whisper-1");
+    formData.append("language", "zh");
 
     const response = await fetch("http://sensevoice:8000/v1/audio/transcriptions", {
       method: "POST",

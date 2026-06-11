@@ -1601,6 +1601,14 @@ export const api = {
       body: JSON.stringify({ diaryId, voiceId }),
     });
   },
+  prewarmDiaryVoice: () => {
+    return request<{ status: string }>("/diary/prewarm", {
+      method: "POST",
+    }).catch((err) => {
+      console.warn("Prewarm speech recognition service failed:", err);
+      return { status: "error" };
+    });
+  },
   getDiaryStats: (range?: { from?: string; to?: string }) => {
     const params = new URLSearchParams();
     if (range?.from) params.set("from", range.from);

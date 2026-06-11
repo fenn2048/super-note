@@ -1541,6 +1541,8 @@
     "filterApply": "应用",
     "filterClear": "清除",
     "emptyFiltered": "该时间范围内没有内容",
+    "favorites": "收藏",
+    "noFavorites":"暂无收藏",
     "emptyFilteredHint": "试试切换其他时间范围"
   },
   "download": {
@@ -1835,6 +1837,7 @@
     "confirmDeleteGroup": "确定要删除该分组吗？此操作不可撤销。",
     "noGroups": "无分组",
     "noFavorites": "暂无收藏",
+    "personalTodo": "个人TODO",
     "tasksCount":"个任务"
   },
   "calendar": {

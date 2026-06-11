@@ -78,6 +78,7 @@ export default function ServerAddressInput({
   accent = "indigo",
 }: ServerAddressInputProps) {
   const { t } = useTranslation();
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   const update = (patch: Partial<ServerAddressParts>) => onChange({ ...value, ...patch });
 
@@ -133,13 +134,13 @@ export default function ServerAddressInput({
   return (
     <div
       className={
-        "relative flex items-stretch w-full border border-zinc-200 dark:border-zinc-700 rounded-xl " +
+        "relative flex flex-col md:flex-row md:items-stretch w-full border border-zinc-200 dark:border-zinc-700 rounded-xl " +
         "bg-zinc-50/50 dark:bg-zinc-800/50 transition-all overflow-hidden " +
         ACCENT_CLASS[accent]
       }
     >
       {/* Protocol select */}
-      <div className="relative flex items-center pl-3 pr-1 border-r border-zinc-200 dark:border-zinc-700">
+      <div className="relative flex items-center pl-3 pr-1 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-700 w-full md:w-auto">
         <Globe className="h-4 w-4 text-zinc-400 dark:text-zinc-500 mr-1.5" />
         <select
           value={value.protocol}
@@ -148,71 +149,71 @@ export default function ServerAddressInput({
           aria-label={t("server.protocolLabel")}
           className={
             "appearance-none bg-transparent text-base md:text-sm text-zinc-900 dark:text-zinc-100 " +
-            "focus:outline-none pr-5 py-2.5 cursor-pointer disabled:cursor-not-allowed"
+            "focus:outline-none pr-5 py-2.5 cursor-pointer disabled:cursor-not-allowed w-full md:w-auto"
           }
         >
           <option value="http">http</option>
           <option value="https">https</option>
         </select>
-        <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 absolute right-4 md:right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
       </div>
 
-      {/* :// 分隔 */}
-      <span className="select-none flex items-center px-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-        ://
-      </span>
+      {/* Host input area */}
+      <div className="flex items-center flex-1 min-w-0 border-b md:border-b-0 border-zinc-200 dark:border-zinc-700">
+        <span className="select-none flex items-center pl-3 pr-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+          ://
+        </span>
+        <input
+          type="text"
+          value={value.host}
+          onChange={handleHostChange}
+          onPaste={handleHostPaste}
+          onBlur={onHostBlur}
+          placeholder={isMobile ? "服务器主机域名或 IP 地址" : t("server.hostPlaceholder")}
+          autoFocus={autoFocus}
+          disabled={disabled}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          inputMode="url"
+          className={
+            "flex-1 min-w-0 bg-transparent py-2.5 pr-2 text-base md:text-sm " +
+            "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
+            "focus:outline-none disabled:cursor-not-allowed"
+          }
+        />
+      </div>
 
-      {/* Host */}
-      <input
-        type="text"
-        value={value.host}
-        onChange={handleHostChange}
-        onPaste={handleHostPaste}
-        onBlur={onHostBlur}
-        placeholder={t("server.hostPlaceholder")}
-        autoFocus={autoFocus}
-        disabled={disabled}
-        // 关键：禁用移动端自动纠错/自动大写，主机名里最怕"被改成首字母大写"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        inputMode="url"
-        className={
-          "flex-1 min-w-0 bg-transparent py-2.5 pr-2 text-base md:text-sm " +
-          "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
-          "focus:outline-none disabled:cursor-not-allowed"
-        }
-      />
-
-      {/* : 分隔 + Port */}
-      <span className="select-none flex items-center px-1 text-base md:text-sm text-zinc-400 dark:text-zinc-500 border-l border-zinc-200 dark:border-zinc-700">
-        :
-      </span>
-      <input
-        type="text"
-        value={value.port}
-        onChange={(e) => {
-          // 端口只收数字；非数字按键体验上直接过滤掉
-          const v = e.target.value.replace(/\D/g, "").slice(0, 5);
-          update({ port: v });
-        }}
-        onPaste={handlePortPaste}
-        placeholder={t("server.portPlaceholder")}
-        disabled={disabled}
-        inputMode="numeric"
-        pattern="\d*"
-        maxLength={5}
-        aria-label={t("server.portLabel")}
-        className={
-          "w-[72px] bg-transparent py-2.5 pr-2 text-base md:text-sm text-center " +
-          "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
-          "focus:outline-none disabled:cursor-not-allowed"
-        }
-      />
+      {/* Port input area */}
+      <div className="flex items-center md:border-l border-zinc-200 dark:border-zinc-700 w-full md:w-[120px]">
+        <span className="select-none flex items-center pl-3 pr-1 text-base md:text-sm text-zinc-400 dark:text-zinc-500">
+          :
+        </span>
+        <input
+          type="text"
+          value={value.port}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, "").slice(0, 5);
+            update({ port: v });
+          }}
+          onPaste={handlePortPaste}
+          placeholder={t("server.portPlaceholder")}
+          disabled={disabled}
+          inputMode="numeric"
+          pattern="\d*"
+          maxLength={5}
+          aria-label={t("server.portLabel")}
+          className={
+            "flex-1 bg-transparent py-2.5 pr-2 text-base md:text-sm text-left md:text-center " +
+            "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
+            "focus:outline-none disabled:cursor-not-allowed"
+          }
+        />
+      </div>
 
       {/* 右侧状态槽 */}
       {rightSlot && (
-        <div className="flex items-center pr-3 pl-1">{rightSlot}</div>
+        <div className="flex items-center pr-3 pl-1 border-t md:border-t-0 border-zinc-200 dark:border-zinc-700 bg-zinc-50/20 dark:bg-zinc-800/20 py-2 md:py-0">{rightSlot}</div>
       )}
     </div>
   );

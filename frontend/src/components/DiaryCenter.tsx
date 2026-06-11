@@ -2418,6 +2418,8 @@ export default function DiaryCenter() {
   useEffect(() => {
     loadTimeline(true);
     loadStats();
+    // Pre-warm SenseVoice container (non-blocking)
+    api.prewarmDiaryVoice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

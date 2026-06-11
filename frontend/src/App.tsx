@@ -756,8 +756,41 @@ function AppLayout() {
     onOpenSearch: () => setCommandPaletteOpen(true),
   });
 
+  const [projectFilter, setProjectFilter] = useState<{ type: string; projectId?: string }>(() => {
+    try {
+      const val = sessionStorage.getItem("super-active-project-filter");
+      return val ? JSON.parse(val) : { type: "my-tasks" };
+    } catch {
+      return { type: "my-tasks" };
+    }
+  });
+
+  useEffect(() => {
+    const handleFilterChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setProjectFilter(customEvent.detail);
+      }
+    };
+    window.addEventListener("super:project-filter-changed", handleFilterChange);
+    return () => {
+      window.removeEventListener("super:project-filter-changed", handleFilterChange);
+    };
+  }, []);
+
+  const isProjectDetailOpen = isProjectsView && projectFilter?.type === "detail";
+
+  const isRootPageOfTabBar =
+    (state.viewMode === "home") ||
+    (state.viewMode === "projects" && !isProjectDetailOpen) ||
+    (isNotesView && state.mobileView === "list") ||
+    (state.viewMode === "diary") ||
+    (state.viewMode === "more");
+
   const { visible: keyboardVisible } = useKeyboardVisible();
-  const showMobileTabBar = !(isNotesView && state.mobileView === "editor") && !keyboardVisible;
+  const showMobileTabBar = isRootPageOfTabBar && !keyboardVisible;
+  const showMobileFAB = showMobileTabBar && state.viewMode !== "more";
+
 
   return (
     <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
@@ -921,7 +954,7 @@ function AppLayout() {
 
       {showMobileTabBar && <MobileTabBar />}
 
-      {showMobileTabBar && barsVisible && !fabHiddenForce && (
+      {showMobileFAB && barsVisible && !fabHiddenForce && (
         <MobileFAB
           onNewNote={quickCreateNote}
           onNewDiary={() => {

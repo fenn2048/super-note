@@ -293,15 +293,42 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     recognition.lang = "zh-CN";
 
     recognition.onresult = (event: any) => {
-      let finalTranscript = "";
+      let finalParts: string[] = [];
       let interimTranscript = "";
       for (let i = 0; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+          const phrase = event.results[i][0].transcript.trim();
+          if (phrase) {
+            finalParts.push(phrase);
+          }
         } else {
           interimTranscript += event.results[i][0].transcript;
         }
       }
+
+      let finalTranscript = "";
+      if (finalParts.length > 0) {
+        finalTranscript = finalParts.map((part, index) => {
+          let cleaned = part.trim();
+          if (index < finalParts.length - 1) {
+            if (!/[。？！，、；：]/.test(cleaned.slice(-1))) {
+              return cleaned + "，";
+            }
+          }
+          return cleaned;
+        }).join("");
+
+        if (interimTranscript) {
+          if (!/[。？！，、；：]/.test(finalTranscript.slice(-1))) {
+            finalTranscript += "，";
+          }
+        } else {
+          if (!/[。？！，、；：]/.test(finalTranscript.slice(-1))) {
+            finalTranscript += "。";
+          }
+        }
+      }
+
       currentSessionFinalRef.current = finalTranscript;
       setTranscriptionText(accumulatedTranscriptRef.current + finalTranscript + interimTranscript);
     };
@@ -340,8 +367,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       } catch (e) {
         console.error("Failed to stop speech recognition:", e);
       }
-      accumulatedTranscriptRef.current += currentSessionFinalRef.current;
-      currentSessionFinalRef.current = "";
     }
   };
 
@@ -433,6 +458,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   useEffect(() => {
     if (showVoiceRecorder) {
+      // Eagerly pre-warm SenseVoice container (non-blocking)
+      api.prewarmDiaryVoice();
       setRecordDuration(0);
       setIsPaused(false);
       setTranscriptionText("");

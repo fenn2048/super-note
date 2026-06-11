@@ -17,7 +17,8 @@ print("Model loaded successfully!")
 @app.post("/v1/audio/transcriptions")
 async def transcribe(
     file: UploadFile = File(...),
-    model_name: str = Form("whisper-1", alias="model")
+    model_name: str = Form("whisper-1", alias="model"),
+    language: str = Form("zh")
 ):
     # Save file temporarily
     temp_file = f"temp_{file.filename}"
@@ -29,7 +30,7 @@ async def transcribe(
         res = model.generate(
             input=temp_file,
             cache={},
-            language="auto",
+            language=language,
             use_itn=True,
             batch_size_s=300,
         )

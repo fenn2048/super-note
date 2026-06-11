@@ -578,6 +578,14 @@ try {
   console.warn("[init] startEmbeddingWorker failed:", e);
 }
 
+try {
+  // Pre-warm SenseVoice container eagerly on boot (non-blocking)
+  const { ensureRunning: warmSenseVoice } = require("./services/sensevoice-manager");
+  warmSenseVoice().catch((err: any) => console.warn("[init] Pre-warming SenseVoice failed:", err));
+} catch (e) {
+  console.warn("[init] Eager SenseVoice pre-warming failed to initialize:", e);
+}
+
 console.log(`🚀 ark-notes API running on http://localhost:${port}`);
 console.log(`📖 OpenAPI 文档: http://localhost:${port}/api/openapi.json`);
 

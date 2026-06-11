@@ -68,6 +68,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
   onNavigateToNote?: (noteId: string) => void;
 }) {
   const { t } = useTranslation();
+  const isMobile = window.innerWidth < 768;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -659,7 +660,10 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
       <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
       {window.innerWidth < 768 ? (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0">
+        <div 
+          className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0"
+          style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
+        >
           <span className="text-sm font-semibold text-tx-primary">AI问答</span>
           <button
             onClick={onClose}
@@ -1029,14 +1033,14 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
       </ScrollArea>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-app-border bg-app-surface/30">
+      <div className="px-2 py-2 md:px-4 md:py-3 border-t border-app-border bg-app-surface/30">
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={t("aiChat.placeholder")}
+            placeholder={isMobile ? "问点什么..." : t("aiChat.placeholder")}
             rows={1}
             className="flex-1 resize-none px-3 py-2 bg-app-bg border border-app-border rounded-xl text-base md:text-sm text-tx-primary placeholder:text-tx-tertiary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all max-h-24"
             style={{ minHeight: "38px" }}
