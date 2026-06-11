@@ -1196,7 +1196,7 @@ diary.post("/transcribe", async (c) => {
     formData.append("model", "whisper-1");
     formData.append("language", "zh");
 
-    const response = await fetch("http://sensevoice:8000/v1/audio/transcriptions", {
+    const response = await fetch("http://super-note-sensevoice:8000/v1/audio/transcriptions", {
       method: "POST",
       body: formData,
     });

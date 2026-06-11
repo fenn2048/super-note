@@ -18,7 +18,7 @@
 
 const SENSEVOICE_CONTAINER = "super-note-sensevoice";
 const SENSEVOICE_IMAGE = "super-note-sensevoice:latest";
-const SENSEVOICE_URL = "http://sensevoice:8000/v1/audio/transcriptions";
+const SENSEVOICE_URL = "http://super-note-sensevoice:8000/v1/audio/transcriptions";
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 分钟空闲超时
 const STARTUP_TIMEOUT_MS = 60 * 1000;   // 容器启动最大等待时间
 const HEALTH_CHECK_INTERVAL = 1000;      // 健康检查间隔
