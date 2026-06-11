@@ -79,7 +79,7 @@ export default function MobileMorePage() {
       </div>
 
       {/* 宫格菜单 */}
-      <div className="px-4 py-2 grid grid-cols-1 gap-3 flex-1">
+      <div className="px-4 py-2 grid grid-cols-2 gap-3 flex-1">
         {menuItems.map((item, idx) => (
           <motion.button
             key={item.id}
@@ -87,14 +87,14 @@ export default function MobileMorePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: idx * 0.05 }}
             onClick={item.onClick}
-            className="flex items-center gap-4 p-4 rounded-2xl border border-app-border/40 bg-app-surface/30 hover:bg-app-hover active:scale-[0.98] transition-all text-left group"
+            className="flex flex-col justify-between p-4 rounded-card border border-app-border/40 bg-app-surface/30 hover:bg-app-hover active:scale-[0.98] transition-all text-left group min-h-[120px]"
           >
-            <div className="w-12 h-12 rounded-xl bg-app-surface border border-app-border flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-button bg-app-surface border border-app-border flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
               {item.icon}
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="mt-4">
               <div className="text-sm font-semibold text-tx-primary">{item.label}</div>
-              <div className="text-[11px] text-tx-tertiary mt-0.5 truncate">{item.desc}</div>
+              <div className="text-[10px] text-tx-tertiary mt-1 line-clamp-2 leading-tight">{item.desc}</div>
             </div>
           </motion.button>
         ))}
@@ -105,14 +105,14 @@ export default function MobileMorePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: menuItems.length * 0.05 }}
           onClick={handleLogout}
-          className="flex items-center gap-4 p-4 rounded-2xl border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-[0.98] transition-all text-left mt-4 group"
+          className="col-span-2 flex items-center gap-4 p-4 rounded-card border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-[0.98] transition-all text-left mt-2 group"
         >
-          <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
-            <LogOut className="w-6 h-6 text-red-500" />
+          <div className="w-10 h-10 rounded-button bg-red-500/10 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+            <LogOut className="w-5 h-5 text-red-500" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-red-500">退出登录</div>
-            <div className="text-[11px] text-red-500/70 mt-0.5">安全退出当前账号的登录状态</div>
+            <div className="text-[10px] text-red-500/70 mt-0.5">安全退出当前账号的登录状态</div>
           </div>
         </motion.button>
       </div>

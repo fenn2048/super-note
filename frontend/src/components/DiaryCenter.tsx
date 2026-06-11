@@ -2699,7 +2699,7 @@ export default function DiaryCenter() {
         {window.innerWidth < 768 && (
           <header
             className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0 z-40"
-            style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)', height: '56px' }}
+            style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)', minHeight: '56px' }}
           >
             {!showMobileSearch ? (
               <>

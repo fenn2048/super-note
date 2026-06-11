@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera } from "lucide-react";
+import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
@@ -788,8 +788,8 @@ function AppLayout() {
     (state.viewMode === "more");
 
   const { visible: keyboardVisible } = useKeyboardVisible();
-  const showMobileTabBar = isRootPageOfTabBar && !keyboardVisible;
-  const showMobileFAB = showMobileTabBar && state.viewMode !== "more";
+  const showMobileTabBar = isRootPageOfTabBar && !keyboardVisible && state.viewMode !== "trash";
+  const showMobileFAB = showMobileTabBar && state.viewMode !== "more" && state.viewMode !== "trash";
 
 
   return (
@@ -851,7 +851,7 @@ function AppLayout() {
       {/* ===== 主内容区 ===== */}
       <div className={cn(
         "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
-        showMobileTabBar && barsVisible ? "pb-[calc(56px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
+        showMobileTabBar && barsVisible ? "pb-[calc(64px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
       )}>
         {isMindMapView ? (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -864,7 +864,10 @@ function AppLayout() {
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
               <AIChatPanel
-                onClose={() => actions.setViewMode("all")}
+                onClose={() => {
+                  actions.setViewMode("more");
+                  actions.setMobileView("list");
+                }}
                 onNavigateToNote={async (noteId) => {
                   try {
                     const { api } = await import("@/lib/api");
@@ -1075,21 +1078,76 @@ function MobileTopBar() {
     return null;
   }
 
+  const isFiles = state.viewMode === "files";
+  const isMentions = state.viewMode === "mentions";
+
   return (
     <header
       className={cn(
         "flex items-center px-4 py-3 border-b border-app-border bg-app-surface/50 md:hidden transition-all duration-300 ease-in-out overflow-hidden shrink-0",
-        visible ? "h-[56px] opacity-100 mt-0" : "h-0 opacity-0 -mt-14 pointer-events-none"
+        visible ? "min-h-[56px] h-auto opacity-100 mt-0" : "h-0 min-h-0 opacity-0 -mt-14 pointer-events-none"
       )}
       style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}
     >
-      <button
-        onClick={() => actions.setMobileSidebar(true)}
-        className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active"
-      >
-        <Menu size={24} />
-      </button>
-      <span className="ml-3 text-sm font-semibold text-tx-primary">{siteConfig.title}</span>
+      {isFiles ? (
+        <div className="flex-1 flex justify-end">
+          <button
+            onClick={() => {
+              actions.setViewMode("more");
+              actions.setMobileView("list");
+            }}
+            className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+            title="关闭"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      ) : isMentions ? (
+        <div className="flex-1 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell size={18} className="text-accent-primary" />
+            <span className="text-sm font-bold text-tx-primary">消息盒子</span>
+            {state.unreadMentionCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-bold">
+                {state.unreadMentionCount}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {state.unreadMentionCount > 0 && (
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("super:mark-all-mentions-read"));
+                }}
+                className="flex items-center gap-1 text-xs text-accent-primary hover:underline font-medium mr-1"
+              >
+                <CheckCheck size={14} />
+                全部已读
+              </button>
+            )}
+            <button
+              onClick={() => {
+                actions.setViewMode("more");
+                actions.setMobileView("list");
+              }}
+              className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+              title="关闭"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={() => actions.setMobileSidebar(true)}
+            className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active"
+          >
+            <Menu size={24} />
+          </button>
+          <span className="ml-3 text-sm font-semibold text-tx-primary">{siteConfig.title}</span>
+        </>
+      )}
     </header>
   );
 }
@@ -1163,7 +1221,7 @@ function MobileTabBar() {
       )}
       style={{ 
         paddingBottom: "var(--safe-area-bottom)",
-        height: "calc(56px + var(--safe-area-bottom))"
+        height: "calc(64px + var(--safe-area-bottom))"
       }}
     >
       {tabs.map((tab) => (
@@ -1177,7 +1235,7 @@ function MobileTabBar() {
             }
           }}
           className={cn(
-            "flex flex-col items-center justify-center flex-1 h-14 relative transition-colors duration-150 active:scale-95",
+            "flex flex-col items-center justify-center flex-1 h-16 relative transition-colors duration-150 active:scale-95",
             tab.active ? "text-accent-primary" : "text-tx-secondary hover:text-tx-primary"
           )}
         >
@@ -1187,9 +1245,9 @@ function MobileTabBar() {
           )}>
             {tab.icon}
           </div>
-          <span className="text-[10px] font-medium tracking-wide mt-0.5">{tab.label}</span>
+          <span className="text-[11px] font-medium tracking-wide mt-0.5">{tab.label}</span>
           {tab.active && (
-            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent-primary" />
+            <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-accent-primary" />
           )}
         </button>
       ))}
@@ -1234,7 +1292,7 @@ function MobileFAB({
         }}
         dragElastic={0.6}
         dragMomentum={false}
-        className="fixed bottom-20 right-4 z-40 md:hidden flex flex-col items-end gap-2 touch-none select-none"
+        className="fixed bottom-[calc(76px+var(--safe-area-bottom))] right-4 z-40 md:hidden flex flex-col items-end gap-2 touch-none select-none"
       >
         <AnimatePresence>
           {open && (
@@ -1249,10 +1307,10 @@ function MobileFAB({
                   setOpen(false);
                   onNewNote();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建笔记</span>
-                <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-button bg-amber-500/10 text-amber-500 flex items-center justify-center">
                   <BookOpen size={16} />
                 </div>
               </button>
@@ -1261,10 +1319,10 @@ function MobileFAB({
                   setOpen(false);
                   onNewDiary();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建说说</span>
-                <div className="w-8 h-8 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-button bg-violet-500/10 text-violet-500 flex items-center justify-center">
                   <NotebookPen size={16} />
                 </div>
               </button>
@@ -1273,10 +1331,10 @@ function MobileFAB({
                   setOpen(false);
                   onNewTask();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建待办</span>
-                <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-button bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                   <ListTodo size={16} />
                 </div>
               </button>
@@ -1285,10 +1343,10 @@ function MobileFAB({
                   setOpen(false);
                   onCameraClick();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>拍照</span>
-                <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-button bg-blue-500/10 text-blue-500 flex items-center justify-center">
                   <Camera size={16} />
                 </div>
               </button>
@@ -1301,7 +1359,7 @@ function MobileFAB({
           whileTap={{ scale: 0.9 }}
           whileDrag={{ scale: 1.1 }}
           transition={{ type: "spring", stiffness: 400, damping: 15 }}
-          className="w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-xl z-40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing"
+          className="w-14 h-14 rounded-button bg-primary text-primary-foreground flex items-center justify-center shadow-xl z-40 hover:opacity-90 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing"
         >
           <motion.div
             animate={{ rotate: open ? 45 : 0 }}

@@ -155,11 +155,21 @@ export default function MentionList() {
     actions.refreshMentionCount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const handleMarkAllReadEvent = () => {
+      void handleMarkAllRead();
+    };
+    window.addEventListener("super:mark-all-mentions-read", handleMarkAllReadEvent);
+    return () => {
+      window.removeEventListener("super:mark-all-mentions-read", handleMarkAllReadEvent);
+    };
+  }, [handleMarkAllRead]);
+
   const unreadCount = items.filter((m) => !m.readAt).length;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
+      <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-app-border">
         <div className="flex items-center gap-2">
           <Bell size={16} className="text-accent-primary" />
           <span className="text-sm font-bold text-tx-primary">消息盒子</span>

@@ -2594,83 +2594,111 @@ export default function NoteList() {
           <>
             <h2 className="text-base font-bold text-tx-primary pl-1">{viewTitles[state.viewMode]}</h2>
             <div className="flex items-center gap-1.5 relative">
-              {/* 移动端排序按钮（搜索/回收站不显示） */}
-              {state.viewMode !== "trash" && state.viewMode !== "search" && (
+              {state.viewMode === "favorites" ? (
                 <button
-                  ref={sortBtnRef}
-                  onClick={() => setShowSortMenu((v) => !v)}
-                  className={cn(
-                    "p-1.5 rounded-md transition-colors relative",
-                    sortPref.by !== "manual"
-                      ? "text-accent-primary bg-accent-primary/10"
-                      : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-                  )}
-                  title={t("noteList.sortBy")}
-                >
-                  <ArrowUpDown size={18} />
-                </button>
-              )}
-              {/* 移动端日历筛选按钮 */}
-              {state.viewMode !== "trash" && state.viewMode !== "search" && (
-                <button
-                  onClick={() => setShowCalendar(!showCalendar)}
-                  className={cn(
-                    "p-1.5 rounded-md transition-colors relative",
-                    showCalendar || dateFilter
-                      ? "text-accent-primary bg-accent-primary/10"
-                      : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-                  )}
-                >
-                  <CalendarDays size={18} />
-                  {dateFilter && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-primary" />
-                  )}
-                </button>
-              )}
-              {state.viewMode === "trash" ? (
-                // 回收站视图下用"一键清空"按钮替换"新建"；
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-accent-danger hover:bg-accent-danger/10"
-                  title={t('sidebar.emptyTrash')}
-                  aria-label={t('sidebar.emptyTrash')}
                   onClick={() => {
-                    try {
-                      window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
-                    } catch { /* ignore */ }
+                    actions.setViewMode("more");
+                    actions.setMobileView("list");
                   }}
+                  className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+                  title="关闭"
                 >
-                  <Trash2 size={18} />
-                </Button>
+                  <X size={18} />
+                </button>
               ) : (
-                // split-button
-                <div className="flex items-center">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreateNote("normal")}>
-                    <Plus size={18} />
-                  </Button>
-                  <button
-                    ref={createMenuAnchorMobileRef}
-                    type="button"
-                    aria-label="选择新建类型"
-                    onClick={() => {
-                      setCreateMenuSource("mobile");
-                      setCreateMenuOpen((v) => !v);
-                    }}
-                    className="h-8 w-5 flex items-center justify-center rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-                  >
-                    <ChevronDown size={12} />
-                  </button>
-                </div>
+                <>
+                  {/* 移动端排序按钮（搜索/回收站不显示） */}
+                  {state.viewMode !== "trash" && state.viewMode !== "search" && (
+                    <button
+                      ref={sortBtnRef}
+                      onClick={() => setShowSortMenu((v) => !v)}
+                      className={cn(
+                        "p-1.5 rounded-md transition-colors relative",
+                        sortPref.by !== "manual"
+                          ? "text-accent-primary bg-accent-primary/10"
+                          : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+                      )}
+                      title={t("noteList.sortBy")}
+                    >
+                      <ArrowUpDown size={18} />
+                    </button>
+                  )}
+                  {/* 移动端日历筛选按钮 */}
+                  {state.viewMode !== "trash" && state.viewMode !== "search" && (
+                    <button
+                      onClick={() => setShowCalendar(!showCalendar)}
+                      className={cn(
+                        "p-1.5 rounded-md transition-colors relative",
+                        showCalendar || dateFilter
+                          ? "text-accent-primary bg-accent-primary/10"
+                          : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+                      )}
+                    >
+                      <CalendarDays size={18} />
+                      {dateFilter && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-primary" />
+                      )}
+                    </button>
+                  )}
+                  {state.viewMode === "trash" ? (
+                    // 回收站视图下用"一键清空"按钮替换"新建"；
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-accent-danger hover:bg-accent-danger/10"
+                      title={t('sidebar.emptyTrash')}
+                      aria-label={t('sidebar.emptyTrash')}
+                      onClick={() => {
+                        try {
+                          window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
+                        } catch { /* ignore */ }
+                      }}
+                    >
+                      <Trash2 size={18} />
+                    </Button>
+                  ) : (
+                    // split-button
+                    <div className="flex items-center">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreateNote("normal")}>
+                        <Plus size={18} />
+                      </Button>
+                      <button
+                        ref={createMenuAnchorMobileRef}
+                        type="button"
+                        aria-label="选择新建类型"
+                        onClick={() => {
+                          setCreateMenuSource("mobile");
+                          setCreateMenuOpen((v) => !v);
+                        }}
+                        className="h-8 w-5 flex items-center justify-center rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                    </div>
+                  )}
+                  {/* 移动端搜索/关闭按钮 */}
+                  {state.viewMode === "trash" ? (
+                    <button
+                      onClick={() => {
+                        actions.setViewMode("more");
+                        actions.setMobileView("list");
+                      }}
+                      className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+                      title="关闭"
+                    >
+                      <X size={18} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setMobileSearchOpen(true)}
+                      className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
+                      title="搜索"
+                    >
+                      <Search size={18} />
+                    </button>
+                  )}
+                </>
               )}
-              {/* 移动端搜索按钮 (置于最右侧) */}
-              <button
-                onClick={() => setMobileSearchOpen(true)}
-                className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-                title="搜索"
-              >
-                <Search size={18} />
-              </button>
               {/* 排序下拉（移动端） */}
               {showSortMenu && (
                 <SortMenu

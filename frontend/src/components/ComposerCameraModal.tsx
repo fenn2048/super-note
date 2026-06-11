@@ -31,6 +31,12 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
         stream.getTracks().forEach((t) => t.stop());
       }
       setLoading(true);
+      if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
+        const { registerPlugin } = await import("@capacitor/core");
+        const AppPermissions = registerPlugin<any>("AppPermissions");
+        await AppPermissions.requestCameraPermission();
+        await AppPermissions.requestMicrophonePermission();
+      }
       const s = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 480 } },
         audio: true,

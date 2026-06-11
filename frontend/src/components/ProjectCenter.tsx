@@ -1116,7 +1116,7 @@ export default function ProjectCenter() {
           <div
             className={cn(
               "border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between gap-4",
-              window.innerWidth < 768 ? "px-4 py-3 h-[56px]" : "px-6 py-4"
+              window.innerWidth < 768 ? "px-4 py-3 min-h-[56px] h-auto" : "px-6 py-4"
             )}
             style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
           >
@@ -1792,7 +1792,7 @@ export default function ProjectCenter() {
           <div
             className={cn(
               "border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between",
-              window.innerWidth < 768 ? "px-4 py-3 h-[56px]" : "px-6 py-4"
+              window.innerWidth < 768 ? "px-4 py-3 min-h-[56px] h-auto" : "px-6 py-4"
             )}
             style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
           >

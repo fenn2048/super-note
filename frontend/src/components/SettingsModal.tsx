@@ -561,6 +561,39 @@ function AboutPanel() {
         </div>
       </div>
 
+      {/* Android 专属功能 */}
+      {typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android" && (
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Wrench size={15} className="text-accent-primary" />
+            调试与日志
+          </h3>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            如果您在使用过程中遇到问题，可以导出应用运行日志以协助排查和诊断。
+          </p>
+          <button
+            onClick={async () => {
+              const { toast } = await import("@/lib/toast");
+              const loadingToast = toast.info("正在导出日志...", 0);
+              try {
+                const { registerPlugin } = await import("@capacitor/core");
+                const AppPermissions = registerPlugin<any>("AppPermissions");
+                await AppPermissions.exportLogs();
+                toast.dismiss(loadingToast);
+                toast.success("日志已成功导出并可分享");
+              } catch (err: any) {
+                toast.dismiss(loadingToast);
+                toast.error(err?.message || "导出日志失败");
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+          >
+            <Download size={14} />
+            导出运行日志
+          </button>
+        </div>
+      )}
+
       {/* 底部 */}
       <p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-4">
         {t('about.madeWith')}

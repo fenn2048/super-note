@@ -297,6 +297,7 @@ export default function ManualPanel() {
                   </ul>
                 </li>
                 <li><strong>邮件通道（自动灾备）</strong>：在设置的“邮件通道”中配置 SMTP 后，系统支持在自动备份任务成功后将备份文件以邮件附件（25MB限制内）的形式安全投递到您的指定邮箱，实现异地容灾。</li>
+                <li><strong>Android 诊断日志导出</strong>：Android 客户端用户在“设置”的“关于”界面可以一键“导出运行日志”，并通过系统分享渠道（微信、邮件等）导出，便于遇到异常时协助排查。</li>
               </ul>
             </div>
           </div>
@@ -311,6 +312,16 @@ export default function ManualPanel() {
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                 沉浸于码字或阅读常常让人忘记时间。Love Write 特别设计了富有趣味性的“太空飞船健康提醒”系统，时刻关注您的身体状态。
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+              <h3 className="text-xs font-bold mb-1 flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                <Shield className="w-4 h-4" />
+                特别说明：颈椎健康休息室
+              </h3>
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                休息室中提供的<strong>“收敛下巴，对齐颈椎”</strong>动作校准目前是一个趣味模拟互动，采用手动的“对齐滑块”进行，<strong>并不需要也未实际开启您的摄像头</strong>进行实时图像分析，请放心体验。
               </p>
             </div>
 

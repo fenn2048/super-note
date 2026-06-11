@@ -176,6 +176,11 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     } else {
       // Start recording
       try {
+        if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
+          const { registerPlugin } = await import("@capacitor/core");
+          const AppPermissions = registerPlugin<any>("AppPermissions");
+          await AppPermissions.requestMicrophonePermission();
+        }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
@@ -384,6 +389,11 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   const startRecordingProcess = async () => {
     try {
+      if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
+        const { registerPlugin } = await import("@capacitor/core");
+        const AppPermissions = registerPlugin<any>("AppPermissions");
+        await AppPermissions.requestMicrophonePermission();
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
