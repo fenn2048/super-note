@@ -8,7 +8,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.nowen.note"
+    namespace "com.ark.note"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.super.note"
@@ -79,4 +79,20 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Custom task to delete the downloaded APK and extension zips from assets to prevent recursive nesting/bloat
+tasks.register("cleanNestedDownloadsInAssets") {
+    doFirst {
+        delete fileTree("${projectDir}/src/main/assets/public/downloads") {
+            include "*.apk"
+            include "*.zip"
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith("merge") && task.name.endsWith("Assets")) {
+        task.dependsOn "cleanNestedDownloadsInAssets"
+    }
 }

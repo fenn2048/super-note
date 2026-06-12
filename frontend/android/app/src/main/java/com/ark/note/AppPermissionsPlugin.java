@@ -1,4 +1,4 @@
-package com.nowen.note;
+package com.ark.note;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -33,8 +33,16 @@ public class AppPermissionsPlugin extends Plugin {
             ret.put("granted", true);
             call.resolve(ret);
         } else {
-            requestPermissionForAlias("camera", call, "permissionCallback");
+            requestPermissionForAlias("camera", call, "cameraPermissionCallback");
         }
+    }
+
+    @PermissionCallback
+    private void cameraPermissionCallback(PluginCall call) {
+        boolean granted = getPermissionState("camera") == com.getcapacitor.PermissionState.GRANTED;
+        JSObject ret = new JSObject();
+        ret.put("granted", granted);
+        call.resolve(ret);
     }
 
     @PluginMethod
@@ -44,33 +52,53 @@ public class AppPermissionsPlugin extends Plugin {
             ret.put("granted", true);
             call.resolve(ret);
         } else {
-            requestPermissionForAlias("microphone", call, "permissionCallback");
+            requestPermissionForAlias("microphone", call, "microphonePermissionCallback");
         }
     }
 
     @PermissionCallback
-    private void permissionCallback(PluginCall call) {
+    private void microphonePermissionCallback(PluginCall call) {
+        boolean granted = getPermissionState("microphone") == com.getcapacitor.PermissionState.GRANTED;
         JSObject ret = new JSObject();
-        boolean cameraGranted = getPermissionState("camera") == com.getcapacitor.PermissionState.GRANTED;
-        boolean micGranted = getPermissionState("microphone") == com.getcapacitor.PermissionState.GRANTED;
-        ret.put("cameraGranted", cameraGranted);
-        ret.put("microphoneGranted", micGranted);
+        ret.put("granted", granted);
         call.resolve(ret);
     }
 
     @PluginMethod
     public void exportLogs(PluginCall call) {
         try {
-            // Run logcat command to dump logs
-            Process process = Runtime.getRuntime().exec("logcat -d");
+            // Use PID-filtered logcat to capture this app's own logs.
+            // On Android 11+ (API 30+), regular apps cannot read system-wide logs;
+            // filtering by PID returns the app's own log output.
+            int pid = android.os.Process.myPid();
+            Process process = Runtime.getRuntime().exec(
+                new String[] { "logcat", "-d", "-v", "threadtime", "--pid=" + pid }
+            );
             BufferedReader bufferedReader = new BufferedReader(
                 new InputStreamReader(process.getInputStream())
             );
 
             StringBuilder log = new StringBuilder();
+            log.append("=== Super Note App Logs ===\n");
+            log.append("Package: ").append(getContext().getPackageName()).append("\n");
+            log.append("PID: ").append(pid).append("\n");
+            log.append("Android: ").append(Build.VERSION.RELEASE)
+              .append(" (SDK ").append(Build.VERSION.SDK_INT).append(")\n");
+            log.append("===========================\n\n");
+
             String line;
+            boolean hasContent = false;
             while ((line = bufferedReader.readLine()) != null) {
                 log.append(line).append("\n");
+                hasContent = true;
+            }
+            process.waitFor();
+
+            if (!hasContent) {
+                log.append("\n(应用运行日志为空 — 可能设备限制了 logcat 读取权限)\n");
+                log.append("请尝试通过以下方式获取日志：\n");
+                log.append("1. 使用 Android Studio 的 Logcat 工具\n");
+                log.append("2. 或在终端执行: adb logcat -d --pid=").append(pid).append("\n");
             }
 
             // Write to a cache file
@@ -91,6 +119,7 @@ public class AppPermissionsPlugin extends Plugin {
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType("text/plain");
             intent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            intent.putExtra(Intent.EXTRA_SUBJECT, "Super Note 运行日志");
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
             // Start chooser
@@ -99,8 +128,13 @@ public class AppPermissionsPlugin extends Plugin {
 
             JSObject ret = new JSObject();
             ret.put("success", true);
+            ret.put("hasContent", hasContent);
             call.resolve(ret);
         } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            ret.put("error", "导出日志失败: " + e.getMessage());
+            call.resolve(ret);
         }
     }
 

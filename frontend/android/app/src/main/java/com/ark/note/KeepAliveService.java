@@ -1,4 +1,4 @@
-package com.nowen.note;
+package com.ark.note;
 
 import android.app.Notification;
 import android.app.NotificationChannel;

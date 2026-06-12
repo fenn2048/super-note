@@ -18,6 +18,7 @@ import { api, getServerUrl } from "@/lib/api";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
+import { registerPlugin } from "@capacitor/core";
 
 export type TabId = "appearance" | "switches" | "ai" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about" | "manual";
 
@@ -437,14 +438,16 @@ function AboutPanel() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
-      import("@capacitor/core").then(({ registerPlugin }) => {
+      try {
         const AppPermissions = registerPlugin<any>("AppPermissions");
         AppPermissions.isIgnoringBatteryOptimizations()
           .then((res: any) => {
             setIsIgnoringBattery(!!res.isIgnoring);
           })
           .catch(console.error);
-      });
+      } catch (e) {
+        console.warn("Capacitor plugin access error:", e);
+      }
     }
   }, []);
 
@@ -601,7 +604,6 @@ function AboutPanel() {
               <button
                 onClick={async () => {
                   try {
-                    const { registerPlugin } = await import("@capacitor/core");
                     const AppPermissions = registerPlugin<any>("AppPermissions");
                     await AppPermissions.requestIgnoreBatteryOptimizations();
                     
@@ -635,11 +637,14 @@ function AboutPanel() {
                 const { toast } = await import("@/lib/toast");
                 const loadingToast = toast.info("正在导出日志...", 0);
                 try {
-                  const { registerPlugin } = await import("@capacitor/core");
                   const AppPermissions = registerPlugin<any>("AppPermissions");
-                  await AppPermissions.exportLogs();
+                  const result = await AppPermissions.exportLogs();
                   toast.dismiss(loadingToast);
-                  toast.success("日志已成功导出并可分享");
+                  if (result.hasContent) {
+                    toast.success("日志已成功导出并可分享");
+                  } else {
+                    toast.success("日志已导出（注意：设备可能限制了应用日志读取，日志内容可能不完整）");
+                  }
                 } catch (err: any) {
                   toast.dismiss(loadingToast);
                   toast.error(err?.message || "导出日志失败");

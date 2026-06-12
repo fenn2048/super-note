@@ -122,7 +122,13 @@ export default function MobileCameraModal({ isOpen, onClose, onCapture }: Mobile
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col justify-between overflow-hidden">
       {/* Top Bar */}
-      <div className="absolute top-0 inset-x-0 h-16 flex items-center justify-between px-4 z-10 bg-gradient-to-b from-black/60 to-transparent">
+      <div
+        className="absolute top-0 inset-x-0 flex items-center justify-between px-4 z-10 bg-gradient-to-b from-black/60 to-transparent"
+        style={{
+          paddingTop: "calc(var(--safe-area-top, 0px) + 12px)",
+          height: "calc(var(--safe-area-top, 0px) + 4rem + 12px)",
+        }}
+      >
         <button
           onClick={handleClose}
           className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90 transition-transform"

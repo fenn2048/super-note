@@ -507,7 +507,9 @@ function AppLayout() {
     if (isNativePlatform()) {
       const updateBadge = async () => {
         try {
-          const { Badge } = await import("@capawesome/capacitor-badge");
+          const pkg = "@capawesome/capacitor-badge";
+          // @ts-ignore
+          const { Badge } = await import(/* @vite-ignore */ pkg);
           const perm = await Badge.checkPermissions();
           if (perm.display !== "granted") {
             await Badge.requestPermissions();
@@ -1423,6 +1425,51 @@ function AuthGate() {
   const [quickLoginState, setQuickLoginState] = useState<"pending" | "skipped">("pending");
   const { t } = useTranslation();
 
+  // Warm Resume Lock: Lock the app when returning from the background
+  const authRef = useRef(isAuthenticated);
+  useEffect(() => {
+    authRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  const lastBackgroundTimeRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+
+    let active = true;
+    const handler = CapApp.addListener("appStateChange", ({ isActive }) => {
+      if (!active) return;
+      if (!isActive) {
+        lastBackgroundTimeRef.current = Date.now();
+      } else {
+        if (lastBackgroundTimeRef.current) {
+          const elapsed = Date.now() - lastBackgroundTimeRef.current;
+          lastBackgroundTimeRef.current = null;
+          // Only lock if backgrounded for more than 5 seconds
+          if (elapsed > 5000) {
+            const checkAndLock = async () => {
+              try {
+                const { isQuickLoginEnabled } = await import("@/lib/quickLogin");
+                const enabled = await isQuickLoginEnabled();
+                if (enabled && authRef.current) {
+                  setQuickLoginState("pending");
+                  setIsAuthenticated(false);
+                }
+              } catch (err) {
+                console.error("Failed to check quick login status on resume:", err);
+              }
+            };
+            void checkAndLock();
+          }
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+      handler.then((h) => h.remove());
+    };
+  }, []);
+
   // P1: Splash Screen — 应用就绪后隐藏启动屏（必须在条件返回之前调用）
   useEffect(() => {
     if (isAuthenticated !== null) {
@@ -1595,7 +1642,25 @@ function AuthGate() {
       setIsAuthenticated(false);
       return;
     }
-    checkAuth();
+
+    const checkStartupAuth = async () => {
+      const isCap = isNativePlatform();
+      if (isCap) {
+        try {
+          const { isQuickLoginEnabled } = await import("@/lib/quickLogin");
+          const enabled = await isQuickLoginEnabled();
+          if (enabled) {
+            setIsAuthenticated(false);
+            return;
+          }
+        } catch (err) {
+          console.error("Failed to check quick login status:", err);
+        }
+      }
+      checkAuth();
+    };
+
+    checkStartupAuth();
   }, [checkAuth, isClientMode]);
 
   // L10: 多标签页登录态同步

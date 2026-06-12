@@ -44,13 +44,14 @@ FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS frontend-buil
 ARG TARGETARCH
 ARG APK_MIRROR
 ARG NPM_REGISTRY
-WORKDIR /app/frontend
+WORKDIR /app
 
-# 配置包管理器镜像源（仅在指定时切换，否则用官方源）
+# 安装 bash（脚本依赖）
 RUN if [ -n "$APK_MIRROR" ]; then \
       sed -i 's/https/http/g' /etc/apk/repositories \
       && sed -i "s/dl-cdn.alpinelinux.org/$APK_MIRROR/g" /etc/apk/repositories; \
     fi \
+    && apk add --no-cache bash \
     && if [ -n "$NPM_REGISTRY" ]; then \
       npm config set registry "$NPM_REGISTRY"; \
     fi \
@@ -59,27 +60,14 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# 根 package.json 被 vite.config.ts 读取用于注入 __APP_VERSION__
-COPY package.json /app/package.json
+# 复制整个项目（包含 clipper 插件、整个 frontend 目录、根 package.json）
+COPY package.json ./
+COPY packages/nowen-clipper ./packages/nowen-clipper
+COPY frontend ./frontend
 
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install --no-audit --no-fund --legacy-peer-deps
-
-# rollup 原生绑定按目标架构选 musl 版（alpine 必须 musl，不能用 gnu）
-RUN ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}") && \
-    [ -z "$ROLLUP_VER" ] && ROLLUP_VER="4.59.0" ; \
-    case "$TARGETARCH" in \
-      amd64) ROLLUP_PKG="@rollup/rollup-linux-x64-musl@${ROLLUP_VER}" ;; \
-      arm64) ROLLUP_PKG="@rollup/rollup-linux-arm64-musl@${ROLLUP_VER}" ;; \
-      *)     ROLLUP_PKG="" ;; \
-    esac; \
-    if [ -n "$ROLLUP_PKG" ]; then \
-      echo "Installing $ROLLUP_PKG ..." && \
-      npm install "$ROLLUP_PKG" --save-optional --no-audit --no-fund 2>/dev/null || true; \
-    fi
-
-COPY frontend/ .
-RUN npx vite build
+# 运行整合了打包插件、编译前端、可跳过安卓打包的自签名编译脚本
+RUN chmod +x frontend/android/build_signed_debug_apk.sh \
+    && TARGETARCH=${TARGETARCH} ./frontend/android/build_signed_debug_apk.sh
 
 # ---------- Stage 2: 后端构建（tsc） ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS backend-build

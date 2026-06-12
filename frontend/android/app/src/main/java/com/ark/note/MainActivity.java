@@ -1,4 +1,4 @@
-package com.nowen.note;
+package com.ark.note;
 
 import android.Manifest;
 import android.content.ContentValues;
@@ -26,6 +26,7 @@ import java.util.List;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(AppPermissionsPlugin.class);
         super.onCreate(savedInstanceState);
         // Start the keep-alive foreground service
         Intent serviceIntent = new Intent(this, KeepAliveService.class);

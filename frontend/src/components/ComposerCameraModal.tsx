@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { X, Video, RefreshCw, Check, Play, Pause, Circle, Plus } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { registerPlugin } from "@capacitor/core";
 
 interface ComposerCameraModalProps {
   isOpen: boolean;
@@ -31,16 +32,45 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
         stream.getTracks().forEach((t) => t.stop());
       }
       setLoading(true);
-      if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
-        const { registerPlugin } = await import("@capacitor/core");
-        const AppPermissions = registerPlugin<any>("AppPermissions");
-        await AppPermissions.requestCameraPermission();
-        await AppPermissions.requestMicrophonePermission();
+
+      // On Android: request native permission through the plugin first.
+      // The plugin now always returns { granted: bool } — consistent.
+      if (
+        typeof window !== "undefined" &&
+        (window as any).Capacitor?.getPlatform?.() === "android"
+      ) {
+        try {
+          const AppPerms = registerPlugin<any>("AppPermissions");
+          const camRes = await AppPerms.requestCameraPermission();
+          if (!camRes.granted) {
+            toast.error("需要摄像头权限才能使用拍照功能，请在系统设置中授予");
+            onClose();
+            return;
+          }
+          // Mic permission is not essential for camera preview; request best-effort
+          await AppPerms.requestMicrophonePermission().catch(() => {});
+        } catch (permErr) {
+          console.warn("Capacitor permission plugin unavailable:", permErr);
+        }
       }
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: true,
-      });
+
+      // Start video-only stream so camera works regardless of mic permission.
+      // Audio track will be added lazily when the user starts recording.
+      let s: MediaStream;
+      try {
+        s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+      } catch (videoErr) {
+        // Fallback: try with audio (some devices/platforms require it)
+        console.warn("Video-only failed, retrying with audio:", videoErr);
+        s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: true,
+        });
+      }
+
       setStream(s);
       if (videoRef.current) {
         videoRef.current.srcObject = s;
@@ -81,19 +111,30 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
     };
   }, [recording]);
 
-  const handleStartRecord = () => {
+  const handleStartRecord = async () => {
     if (!stream) return;
     chunksRef.current = [];
-    
+
+    // Ensure audio track is available for recording; add it if missing
+    if (!stream.getAudioTracks().length) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStream.getAudioTracks().forEach((track) => stream.addTrack(track));
+      } catch (audioErr) {
+        console.warn("Audio track not available for recording:", audioErr);
+        // Continue with video-only recording
+      }
+    }
+
     // Choose mime type
-    let options = { mimeType: "video/webm;codecs=vp9,opus" };
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+    let options: MediaRecorderOptions = { mimeType: "video/webm;codecs=vp9,opus" };
+    if (!MediaRecorder.isTypeSupported(options.mimeType!)) {
       options = { mimeType: "video/webm;codecs=vp8,opus" };
     }
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+    if (!MediaRecorder.isTypeSupported(options.mimeType!)) {
       options = { mimeType: "video/webm" };
     }
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+    if (!MediaRecorder.isTypeSupported(options.mimeType!)) {
       options = { mimeType: "video/mp4" };
     }
 
@@ -188,7 +229,13 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col justify-between overflow-hidden">
       {/* Top Header */}
-      <div className="absolute top-0 inset-x-0 h-16 flex items-center justify-between px-4 z-10 bg-gradient-to-b from-black/60 to-transparent">
+      <div
+        className="absolute top-0 inset-x-0 flex items-center justify-between px-4 z-10 bg-gradient-to-b from-black/60 to-transparent"
+        style={{
+          paddingTop: "calc(var(--safe-area-top, 0px) + 12px)",
+          height: "calc(var(--safe-area-top, 0px) + 4rem + 12px)",
+        }}
+      >
         <button
           onClick={handleClose}
           className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90"
@@ -240,7 +287,10 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
 
         {/* Recording Indicator */}
         {recording && (
-          <div className="absolute top-20 left-4 flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/80 text-white text-xs font-bold animate-pulse">
+          <div 
+            className="absolute left-4 flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/80 text-white text-xs font-bold animate-pulse"
+            style={{ top: "calc(var(--safe-area-top, 0px) + 4.5rem)" }}
+          >
             <div className="w-2 h-2 rounded-full bg-white" />
             <span>录制中 {Math.floor(recordDuration / 60)}:{(recordDuration % 60).toString().padStart(2, "0")}</span>
           </div>

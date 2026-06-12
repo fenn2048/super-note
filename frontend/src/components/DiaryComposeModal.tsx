@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
 import ComposerCameraModal from "@/components/ComposerCameraModal";
+import { registerPlugin } from "@capacitor/core";
 
 interface DiaryComposeModalProps {
   isOpen: boolean;
@@ -177,11 +178,24 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     } else {
       // Start recording
       try {
-        if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
-          const { registerPlugin } = await import("@capacitor/core");
-          const AppPermissions = registerPlugin<any>("AppPermissions");
-          await AppPermissions.requestMicrophonePermission();
+        // On Android: request native mic permission through plugin first.
+        // Plugin now returns consistent { granted: bool }.
+        if (
+          typeof window !== "undefined" &&
+          (window as any).Capacitor?.getPlatform?.() === "android"
+        ) {
+          try {
+            const AppPermissions = registerPlugin<any>("AppPermissions");
+            const micRes = await AppPermissions.requestMicrophonePermission();
+            if (!micRes.granted) {
+              toast.error("需要麦克风权限才能使用录音功能，请在系统设置中授予权限");
+              return;
+            }
+          } catch (permErr) {
+            console.warn("Capacitor mic permission plugin unavailable:", permErr);
+          }
         }
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
@@ -223,7 +237,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         setRecording(true);
       } catch (err) {
         console.error("Failed to start recording:", err);
-        toast.error("无法访问录音设备");
+        toast.error("无法访问录音设备，请检查麦克风权限");
       }
     }
   };
@@ -390,11 +404,25 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   const startRecordingProcess = async () => {
     try {
-      if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
-        const { registerPlugin } = await import("@capacitor/core");
-        const AppPermissions = registerPlugin<any>("AppPermissions");
-        await AppPermissions.requestMicrophonePermission();
+      // On Android: request native mic permission through plugin first.
+      // Plugin now returns consistent { granted: bool }.
+      if (
+        typeof window !== "undefined" &&
+        (window as any).Capacitor?.getPlatform?.() === "android"
+      ) {
+        try {
+          const AppPermissions = registerPlugin<any>("AppPermissions");
+          const micRes = await AppPermissions.requestMicrophonePermission();
+          if (!micRes.granted) {
+            toast.error("需要麦克风权限才能使用录音功能，请在系统设置中授予权限");
+            setShowVoiceRecorder(false);
+            return;
+          }
+        } catch (permErr) {
+          console.warn("Capacitor mic permission plugin unavailable:", permErr);
+        }
       }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -417,7 +445,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         }
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         setTempAudioBlob(audioBlob);
-        stream.getTracks().forEach((track) => track.stop());
+        stream!.getTracks().forEach((track) => track.stop());
       };
 
       // Web Audio Analyser for real-time waveform visualization
