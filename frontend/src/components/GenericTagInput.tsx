@@ -195,7 +195,7 @@ export default function GenericTagInput<T extends TagLike>({
           onFocus={handleFocus}
           onBlur={handleBlur}
           disabled={isAdding}
-          className="flex-1 min-w-[60px] sm:min-w-[80px] bg-transparent text-[10px] sm:text-[11px] text-tx-primary outline-none placeholder:text-tx-tertiary"
+          className="flex-1 min-w-[60px] sm:min-w-[80px] bg-transparent text-[10px] sm:text-[11px] text-tx-primary outline-none placeholder:text-tx-tertiary no-focus-ring"
           placeholder={selectedTags.length === 0 ? (placeholder || t('tags.addTagPlaceholder')) : ""}
         />
       </div>

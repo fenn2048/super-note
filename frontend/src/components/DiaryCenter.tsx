@@ -609,7 +609,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             onPaste={handlePaste}
             placeholder={t("diary.placeholder")}
             rows={4}
-            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px]"
+            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px] no-focus-ring"
           />
         </div>
 
@@ -1863,7 +1863,7 @@ function DiaryEditor({
           onKeyDown={handleKeyDown}
           placeholder={t("diary.editPlaceholder")}
           rows={4}
-          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px]"
+          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px] no-focus-ring"
           autoFocus
         />
 
@@ -2216,7 +2216,7 @@ function FilterBar({
                     value={draftFrom}
                     max={draftTo || undefined}
                     onChange={(e) => setDraftFrom(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-lg bg-app-bg border border-app-border text-xs text-tx-primary outline-none focus:border-accent-primary/60"
+                    className="w-full px-2 py-1.5 rounded-lg bg-app-bg border border-app-border text-xs text-tx-primary outline-none no-focus-ring"
                   />
                 </div>
                 <div>
@@ -2228,7 +2228,7 @@ function FilterBar({
                     value={draftTo}
                     min={draftFrom || undefined}
                     onChange={(e) => setDraftTo(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-lg bg-app-bg border border-app-border text-xs text-tx-primary outline-none focus:border-accent-primary/60"
+                    className="w-full px-2 py-1.5 rounded-lg bg-app-bg border border-app-border text-xs text-tx-primary outline-none no-focus-ring"
                   />
                 </div>
               </div>
@@ -2581,7 +2581,7 @@ export default function DiaryCenter() {
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
             <Input
               placeholder={t('diary.searchPlaceholder') || "搜索说说..."}
-              className="pl-8 h-8 text-xs bg-app-bg border-app-border"
+              className="pl-8 h-8 text-xs bg-app-bg border-app-border no-focus-ring"
               value={diarySearchQuery}
               onChange={handleDiarySearchChange}
             />
@@ -2738,7 +2738,7 @@ export default function DiaryCenter() {
                     placeholder="搜索说说..."
                     value={diarySearchQuery}
                     onChange={handleDiarySearchChange}
-                    className="pl-8 pr-8 h-8 w-full rounded-full bg-app-hover border-none text-xs focus-visible:ring-1 focus-visible:ring-accent-primary"
+                    className="pl-8 pr-8 h-8 w-full rounded-full bg-app-hover border-none text-xs no-focus-ring"
                   />
                   {diarySearchQuery && (
                     <button

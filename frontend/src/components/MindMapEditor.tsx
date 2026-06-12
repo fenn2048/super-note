@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { MindMap, MindMapListItem, MindMapNode, MindMapData } from "@/types";
 import { cn } from "@/lib/utils";
+import { downloadBlob } from "@/lib/downloadFile";
 
 /* ===== 布局算法：计算树节点的 x,y 位置 ===== */
 interface LayoutNode {
@@ -873,12 +874,7 @@ export default function MindMapCenter() {
     const svgResult = buildExportSvgFromData(result.data);
     if (!svgResult) return;
     const blob = new Blob([svgResult.svgContent], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title || "mindmap"}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await downloadBlob(blob, `${title || "mindmap"}.svg`);
   }, [listContextMenu, loadMapData, buildExportSvgFromData]);
 
   const handleListDownloadPNG = useCallback(async () => {
@@ -902,14 +898,9 @@ export default function MindMapCenter() {
       ctx.scale(scale, scale);
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
-      canvas.toBlob((blob) => {
+      canvas.toBlob(async (blob) => {
         if (!blob) return;
-        const pngUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = pngUrl;
-        a.download = `${title || "mindmap"}.png`;
-        a.click();
-        URL.revokeObjectURL(pngUrl);
+        await downloadBlob(blob, `${title || "mindmap"}.png`);
       }, "image/png");
     };
     img.src = url;
@@ -1037,12 +1028,7 @@ export default function MindMapCenter() {
     parts.forEach((p) => { zipData.set(p, pos); pos += p.length; });
 
     const blob = new Blob([zipData], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title || "mindmap"}.xmind`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await downloadBlob(blob, `${title || "mindmap"}.xmind`);
   }, [listContextMenu, loadMapData, buildXmindContent]);
 
   // 自动居中

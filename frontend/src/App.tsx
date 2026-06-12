@@ -329,6 +329,10 @@ function AppLayout() {
   }, []);
 
   useEffect(() => {
+    setBarsVisible(true);
+  }, [state.viewMode, state.mobileView, showSettings]);
+
+  useEffect(() => {
     const handleDoubleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (
@@ -994,7 +998,7 @@ function AppLayout() {
         )}
       </div>
 
-      {showMobileTabBar && <MobileTabBar />}
+      {showMobileTabBar && <MobileTabBar visible={barsVisible} />}
 
       {showMobileFAB && barsVisible && !fabHiddenForce && (
         <MobileFAB
@@ -1191,22 +1195,10 @@ function MobileTopBar() {
   );
 }
 
-function MobileTabBar() {
+function MobileTabBar({ visible }: { visible: boolean }) {
   const { state } = useApp();
   const actions = useAppActions();
   const { t } = useTranslation();
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    const show = () => setVisible(true);
-    const hide = () => setVisible(false);
-    window.addEventListener("super:scroll-show-bars", show);
-    window.addEventListener("super:scroll-hide-bars", hide);
-    return () => {
-      window.removeEventListener("super:scroll-show-bars", show);
-      window.removeEventListener("super:scroll-hide-bars", hide);
-    };
-  }, []);
 
   const handleTabClick = (mode: ViewMode) => {
     actions.setViewMode(mode);

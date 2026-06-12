@@ -2836,3 +2836,17 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 .sleek-select-inline:hover {
   background-color: var(--color-hover) !important;
 }
+
+/* Disable macOS/default focus ring and keep border consistent */
+:root[data-skin="macos"] input.no-focus-ring:focus-visible,
+:root[data-skin="macos"] textarea.no-focus-ring:focus-visible,
+:root[data-skin="macos"] select.no-focus-ring:focus-visible,
+input.no-focus-ring:focus-visible,
+textarea.no-focus-ring:focus-visible,
+.no-focus-ring:focus-visible,
+.no-focus-ring:focus,
+.no-focus-ring:focus-within {
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: var(--color-border) !important;
+}

@@ -2564,12 +2564,12 @@ export default function NoteList() {
       {/* Mobile Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-app-border md:hidden relative z-40" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
         {mobileSearchOpen ? (
-          <div className="flex-1 flex items-center gap-2 h-9 px-2 bg-app-bg rounded-lg border border-app-border">
-            <Search size={16} className="text-tx-tertiary" />
+          <div className="flex-1 flex items-center gap-2 h-11 px-3 bg-app-subtle rounded-xl">
+            <Search size={18} className="text-tx-tertiary" />
             <input
               type="text"
               placeholder="搜索笔记..."
-              className="flex-1 min-w-0 bg-transparent border-none text-xs text-tx-primary focus:ring-0 placeholder:text-tx-tertiary p-0"
+              className="flex-1 min-w-0 bg-transparent border-none text-sm text-tx-primary focus:ring-0 placeholder:text-tx-tertiary p-0 no-focus-ring"
               value={mobileSearchText}
               onChange={(e) => {
                 setMobileSearchText(e.target.value);

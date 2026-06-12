@@ -12,6 +12,7 @@ import {
   readTags as _readTags,
   readNote as _readNote,
 } from "@/lib/offlineRead";
+import { downloadBlob } from "@/lib/downloadFile";
 
 // 服务器地址管理
 const SERVER_URL_KEY = "super-server-url";
@@ -2471,14 +2472,7 @@ export const api = {
       const fallbackTs = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const filename = m?.[1] || `super-note-${fallbackTs}.data`;
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await downloadBlob(blob, filename);
       return { filename, size: blob.size };
     },
 

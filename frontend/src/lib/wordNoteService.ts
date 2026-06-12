@@ -19,6 +19,7 @@
 import { api } from "./api";
 import { createBlankDocx, blankDocxFile, tiptapToIr, createDocx } from "@/office";
 import type { Note } from "@/types";
+import { downloadBlob } from "./downloadFile";
 import { generateJSON } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -354,15 +355,7 @@ export async function exportNoteAsDocx(
  */
 export function downloadDocxBlob(blob: Blob, filename: string): void {
   const safeName = /\.docx$/i.test(filename) ? filename : `${filename}.docx`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = safeName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // 给浏览器一点时间走下载握手再释放（直接 revoke 部分浏览器会取消下载）
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(blob, safeName);
 }
 
 // ===== 导入 Word 文档 =====

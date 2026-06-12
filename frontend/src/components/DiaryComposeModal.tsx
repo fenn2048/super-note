@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { useApp } from "@/store/AppContext";
+import { useApp, useAppActions } from "@/store/AppContext";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +18,7 @@ interface DiaryComposeModalProps {
 export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImages = [] }: DiaryComposeModalProps) {
   const { t } = useTranslation();
   const { state } = useApp();
+  const actions = useAppActions();
   const [text, setText] = useState("");
   const [mood, setMood] = useState("");
   const [showMoods, setShowMoods] = useState(false);
@@ -897,7 +898,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             setSelectionMode(false);
           }}
           placeholder="分享新鲜事..."
-          className="w-full flex-1 bg-transparent text-sm text-tx-primary placeholder:text-tx-tertiary border-none outline-none resize-none min-h-[150px] focus:ring-0"
+          className="w-full flex-1 bg-transparent text-sm text-tx-primary placeholder:text-tx-tertiary border-none outline-none resize-none min-h-[150px] focus:ring-0 no-focus-ring"
         />
 
         {/* 语音文件展示 */}
@@ -1099,35 +1100,72 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           </motion.div>
         )}
 
-        {showTags && state.tags.length > 0 && (
+        {showTags && (
           <motion.div
             initial={{ height: 0 }}
             animate={{ height: "auto" }}
             exit={{ height: 0 }}
             className="bg-app-surface border-t border-app-border overflow-hidden shrink-0"
           >
-            <div className="p-4 max-h-[200px] overflow-y-auto">
-              <h4 className="text-[10px] font-semibold text-tx-tertiary uppercase tracking-wider mb-2">选择说说标签</h4>
-              <div className="flex flex-wrap gap-2">
-                {state.tags.map((tag) => {
-                  const active = selectedTags.some((t) => t.id === tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      onClick={() => handleTagToggle(tag)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border",
-                        active
-                          ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 font-medium"
-                          : "bg-transparent text-tx-secondary border-app-border hover:border-tx-secondary"
-                      )}
-                    >
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
+            <div className="p-4 max-h-[250px] overflow-y-auto flex flex-col gap-3">
+              {/* 新建/添加标签输入框 */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="添加或新建标签..."
+                  className="flex-1 px-3 py-1.5 bg-app-bg border border-app-border rounded-lg text-xs text-tx-primary outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 no-focus-ring"
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const name = e.currentTarget.value.trim();
+                      if (!name) return;
+                      // 检查是否已存在
+                      const existing = state.tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+                      if (existing) {
+                        if (!selectedTags.some((t) => t.id === existing.id)) {
+                          setSelectedTags((prev) => [...prev, existing]);
+                        }
+                      } else {
+                        try {
+                          const newTag = await api.createTag({ name });
+                          setSelectedTags((prev) => [...prev, newTag]);
+                          const allTags = await api.getTags();
+                          actions.setTags(allTags);
+                        } catch (err) {
+                          console.error("Failed to create tag:", err);
+                        }
+                      }
+                      e.currentTarget.value = "";
+                    }
+                  }}
+                />
               </div>
+
+              <h4 className="text-[10px] font-semibold text-tx-tertiary uppercase tracking-wider">选择说说标签</h4>
+              {state.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {state.tags.map((tag) => {
+                    const active = selectedTags.some((t) => t.id === tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => handleTagToggle(tag)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border",
+                          active
+                            ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 font-medium"
+                            : "bg-transparent text-tx-secondary border-app-border hover:border-tx-secondary"
+                        )}
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-tx-tertiary py-1">暂无标签，请输入并按回车创建新标签</div>
+              )}
             </div>
           </motion.div>
         )}

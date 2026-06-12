@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { saveAs } from "file-saver";
+import { downloadBlob } from "./downloadFile";
 import TurndownService from "turndown";
 import i18n from "i18next";
 import { generateHTML } from "@tiptap/core";
@@ -1092,7 +1092,7 @@ export async function exportAllNotes(
 
     // 5. 触发下载
     const date = new Date().toISOString().slice(0, 10);
-    saveAs(blob, `super-note_backup_${date}.zip`);
+    downloadBlob(blob, `super-note_backup_${date}.zip`);
 
     // 若有图片下载失败，给用户一个非阻塞警告
     if (imgStats.failed > 0) {
@@ -1294,7 +1294,7 @@ export async function exportNotebook(
 
     const date = new Date().toISOString().slice(0, 10);
     const safeRoot = sanitizeFilename(notebookName);
-    saveAs(blob, `${safeRoot}_${date}.zip`);
+    downloadBlob(blob, `${safeRoot}_${date}.zip`);
     if (imgStats.failed > 0) {
       onProgress?.({
         phase: "error",
@@ -1379,10 +1379,10 @@ export async function exportSingleNote(
         compression: "DEFLATE",
         compressionOptions: { level: 6 },
       });
-      saveAs(blob, `${safeTitle}.zip`);
+      downloadBlob(blob, `${safeTitle}.zip`);
     } else {
       const blob = new Blob([fullContent], { type: "text/markdown;charset=utf-8" });
-      saveAs(blob, `${safeTitle}.md`);
+      downloadBlob(blob, `${safeTitle}.md`);
     }
     return true;
   } catch (error) {
@@ -1661,7 +1661,7 @@ export async function exportSingleNoteAsPDF(noteId: string): Promise<ExportPdfRe
     // —— Web 直接下载 PDF ——
     const blob = await renderPrintableHtmlToPdfBlob(docHtml);
     const filename = `${sanitizeFilename(note.title) || "note"}.pdf`;
-    saveAs(blob, filename);
+    downloadBlob(blob, filename);
     return { ok: true, mode: "web" };
   } catch (error) {
     console.error("导出 PDF 失败:", error);
@@ -1774,7 +1774,7 @@ export async function exportSingleNoteAsImage(noteId: string): Promise<boolean> 
       { type: "image/svg+xml;charset=utf-8" }
     );
     const safeTitle = sanitizeFilename(note.title);
-    saveAs(svgBlob, `${safeTitle}.svg`);
+    downloadBlob(svgBlob, `${safeTitle}.svg`);
     return true;
   } catch (error) {
     console.error("导出图片失败:", error);
