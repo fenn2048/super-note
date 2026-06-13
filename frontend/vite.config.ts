@@ -26,6 +26,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
+    entries: ["index.html"],
     esbuildOptions: {
       keepNames: true,
     },
@@ -76,6 +77,9 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+    watch: {
+      ignored: ["**/android/**", "**/ios/**"],
+    },
     // 接受来自手机 App（Capacitor WebView）跨 origin 的 HMR WebSocket 握手。
     // 手机侧的 `capacitor.config.ts#server.url` 会把 WebView 直接指向
     // `http://<电脑LAN_IP>:5173`，此时 host 就是 LAN IP。

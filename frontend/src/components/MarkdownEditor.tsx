@@ -1290,6 +1290,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         </div>
       )}
 
+      <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full relative">
       {/* 标题栏 */}
       <div className="px-4 md:px-8 pt-4 md:pt-6 pb-2">
         <input
@@ -1338,6 +1339,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           {tr("tiptap.words", { count: wordStats.words }) || `${wordStats.words} 词`}
         </span>
         <span className="ml-auto opacity-60">Markdown</span>
+      </div>
       </div>
 
       {/* 斜杠菜单浮层 */}

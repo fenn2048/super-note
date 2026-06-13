@@ -3629,6 +3629,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         />
       )}
 
+      <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full relative">
       {/* Title */}
       <div className="px-4 md:px-8 pt-4 md:pt-6 pb-0">
         <input
@@ -4030,6 +4031,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
             onClose={() => setTiptapMention(null)}
           />
         )}
+      </div>
       </div>
 
       {/* 附件内嵌预览：复用 AttachmentDetailDrawer

@@ -1339,6 +1339,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
 
   const isAdmin = currentUser?.role === "admin";
 
+  const isMobile = window.innerWidth < 768;
+
   const SETTING_TABS = [
     { id: "appearance" as const, label: t('settings.appearance'), icon: Palette },
     { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
@@ -1349,14 +1351,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
     ...(isAdmin ? [{ id: "workspaces" as const, label: t('settings.workspaces'), icon: Building2 }] : []),
-    // 「数据管理」面板：
-    //   - 管理员：展示三个一级 tab（个人空间 / 工作区 / 系统），包含跨用户/全库范围
-    //     的高危操作（备份、灾难恢复、工厂重置、SQLite 文件级导入导出等）；
-    //   - 普通用户：DataManager 内部只渲染"个人空间"scope 的导出/导入 —— 这是
-    //     用户对自己数据的基本自主权。是否可用再叠加后端下发的 feature flag
-    //     （personalExport/Import Enabled），由管理员集中控制。
-    //   组件内部也做了一层防御性闸门，防止用户从深链绕过这里直达 admin-only 区域。
-    { id: "data" as const, label: t('settings.dataManagement'), icon: Database },
+    // 「数据管理」面板：仅在非移动端展示，避免移动端进行超大压缩包高负荷解压与迁移
+    ...(!isMobile ? [{ id: "data" as const, label: t('settings.dataManagement'), icon: Database }] : []),
     // 「开发者」面板：仅管理员可见，承载运行时调试开关（如 files-list 查询日志）。
     // 普通用户根本看不到这一项，与后端的 admin-only 写入闸门双层防御。
     ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench }] : []),

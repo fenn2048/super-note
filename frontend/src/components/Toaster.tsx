@@ -27,7 +27,8 @@ export default function Toaster() {
 
   return createPortal(
     <div
-      className="pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2"
+      className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 w-[calc(100%-2rem)] md:w-auto md:max-w-[480px]"
+      style={{ top: "var(--toast-top, 1rem)" }}
       role="status"
       aria-live="polite"
     >
@@ -35,8 +36,8 @@ export default function Toaster() {
         <div
           key={it.id}
           className={cn(
-            "pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-lg shadow-lg",
-            "bg-app-elevated border text-sm text-tx-primary max-w-[480px]",
+            "pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-lg shadow-lg w-full",
+            "bg-app-elevated border text-sm text-tx-primary",
             "animate-in fade-in slide-in-from-top-2 duration-200",
             ACCENTS[it.type]
           )}

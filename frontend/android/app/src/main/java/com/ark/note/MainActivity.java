@@ -39,9 +39,18 @@ public class MainActivity extends BridgeActivity {
         // Request permissions
         checkAndRequestPermissions();
 
-        // Inject download bridge
+        // Inject download bridge and customize WebChromeClient for permissions
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
+            
+            this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
+                @Override
+                public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                    runOnUiThread(() -> {
+                        request.grant(request.getResources());
+                    });
+                }
+            });
         }
     }
 

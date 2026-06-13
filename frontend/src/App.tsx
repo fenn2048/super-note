@@ -41,7 +41,7 @@ import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification } from "@/hooks/useCapacitor";
+import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import CommandPalette from "@/components/common/CommandPalette";
@@ -507,9 +507,7 @@ function AppLayout() {
     if (isNativePlatform()) {
       const updateBadge = async () => {
         try {
-          const pkg = "@capawesome/capacitor-badge";
-          // @ts-ignore
-          const { Badge } = await import(/* @vite-ignore */ pkg);
+          const { Badge } = await import("@capawesome/capacitor-badge");
           const perm = await Badge.checkPermissions();
           if (perm.display !== "granted") {
             await Badge.requestPermissions();
@@ -693,6 +691,30 @@ function AppLayout() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [quickCreateNote]);
+
+  // 监听全局新建命令（通过 Cmd+K 弹窗派发）
+  useEffect(() => {
+    const onQuickNewNote = () => {
+      void quickCreateNote();
+    };
+    const onQuickNewDiary = () => {
+      setComposerInitialImages([]);
+      setShowDiaryComposer(true);
+    };
+    const onQuickNewTask = () => {
+      setShowTaskComposer(true);
+    };
+
+    window.addEventListener("super:quick-new-note", onQuickNewNote);
+    window.addEventListener("super:quick-new-diary", onQuickNewDiary);
+    window.addEventListener("super:quick-new-task", onQuickNewTask);
+
+    return () => {
+      window.removeEventListener("super:quick-new-note", onQuickNewNote);
+      window.removeEventListener("super:quick-new-diary", onQuickNewDiary);
+      window.removeEventListener("super:quick-new-task", onQuickNewTask);
+    };
   }, [quickCreateNote]);
 
   // ── 工作区切换：清空当前会话态，回到空态页 ──────────────────────────
@@ -897,7 +919,7 @@ function AppLayout() {
       {/* ===== 主内容区 ===== */}
       <div className={cn(
         "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
-        showMobileTabBar && barsVisible ? "pb-[calc(64px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
+        showMobileTabBar ? "pb-[calc(64px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
       )}>
         {isMindMapView ? (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -1129,7 +1151,7 @@ function MobileTopBar() {
   return (
     <header
       className={cn(
-        "flex items-center px-4 py-3 border-b border-app-border bg-app-surface/50 md:hidden transition-all duration-300 ease-in-out overflow-hidden shrink-0",
+        "flex items-center px-4 py-3 border-b border-app-border/40 bg-app-surface/80 backdrop-blur-lg md:hidden transition-all duration-300 ease-in-out overflow-hidden shrink-0",
         visible ? "min-h-[56px] h-auto opacity-100 mt-0" : "h-0 min-h-0 opacity-0 -mt-14 pointer-events-none"
       )}
       style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}
@@ -1203,6 +1225,7 @@ function MobileTabBar({ visible }: { visible: boolean }) {
   const { t } = useTranslation();
 
   const handleTabClick = (mode: ViewMode) => {
+    haptic.light();
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
     actions.setMobileView("list");
@@ -1249,7 +1272,7 @@ function MobileTabBar({ visible }: { visible: boolean }) {
   return (
     <div 
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-35 md:hidden bg-app-surface/80 backdrop-blur-md border-t border-app-border flex items-center justify-around transition-all duration-300 ease-in-out",
+        "fixed bottom-0 left-0 right-0 z-35 md:hidden bg-app-surface/80 backdrop-blur-lg border-t border-app-border/40 flex items-center justify-around transition-all duration-300 ease-in-out",
         visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
       )}
       style={{ 
@@ -1345,6 +1368,7 @@ function MobileFAB({
             >
               <button
                 onClick={() => {
+                  haptic.light();
                   setOpen(false);
                   onNewNote();
                 }}
@@ -1357,6 +1381,7 @@ function MobileFAB({
               </button>
               <button
                 onClick={() => {
+                  haptic.light();
                   setOpen(false);
                   onNewDiary();
                 }}
@@ -1369,6 +1394,7 @@ function MobileFAB({
               </button>
               <button
                 onClick={() => {
+                  haptic.light();
                   setOpen(false);
                   onNewTask();
                 }}
@@ -1381,6 +1407,7 @@ function MobileFAB({
               </button>
               <button
                 onClick={() => {
+                  haptic.light();
                   setOpen(false);
                   onCameraClick();
                 }}
@@ -1396,7 +1423,10 @@ function MobileFAB({
         </AnimatePresence>
 
         <motion.button
-          onClick={() => setOpen(!open)}
+          onClick={() => {
+            haptic.light();
+            setOpen(!open);
+          }}
           whileTap={{ scale: 0.9 }}
           whileDrag={{ scale: 1.1 }}
           transition={{ type: "spring", stiffness: 400, damping: 15 }}

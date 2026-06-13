@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check } from "lucide-react";
+import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -7,7 +7,9 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
 import ComposerCameraModal from "@/components/ComposerCameraModal";
+import MobileCameraModal from "@/components/MobileCameraModal";
 import { registerPlugin } from "@capacitor/core";
+import { haptic } from "@/hooks/useCapacitor";
 
 interface DiaryComposeModalProps {
   isOpen: boolean;
@@ -31,12 +33,37 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   });
   const [posting, setPosting] = useState(false);
 
+  const handleAddTag = useCallback(async (tagName: string) => {
+    haptic.light();
+    const existing = state.tags.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
+    if (existing) {
+      if (selectedTags.some((t) => t.id === existing.id)) {
+        setSelectedTags((prev) => prev.filter((t) => t.id !== existing.id));
+      } else {
+        setSelectedTags((prev) => [...prev, existing]);
+      }
+    } else {
+      try {
+        const newTag = await api.createTag({ name: tagName });
+        setSelectedTags((prev) => [...prev, newTag]);
+        const allTags = await api.getTags();
+        actions.setTags(allTags);
+      } catch (err) {
+        console.error("Failed to create tag:", err);
+      }
+    }
+  }, [state.tags, selectedTags, actions]);
+
   // Mobile viewport stickiness
   const isMobile = window.innerWidth < 768;
   const [viewportHeight, setViewportHeight] = useState<number | string>("100%");
   const [showCamera, setShowCamera] = useState(false);
+  const [showPhotoCamera, setShowPhotoCamera] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [tempAudioBlob, setTempAudioBlob] = useState<Blob | null>(null);
+  const [enableTranscription, setEnableTranscription] = useState(true);
+  const [history, setHistory] = useState<string[]>([]);
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
 
   // Images Grid (说说支持拍照上传图片，支持图片九宫格展示)
   const [images, setImages] = useState<{ id: string; url: string; isVideo?: boolean }[]>(initialImages);
@@ -101,6 +128,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 100);
+    } else {
+      setSelectionMode(false);
+      setMenuCoords(null);
+      setHistory([]);
     }
   }, [isOpen]);
 
@@ -173,6 +204,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       // Stop recording
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         mediaRecorderRef.current.stop();
+        haptic.medium();
       }
       setRecording(false);
     } else {
@@ -234,6 +266,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         };
 
         mediaRecorder.start(200);
+        haptic.light();
         setRecording(true);
       } catch (err) {
         console.error("Failed to start recording:", err);
@@ -294,7 +327,29 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     }
   };
 
+  const handlePhotoCapture = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const res = await api.diaryImages.upload(file);
+      setImages((prev) => [
+        ...prev,
+        {
+          id: res.id,
+          url: api.diaryImages.urlFor(res.id),
+          isVideo: false,
+        },
+      ]);
+      toast.success("图片拍照上传成功");
+    } catch (err: any) {
+      toast.error(err?.message || "图片拍照上传失败");
+    } finally {
+      setUploadingImage(false);
+      setShowPhotoCamera(false);
+    }
+  };
+
   const startSpeechRecognition = () => {
+    if (!enableTranscription) return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn("Speech recognition not supported in this browser.");
@@ -403,6 +458,11 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   };
 
   const startRecordingProcess = async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error("录音功能要求安全上下文 (HTTPS 或 localhost)，请通过 USB 隧道 (localhost) 访问以授权麦克风");
+      setShowVoiceRecorder(false);
+      return;
+    }
     try {
       // On Android: request native mic permission through plugin first.
       // Plugin now returns consistent { granted: bool }.
@@ -483,6 +543,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       }
 
       mediaRecorder.start(200);
+      haptic.light();
       setRecording(true);
       setTranscriptionText("");
       accumulatedTranscriptRef.current = "";
@@ -530,9 +591,11 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         mediaRecorderRef.current.stop();
       }
+      haptic.medium();
       setRecording(false);
       setIsPaused(false);
     } else {
+      haptic.light();
       setTempAudioBlob(null);
       setRecordDuration(0);
       setIsPaused(false);
@@ -544,6 +607,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     if (!recording) return;
     const recorder = mediaRecorderRef.current;
     if (recorder) {
+      haptic.light();
       if (isPaused) {
         recorder.resume();
         setIsPaused(false);
@@ -580,7 +644,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   const handleFinishVoiceRecord = async () => {
     stopSpeechRecognition();
-    if (transcriptionText.trim()) {
+    if (enableTranscription && transcriptionText.trim()) {
       setText((prev) => {
         const spacer = prev ? "\n" : "";
         return prev + spacer + transcriptionText.trim();
@@ -627,6 +691,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           await uploadBlob(audioBlob, currentDuration);
         };
         mediaRecorderRef.current.stop();
+        haptic.medium();
         setRecording(false);
       } else {
         setVoiceUploading(false);
@@ -729,6 +794,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   };
 
   const handleTagToggle = (tag: any) => {
+    haptic.light();
     if (selectedTags.some((t) => t.id === tag.id)) {
       setSelectedTags((prev) => prev.filter((t) => t.id !== tag.id));
     } else {
@@ -737,6 +803,61 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   };
 
   // ----------------- Custom text selection controls -----------------
+  const pushHistory = (currentText: string) => {
+    setHistory((prev) => {
+      if (prev.length > 0 && prev[prev.length - 1] === currentText) return prev;
+      const next = [...prev, currentText];
+      if (next.length > 20) next.shift();
+      return next;
+    });
+  };
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const prevText = history[history.length - 1];
+    setHistory((prev) => prev.slice(0, prev.length - 1));
+    setText(prevText);
+    toast.success("已恢复上一步修改");
+  };
+
+  const handleClearAll = () => {
+    if (!text.trim()) return;
+    const confirmDelete = window.confirm("确定要清空编辑区域的所有内容吗？此操作可以使用恢复按钮撤销。");
+    if (confirmDelete) {
+      pushHistory(text);
+      setText("");
+      toast.success("内容已清空");
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    pushHistory(text);
+    const nextText = text.slice(0, selStart) + text.slice(selEnd);
+    setText(nextText);
+    setSelEnd(selStart);
+    setSelectionMode(false);
+    setMenuCoords(null);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(selStart, selStart);
+    }, 50);
+  };
+
+  const handleToggleTranscription = () => {
+    haptic.light();
+    const nextVal = !enableTranscription;
+    setEnableTranscription(nextVal);
+    if (nextVal) {
+      if (recording && !isPaused) {
+        startSpeechRecognition();
+      }
+    } else {
+      stopSpeechRecognition();
+    }
+  };
+
   // Handle text selection change via standard selection API (for long press)
   const handleTextareaSelectionChange = () => {
     const el = textareaRef.current;
@@ -748,6 +869,37 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       setSelStart(start);
       setSelEnd(end);
       setSelectionMode(true);
+      
+      // Calculate selection coordinates for WeChat-style menu
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect && rect.top > 0 && rect.left > 0) {
+            const menuWidth = 240;
+            const margin = 16;
+            const left = Math.max(
+              menuWidth / 2 + margin,
+              Math.min(window.innerWidth - (menuWidth / 2 + margin), rect.left + rect.width / 2)
+            );
+            setMenuCoords({
+              top: rect.top - 8,
+              left: left
+            });
+          } else {
+            // Fallback
+            const textareaRect = el.getBoundingClientRect();
+            setMenuCoords({
+              top: textareaRect.top + 20,
+              left: window.innerWidth / 2
+            });
+          }
+        }
+      }, 50);
+    } else {
+      setSelectionMode(false);
+      setMenuCoords(null);
     }
   };
 
@@ -756,13 +908,11 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     const el = textareaRef.current;
     if (!el || text.length === 0) return;
 
-    // Trigger selection mode
     setSelectionMode(true);
     const start = el.selectionStart || 0;
     const end = el.selectionEnd || 0;
 
     if (start === end) {
-      // Select a small word/range around cursor
       const left = Math.max(0, start - 2);
       const right = Math.min(text.length, start + 2);
       setSelStart(left);
@@ -772,28 +922,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       setSelStart(start);
       setSelEnd(end);
     }
-  };
-
-  const sliderTrackRef = useRef<HTMLDivElement>(null);
-
-  const handleLeftSliderMove = (e: React.TouchEvent) => {
-    if (!sliderTrackRef.current || text.length === 0) return;
-    const rect = sliderTrackRef.current.getBoundingClientRect();
-    const touch = e.touches[0];
-    const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-    const idx = Math.min(selEnd, Math.round(pct * text.length));
-    setSelStart(idx);
-    textareaRef.current?.setSelectionRange(idx, selEnd);
-  };
-
-  const handleRightSliderMove = (e: React.TouchEvent) => {
-    if (!sliderTrackRef.current || text.length === 0) return;
-    const rect = sliderTrackRef.current.getBoundingClientRect();
-    const touch = e.touches[0];
-    const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-    const idx = Math.max(selStart, Math.round(pct * text.length));
-    setSelEnd(idx);
-    textareaRef.current?.setSelectionRange(selStart, idx);
+    
+    setTimeout(() => {
+      handleTextareaSelectionChange();
+    }, 50);
   };
 
   // Text selection actions
@@ -818,10 +950,12 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     const selected = text.slice(selStart, selEnd);
     if (!selected) return;
     navigator.clipboard.writeText(selected).then(() => {
+      pushHistory(text);
       const nextText = text.slice(0, selStart) + text.slice(selEnd);
       setText(nextText);
       setSelEnd(selStart);
       setSelectionMode(false);
+      setMenuCoords(null);
       toast.success("已剪切");
     });
   };
@@ -830,6 +964,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     const el = textareaRef.current;
     if (!el) return;
     navigator.clipboard.readText().then((clipText) => {
+      pushHistory(text);
       const nextText = text.slice(0, selStart) + clipText + text.slice(selEnd);
       setText(nextText);
       const nextPos = selStart + clipText.length;
@@ -838,6 +973,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         el.setSelectionRange(nextPos, nextPos);
       }, 50);
       setSelectionMode(false);
+      setMenuCoords(null);
     }).catch(() => {
       toast.error("无法读取剪贴板");
     });
@@ -861,6 +997,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         voice: pendingVoice,
         tagIds: selectedTags.map((t) => t.id),
       });
+      haptic.success();
       
       toast.success("说说发布成功！");
       // Reset
@@ -928,6 +1065,35 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           placeholder="分享新鲜事..."
           className="w-full flex-1 bg-transparent text-sm text-tx-primary placeholder:text-tx-tertiary border-none outline-none resize-none min-h-[150px] focus:ring-0 no-focus-ring"
         />
+
+        {/* 常用标签推荐 */}
+        <div className="flex flex-wrap items-center gap-1.5 px-1 py-1 shrink-0">
+          <span className="text-[11px] text-tx-tertiary mr-1 font-medium">推荐标签:</span>
+          {((state.tags && state.tags.length > 0) ? state.tags.slice(0, 5) : [
+            { id: "1", name: "日记" },
+            { id: "2", name: "想法" },
+            { id: "3", name: "工作" },
+            { id: "4", name: "学习" },
+            { id: "5", name: "生活" }
+          ]).map((tag) => {
+            const isSelected = selectedTags.some((t) => t.name.toLowerCase() === tag.name.toLowerCase());
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => handleAddTag(tag.name)}
+                className={cn(
+                  "text-[11px] px-2.5 py-0.5 rounded-full transition-all border",
+                  isSelected
+                    ? "bg-accent-primary/10 border-accent-primary/30 text-accent-primary font-medium"
+                    : "bg-app-hover border-transparent hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary"
+                )}
+              >
+                #{tag.name}
+              </button>
+            );
+          })}
+        </div>
 
         {/* 语音文件展示 */}
         {voiceUploading && (
@@ -1029,55 +1195,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         onChange={handleUploadImage}
       />
 
-      {/* 左右滑块与浮动选择菜单 */}
-      {selectionMode && text.length > 0 && (
-        <div className="p-3 bg-app-surface border-t border-app-border flex flex-col gap-2 shrink-0">
-          {/* 浮动操作菜单 */}
-          <div className="flex justify-around items-center bg-app-hover p-1 rounded-xl">
-            <button onClick={handleSelectAll} className="text-xs px-3 py-1.5 font-semibold text-tx-secondary hover:text-tx-primary">全选</button>
-            <div className="w-px h-4 bg-app-border" />
-            <button onClick={handleCopy} className="text-xs px-3 py-1.5 font-semibold text-tx-secondary hover:text-tx-primary">复制</button>
-            <div className="w-px h-4 bg-app-border" />
-            <button onClick={handleCut} className="text-xs px-3 py-1.5 font-semibold text-tx-secondary hover:text-tx-primary">剪切</button>
-            <div className="w-px h-4 bg-app-border" />
-            <button onClick={handlePaste} className="text-xs px-3 py-1.5 font-semibold text-tx-secondary hover:text-tx-primary">粘贴</button>
-            <div className="w-px h-4 bg-app-border" />
-            <button onClick={() => setSelectionMode(false)} className="text-xs px-3 py-1.5 font-semibold text-red-500">取消</button>
-          </div>
-          {/* 滑块轨道 */}
-          <div className="flex items-center gap-4 px-2 py-2">
-            <span className="text-[10px] text-tx-tertiary">滑块选取</span>
-            <div ref={sliderTrackRef} className="flex-1 h-6 relative flex items-center select-none touch-none">
-              {/* 轨道线 */}
-              <div className="w-full h-1 rounded bg-app-border/70" />
-              {/* 高亮部分 */}
-              <div
-                className="absolute h-1 rounded bg-accent-primary"
-                style={{
-                  left: `${(selStart / text.length) * 100}%`,
-                  width: `${((selEnd - selStart) / text.length) * 100}%`
-                }}
-              />
-              {/* 左滑块 */}
-              <div
-                onTouchMove={handleLeftSliderMove}
-                className="absolute w-5 h-5 bg-accent-primary border-2 border-white rounded-full shadow-lg cursor-pointer -translate-x-1/2 flex items-center justify-center text-[9px] text-white font-bold"
-                style={{ left: `${(selStart / text.length) * 100}%` }}
-              >
-                L
-              </div>
-              {/* 右滑块 */}
-              <div
-                onTouchMove={handleRightSliderMove}
-                className="absolute w-5 h-5 bg-accent-primary border-2 border-white rounded-full shadow-lg cursor-pointer -translate-x-1/2 flex items-center justify-center text-[9px] text-white font-bold"
-                style={{ left: `${(selEnd / text.length) * 100}%` }}
-              >
-                R
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* 心情表情选择和标签区域 */}
       <AnimatePresence>
@@ -1223,53 +1341,82 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
       {/* 底部操作工具栏 (紧挨着键盘上方右侧，屏幕底端对齐) */}
       <div className="p-3 bg-app-surface border-t border-app-border flex items-center justify-between shrink-0" style={{ paddingBottom: "calc(var(--safe-area-bottom) + 8px)" }}>
-        {/* 左侧：可见性权限 */}
-        {getCurrentWorkspace() && getCurrentWorkspace() !== "personal" && (
-          <button
-            onClick={() => setVisibility((v) => (v === "PRIVATE" ? "PUBLIC" : "PRIVATE"))}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border border-app-border/60 bg-app-surface",
-              visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
-            )}
-          >
-            {visibility === "PUBLIC" ? (
-              <>
-                <Globe size={13} />
-                <span>公开可见</span>
-              </>
-            ) : (
-              <>
-                <Lock size={13} />
-                <span>自己可见</span>
-              </>
-            )}
-          </button>
-        )}
-        {!getCurrentWorkspace() || getCurrentWorkspace() === "personal" ? <div /> : null}
+        {/* 左侧：可见性权限 + 清空与恢复 */}
+        <div className="flex items-center gap-1">
+          {getCurrentWorkspace() && getCurrentWorkspace() !== "personal" && (
+            <button
+              onClick={() => setVisibility((v) => (v === "PRIVATE" ? "PUBLIC" : "PRIVATE"))}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs transition-all border border-app-border/60 bg-app-surface shrink-0",
+                visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
+              )}
+            >
+              {visibility === "PUBLIC" ? (
+                <>
+                  <Globe size={13} />
+                  <span>公开可见</span>
+                </>
+              ) : (
+                <>
+                  <Lock size={13} />
+                  <span>自己可见</span>
+                </>
+              )}
+            </button>
+          )}
 
-        {/* 右侧：标签、表情/心情、录音、拍照/上传 */}
-        <div className="flex items-center gap-2">
-          {/* 照片按钮 */}
+          {text.trim().length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="p-2 text-tx-secondary hover:text-red-500 rounded-lg hover:bg-app-hover transition-colors shrink-0"
+              title="清空内容"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+
+          {history.length > 0 && (
+            <button
+              onClick={handleUndo}
+              className="p-2 text-tx-secondary hover:text-accent-primary rounded-lg hover:bg-app-hover transition-colors shrink-0"
+              title="恢复上一步"
+            >
+              <Undo size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* 右侧：相册、拍照、录像、标签、心情表情、录音 */}
+        <div className="flex items-center gap-1">
+          {/* 相册按钮 */}
           <button
             onClick={() => imageInputRef.current?.click()}
             disabled={images.length >= 9}
             className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
-            title="添加图片"
+            title="相册导入"
           >
-            <span className="text-base">📷</span>
+            <ImageIcon size={18} />
           </button>
 
-          {/* 拍照按钮 (仅在移动端展示) */}
-          {isMobile && (
-            <button
-              onClick={() => setShowCamera(true)}
-              disabled={images.length >= 9}
-              className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
-              title="拍照/录像"
-            >
-              <Camera size={18} />
-            </button>
-          )}
+          {/* 拍照按钮 */}
+          <button
+            onClick={() => setShowPhotoCamera(true)}
+            disabled={images.length >= 9}
+            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
+            title="拍摄照片"
+          >
+            <Camera size={18} />
+          </button>
+
+          {/* 录像按钮 */}
+          <button
+            onClick={() => setShowCamera(true)}
+            disabled={images.length >= 9}
+            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
+            title="录制视频"
+          >
+            <Video size={18} />
+          </button>
 
           {/* 标签按钮 */}
           <button
@@ -1321,6 +1468,13 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         </div>
       </div>
 
+      {/* 拍照弹窗 */}
+      <MobileCameraModal
+        isOpen={showPhotoCamera}
+        onClose={() => setShowPhotoCamera(false)}
+        onCapture={handlePhotoCapture}
+      />
+
       {/* 拍照录像弹窗 */}
       <ComposerCameraModal
         isOpen={showCamera}
@@ -1328,54 +1482,100 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         onComplete={handleCameraComplete}
       />
 
+      {/* 微信长按文字选中浮动菜单 */}
+      {selectionMode && menuCoords && (
+        <div
+          className="fixed z-[10000] -translate-x-1/2 -translate-y-full animate-in fade-in zoom-in-95 duration-100 ease-out pointer-events-auto"
+          style={{
+            top: `${menuCoords.top}px`,
+            left: `${menuCoords.left}px`,
+          }}
+        >
+          {/* 气泡主体 */}
+          <div className="flex items-center bg-zinc-900/95 text-white text-[11px] rounded-xl shadow-xl border border-zinc-800 divide-x divide-zinc-800/60 overflow-hidden backdrop-blur-md px-1 py-0.5 select-none">
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSelectAll(); }}
+              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+            >
+              全选
+            </button>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopy(); }}
+              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+            >
+              复制
+            </button>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCut(); }}
+              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+            >
+              剪切
+            </button>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePaste(); }}
+              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+            >
+              粘贴
+            </button>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteSelected(); }}
+              className="px-2.5 py-2 font-medium text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors whitespace-nowrap active:scale-95"
+            >
+              删除
+            </button>
+          </div>
+          {/* 底部三角形小指针 */}
+          <div className="w-2 h-2 bg-zinc-900 rotate-45 border-r border-b border-zinc-800 absolute left-1/2 -translate-x-1/2 -bottom-[4px]" />
+        </div>
+      )}
+
+
       {/* 全屏录音遮罩 */}
       {showVoiceRecorder && (
-        <div className="fixed inset-0 z-[80] bg-app-bg flex flex-col justify-between p-6 overflow-hidden">
+        <div className="fixed inset-0 z-[80] bg-gradient-to-b from-zinc-900 via-zinc-950 to-black text-white flex flex-col justify-between p-6 overflow-hidden">
           {/* 顶栏 */}
           <div className="flex items-center justify-between" style={{ paddingTop: "var(--safe-area-top)" }}>
             <button
               onClick={handleCancelVoiceRecord}
-              className="p-2 rounded-full bg-app-hover text-tx-secondary active:scale-95"
+              className="p-2 rounded-full bg-white/5 border border-white/10 text-zinc-400 hover:text-white active:scale-95 transition-colors"
             >
               <X size={20} />
             </button>
-            <span className="text-sm font-semibold text-tx-primary">录音说说</span>
-            <div className="w-9" />
+            <span className="text-sm font-semibold tracking-wider text-zinc-200">录音说说</span>
+            <button
+              onClick={handleToggleTranscription}
+              className={cn(
+                "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 shadow-sm",
+                enableTranscription
+                  ? "bg-accent-primary/25 border-accent-primary/40 text-violet-300"
+                  : "bg-white/5 border-white/10 text-zinc-500"
+              )}
+            >
+              {enableTranscription ? "转文字: 开" : "转文字: 关"}
+            </button>
           </div>
 
           {/* 中间麦克风 (Area 1 - Waveform + Mic status) */}
           <div className="flex-1 flex flex-col items-center justify-center space-y-8 min-h-0">
             {/* Live Transcription Box */}
-            <div className="relative w-full max-w-sm flex-1 min-h-[160px] max-h-[32vh] bg-app-surface/50 border border-app-border/80 rounded-2xl p-4 flex flex-col overflow-hidden shadow-inner">
+            <div className="relative w-full max-w-sm md:max-w-md flex-1 min-h-[260px] max-h-[45vh] bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-4.5 flex flex-col overflow-hidden shadow-2xl">
               <div 
                 ref={transcriptionScrollRef}
-                className="flex-1 overflow-y-auto pr-8 space-y-1.5 scroll-smooth"
+                className="flex-1 overflow-y-auto pr-2 space-y-1.5 scroll-smooth"
               >
                 {transcriptionText ? (
-                  <p className="text-sm font-semibold text-tx-primary leading-relaxed whitespace-pre-wrap text-left">
+                  <p className="text-sm font-semibold text-zinc-200 leading-relaxed whitespace-pre-wrap text-left">
                     {transcriptionText}
                   </p>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-2">
-                    <Mic className="text-tx-tertiary/50 animate-pulse" size={22} />
-                    <p className="text-xs text-tx-tertiary italic text-center">
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500">
+                    <Mic className="text-zinc-600/50 animate-pulse" size={22} />
+                    <p className="text-xs text-zinc-500 italic text-center">
                       {recording && !isPaused ? "开始说话，实时转文字将在此处显示..." : "等待说话..."}
                     </p>
                   </div>
                 )}
               </div>
-              
-              {/* Copy Button on the middle-right side of the overlay / box */}
-              {transcriptionText && (
-                <button
-                  type="button"
-                  onClick={handleCopyTranscription}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-4 rounded-xl bg-accent-primary text-white text-[10px] font-bold shadow-md hover:bg-accent-primary/95 active:scale-95 transition-all flex flex-col items-center justify-center"
-                  style={{ writingMode: "vertical-rl", letterSpacing: "2px" }}
-                >
-                  复制
-                </button>
-              )}
             </div>
 
             <div className="relative flex items-center justify-center">
@@ -1383,16 +1583,15 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
                 <motion.div
                   animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0.1, 0.5] }}
                   transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                  className="absolute w-32 h-32 rounded-full"
-                  style={{ backgroundColor: "var(--color-accent-primary)" }}
+                  className="absolute w-32 h-32 rounded-full bg-accent-primary/20 blur-xl"
                 />
               )}
               <div
-                className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-lg"
+                className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl z-10 transition-all duration-300"
                 style={{
-                  backgroundColor: recording && !isPaused ? "var(--color-accent-primary)" : "var(--app-surface)",
-                  border: "3px solid var(--color-accent-primary)",
-                  color: recording && !isPaused ? "white" : "var(--color-accent-primary)"
+                  backgroundColor: recording && !isPaused ? "var(--color-accent-primary)" : "rgba(255,255,255,0.05)",
+                  border: "2px solid rgba(255,255,255,0.1)",
+                  color: "white"
                 }}
               >
                 {recording && !isPaused ? (
@@ -1416,10 +1615,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             </div>
 
             <div className="text-center space-y-2">
-              <span className="text-2xl font-bold text-tx-primary font-mono">
+              <span className="text-3xl font-bold text-zinc-100 tracking-wide font-mono">
                 {Math.floor(recordDuration / 60).toString().padStart(2, "0")}:{(recordDuration % 60).toString().padStart(2, "0")}
               </span>
-              <p className="text-xs text-tx-secondary">
+              <p className="text-xs text-zinc-400">
                 {isPaused ? "录音已暂停" : recording ? "正在录音，点击下方按钮暂停或完成" : "已停止，点击下方完成保存"}
               </p>
             </div>
@@ -1430,7 +1629,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             {/* 取消按钮 */}
             <button
               onClick={handleCancelVoiceRecord}
-              className="w-14 h-14 rounded-full border border-app-border bg-app-surface text-tx-secondary flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-sm hover:bg-app-hover"
+              className="w-14 h-14 rounded-full border border-white/10 bg-white/5 text-zinc-400 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg hover:bg-white/10 hover:text-white"
             >
               <X size={18} className="mb-0.5" />
               <span>取消</span>
@@ -1441,10 +1640,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
               onClick={handleTogglePauseVoiceRecord}
               disabled={!recording}
               className={cn(
-                "w-16 h-16 rounded-full flex flex-col items-center justify-center active:scale-95 transition-all text-xs font-bold shadow-md disabled:opacity-40 disabled:pointer-events-none",
+                "w-16 h-16 rounded-full flex flex-col items-center justify-center active:scale-95 transition-all text-xs font-bold shadow-lg disabled:opacity-40 disabled:pointer-events-none",
                 isPaused
                   ? "bg-accent-primary text-white"
-                  : "bg-app-surface border border-accent-primary text-accent-primary"
+                  : "bg-white/5 border border-white/15 text-zinc-200 hover:bg-white/10"
               )}
             >
               {isPaused ? (
@@ -1464,7 +1663,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             <button
               onClick={handleFinishVoiceRecord}
               disabled={recordDuration === 0 && !recording}
-              className="w-14 h-14 rounded-full text-white bg-accent-primary hover:bg-accent-primary/95 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-md disabled:opacity-40 disabled:pointer-events-none"
+              className="w-14 h-14 rounded-full text-white bg-accent-primary hover:bg-accent-primary/90 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg disabled:opacity-40 disabled:pointer-events-none"
             >
               <Check size={18} className="mb-0.5" />
               <span>完成</span>

@@ -1,5 +1,5 @@
 /**
- * CommandPalette —— Cmd-K 全局搜索弹窗
+ * CommandPalette —— Cmd-K 全局搜索与命令控制弹窗
  * ----------------------------------------------------------------------------
  * 为什么不用 Sidebar 搜索框？
  *   - Sidebar 搜索把结果灌回 NoteList 的"search 视图"，是 **持久化浏览** 语义；
@@ -12,30 +12,52 @@
  *   2) Dock 右键 "搜索笔记"（dock:search）
  *   3) 键盘 Cmd/Ctrl+K（本组件自己监听 window keydown）
  *
- * 实现选择：
- *   - Portal 到 document.body，不被父级 overflow/transform 牵连；
- *   - 搜索输入 debounce 200ms，避免每键一次 HTTP；
- *   - 空查询不请求接口；
- *   - 键盘：Up/Down 选择、Enter 跳转、Esc 关闭；鼠标 hover 同步高亮；
- *   - 点击结果或 Enter → `api.getNote(id)` 取详情 → `actions.setActiveNote`，
- *     与 Sidebar 搜索命中同一条数据通路，保证打开后编辑器正常渲染；
- *   - 面板尺寸与 SettingsModal 保持一致的"上偏移居中"定位（HIG 命令面板惯例）。
+ * 新增升级功能：
+ *   - 支持静态/系统级别指令，整合至单列表导航 (DisplayItems)；
+ *   - 支持一键快捷新建笔记、说说、待办（触发 App 顶层事件）；
+ *   - 支持一键切换明暗主题 (next-themes) 和外观皮肤 (useSkin)；
+ *   - 列表键盘及鼠标高亮无缝适配。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Search as SearchIcon, FileText, Loader2 } from "lucide-react";
+import {
+  Search as SearchIcon,
+  FileText,
+  Loader2,
+  NotebookPen,
+  ListTodo,
+  Home,
+  Briefcase,
+  Bell,
+  Settings,
+  Palette,
+  Moon,
+  Sun,
+  Sidebar as SidebarIcon
+} from "lucide-react";
 import { useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
 import type { SearchResult } from "@/types";
+import { useSkin } from "@/hooks/useSkin";
+import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 
 export interface CommandPaletteProps {
-  /** 由外部控制开合；App 层一个 useState 即可 */
   open: boolean;
   onClose: () => void;
 }
 
-/** 极简高亮：把命中词用 <mark> 包裹。只做首个不区分大小写的匹配，避免 XSS 做纯字符串分段。 */
+interface CommandItem {
+  id: string;
+  type: "command";
+  title: string;
+  subtitle?: string;
+  shortcut?: string;
+  icon: React.ComponentType<any>;
+  handler: () => void;
+}
+
 function highlight(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
   const i = text.toLowerCase().indexOf(query.toLowerCase());
@@ -53,6 +75,9 @@ function highlight(text: string, query: string): React.ReactNode {
 
 export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const actions = useAppActions();
+  const { setSkin } = useSkin();
+  const { theme, setTheme } = useTheme();
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,13 +88,200 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 全局命令列表定义
+  const commands = useMemo<CommandItem[]>(() => {
+    return [
+      {
+        id: "new-note",
+        type: "command",
+        title: "新建笔记",
+        subtitle: "在当前选中的笔记本下快速创建一篇富文本笔记",
+        shortcut: "Alt+N",
+        icon: FileText,
+        handler: () => {
+          window.dispatchEvent(new CustomEvent("super:quick-new-note"));
+        },
+      },
+      {
+        id: "new-diary",
+        type: "command",
+        title: "新建说说",
+        subtitle: "发布一段 Says 碎碎念说说或录音",
+        icon: NotebookPen,
+        handler: () => {
+          window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+        },
+      },
+      {
+        id: "new-task",
+        type: "command",
+        title: "新建待办",
+        subtitle: "创建一条待办事项，支持设置提醒时间",
+        icon: ListTodo,
+        handler: () => {
+          window.dispatchEvent(new CustomEvent("super:quick-new-task"));
+        },
+      },
+      {
+        id: "go-home",
+        type: "command",
+        title: "前往 首页",
+        subtitle: "切换到仪表盘、最近更新及提醒中心",
+        icon: Home,
+        handler: () => {
+          actions.setViewMode("home");
+        },
+      },
+      {
+        id: "go-notes",
+        type: "command",
+        title: "前往 笔记库",
+        subtitle: "切换到全部笔记的纵览与列表浏览视图",
+        icon: FileText,
+        handler: () => {
+          actions.setViewMode("all");
+          actions.setSelectedNotebook(null);
+        },
+      },
+      {
+        id: "go-diary",
+        type: "command",
+        title: "前往 说说墙",
+        subtitle: "切换到 Says 说说卡片与日记中心",
+        icon: NotebookPen,
+        handler: () => {
+          actions.setViewMode("diary");
+        },
+      },
+      {
+        id: "go-projects",
+        type: "command",
+        title: "前往 项目看板",
+        subtitle: "切换到工作、协作项目管理看板",
+        icon: Briefcase,
+        handler: () => {
+          actions.setViewMode("projects");
+          const filter = { type: "my-tasks" };
+          sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+          window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
+        },
+      },
+      {
+        id: "go-mentions",
+        type: "command",
+        title: "前往 消息盒子",
+        subtitle: "查看与我相关的协作通知和提醒",
+        icon: Bell,
+        handler: () => {
+          actions.setViewMode("mentions");
+        },
+      },
+      {
+        id: "open-settings",
+        type: "command",
+        title: "前往 系统设置",
+        subtitle: "打开偏好配置、云端同步以及安全选项",
+        shortcut: "Cmd+,",
+        icon: Settings,
+        handler: () => {
+          window.dispatchEvent(new CustomEvent("super:open-settings", { detail: { tab: "appearance" } }));
+        },
+      },
+      {
+        id: "toggle-theme",
+        type: "command",
+        title: `切换 深色/浅色模式 (当前: ${theme === "dark" ? "深色" : "浅色"})`,
+        subtitle: "快速切换颜色外观为深色或浅色",
+        icon: theme === "dark" ? Sun : Moon,
+        handler: () => {
+          setTheme(theme === "dark" ? "light" : "dark");
+        },
+      },
+      {
+        id: "toggle-sidebar",
+        type: "command",
+        title: "展开/收起 左侧主栏",
+        subtitle: "折叠或展开笔记本和标签的侧边管理面板 (Zen Mode)",
+        icon: SidebarIcon,
+        handler: () => {
+          actions.toggleSidebar();
+        },
+      },
+      // 各种皮肤一键切换
+      {
+        id: "skin-claude",
+        type: "command",
+        title: "外观皮肤: Claude 风格",
+        subtitle: "切换为温润乳沙色底色、书卷衬线体标题的 Claude 皮肤",
+        icon: Palette,
+        handler: () => {
+          setSkin("claude");
+        },
+      },
+      {
+        id: "skin-obsidian",
+        type: "command",
+        title: "外观皮肤: Obsidian 风格",
+        subtitle: "切换为高级深海幽蓝护眼的 Obsidian 暗色皮肤",
+        icon: Palette,
+        handler: () => {
+          setSkin("obsidian");
+        },
+      },
+      {
+        id: "skin-flomo",
+        type: "command",
+        title: "外观皮肤: flomo 风格",
+        subtitle: "切换为经典温润宣纸暖沙卡片流皮肤",
+        icon: Palette,
+        handler: () => {
+          setSkin("flomo");
+        },
+      },
+      {
+        id: "skin-macos",
+        type: "command",
+        title: "外观皮肤: macOS 风格",
+        subtitle: "切换为无缝轻量原生的苹果灰白皮肤",
+        icon: Palette,
+        handler: () => {
+          setSkin("macos");
+        },
+      },
+      {
+        id: "skin-notion",
+        type: "command",
+        title: "外观皮肤: Notion 风格",
+        subtitle: "切换为极简黑白像素线条皮肤",
+        icon: Palette,
+        handler: () => {
+          setSkin("notion");
+        },
+      },
+    ];
+  }, [theme, setTheme, setSkin, actions]);
+
+  // 合并计算出最终展示项 (DisplayItems)
+  const displayItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return commands;
+    }
+    const filteredCommands = commands.filter(
+      (cmd) =>
+        cmd.title.toLowerCase().includes(q) ||
+        (cmd.subtitle && cmd.subtitle.toLowerCase().includes(q))
+    );
+    const noteItems = results.map((r) => ({ ...r, type: "note" as const }));
+    return [...filteredCommands, ...noteItems];
+  }, [query, commands, results]);
+
   // 打开时：清空旧状态、focus 输入框
   useEffect(() => {
     if (!open) return;
     setQuery("");
     setResults([]);
     setActiveIdx(0);
-    // rAF 等一帧让 Portal DOM 就位
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -101,7 +313,6 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
       debounceRef.current = null;
-      // 取消上一次可能还未返回的请求（api.search 目前不吃 signal，我们用"丢弃结果"实现取消语义）
       const my = new AbortController();
       abortRef.current?.abort();
       abortRef.current = my;
@@ -120,15 +331,12 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }, 200);
   }, [query, open]);
 
-  // 全局 Cmd/Ctrl+K：在任何地方都能打开；Esc 关闭
-  // 注意：Cmd-K 通常会被 Chrome 占用（焦点地址栏），但在 Electron 中不会，Web 端我们
-  // preventDefault 后即可覆盖默认行为；已经打开则忽略（避免重复 focus 抖动）。
+  // 全局 Cmd/Ctrl+K 触发逻辑
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         if (!open) {
-          // 由外部控制开合，发个 CustomEvent 让 App 层监听并 setOpen(true)
           window.dispatchEvent(new CustomEvent("super:open-command-palette"));
         }
       } else if (open && e.key === "Escape") {
@@ -140,7 +348,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // 跳转到笔记：拉详情 → setActiveNote（与 Sidebar 搜索命中一致的数据通路）
+  // 跳转到笔记
   const jumpTo = useCallback(
     async (id: string) => {
       try {
@@ -158,30 +366,37 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     [actions, onClose],
   );
 
-  // 列表内键盘导航
+  // 键盘操作响应
   const onInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (!results.length) return;
+      if (!displayItems.length) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActiveIdx((i) => Math.min(i + 1, results.length - 1));
+        setActiveIdx((i) => Math.min(i + 1, displayItems.length - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setActiveIdx((i) => Math.max(i - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const hit = results[activeIdx];
-        if (hit) void jumpTo(hit.id);
+        const hit = displayItems[activeIdx];
+        if (hit) {
+          if (hit.type === "command") {
+            hit.handler();
+            onClose();
+          } else {
+            void jumpTo(hit.id);
+          }
+        }
       }
     },
-    [results, activeIdx, jumpTo],
+    [displayItems, activeIdx, jumpTo, onClose],
   );
 
-  // activeIdx 变化时，把高亮项滚到视口内
+  // 滚动可视区同步
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${activeIdx}"]`);
     el?.scrollIntoView({ block: "nearest" });
-  }, [activeIdx, results]);
+  }, [activeIdx, displayItems]);
 
   const body = useMemo(() => {
     if (!open) return null;
@@ -189,18 +404,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       <div
         className="fixed inset-0 z-[200] flex items-start justify-center pt-[15vh] px-4"
         onClick={(e) => {
-          // 只有点 backdrop 时关闭；面板内的点击不冒泡到此处
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        {/* Backdrop */}
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden />
-        {/* Panel */}
         <div
           className="relative w-full max-w-[640px] bg-app-elevated border border-app-border rounded-xl shadow-2xl overflow-hidden"
           role="dialog"
           aria-modal="true"
-          aria-label="全局搜索"
+          aria-label="全局搜索与命令面板"
           onClick={(e) => e.stopPropagation()}
         >
           {/* 输入框 */}
@@ -212,7 +424,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onInputKeyDown}
-              placeholder="搜索笔记标题与内容…"
+              placeholder="搜索笔记或直接输入系统指令 (如: Claude, 新建)..."
               className="flex-1 bg-transparent outline-none text-sm text-tx-primary placeholder:text-tx-tertiary"
               autoComplete="off"
               spellCheck={false}
@@ -223,40 +435,55 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             </kbd>
           </div>
 
-          {/* 结果列表 */}
+          {/* 选项结果列表 */}
           <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
-            {results.length === 0 && query.trim() && !loading && (
+            {displayItems.length === 0 && query.trim() && !loading && (
               <div className="px-4 py-6 text-center text-sm text-tx-tertiary">
-                未找到与 &ldquo;{query}&rdquo; 匹配的笔记
+                未找到与 &ldquo;{query}&rdquo; 匹配的项目或指令
               </div>
             )}
-            {!query.trim() && (
-              <div className="px-4 py-6 text-center text-sm text-tx-tertiary">
-                输入关键词开始搜索（↑↓ 选择，Enter 打开，Esc 关闭）
-              </div>
-            )}
-            {results.map((r, idx) => {
+            {displayItems.map((item, idx) => {
               const isActive = idx === activeIdx;
+              const isCommand = item.type === "command";
+              const Icon = item.type === "command" ? item.icon : FileText;
+
               return (
                 <button
-                  key={r.id}
+                  key={item.id}
                   data-idx={idx}
                   type="button"
                   onMouseEnter={() => setActiveIdx(idx)}
-                  onClick={() => void jumpTo(r.id)}
-                  className={[
-                    "w-full text-left px-4 py-2 flex items-start gap-3 transition-colors",
-                    isActive ? "bg-app-hover" : "hover:bg-app-hover/60",
-                  ].join(" ")}
+                  onClick={() => {
+                    if (item.type === "command") {
+                      item.handler();
+                      onClose();
+                    } else {
+                      void jumpTo(item.id);
+                    }
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-2.5 flex items-start gap-3 transition-colors",
+                    isActive ? "bg-app-hover" : "hover:bg-app-hover/60"
+                  )}
                 >
-                  <FileText size={16} className="mt-0.5 text-tx-tertiary shrink-0" />
+                  <Icon size={16} className={cn("mt-0.5 shrink-0", isCommand ? "text-accent-primary" : "text-tx-tertiary")} />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm text-tx-primary truncate">
-                      {highlight(r.title || "(无标题)", query)}
+                    <div className="text-sm text-tx-primary truncate flex items-center justify-between">
+                      <span>{highlight(item.title || "(无标题)", query)}</span>
+                      {item.type === "command" && (
+                        <span className="text-[10px] text-tx-tertiary px-1.5 py-0.5 rounded bg-app-surface border border-app-border uppercase font-mono shrink-0 ml-2">
+                          {item.shortcut ? item.shortcut : "系统指令"}
+                        </span>
+                      )}
                     </div>
-                    {r.snippet && (
+                    {item.type === "command" && item.subtitle && (
                       <div className="text-xs text-tx-tertiary truncate mt-0.5">
-                        {highlight(r.snippet, query)}
+                        {highlight(item.subtitle, query)}
+                      </div>
+                    )}
+                    {item.type === "note" && item.snippet && (
+                      <div className="text-xs text-tx-tertiary truncate mt-0.5">
+                        {highlight(item.snippet, query)}
                       </div>
                     )}
                   </div>
@@ -267,7 +494,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         </div>
       </div>
     );
-  }, [open, query, loading, results, activeIdx, onInputKeyDown, jumpTo, onClose]);
+  }, [open, query, loading, displayItems, activeIdx, onInputKeyDown, jumpTo, onClose]);
 
   if (typeof document === "undefined") return null;
   return createPortal(body, document.body);

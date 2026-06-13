@@ -75,6 +75,7 @@ module.exports = {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        serif: ['Georgia', 'Lora', 'Songti SC', 'SimSun', 'STSong', 'serif'],
       },
       borderRadius: {
         // 与 CSS 变量绑定的语义圆角令牌：

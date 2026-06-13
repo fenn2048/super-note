@@ -12,10 +12,10 @@ import { useCallback, useEffect, useState } from "react";
  * 存储在 localStorage("super-note-skin")；FOUC 防护由 index.html 里的同步内联脚本完成。
  */
 
-export type Skin = "obsidian" | "macos" | "notion" | "memos" | "flomo";
+export type Skin = "obsidian" | "macos" | "notion" | "memos" | "flomo" | "claude";
 
 export const SKIN_STORAGE_KEY = "super-note-skin";
-const ALL_SKINS: readonly Skin[] = ["obsidian", "macos", "notion", "memos", "flomo"] as const;
+const ALL_SKINS: readonly Skin[] = ["obsidian", "macos", "notion", "memos", "flomo", "claude"] as const;
 
 function readSkin(): Skin {
   try {

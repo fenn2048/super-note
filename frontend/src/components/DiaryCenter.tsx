@@ -28,6 +28,7 @@ import { api, getCurrentWorkspace } from "@/lib/api";
 import { Diary, DiaryStats, Tag } from "@/types";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
+import { haptic } from "@/hooks/useCapacitor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Input } from "@/components/ui/input";
@@ -159,6 +160,7 @@ interface PendingImage {
 // ============================================================
 function ComposeBox({ onPost }: { onPost: () => void }) {
   const { t } = useTranslation();
+  const { state } = useApp();
   const [text, setText] = useState("");
   const [mood, setMood] = useState("");
   const [showMoods, setShowMoods] = useState(false);
@@ -184,6 +186,18 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   const [cursorPos, setCursorPos] = useState(0);
   const mentionRaw = parseMentionTrigger(text, cursorPos);
   const mentionTrigger = mentionRaw ? { ...mentionRaw, clear: () => {} } : null;
+
+  const [isFocused, setIsFocused] = useState(false);
+  const handleAddTag = useCallback((tagName: string) => {
+    haptic.light();
+    const formattedTag = `#${tagName} `;
+    if (!text.includes(formattedTag)) {
+      setText((prev) => prev + (prev.endsWith(" ") || prev === "" ? "" : " ") + formattedTag);
+    }
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
+  }, [text]);
 
   // 录音相关状态
   const [recording, setRecording] = useState(false);
@@ -252,6 +266,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       };
 
       recorder.start();
+      haptic.light();
       recordingStartTimeRef.current = Date.now();
       setRecording(true);
       setRecordDuration(0);
@@ -284,6 +299,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       }, { once: true });
 
       recorder.stop();
+      haptic.medium();
     });
   }, [cleanupRecording]);
 
@@ -538,6 +554,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
         voice: pendingVoice,
         tagIds: composeTags.map((t) => t.id),
       });
+      haptic.success();
       // 重置：先 revoke 所有 blob URL（已发布图片由后端持久化，前端不再需要 blob）
       for (const item of pendingImagesRef.current) {
         try {
@@ -606,10 +623,14 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               }
               handleKeyDown(e);
             }}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
             onPaste={handlePaste}
             placeholder={t("diary.placeholder")}
-            rows={4}
-            className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px] no-focus-ring"
+            className={cn(
+              "w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none no-focus-ring transition-all duration-300",
+              (isFocused || text.length > 0) ? "min-h-[120px]" : "min-h-[44px] h-[44px]"
+            )}
           />
         </div>
 
@@ -705,14 +726,44 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
           </div>
         )}
 
-        {/* 标签选择 */}
-        <div className="mt-3">
-          <GenericTagInput
-            selectedTags={composeTags}
-            onTagsChange={setComposeTags}
-            placeholder={t('tags.addTagPlaceholder')}
-          />
-        </div>
+        {/* 常用标签与标签选择器 - 在聚焦或有内容时展开 */}
+        {(isFocused || text.length > 0 || pendingImages.length > 0 || pendingVoice !== null) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden mt-3 space-y-3"
+          >
+            {/* 常用标签推荐 */}
+            <div className="flex flex-wrap items-center gap-1.5 px-1">
+              <span className="text-[11px] text-tx-tertiary mr-1 font-medium">推荐标签:</span>
+              {((state.tags && state.tags.length > 0) ? state.tags.slice(0, 5) : [
+                { id: "1", name: "日记" },
+                { id: "2", name: "想法" },
+                { id: "3", name: "工作" },
+                { id: "4", name: "学习" },
+                { id: "5", name: "生活" }
+              ]).map((tag: any) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => handleAddTag(tag.name)}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-app-hover hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary transition-all"
+                >
+                  #{tag.name}
+                </button>
+              ))}
+            </div>
+
+            {/* 标签选择 */}
+            <GenericTagInput
+              selectedTags={composeTags}
+              onTagsChange={setComposeTags}
+              placeholder={t('tags.addTagPlaceholder')}
+            />
+          </motion.div>
+        )}
       </div>
 
       {/* 录音面板 - 覆盖底部操作栏 */}

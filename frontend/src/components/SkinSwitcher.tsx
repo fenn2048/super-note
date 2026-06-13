@@ -96,6 +96,19 @@ const SKINS: SkinDescriptor[] = [
       text: "#2c3e50",
     },
   },
+  {
+    key: "claude",
+    titleKey: "appearance.skinClaude",
+    titleDefault: "Claude",
+    descKey: "appearance.skinClaudeDesc",
+    descDefault: "Claude 风格，温润乳沙色底色，大标题加载书卷衬线体，陶土橙高亮",
+    swatch: {
+      bg: "#f9f6f0",
+      sidebar: "#f2ede4",
+      accent: "#c95b36",
+      text: "#191919",
+    },
+  },
 ];
 
 export default function SkinSwitcher() {

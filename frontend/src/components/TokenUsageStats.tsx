@@ -192,11 +192,13 @@ export default function TokenUsageStats(): JSX.Element | null {
             </div>
           </div>
 
-          {/* 柱状图 */}
-          <UsageBarChart series={data.series} />
+          {/* 柱状图 - 仅在电脑端展示 */}
+          {window.innerWidth >= 768 && (
+            <UsageBarChart series={data.series} />
+          )}
 
-          {/* Top 令牌 */}
-          {data.byToken.length > 0 && (
+          {/* Top 令牌 - 仅在电脑端展示 */}
+          {window.innerWidth >= 768 && data.byToken.length > 0 && (
             <TopTokensList byToken={data.byToken} total={data.total} />
           )}
         </div>

@@ -1042,15 +1042,17 @@ export default function ProjectCenter() {
                 <Calendar size={12} />
                 <span>{t("projects.calendar") || "日历"}</span>
               </button>
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                  detailTab === "gantt" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setDetailTab("gantt")}
-              >
-                <Clock size={12} />
-                <span>{t("projects.gantt") || "甘特图"}</span>
-              </button>
+              {window.innerWidth >= 768 && (
+                <button
+                  className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
+                    detailTab === "gantt" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
+                  }`}
+                  onClick={() => setDetailTab("gantt")}
+                >
+                  <Clock size={12} />
+                  <span>{t("projects.gantt") || "甘特图"}</span>
+                </button>
+              )}
               <button
                 className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
                   detailTab === "overview" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"

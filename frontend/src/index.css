@@ -36,8 +36,10 @@
 
 /* ===== Light Theme (默认：Obsidian Light) ===== */
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --editor-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  --editor-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  font-size-adjust: from-font;
+  line-height: 1.6;
 
   --color-bg: #ffffff;
   --color-surface: #ffffff;
@@ -74,44 +76,51 @@
   --pm-scrollbar: #e5e5e5;
   --pm-scrollbar-hover: #cccccc;
   --pm-selection: rgba(72, 54, 153, 0.15);
+  --toast-top: 1rem;
 }
 
-/* ===== Dark Theme (默认：Obsidian Dark) ===== */
+@supports not (font-size-adjust: from-font) {
+  :root {
+    line-height: 1.65;
+  }
+}
+
+/* ===== Dark Theme (默认：Obsidian Dark - 优化为高档深蓝灰) ===== */
 .dark {
-  --color-bg: #1e1e1e;
-  --color-surface: #1e1e1e;
-  --color-sidebar: #161616;
-  --color-elevated: #242424;
-  --color-border: #2e2e2e;
-  --color-hover: rgba(255, 255, 255, 0.04);
-  --color-active: rgba(122, 82, 244, 0.15);
+  --color-bg: #12151d;
+  --color-surface: #12151d;
+  --color-sidebar: #0e1117;
+  --color-elevated: #1a1d26;
+  --color-border: #242834;
+  --color-hover: rgba(255, 255, 255, 0.05);
+  --color-active: rgba(138, 99, 255, 0.18);
 
-  --color-text-primary: #dadada;
-  --color-text-secondary: #a6a6a6;
-  --color-text-tertiary: #7c7c7c;
-  --color-text-inverse: #1e1e1e;
+  --color-text-primary: #dadde5;
+  --color-text-secondary: #a2a6b3;
+  --color-text-tertiary: #787d8a;
+  --color-text-inverse: #12151d;
 
-  --color-accent-primary: #7a52f4;
+  --color-accent-primary: #8a63ff;
   --color-accent-secondary: #2ecc71;
   --color-accent-warning: #f39c12;
   --color-accent-danger: #e74c3c;
   --color-accent-muted: rgba(255, 255, 255, 0.3);
 
-  --pm-text: #dadada;
+  --pm-text: #dadde5;
   --pm-heading: #ffffff;
-  --pm-code-bg: #272727;
+  --pm-code-bg: #20232f;
   --pm-code-text: #ff7e7e;
-  --pm-pre-bg: #181818;
-  --pm-pre-border: #2e2e2e;
-  --pm-pre-text: #dadada;
-  --pm-blockquote-border: #7a52f4;
-  --pm-blockquote-text: #a6a6a6;
-  --pm-hr: #2e2e2e;
-  --pm-placeholder: #505050;
-  --pm-task-done: #505050;
-  --pm-scrollbar: #363636;
-  --pm-scrollbar-hover: #4c4c4c;
-  --pm-selection: rgba(122, 82, 244, 0.25);
+  --pm-pre-bg: #0e1117;
+  --pm-pre-border: #242834;
+  --pm-pre-text: #dadde5;
+  --pm-blockquote-border: #8a63ff;
+  --pm-blockquote-text: #a2a6b3;
+  --pm-hr: #242834;
+  --pm-placeholder: #505462;
+  --pm-task-done: #505462;
+  --pm-scrollbar: #242834;
+  --pm-scrollbar-hover: #363c4e;
+  --pm-selection: rgba(138, 99, 255, 0.28);
 }
 
 html, body, #root {
@@ -161,6 +170,19 @@ html[data-native="android"] {
 html[data-native="ios"] {
   --safe-area-top: max(env(safe-area-inset-top, 0px), 20px);
   --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+}
+
+/* ===== 移动端排版与提示框优化 ===== */
+@media (max-width: 767px) {
+  :root {
+    --toast-top: calc(var(--safe-area-top) + 3.75rem);
+  }
+  html {
+    font-size: 106.25%; /* 提升移动端全局 rem 比例（16px -> 17px） */
+  }
+  .ProseMirror {
+    font-size: 1.0625rem; /* 独立提升编辑器字号至 ~18px，保障输入体验 */
+  }
 }
 
 body {
@@ -2666,10 +2688,10 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
 /* ---------- flomo Light ---------- */
 :root[data-skin="flomo"] {
-  --color-bg: #f4f4f0;
+  --color-bg: #f7f6f1;
   --color-surface: #ffffff;
-  --color-sidebar: #f4f4f0;
-  --color-sidebar-solid: #f4f4f0;
+  --color-sidebar: #f7f6f1;
+  --color-sidebar-solid: #f7f6f1;
   --color-elevated: #ffffff;
   --color-elevated-solid: #ffffff;
   --color-border: #e1e1db;
@@ -2696,7 +2718,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   /* 编辑器样式 */
   --pm-text: #2c3e50;
   --pm-heading: #2c3e50;
-  --pm-code-bg: #f4f4f0;
+  --pm-code-bg: #f7f6f1;
   --pm-code-text: #27ae60;
   --pm-pre-bg: #fafaf8;
   --pm-pre-border: #e1e1db;
@@ -2709,6 +2731,106 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-scrollbar: #eaeae5;
   --pm-scrollbar-hover: #d5d5cd;
   --pm-selection: rgba(50, 182, 122, 0.15);
+}
+
+/* ============================================================================
+ * Claude 外观风格（Skin）
+ * ----------------------------------------------------------------------------
+ * 设计来源：Claude.ai 官方网站（温润乳沙色底色、高级衬线体标题、陶土橙高亮）。
+ * ========================================================================= */
+
+/* ---------- Claude Light ---------- */
+:root[data-skin="claude"] {
+  --color-bg: #f9f6f0;
+  --color-surface: #ffffff;
+  --color-sidebar: #f2ede4;
+  --color-sidebar-solid: #f2ede4;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: #e9e5d9;
+  --color-hover: rgba(201, 91, 54, 0.05);
+  --color-active: rgba(201, 91, 54, 0.12);
+
+  --color-text-primary: #191919;
+  --color-text-secondary: #595650;
+  --color-text-tertiary: #928f86;
+  --color-text-quaternary: #bebbae;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-primary: #c95b36;
+  --color-accent-secondary: #0f7b6c;
+  --color-accent-warning: #d99c00;
+  --color-accent-danger: #c84040;
+  --color-accent-muted: rgba(201, 91, 54, 0.4);
+
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+
+  /* 编辑器样式 */
+  --pm-text: #191919;
+  --pm-heading: #191919;
+  --pm-code-bg: rgba(201, 91, 54, 0.08);
+  --pm-code-text: #c95b36;
+  --pm-pre-bg: #f2ede4;
+  --pm-pre-border: #e9e5d9;
+  --pm-pre-text: #191919;
+  --pm-blockquote-border: #c95b36;
+  --pm-blockquote-text: #595650;
+  --pm-hr: #e9e5d9;
+  --pm-placeholder: #bebbae;
+  --pm-task-done: #bebbae;
+  --pm-scrollbar: rgba(201, 91, 54, 0.12);
+  --pm-scrollbar-hover: rgba(201, 91, 54, 0.25);
+  --pm-selection: rgba(201, 91, 54, 0.15);
+}
+
+/* ---------- Claude Dark ---------- */
+:root[data-skin="claude"].dark {
+  --color-bg: #181715;
+  --color-surface: #22201c;
+  --color-sidebar: #1d1b19;
+  --color-sidebar-solid: #1d1b19;
+  --color-elevated: #2c2925;
+  --color-elevated-solid: #2c2925;
+  --color-border: #2f2d28;
+  --color-hover: rgba(226, 138, 109, 0.08);
+  --color-active: rgba(226, 138, 109, 0.18);
+
+  --color-text-primary: #e5e3dd;
+  --color-text-secondary: #aba8a0;
+  --color-text-tertiary: #7d7a72;
+  --color-text-quaternary: #4f4c46;
+  --color-text-inverse: #181715;
+
+  --color-accent-primary: #e28a6d;
+  --color-accent-secondary: #30d158;
+  --color-accent-warning: #ff9f0a;
+  --color-accent-danger: #ff453a;
+  --color-accent-muted: rgba(226, 138, 109, 0.4);
+
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+
+  /* 编辑器样式 */
+  --pm-text: #e5e3dd;
+  --pm-heading: #ffffff;
+  --pm-code-bg: rgba(226, 138, 109, 0.12);
+  --pm-code-text: #e28a6d;
+  --pm-pre-bg: #1d1b19;
+  --pm-pre-border: #2f2d28;
+  --pm-pre-text: #e5e3dd;
+  --pm-blockquote-border: #e28a6d;
+  --pm-blockquote-text: #aba8a0;
+  --pm-hr: #2f2d28;
+  --pm-placeholder: #7d7a72;
+  --pm-task-done: #7d7a72;
+  --pm-scrollbar: rgba(226, 138, 109, 0.15);
+  --pm-scrollbar-hover: rgba(226, 138, 109, 0.3);
+  --pm-selection: rgba(226, 138, 109, 0.25);
 }
 
 /* ---------- flomo Dark ---------- */
@@ -2774,7 +2896,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   box-shadow: 0 0 8px rgba(0, 122, 255, 0.4) !important;
 }
 
-/* 弱化 flomo 和 notion 皮肤下的卡片立体虚饰投影 */
+/* 弱化 flomo、notion 和 claude 皮肤下的卡片立体虚饰投影 */
 :root[data-skin="flomo"] .shadow-sm,
 :root[data-skin="flomo"] .shadow,
 :root[data-skin="flomo"] .shadow-md,
@@ -2784,15 +2906,22 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 :root[data-skin="notion"] .shadow,
 :root[data-skin="notion"] .shadow-md,
 :root[data-skin="notion"] .shadow-lg,
-:root[data-skin="notion"] .shadow-xl {
+:root[data-skin="notion"] .shadow-xl,
+:root[data-skin="claude"] .shadow-sm,
+:root[data-skin="claude"] .shadow,
+:root[data-skin="claude"] .shadow-md,
+:root[data-skin="claude"] .shadow-lg,
+:root[data-skin="claude"] .shadow-xl {
   box-shadow: none !important;
 }
 
-/* 弱化 flomo 和 notion 皮肤下卡片边框 */
+/* 弱化 flomo、notion 和 claude 皮肤下卡片边框 */
 :root[data-skin="flomo"] .border-zinc-200,
 :root[data-skin="flomo"] .border-zinc-300,
 :root[data-skin="notion"] .border-zinc-200,
-:root[data-skin="notion"] .border-zinc-300 {
+:root[data-skin="notion"] .border-zinc-300,
+:root[data-skin="claude"] .border-zinc-200,
+:root[data-skin="claude"] .border-zinc-300 {
   border-color: var(--color-border) !important;
 }
 
@@ -2841,6 +2970,9 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 :root[data-skin="macos"] input.no-focus-ring:focus-visible,
 :root[data-skin="macos"] textarea.no-focus-ring:focus-visible,
 :root[data-skin="macos"] select.no-focus-ring:focus-visible,
+:root[data-skin="claude"] input.no-focus-ring:focus-visible,
+:root[data-skin="claude"] textarea.no-focus-ring:focus-visible,
+:root[data-skin="claude"] select.no-focus-ring:focus-visible,
 input.no-focus-ring:focus-visible,
 textarea.no-focus-ring:focus-visible,
 .no-focus-ring:focus-visible,
@@ -2850,3 +2982,33 @@ textarea.no-focus-ring:focus-visible,
   outline: none !important;
   border-color: var(--color-border) !important;
 }
+
+/* ---------- Claude Specific Focus & Fonts ---------- */
+:root[data-skin="claude"] *:focus-visible {
+  outline: 2px solid var(--color-accent-primary) !important;
+  outline-offset: -1px !important;
+  box-shadow: 0 0 8px rgba(201, 91, 54, 0.4) !important;
+}
+:root[data-skin="claude"] input:focus-visible,
+:root[data-skin="claude"] textarea:focus-visible,
+:root[data-skin="claude"] select:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 30%, transparent) !important;
+  border-color: var(--color-accent-primary) !important;
+}
+
+:root[data-skin="claude"] h1,
+:root[data-skin="claude"] h2,
+:root[data-skin="claude"] h3,
+:root[data-skin="claude"] h4,
+:root[data-skin="claude"] h5,
+:root[data-skin="claude"] h6,
+:root[data-skin="claude"] .claude-serif-font {
+  font-family: 'Georgia', 'Lora', 'Songti SC', 'SimSun', 'STSong', serif !important;
+}
+:root[data-skin="claude"] {
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+}
+

@@ -227,10 +227,10 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col justify-between overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-zinc-950 flex flex-col justify-between overflow-hidden">
       {/* Top Header */}
       <div
-        className="absolute top-0 inset-x-0 flex items-center justify-between px-4 z-10 bg-gradient-to-b from-black/60 to-transparent"
+        className="absolute top-0 inset-x-0 flex items-center justify-between px-4 z-20 bg-black/40 backdrop-blur-md border-b border-white/5"
         style={{
           paddingTop: "calc(var(--safe-area-top, 0px) + 12px)",
           height: "calc(var(--safe-area-top, 0px) + 4rem + 12px)",
@@ -238,17 +238,17 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
       >
         <button
           onClick={handleClose}
-          className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90"
+          className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all hover:bg-white/10"
         >
           <X size={20} />
         </button>
-        <span className="text-white text-xs font-semibold">
+        <span className="text-zinc-200 text-xs font-semibold tracking-wider">
           {recordedBlob ? `预览视频 (已录 ${capturedClips.length} 段)` : `录制说说视频 (${capturedClips.length} 已录)`}
         </span>
         {!recordedBlob && !recording ? (
           <button
             onClick={toggleFacingMode}
-            className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90"
+            className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all hover:bg-white/10"
           >
             <RefreshCw size={20} />
           </button>
@@ -258,10 +258,10 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
       </div>
 
       {/* Main Screen */}
-      <div className="flex-1 flex items-center justify-center relative bg-zinc-950">
+      <div className="flex-1 flex items-center justify-center relative bg-zinc-950 p-4 pt-[calc(var(--safe-area-top,0px)+5rem)] pb-36">
         {loading && !recordedUrl && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-sm text-zinc-400">正在启动相机...</span>
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-zinc-950/80">
+            <span className="text-sm text-zinc-400 animate-pulse">正在启动相机...</span>
           </div>
         )}
 
@@ -270,7 +270,7 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
           playsInline
           autoPlay
           muted
-          className={`w-full h-full object-cover max-h-[85vh] ${recordedBlob ? "hidden" : "block"}`}
+          className={`w-full h-full object-cover rounded-2xl border border-zinc-800/80 shadow-2xl ${recordedBlob ? "hidden" : "block"}`}
         />
 
         {recordedUrl && (
@@ -281,37 +281,40 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
             controls
             autoPlay
             loop
-            className="w-full h-full object-contain max-h-[85vh]"
+            className="w-full h-full object-contain rounded-2xl border border-zinc-800/80 shadow-2xl"
           />
         )}
 
         {/* Recording Indicator */}
         {recording && (
           <div 
-            className="absolute left-4 flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/80 text-white text-xs font-bold animate-pulse"
-            style={{ top: "calc(var(--safe-area-top, 0px) + 4.5rem)" }}
+            className="absolute left-8 flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/90 text-white text-xs font-bold animate-pulse shadow-lg z-10"
+            style={{ top: "calc(var(--safe-area-top, 0px) + 5.5rem)" }}
           >
-            <div className="w-2 h-2 rounded-full bg-white" />
+            <div className="w-2.5 h-2.5 rounded-full bg-white" />
             <span>录制中 {Math.floor(recordDuration / 60)}:{(recordDuration % 60).toString().padStart(2, "0")}</span>
           </div>
         )}
       </div>
 
       {/* Footer Controls */}
-      <div className="h-36 bg-black flex items-center justify-center px-4 z-10 pb-safe">
+      <div className="absolute bottom-0 inset-x-0 h-32 bg-black/45 backdrop-blur-lg border-t border-white/5 flex items-center justify-center px-4 z-20 pb-safe">
         {!recordedBlob ? (
           <button
             onClick={recording ? handleStopRecord : handleStartRecord}
             disabled={loading}
             className={cn(
-              "w-20 h-20 rounded-full border-4 flex items-center justify-center bg-transparent active:scale-95 transition-all",
-              recording ? "border-red-500" : "border-white"
+              "w-20 h-20 rounded-full border-4 flex items-center justify-center bg-transparent active:scale-95 transition-all relative",
+              recording ? "border-red-500/80" : "border-white/80"
             )}
           >
+            {recording && (
+              <span className="absolute inset-0 rounded-full bg-red-500/20 blur-md animate-ping" />
+            )}
             {recording ? (
-              <div className="w-8 h-8 rounded bg-red-500" />
+              <div className="w-8 h-8 rounded-md bg-red-500 shadow-lg z-10 animate-pulse" />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-500/25 z-10 transition-colors">
                 <Video size={24} className="text-white" />
               </div>
             )}
@@ -321,30 +324,30 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
             <div className="flex items-center justify-around w-full max-w-sm">
               <button
                 onClick={handleRetake}
-                className="flex flex-col items-center gap-1 text-white active:scale-90"
+                className="flex flex-col items-center gap-1.5 text-white active:scale-90 transition-transform"
               >
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
-                  <RefreshCw size={18} />
+                <div className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
+                  <RefreshCw size={16} className="text-zinc-300" />
                 </div>
                 <span className="text-[10px] text-zinc-400">重拍</span>
               </button>
 
               <button
                 onClick={handleTakeAnother}
-                className="flex flex-col items-center gap-1 text-white active:scale-90"
+                className="flex flex-col items-center gap-1.5 text-white active:scale-90 transition-transform"
               >
-                <div className="w-14 h-14 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
-                  <Plus size={20} className="text-white" />
+                <div className="w-13 h-13 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/35 hover:bg-indigo-500 transition-colors">
+                  <Plus size={18} className="text-white" />
                 </div>
                 <span className="text-[10px] text-zinc-300 font-medium">再拍一个</span>
               </button>
 
               <button
                 onClick={handleDone}
-                className="flex flex-col items-center gap-1 text-white active:scale-90"
+                className="flex flex-col items-center gap-1.5 text-white active:scale-90 transition-transform"
               >
-                <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center">
-                  <Check size={20} />
+                <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-colors">
+                  <Check size={18} className="text-white" />
                 </div>
                 <span className="text-[10px] text-emerald-400 font-semibold">完成</span>
               </button>
