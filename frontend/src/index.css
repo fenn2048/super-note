@@ -2069,16 +2069,16 @@ body.density-compact {
   --color-active: rgba(10, 132, 255, 0.30);
 
   --color-text-primary: #FFFFFF;
-  --color-text-secondary: rgba(255, 255, 255, 0.60);
-  --color-text-tertiary: rgba(255, 255, 255, 0.40);
-  --color-text-quaternary: rgba(255, 255, 255, 0.20);
+  --color-text-secondary: rgba(255, 255, 255, 0.70);
+  --color-text-tertiary: rgba(255, 255, 255, 0.52);
+  --color-text-quaternary: rgba(255, 255, 255, 0.35);
   --color-text-inverse: #1E1E1E;
 
   --color-accent-primary: #0A84FF;
   --color-accent-secondary: #30D158;
   --color-accent-warning: #FF9F0A;
   --color-accent-danger: #FF453A;
-  --color-accent-muted: rgba(255, 255, 255, 0.40);
+  --color-accent-muted: rgba(255, 255, 255, 0.52);
 
   --pm-text: #E8E8E8;
   --pm-heading: #FFFFFF;
@@ -2088,10 +2088,10 @@ body.density-compact {
   --pm-pre-border: rgba(255, 255, 255, 0.10);
   --pm-pre-text: #E8E8E8;
   --pm-blockquote-border: #0A84FF;
-  --pm-blockquote-text: rgba(255, 255, 255, 0.55);
+  --pm-blockquote-text: rgba(255, 255, 255, 0.65);
   --pm-hr: rgba(255, 255, 255, 0.10);
-  --pm-placeholder: rgba(255, 255, 255, 0.30);
-  --pm-task-done: rgba(255, 255, 255, 0.30);
+  --pm-placeholder: rgba(255, 255, 255, 0.35);
+  --pm-task-done: rgba(255, 255, 255, 0.45);
   --pm-scrollbar: rgba(255, 255, 255, 0.20);
   --pm-scrollbar-hover: rgba(255, 255, 255, 0.35);
   --pm-selection: rgba(10, 132, 255, 0.30);
@@ -2497,16 +2497,16 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-active: rgba(55, 53, 47, 0.08);
 
   --color-text-primary: #37352f;
-  --color-text-secondary: rgba(55, 53, 47, 0.65);
-  --color-text-tertiary: rgba(55, 53, 47, 0.45);
-  --color-text-quaternary: rgba(55, 53, 47, 0.20);
+  --color-text-secondary: rgba(55, 53, 47, 0.72);
+  --color-text-tertiary: rgba(55, 53, 47, 0.58);
+  --color-text-quaternary: rgba(55, 53, 47, 0.35);
   --color-text-inverse: #ffffff;
 
   --color-accent-primary: #2383e2;
   --color-accent-secondary: #0f7b6c;
   --color-accent-warning: #dfab01;
   --color-accent-danger: #e03e3e;
-  --color-accent-muted: rgba(55, 53, 47, 0.45);
+  --color-accent-muted: rgba(55, 53, 47, 0.58);
 
   --radius-window: 4px;
   --radius-card: 4px;
@@ -2522,10 +2522,10 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-pre-border: rgba(55, 53, 47, 0.09);
   --pm-pre-text: #37352f;
   --pm-blockquote-border: #37352f;
-  --pm-blockquote-text: rgba(55, 53, 47, 0.6);
+  --pm-blockquote-text: rgba(55, 53, 47, 0.70);
   --pm-hr: rgba(55, 53, 47, 0.09);
-  --pm-placeholder: rgba(55, 53, 47, 0.3);
-  --pm-task-done: rgba(55, 53, 47, 0.4);
+  --pm-placeholder: rgba(55, 53, 47, 0.40);
+  --pm-task-done: rgba(55, 53, 47, 0.50);
   --pm-scrollbar: rgba(55, 53, 47, 0.15);
   --pm-scrollbar-hover: rgba(55, 53, 47, 0.3);
   --pm-selection: rgba(35, 131, 226, 0.15);
@@ -2544,16 +2544,16 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-active: rgba(255, 255, 255, 0.1);
 
   --color-text-primary: rgba(255, 255, 255, 0.9);
-  --color-text-secondary: rgba(255, 255, 255, 0.6);
-  --color-text-tertiary: rgba(255, 255, 255, 0.4);
-  --color-text-quaternary: rgba(255, 255, 255, 0.2);
+  --color-text-secondary: rgba(255, 255, 255, 0.72);
+  --color-text-tertiary: rgba(255, 255, 255, 0.55);
+  --color-text-quaternary: rgba(255, 255, 255, 0.35);
   --color-text-inverse: #191919;
 
   --color-accent-primary: #2eaadc;
   --color-accent-secondary: #34d158;
   --color-accent-warning: #eab308;
   --color-accent-danger: #ef4444;
-  --color-accent-muted: rgba(255, 255, 255, 0.4);
+  --color-accent-muted: rgba(255, 255, 255, 0.55);
 
   --radius-window: 4px;
   --radius-card: 4px;
@@ -2569,10 +2569,10 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-pre-border: rgba(255, 255, 255, 0.09);
   --pm-pre-text: rgba(255, 255, 255, 0.9);
   --pm-blockquote-border: rgba(255, 255, 255, 0.8);
-  --pm-blockquote-text: rgba(255, 255, 255, 0.6);
+  --pm-blockquote-text: rgba(255, 255, 255, 0.70);
   --pm-hr: rgba(255, 255, 255, 0.09);
-  --pm-placeholder: rgba(255, 255, 255, 0.3);
-  --pm-task-done: rgba(255, 255, 255, 0.4);
+  --pm-placeholder: rgba(255, 255, 255, 0.40);
+  --pm-task-done: rgba(255, 255, 255, 0.50);
   --pm-scrollbar: rgba(255, 255, 255, 0.15);
   --pm-scrollbar-hover: rgba(255, 255, 255, 0.3);
   --pm-selection: rgba(46, 170, 220, 0.25);
@@ -2699,16 +2699,16 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-active: rgba(50, 182, 122, 0.08);
 
   --color-text-primary: #2c3e50;
-  --color-text-secondary: #5d6d7e;
-  --color-text-tertiary: #85929e;
-  --color-text-quaternary: #bdc3c7;
+  --color-text-secondary: #415b76;
+  --color-text-tertiary: #6c7a89;
+  --color-text-quaternary: #909ea9;
   --color-text-inverse: #ffffff;
 
   --color-accent-primary: #32b67a;
   --color-accent-secondary: #2e9d68;
   --color-accent-warning: #f39c12;
   --color-accent-danger: #e74c3c;
-  --color-accent-muted: #85929e;
+  --color-accent-muted: #6c7a89;
 
   --radius-window: 12px;
   --radius-card: 10px;
@@ -2724,10 +2724,10 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-pre-border: #e1e1db;
   --pm-pre-text: #2c3e50;
   --pm-blockquote-border: #32b67a;
-  --pm-blockquote-text: #5d6d7e;
+  --pm-blockquote-text: #415b76;
   --pm-hr: #e1e1db;
-  --pm-placeholder: #bdc3c7;
-  --pm-task-done: #bdc3c7;
+  --pm-placeholder: #909ea9;
+  --pm-task-done: #909ea9;
   --pm-scrollbar: #eaeae5;
   --pm-scrollbar-hover: #d5d5cd;
   --pm-selection: rgba(50, 182, 122, 0.15);
@@ -2753,8 +2753,8 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
   --color-text-primary: #191919;
   --color-text-secondary: #595650;
-  --color-text-tertiary: #928f86;
-  --color-text-quaternary: #bebbae;
+  --color-text-tertiary: #747167;
+  --color-text-quaternary: #9c988c;
   --color-text-inverse: #ffffff;
 
   --color-accent-primary: #c95b36;
@@ -2779,8 +2779,8 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-blockquote-border: #c95b36;
   --pm-blockquote-text: #595650;
   --pm-hr: #e9e5d9;
-  --pm-placeholder: #bebbae;
-  --pm-task-done: #bebbae;
+  --pm-placeholder: #9c988c;
+  --pm-task-done: #9c988c;
   --pm-scrollbar: rgba(201, 91, 54, 0.12);
   --pm-scrollbar-hover: rgba(201, 91, 54, 0.25);
   --pm-selection: rgba(201, 91, 54, 0.15);
@@ -2800,8 +2800,8 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
   --color-text-primary: #e5e3dd;
   --color-text-secondary: #aba8a0;
-  --color-text-tertiary: #7d7a72;
-  --color-text-quaternary: #4f4c46;
+  --color-text-tertiary: #9b9890;
+  --color-text-quaternary: #6b6861;
   --color-text-inverse: #181715;
 
   --color-accent-primary: #e28a6d;
@@ -2826,8 +2826,8 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-blockquote-border: #e28a6d;
   --pm-blockquote-text: #aba8a0;
   --pm-hr: #2f2d28;
-  --pm-placeholder: #7d7a72;
-  --pm-task-done: #7d7a72;
+  --pm-placeholder: #9b9890;
+  --pm-task-done: #9b9890;
   --pm-scrollbar: rgba(226, 138, 109, 0.15);
   --pm-scrollbar-hover: rgba(226, 138, 109, 0.3);
   --pm-selection: rgba(226, 138, 109, 0.25);
@@ -2846,16 +2846,16 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-active: rgba(50, 182, 122, 0.15);
 
   --color-text-primary: #e0e0d8;
-  --color-text-secondary: #a5a59e;
-  --color-text-tertiary: #787873;
-  --color-text-quaternary: #454542;
+  --color-text-secondary: #b5b5ad;
+  --color-text-tertiary: #989893;
+  --color-text-quaternary: #62625f;
   --color-text-inverse: #181816;
 
   --color-accent-primary: #3cd08c;
   --color-accent-secondary: #32b67a;
   --color-accent-warning: #f39c12;
   --color-accent-danger: #e74c3c;
-  --color-accent-muted: #787873;
+  --color-accent-muted: #989893;
 
   --radius-window: 12px;
   --radius-card: 10px;
@@ -2871,10 +2871,10 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-pre-border: #363632;
   --pm-pre-text: #e0e0d8;
   --pm-blockquote-border: #3cd08c;
-  --pm-blockquote-text: #a5a59e;
+  --pm-blockquote-text: #b5b5ad;
   --pm-hr: #363632;
-  --pm-placeholder: #787873;
-  --pm-task-done: #787873;
+  --pm-placeholder: #989893;
+  --pm-task-done: #989893;
   --pm-scrollbar: #363632;
   --pm-scrollbar-hover: #454542;
   --pm-selection: rgba(60, 208, 140, 0.25);
@@ -3010,5 +3010,59 @@ textarea.no-focus-ring:focus-visible,
   --radius-card: 8px;
   --radius-button: 6px;
   --radius-input: 6px;
+}
+
+/* ---------- Skin & Theme Compatibility Safety Fallbacks ---------- */
+:root[data-skin] .dark .bg-white {
+  background-color: var(--color-surface) !important;
+}
+
+:root[data-skin] .dark .bg-zinc-50,
+:root[data-skin] .dark .bg-slate-50,
+:root[data-skin] .dark .bg-gray-50,
+:root[data-skin] .dark .bg-neutral-50 {
+  background-color: var(--color-bg) !important;
+}
+
+:root[data-skin] .dark .text-zinc-900,
+:root[data-skin] .dark .text-zinc-850,
+:root[data-skin] .dark .text-zinc-800,
+:root[data-skin] .dark .text-slate-900,
+:root[data-skin] .dark .text-gray-900,
+:root[data-skin] .dark .text-black {
+  color: var(--color-text-primary) !important;
+}
+
+/* Redirect hardcoded focus ring styles to the current skin's accent color */
+:root[data-skin] .focus-within\:ring-emerald-500:focus-within,
+:root[data-skin] .focus\:ring-indigo-500:focus,
+:root[data-skin] .focus\:ring-indigo-500\/30:focus,
+:root[data-skin] .focus\:ring-accent-primary\/40:focus,
+:root[data-skin] .focus-within\:ring-indigo-500:focus-within {
+  --tw-ring-color: var(--color-accent-primary) !important;
+}
+
+:root[data-skin] .focus-within\:border-transparent:focus-within,
+:root[data-skin] .focus\:border-indigo-500:focus,
+:root[data-skin] .focus\:border-accent-primary:focus,
+:root[data-skin] .focus-within\:border-accent-primary:focus-within {
+  border-color: var(--color-accent-primary) !important;
+}
+
+/* Fix mobile bottom navigation active indicators and hover rules for custom skins */
+:root[data-skin] .text-accent-primary {
+  color: var(--color-accent-primary) !important;
+}
+:root[data-skin] .bg-accent-primary {
+  background-color: var(--color-accent-primary) !important;
+}
+:root[data-skin] .bg-accent-primary\/5 {
+  background-color: color-mix(in srgb, var(--color-accent-primary) 5%, transparent) !important;
+}
+:root[data-skin] .bg-accent-primary\/10 {
+  background-color: color-mix(in srgb, var(--color-accent-primary) 10%, transparent) !important;
+}
+:root[data-skin] .bg-accent-primary\/15 {
+  background-color: color-mix(in srgb, var(--color-accent-primary) 15%, transparent) !important;
 }
 

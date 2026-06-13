@@ -1,0 +1,58 @@
+name: super_note_mobile
+description: "Professional native mobile client for Super-Note, implementing LAN discovery, Says recording, and collaborative editing."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation & State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Web Rendering for TipTap/CodeMirror collaborative editor
+  flutter_inappwebview: ^6.0.0
+
+  # mDNS LAN Peer Discovery
+  nsd: ^1.2.0
+
+  # Hardware Mappings & Audio Memos (Says)
+  record: ^5.0.4
+  audioplayers: ^6.0.0
+  camera: ^0.10.5+9
+  path_provider: ^2.1.1
+  permission_handler: ^11.1.0
+
+  # Local Notification & Sync Scheduling
+  flutter_local_notifications: ^17.0.0
+  timezone: ^0.9.2
+
+  # Security & Biometrics
+  local_auth: ^2.1.8
+  flutter_secure_storage: ^9.0.0
+
+  # Networking & Sync HTTP Helper
+  dio: ^5.4.0
+
+  # UI Polish & Icons
+  cupertino_icons: ^1.0.6
+  lucide_icons: ^0.320.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Asset bundling for local WebView editor
+  assets:
+    - assets/web/
+    - assets/web/dist/
+    - assets/images/

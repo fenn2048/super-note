@@ -311,7 +311,6 @@ function AppLayout() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TabId>("appearance");
   const [barsVisible, setBarsVisible] = useState(true);
-  const [fabHiddenForce, setFabHiddenForce] = useState(false);
   const [showDiaryComposer, setShowDiaryComposer] = useState(false);
   const [composerInitialImages, setComposerInitialImages] = useState<{ id: string; url: string }[]>([]);
   const [showCameraModal, setShowCameraModal] = useState(false);
@@ -331,24 +330,6 @@ function AppLayout() {
   useEffect(() => {
     setBarsVisible(true);
   }, [state.viewMode, state.mobileView, showSettings]);
-
-  useEffect(() => {
-    const handleDoubleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable ||
-        target.closest("input") ||
-        target.closest("textarea")
-      ) {
-        return;
-      }
-      setFabHiddenForce(prev => !prev);
-    };
-    window.addEventListener("dblclick", handleDoubleClick);
-    return () => window.removeEventListener("dblclick", handleDoubleClick);
-  }, []);
 
   // 太空飞船健康提醒
   const { prefs: userPrefs } = useUserPreferences();
@@ -856,7 +837,7 @@ function AppLayout() {
     (state.viewMode === "more");
 
   const { visible: keyboardVisible } = useKeyboardVisible();
-  const showMobileTabBar = isRootPageOfTabBar && !keyboardVisible && state.viewMode !== "trash";
+  const showMobileTabBar = isRootPageOfTabBar && state.viewMode !== "trash";
   const showMobileFAB = showMobileTabBar && state.viewMode !== "more" && state.viewMode !== "trash";
 
 
@@ -921,124 +902,139 @@ function AppLayout() {
         "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
         showMobileTabBar ? "pb-[calc(64px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
       )}>
-        {isMindMapView ? (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <MobileTopBar />
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <MindMapCenter />
-            </Suspense>
-          </div>
-        ) : isAIChatView ? (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <AIChatPanel
-                onClose={() => {
-                  actions.setViewMode("more");
-                  actions.setMobileView("list");
-                }}
-                onNavigateToNote={async (noteId) => {
-                  try {
-                    const { api } = await import("@/lib/api");
-                    const note = await api.getNote(noteId);
-                    if (note) {
-                      actions.setActiveNote(note);
-                      actions.setViewMode("all");
-                      actions.setMobileView("editor");
-                    }
-                  } catch (err) {
-                    console.error("Navigate to note failed:", err);
-                  }
-                }}
-              />
-            </Suspense>
-          </div>
-        ) : isDiaryView ? (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <MobileTopBar />
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <DiaryCenter />
-            </Suspense>
-          </div>
-        ) : isProjectsView ? (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <MobileTopBar />
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <ProjectCenter />
-            </Suspense>
-          </div>
-        ) : isTasksView ? (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <MobileTopBar />
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <TaskCenter />
-            </Suspense>
-          </div>
-        ) : isFilesView ? (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <FileManager />
-            </Suspense>
-          </div>
-        ) : state.viewMode === "more" ? (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-            <MobileMorePage />
-          </Suspense>
-        ) : isHomeView ? (
-          <Dashboard />
-        ) : isMentionsView ? (
-          <div className="flex-1 flex flex-col">
-            <MobileTopBar />
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-              <MentionList />
-            </Suspense>
-          </div>
-        ) : (
-          <div className="flex-1 flex relative overflow-hidden">
-            {/* 笔记列表（仅笔记相关视图展示） */}
-            {isNotesView && (
-              <div
-                className={cn(
-                  state.mobileView === "list" ? "flex" : "hidden md:flex",
-                  "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)]"
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={state.viewMode}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="flex-1 flex flex-col min-h-0 overflow-hidden"
+          >
+            {isMindMapView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <MindMapCenter />
+                </Suspense>
+              </div>
+            ) : isAIChatView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <AIChatPanel
+                    onClose={() => {
+                      actions.setViewMode("more");
+                      actions.setMobileView("list");
+                    }}
+                    onNavigateToNote={async (noteId) => {
+                      try {
+                        const { api } = await import("@/lib/api");
+                        const note = await api.getNote(noteId);
+                        if (note) {
+                          actions.setActiveNote(note);
+                          actions.setViewMode("all");
+                          actions.setMobileView("editor");
+                        }
+                      } catch (err) {
+                        console.error("Navigate to note failed:", err);
+                      }
+                    }}
+                  />
+                </Suspense>
+              </div>
+            ) : isDiaryView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <DiaryCenter />
+                </Suspense>
+              </div>
+            ) : isProjectsView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <ProjectCenter />
+                </Suspense>
+              </div>
+            ) : isTasksView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <TaskCenter />
+                </Suspense>
+              </div>
+            ) : isFilesView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <FileManager />
+                </Suspense>
+              </div>
+            ) : state.viewMode === "more" ? (
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                <MobileMorePage />
+              </Suspense>
+            ) : isHomeView ? (
+              <Dashboard />
+            ) : isMentionsView ? (
+              <div className="flex-1 flex flex-col">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <MentionList />
+                </Suspense>
+              </div>
+            ) : (
+              <div className="flex-1 flex relative overflow-hidden">
+                {/* 笔记列表（仅笔记相关视图展示） */}
+                {isNotesView && (
+                  <div
+                    className={cn(
+                      "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)] transition-transform duration-300 ease-in-out md:translate-x-0 md:opacity-100",
+                      state.mobileView === "list"
+                        ? "translate-x-0 opacity-100"
+                        : "-translate-x-1/3 opacity-50 pointer-events-none absolute inset-y-0 left-0 md:relative md:translate-x-0 md:opacity-100"
+                    )}
+                    style={{
+                      "--note-list-width": `${state.noteListWidth}px`,
+                    } as React.CSSProperties}
+                  >
+                    <NoteList />
+                  </div>
                 )}
-                style={{
-                  "--note-list-width": `${state.noteListWidth}px`,
-                } as React.CSSProperties}
-              >
-                <NoteList />
+
+                {/* 编辑器 — 移动端全屏覆盖 */}
+                <div className={cn(
+                  "absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0 transition-transform duration-300 ease-in-out md:translate-x-0 md:pointer-events-auto",
+                  state.mobileView === "editor" ? "translate-x-0 pointer-events-auto" : "translate-x-full pointer-events-none"
+                )}>
+                  <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                    <EditorPane />
+                  </Suspense>
+                </div>
               </div>
             )}
-
-            {/* 编辑器 — 移动端全屏覆盖 */}
-            <div className={cn(
-              "absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0",
-              state.mobileView === "editor" ? "flex" : "hidden md:flex"
-            )}>
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                <EditorPane />
-              </Suspense>
-            </div>
-          </div>
-        )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {showMobileTabBar && <MobileTabBar visible={barsVisible} />}
+      {showMobileTabBar && <MobileTabBar visible={barsVisible && !keyboardVisible} />}
 
-      {showMobileFAB && barsVisible && !fabHiddenForce && (
-        <MobileFAB
-          onNewNote={quickCreateNote}
-          onNewDiary={() => {
-            setComposerInitialImages([]);
-            setShowDiaryComposer(true);
-          }}
-          onNewTask={() => {
-            setShowTaskComposer(true);
-          }}
-          onCameraClick={() => {
-            setShowCameraModal(true);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {showMobileFAB && barsVisible && !keyboardVisible && (
+          <MobileFAB
+            onNewNote={quickCreateNote}
+            onNewDiary={() => {
+              setComposerInitialImages([]);
+              setShowDiaryComposer(true);
+            }}
+            onNewTask={() => {
+              setShowTaskComposer(true);
+            }}
+            onCameraClick={() => {
+              setShowCameraModal(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <MobileCameraModal
         isOpen={showCameraModal}
@@ -1347,6 +1343,10 @@ function MobileFAB({
       </AnimatePresence>
 
       <motion.div
+        initial={{ opacity: 0, scale: 0.5, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.5, y: 20 }}
+        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
         drag
         dragConstraints={{
           left: -window.innerWidth + 72,

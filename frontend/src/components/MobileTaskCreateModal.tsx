@@ -173,7 +173,7 @@ export default function MobileTaskCreateModal({
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 220 }}
             className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col max-h-[92vh] overflow-hidden shadow-2xl text-tx-primary"
-            style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px)" }}
+            style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px + var(--keyboard-height, 0px))" }}
           >
             {/* Top Pull Handle Indicator */}
             <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
@@ -355,7 +355,7 @@ export default function MobileTaskCreateModal({
                     exit={{ y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 220 }}
                     className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col max-h-[60vh] overflow-hidden shadow-2xl text-tx-primary z-10"
-                    style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px)" }}
+                    style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px + var(--keyboard-height, 0px))" }}
                   >
                     {/* Handle */}
                     <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
@@ -418,7 +418,7 @@ export default function MobileTaskCreateModal({
                     exit={{ y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 220 }}
                     className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col max-h-[60vh] overflow-hidden shadow-2xl text-tx-primary z-10"
-                    style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px)" }}
+                    style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px + var(--keyboard-height, 0px))" }}
                   >
                     {/* Handle */}
                     <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />

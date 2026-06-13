@@ -1,4 +1,18 @@
 /** @type {import('tailwindcss').Config} */
+const semanticGrays = {
+  50: "var(--color-bg)",
+  100: "var(--color-hover)",
+  200: "var(--color-border)",
+  300: "var(--color-border)",
+  400: "var(--color-text-tertiary)",
+  500: "var(--color-text-secondary)",
+  600: "var(--color-text-secondary)",
+  700: "var(--color-text-primary)",
+  800: "var(--color-border)",
+  900: "var(--color-surface)",
+  950: "var(--color-bg)",
+};
+
 module.exports = {
   darkMode: "class",
   content: [
@@ -29,7 +43,7 @@ module.exports = {
         },
         // NOTE: "accent" 原本是 DEFAULT 对象，扩展后同时支持 bg-accent / bg-accent-primary 等
         accent: {
-          DEFAULT: "var(--color-hover)", // shadcn 风格的 bg-accent（悬停态浅灰）
+          DEFAULT: "var(--color-hover)", // shadcn 风格 of bg-accent（悬停态浅灰）
           foreground: "var(--color-text-primary)",
           primary: "var(--color-accent-primary)",
           secondary: "var(--color-accent-secondary)",
@@ -71,6 +85,10 @@ module.exports = {
         border: "var(--color-border)",
         input: "var(--color-border)",
         ring: "var(--color-accent-primary)",
+        zinc: semanticGrays,
+        slate: semanticGrays,
+        gray: semanticGrays,
+        neutral: semanticGrays,
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
