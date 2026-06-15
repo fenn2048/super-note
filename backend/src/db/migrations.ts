@@ -1587,6 +1587,36 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 21,
+    name: "diaries-add-is-pinned",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(diaries)").all() as { name: string }[];
+      if (!cols.some((c) => c.name === "isPinned")) {
+        db.exec("ALTER TABLE diaries ADD COLUMN isPinned INTEGER DEFAULT 0");
+      }
+      db.exec("CREATE INDEX IF NOT EXISTS idx_diaries_pinned_created ON diaries(isPinned DESC, createdAt DESC);");
+    },
+  },
+  {
+    version: 22,
+    name: "diaries-add-comments",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS diary_comments (
+          id TEXT PRIMARY KEY,
+          diaryId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          content TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (diaryId) REFERENCES diaries(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+      db.exec("CREATE INDEX IF NOT EXISTS idx_diary_comments_diary ON diary_comments(diaryId);");
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

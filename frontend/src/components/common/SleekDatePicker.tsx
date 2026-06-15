@@ -210,17 +210,16 @@ export default function SleekDatePicker({
       </div>
 
       {/* Calendar Dropdown Popover */}
-      {isOpen && createPortal(
+      {isOpen && coords && createPortal(
         <div
           ref={popoverRef}
           style={{
             position: "fixed",
-            top: coords ? `${coords.top}px` : "0px",
-            left: coords ? `${coords.left}px` : "0px",
-            opacity: coords ? 1 : 0,
-            pointerEvents: coords ? "auto" : "none",
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            pointerEvents: "auto",
           }}
-          className="bg-app-elevated border border-app-border rounded-xl shadow-2xl z-[9999] p-3 w-64 animate-in fade-in slide-in-from-top-1 duration-150"
+          className="bg-app-elevated border border-app-border rounded-xl shadow-2xl z-[9999] p-3 w-64"
         >
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-3 px-1">

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { X, Camera, RefreshCw, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/lib/toast";
+import { registerPlugin } from "@capacitor/core";
 
 interface MobileCameraModalProps {
   isOpen: boolean;
@@ -26,7 +27,27 @@ export default function MobileCameraModal({ isOpen, onClose, onCapture }: Mobile
         stream.getTracks().forEach((track) => track.stop());
       }
       setLoading(true);
+
+      // On Android: request native camera permission first
+      if (
+        typeof window !== "undefined" &&
+        (window as any).Capacitor?.getPlatform?.() === "android"
+      ) {
+        try {
+          const AppPerms = registerPlugin<any>("AppPermissions");
+          const camRes = await AppPerms.requestCameraPermission();
+          if (!camRes.granted) {
+            toast.error("需要摄像头权限才能使用拍照功能，请在系统设置中授予");
+            onClose();
+            return;
+          }
+        } catch (permErr) {
+          console.warn("Capacitor permission plugin unavailable:", permErr);
+        }
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
+
         video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });

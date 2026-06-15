@@ -148,7 +148,7 @@ export default function ServerAddressInput({
           onChange={(e) => update({ protocol: e.target.value as ServerScheme })}
           aria-label={t("server.protocolLabel")}
           className={
-            "appearance-none bg-transparent text-base md:text-sm text-zinc-900 dark:text-zinc-100 " +
+            "appearance-none bg-transparent text-base md:text-sm text-tx-primary " +
             "focus:outline-none pr-5 py-2.5 cursor-pointer disabled:cursor-not-allowed w-full md:w-auto"
           }
         >
@@ -178,7 +178,7 @@ export default function ServerAddressInput({
           inputMode="url"
           className={
             "flex-1 min-w-0 bg-transparent py-2.5 pr-2 text-base md:text-sm " +
-            "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
+            "text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 " +
             "focus:outline-none disabled:cursor-not-allowed"
           }
         />
@@ -205,7 +205,7 @@ export default function ServerAddressInput({
           aria-label={t("server.portLabel")}
           className={
             "flex-1 bg-transparent py-2.5 pr-2 text-base md:text-sm text-left md:text-center " +
-            "text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 " +
+            "text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 " +
             "focus:outline-none disabled:cursor-not-allowed"
           }
         />

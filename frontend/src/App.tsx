@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck } from "lucide-react";
+import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, FolderPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
@@ -35,7 +35,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { SiteSettingsProvider, useSiteSettings } from "@/hooks/useSiteSettings";
 import { UserPreferencesProvider, useUserPreferences } from "@/hooks/useUserPreferences";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ConfirmProvider } from "@/components/ui/confirm";
+import { ConfirmProvider, prompt as appPrompt } from "@/components/ui/confirm";
 import { toast } from "@/lib/toast";
 import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
@@ -634,6 +634,29 @@ function AppLayout() {
     mobileSidebarOpen: state.mobileSidebarOpen,
   });
 
+  const handleCreateNotebook = useCallback(async () => {
+    const name = await appPrompt({
+      title: t("common.newNotebook") || "新建笔记本",
+      placeholder: t("sidebar.notebookName") || "笔记本名称",
+      confirmText: t("common.confirm") || "确认",
+      cancelText: t("common.cancel") || "取消",
+    });
+    if (!name || !name.trim()) return;
+    try {
+      const nb = await api.createNotebook({ name: name.trim(), icon: "📒" });
+      actions.setNotebooks([...state.notebooks, nb]);
+      toast.success(t("common.createSuccess") || "创建成功");
+    } catch (err: any) {
+      toast.error(err?.message || "创建笔记本失败");
+    }
+  }, [state.notebooks, actions, t]);
+
+  const handleCreateProject = useCallback(async () => {
+    actions.setViewMode("projects");
+    sessionStorage.setItem("super-pending-create-project", "1");
+    window.dispatchEvent(new CustomEvent("super:create-project-trigger"));
+  }, [actions]);
+
   // Alt+N 全局快捷键 / 桌面端菜单"新建笔记"共用同一入口
   const quickCreateNote = useCallback(async () => {
     const { toast } = await import("@/lib/toast");
@@ -1032,6 +1055,8 @@ function AppLayout() {
             onCameraClick={() => {
               setShowCameraModal(true);
             }}
+            onNewNotebook={handleCreateNotebook}
+            onNewProject={handleCreateProject}
           />
         )}
       </AnimatePresence>
@@ -1320,11 +1345,15 @@ function MobileFAB({
   onNewDiary,
   onNewTask,
   onCameraClick,
+  onNewNotebook,
+  onNewProject,
 }: {
   onNewNote: () => void;
   onNewDiary: () => void;
   onNewTask: () => void;
   onCameraClick: () => void;
+  onNewNotebook: () => void;
+  onNewProject: () => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1403,6 +1432,32 @@ function MobileFAB({
                 <span>新建待办</span>
                 <div className="w-8 h-8 rounded-button bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                   <ListTodo size={16} />
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  haptic.light();
+                  setOpen(false);
+                  onNewNotebook();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+              >
+                <span>新建笔记本</span>
+                <div className="w-8 h-8 rounded-button bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                  <FolderPlus size={16} />
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  haptic.light();
+                  setOpen(false);
+                  onNewProject();
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+              >
+                <span>新建项目</span>
+                <div className="w-8 h-8 rounded-button bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                  <Briefcase size={16} />
                 </div>
               </button>
               <button

@@ -313,6 +313,7 @@ function initSchema(db: Database.Database) {
       images TEXT NOT NULL DEFAULT '[]',
       visibility TEXT NOT NULL DEFAULT 'PRIVATE',
       voice TEXT DEFAULT NULL,
+      isPinned INTEGER DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -663,6 +664,7 @@ function initSchema(db: Database.Database) {
         images TEXT NOT NULL DEFAULT '[]',
         visibility TEXT NOT NULL DEFAULT 'PRIVATE',
         voice TEXT DEFAULT NULL,
+        isPinned INTEGER DEFAULT 0,
         createdAt TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -1173,5 +1175,17 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_project_discussions_project ON project_discussions(projectId);
+
+    CREATE TABLE IF NOT EXISTS diary_comments (
+      id TEXT PRIMARY KEY,
+      diaryId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (diaryId) REFERENCES diaries(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_diary_comments_diary ON diary_comments(diaryId);
   `);
 }

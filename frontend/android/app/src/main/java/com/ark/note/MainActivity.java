@@ -36,8 +36,10 @@ public class MainActivity extends BridgeActivity {
             startService(serviceIntent);
         }
 
-        // Request permissions
-        checkAndRequestPermissions();
+
+        // Request permissions (removed from startup; requested on-demand now)
+        // checkAndRequestPermissions();
+
 
         // Inject download bridge and customize WebChromeClient for permissions
         if (this.bridge != null && this.bridge.getWebView() != null) {

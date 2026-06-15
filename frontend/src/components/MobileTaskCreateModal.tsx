@@ -7,6 +7,7 @@ import { toast } from "@/lib/toast";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Capacitor } from "@capacitor/core";
 
 interface MobileTaskCreateModalProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ export default function MobileTaskCreateModal({
   const [isAssigneeDrawerOpen, setIsAssigneeDrawerOpen] = useState(false);
 
   const workspaceId = getCurrentWorkspace();
+  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 
   // Load projects and current user
   useEffect(() => {
@@ -156,7 +158,10 @@ export default function MobileTaskCreateModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center select-text md:hidden">
+        <div 
+          className="fixed inset-0 z-[100] flex items-end justify-center select-text md:hidden"
+          style={{ bottom: isIOS ? "var(--keyboard-height, 0px)" : "0px" }}
+        >
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -172,8 +177,11 @@ export default function MobileTaskCreateModal({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 220 }}
-            className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col max-h-[92vh] overflow-hidden shadow-2xl text-tx-primary"
-            style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px + var(--keyboard-height, 0px))" }}
+            className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col overflow-hidden shadow-2xl text-tx-primary"
+            style={{ 
+              maxHeight: "92%",
+              paddingBottom: "calc(var(--safe-area-bottom) + 16px)"
+            }}
           >
             {/* Top Pull Handle Indicator */}
             <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
@@ -339,7 +347,10 @@ export default function MobileTaskCreateModal({
             {/* Project Selector Drawer */}
             <AnimatePresence>
               {isProjectDrawerOpen && (
-                <div className="fixed inset-0 z-[110] flex items-end justify-center md:hidden">
+                <div 
+                  className="fixed inset-0 z-[110] flex items-end justify-center md:hidden"
+                  style={{ bottom: isIOS ? "var(--keyboard-height, 0px)" : "0px" }}
+                >
                   {/* Backdrop */}
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -354,8 +365,11 @@ export default function MobileTaskCreateModal({
                     animate={{ y: 0 }}
                     exit={{ y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 220 }}
-                    className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col max-h-[60vh] overflow-hidden shadow-2xl text-tx-primary z-10"
-                    style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px + var(--keyboard-height, 0px))" }}
+                    className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10"
+                    style={{ 
+                      maxHeight: "60%",
+                      paddingBottom: "calc(var(--safe-area-bottom) + 16px)"
+                    }}
                   >
                     {/* Handle */}
                     <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
@@ -402,7 +416,10 @@ export default function MobileTaskCreateModal({
             {/* Assignee Selector Drawer */}
             <AnimatePresence>
               {isAssigneeDrawerOpen && (
-                <div className="fixed inset-0 z-[110] flex items-end justify-center md:hidden">
+                <div 
+                  className="fixed inset-0 z-[110] flex items-end justify-center md:hidden"
+                  style={{ bottom: isIOS ? "var(--keyboard-height, 0px)" : "0px" }}
+                >
                   {/* Backdrop */}
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -417,8 +434,11 @@ export default function MobileTaskCreateModal({
                     animate={{ y: 0 }}
                     exit={{ y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 220 }}
-                    className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col max-h-[60vh] overflow-hidden shadow-2xl text-tx-primary z-10"
-                    style={{ paddingBottom: "calc(var(--safe-area-bottom) + 16px + var(--keyboard-height, 0px))" }}
+                    className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10"
+                    style={{ 
+                      maxHeight: "60%",
+                      paddingBottom: "calc(var(--safe-area-bottom) + 16px)"
+                    }}
                   >
                     {/* Handle */}
                     <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />

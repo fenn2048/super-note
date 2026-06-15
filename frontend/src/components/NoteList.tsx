@@ -1177,7 +1177,8 @@ export default function NoteList() {
   // 排序偏好（持久化到 localStorage，不入 store；用户在不同设备/浏览器下可独立设置）
   const [sortPref, setSortPref] = useState<{ by: SortBy; dir: SortDir }>(() => loadSortPref());
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const sortBtnRef = useRef<HTMLButtonElement>(null);
+  const sortBtnMobileRef = useRef<HTMLButtonElement>(null);
+  const sortBtnDesktopRef = useRef<HTMLButtonElement>(null);
   const [sharedNoteIds, setSharedNoteIds] = useState<Set<string>>(new Set());
   const [dragNoteId, setDragNoteId] = useState<string | null>(null);
   const [dragOverNoteId, setDragOverNoteId] = useState<string | null>(null);
@@ -2610,7 +2611,7 @@ export default function NoteList() {
                   {/* 移动端排序按钮（搜索/回收站不显示） */}
                   {state.viewMode !== "trash" && state.viewMode !== "search" && (
                     <button
-                      ref={sortBtnRef}
+                      ref={sortBtnMobileRef}
                       onClick={() => setShowSortMenu((v) => !v)}
                       className={cn(
                         "p-1.5 rounded-md transition-colors relative",
@@ -2703,7 +2704,7 @@ export default function NoteList() {
               {showSortMenu && (
                 <SortMenu
                   value={sortPref}
-                  anchorRef={sortBtnRef}
+                  anchorRef={sortBtnMobileRef}
                   onChange={(next) => {
                     setSortPref(next);
                     saveSortPref(next);
@@ -2749,7 +2750,7 @@ export default function NoteList() {
           {/* 桌面端排序按钮 */}
           {state.viewMode !== "trash" && state.viewMode !== "search" && (
             <button
-              ref={sortBtnRef}
+              ref={sortBtnDesktopRef}
               onClick={() => setShowSortMenu((v) => !v)}
               className={cn(
                 "p-1.5 rounded-md transition-colors relative",
@@ -2804,11 +2805,11 @@ export default function NoteList() {
                 <Plus size={15} />
               </Button>
               <button
-                ref={createMenuAnchorMobileRef}
+                ref={createMenuAnchorDesktopRef}
                 type="button"
                 aria-label="选择新建类型"
                 onClick={() => {
-                  setCreateMenuSource("mobile");
+                  setCreateMenuSource("desktop");
                   setCreateMenuOpen((v) => !v);
                 }}
                 className="h-7 w-4 flex items-center justify-center rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
@@ -2821,7 +2822,7 @@ export default function NoteList() {
           {showSortMenu && (
             <SortMenu
               value={sortPref}
-              anchorRef={sortBtnRef}
+              anchorRef={sortBtnDesktopRef}
               onChange={(next) => {
                 setSortPref(next);
                 saveSortPref(next);

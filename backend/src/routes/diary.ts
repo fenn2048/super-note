@@ -112,9 +112,11 @@ interface DiaryRow {
   images: string;
   visibility: string;
   voice: string | null;
+  isPinned?: number;
   createdAt: string;
   creatorName?: string | null;
   tagsJson?: string | null;
+  commentCount?: number;
 }
 
 function rowToDiary(row: DiaryRow) {
@@ -165,9 +167,11 @@ function rowToDiary(row: DiaryRow) {
     attachments,
     visibility: row.visibility || "PRIVATE",
     voice,
+    isPinned: row.isPinned ?? 0,
     createdAt: row.createdAt,
     creatorName: row.creatorName ?? null,
     tags,
+    commentCount: row.commentCount ?? 0,
   };
 }
 
@@ -359,7 +363,8 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
            (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
             FROM tags t
             JOIN diary_tags dt ON t.id = dt.tagId
-            WHERE dt.diaryId = diaries.id) AS tagsJson
+            WHERE dt.diaryId = diaries.id) AS tagsJson,
+           (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount
     FROM diaries LEFT JOIN users ON users.id = diaries.userId
     WHERE diaries.id = ?
   `).get(id) as DiaryRow;
@@ -468,7 +473,7 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
   const finalArgs = [...args];
   if (cursor) {
     // 带 diaries. 前缀：因为本 SELECT 与 users 表 LEFT JOIN，避免 createdAt 歧义。
-    finalWhere += " AND diaries.createdAt < ?";
+    finalWhere += " AND diaries.createdAt < ? AND diaries.isPinned = 0";
     finalArgs.push(cursor);
   }
 
@@ -476,14 +481,15 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
     (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
      FROM tags t
      JOIN diary_tags dt ON t.id = dt.tagId
-     WHERE dt.diaryId = diaries.id) AS tagsJson`;
+     WHERE dt.diaryId = diaries.id) AS tagsJson,
+    (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount`;
 
   const rows = db
     .prepare(
       `SELECT ${selectFields}
        FROM diaries LEFT JOIN users ON users.id = diaries.userId
        WHERE ${finalWhere}
-       ORDER BY diaries.createdAt DESC
+       ORDER BY diaries.isPinned DESC, diaries.createdAt DESC
        LIMIT ?`,
     )
     .all(...finalArgs, limit) as DiaryRow[];
@@ -555,6 +561,8 @@ diary.put("/:id", (c) => {
     const newVoice: any | undefined =
       body.voice !== undefined ? body.voice : undefined;
     const newTagIds: string[] | undefined = Array.isArray(body.tagIds) ? body.tagIds : undefined;
+    const newIsPinned: number | undefined =
+      body.isPinned !== undefined ? (body.isPinned ? 1 : 0) : undefined;
 
     // 计算合并后的最终值（仅用来做"text, images, voice 至少一项非空"校验）
     const finalText = newContentText !== undefined ? newContentText : row.contentText;
@@ -587,7 +595,8 @@ diary.put("/:id", (c) => {
       newImagesRaw === undefined &&
       newVisibility === undefined &&
       newVoice === undefined &&
-      newTagIds === undefined
+      newTagIds === undefined &&
+      newIsPinned === undefined
     ) {
       // 顺手加载已有 tags
       const currentTags = db.prepare(`
@@ -707,6 +716,10 @@ diary.put("/:id", (c) => {
         updates.push("voice = ?");
         args.push(newVoice ? JSON.stringify(newVoice) : null);
       }
+      if (newIsPinned !== undefined) {
+        updates.push("isPinned = ?");
+        args.push(newIsPinned);
+      }
       if (updates.length > 0) {
         args.push(id);
         db.prepare(
@@ -737,7 +750,8 @@ diary.put("/:id", (c) => {
                 (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
                  FROM tags t
                  JOIN diary_tags dt ON t.id = dt.tagId
-                 WHERE dt.diaryId = diaries.id) AS tagsJson
+                 WHERE dt.diaryId = diaries.id) AS tagsJson,
+                (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount
            FROM diaries LEFT JOIN users ON users.id = diaries.userId
           WHERE diaries.id = ?`,
       )
@@ -1139,43 +1153,60 @@ diary.post("/transcribe", async (c) => {
     return c.json({ error: "Invalid JSON" }, 400);
   }
   const { diaryId, voiceId } = body;
-  if (!diaryId || !voiceId) {
-    return c.json({ error: "diaryId and voiceId required" }, 400);
+  if (!voiceId) {
+    return c.json({ error: "voiceId required" }, 400);
   }
 
-  // 1) 校验说说权限
-  const diaryRow = db
-    .prepare("SELECT * FROM diaries WHERE id = ?")
-    .get(diaryId) as DiaryRow | undefined;
-  if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
+  let absPath = "";
+  let attachRow: any;
+  let diaryRow: any;
 
-  if (!canManageResource(diaryRow.userId, diaryRow.workspaceId, userId)) {
-    // 允许同一个工作区的成员读取（转文字）
-    const wsRole = diaryRow.workspaceId ? getUserWorkspaceRole(diaryRow.workspaceId, userId) : null;
-    if (!wsRole && diaryRow.userId !== userId && diaryRow.visibility !== "PUBLIC") {
-      return c.json({ error: "无权访问该说说", code: "FORBIDDEN" }, 403);
+  if (diaryId) {
+    // 1) 校验说说权限
+    diaryRow = db
+      .prepare("SELECT * FROM diaries WHERE id = ?")
+      .get(diaryId) as DiaryRow | undefined;
+    if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
+
+    if (!canManageResource(diaryRow.userId, diaryRow.workspaceId, userId)) {
+      // 允许同一个工作区的成员读取（转文字）
+      const wsRole = diaryRow.workspaceId ? getUserWorkspaceRole(diaryRow.workspaceId, userId) : null;
+      if (!wsRole && diaryRow.userId !== userId && diaryRow.visibility !== "PUBLIC") {
+        return c.json({ error: "无权访问该说说", code: "FORBIDDEN" }, 403);
+      }
+    }
+
+    // 2) 如果已经转过文字，直接返回
+    if (diaryRow.voice) {
+      try {
+        const parsed = JSON.parse(diaryRow.voice);
+        if (parsed && parsed.text) {
+          return c.json({ text: parsed.text });
+        }
+      } catch {}
+    }
+
+    // 3) 查找语音附件
+    attachRow = db
+      .prepare("SELECT path FROM diary_attachments WHERE id = ? AND diaryId = ?")
+      .get(voiceId, diaryId) as { path: string } | undefined;
+    if (!attachRow) {
+      return c.json({ error: "语音附件不存在" }, 404);
+    }
+  } else {
+    // 没有 diaryId，直接从悬空附件找，只能由上传该附件的用户访问
+    attachRow = db
+      .prepare("SELECT * FROM diary_attachments WHERE id = ?")
+      .get(voiceId) as any;
+    if (!attachRow) {
+      return c.json({ error: "语音附件不存在" }, 404);
+    }
+    if (attachRow.userId !== userId) {
+      return c.json({ error: "无权访问该语音附件", code: "FORBIDDEN" }, 403);
     }
   }
 
-  // 2) 如果已经转过文字，直接返回
-  if (diaryRow.voice) {
-    try {
-      const parsed = JSON.parse(diaryRow.voice);
-      if (parsed && parsed.text) {
-        return c.json({ text: parsed.text });
-      }
-    } catch {}
-  }
-
-  // 3) 查找语音附件
-  const attachRow = db
-    .prepare("SELECT path FROM diary_attachments WHERE id = ? AND diaryId = ?")
-    .get(voiceId, diaryId) as { path: string } | undefined;
-  if (!attachRow) {
-    return c.json({ error: "语音附件不存在" }, 404);
-  }
-
-  const absPath = path.join(getAttachmentsDir(), attachRow.path);
+  absPath = path.join(getAttachmentsDir(), attachRow.path);
   if (!fs.existsSync(absPath)) {
     return c.json({ error: "语音文件不存在" }, 404);
   }
@@ -1209,19 +1240,21 @@ diary.post("/transcribe", async (c) => {
     const resJson = await response.json() as { text: string };
     const text = resJson.text || "";
 
-    // 5) 更新 diaries 的 voice 字段以缓存转写出的文字
-    let voiceObj: any = {};
-    if (diaryRow.voice) {
-      try {
-        voiceObj = JSON.parse(diaryRow.voice);
-      } catch {}
-    }
-    voiceObj.text = text;
+    // 6) 更新 diaries 的 voice 字段以缓存转写出的文字
+    if (diaryId && diaryRow) {
+      let voiceObj: any = {};
+      if (diaryRow.voice) {
+        try {
+          voiceObj = JSON.parse(diaryRow.voice);
+        } catch {}
+      }
+      voiceObj.text = text;
 
-    db.prepare("UPDATE diaries SET voice = ? WHERE id = ?").run(
-      JSON.stringify(voiceObj),
-      diaryId,
-    );
+      db.prepare("UPDATE diaries SET voice = ? WHERE id = ?").run(
+        JSON.stringify(voiceObj),
+        diaryId,
+      );
+    }
 
     try { resetIdleTimer(); } catch {}
 
@@ -1230,6 +1263,103 @@ diary.post("/transcribe", async (c) => {
     console.error("Transcription error:", err);
     return c.json({ error: `转文字失败: ${err?.message || err}` }, 500);
   }
+});
+
+// ===================== 说说评论功能 =====================
+
+// 1. 获取某条说说的评论列表
+diary.get("/:id/comments", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const id = c.req.param("id");
+
+  const diaryRow = db
+    .prepare("SELECT userId, workspaceId, visibility FROM diaries WHERE id = ?")
+    .get(id) as { userId: string; workspaceId: string | null; visibility: string } | undefined;
+  if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
+
+  // 检查读权限
+  const hasAccess = diaryRow.workspaceId 
+    ? !!getUserWorkspaceRole(diaryRow.workspaceId, userId)
+    : (diaryRow.userId === userId || diaryRow.visibility === "PUBLIC");
+  if (!hasAccess) {
+    return c.json({ error: "无权访问该说说的评论", code: "FORBIDDEN" }, 403);
+  }
+
+  const comments = db.prepare(`
+    SELECT dc.*, u.username, u.avatarUrl
+    FROM diary_comments dc
+    JOIN users u ON u.id = dc.userId
+    WHERE dc.diaryId = ?
+    ORDER BY dc.createdAt ASC
+  `).all(id);
+
+  return c.json(comments);
+});
+
+// 2. 发表评论
+diary.post("/:id/comments", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const { content } = body as { content: string };
+
+  if (!content || !content.trim()) {
+    return c.json({ error: "评论内容不能为空" }, 400);
+  }
+
+  const diaryRow = db
+    .prepare("SELECT userId, workspaceId, visibility FROM diaries WHERE id = ?")
+    .get(id) as { userId: string; workspaceId: string | null; visibility: string } | undefined;
+  if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
+
+  // 检查读权限（能读才能评）
+  const hasAccess = diaryRow.workspaceId 
+    ? !!getUserWorkspaceRole(diaryRow.workspaceId, userId)
+    : (diaryRow.userId === userId || diaryRow.visibility === "PUBLIC");
+  if (!hasAccess) {
+    return c.json({ error: "无权评论该说说", code: "FORBIDDEN" }, 403);
+  }
+
+  const commentId = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO diary_comments (id, diaryId, userId, content, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(commentId, id, userId, content.trim());
+
+  const newComment = db.prepare(`
+    SELECT dc.*, u.username, u.avatarUrl
+    FROM diary_comments dc
+    JOIN users u ON u.id = dc.userId
+    WHERE dc.id = ?
+  `).get(commentId);
+
+  return c.json(newComment, 201);
+});
+
+// 3. 删除评论
+diary.delete("/comments/:commentId", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const commentId = c.req.param("commentId");
+
+  const comment = db
+    .prepare("SELECT dc.userId, d.userId AS diaryOwnerId, d.workspaceId FROM diary_comments dc JOIN diaries d ON d.id = dc.diaryId WHERE dc.id = ?")
+    .get(commentId) as { userId: string; diaryOwnerId: string; workspaceId: string | null } | undefined;
+  if (!comment) return c.json({ error: "评论不存在" }, 404);
+
+  // 允许删除的条件：评论作者自己，说说所有者，或者工作区管理人员(canManageResource)
+  const isCommentOwner = comment.userId === userId;
+  const isDiaryOwner = comment.diaryOwnerId === userId;
+  const isWorkspaceManager = comment.workspaceId ? canManageResource(comment.diaryOwnerId, comment.workspaceId, userId) : false;
+
+  if (!isCommentOwner && !isDiaryOwner && !isWorkspaceManager) {
+    return c.json({ error: "无权删除该评论", code: "FORBIDDEN" }, 403);
+  }
+
+  db.prepare("DELETE FROM diary_comments WHERE id = ?").run(commentId);
+  return c.json({ success: true });
 });
 
 export default diary;

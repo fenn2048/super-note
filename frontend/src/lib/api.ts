@@ -1590,13 +1590,13 @@ export const api = {
    */
   updateDiary: (
     id: string,
-    data: { contentText?: string; mood?: string; images?: string[]; visibility?: string; voice?: { id: string; duration: number; text?: string } | null; tagIds?: string[] },
+    data: { contentText?: string; mood?: string; images?: string[]; visibility?: string; voice?: { id: string; duration: number; text?: string } | null; tagIds?: string[]; isPinned?: number },
   ) =>
     request<Diary>(`/diary/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  transcribeDiaryVoice: (diaryId: string, voiceId: string) => {
+  transcribeDiaryVoice: (diaryId: string | undefined, voiceId: string) => {
     return request<{ text: string }>("/diary/transcribe", {
       method: "POST",
       body: JSON.stringify({ diaryId, voiceId }),
@@ -1629,6 +1629,14 @@ export const api = {
       `/diary/calendar?${params.toString()}`,
     );
   },
+  getDiaryComments: (diaryId: string) => request<any[]>(`/diary/${diaryId}/comments`),
+  postDiaryComment: (diaryId: string, content: string) =>
+    request<any>(`/diary/${diaryId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  deleteDiaryComment: (commentId: string) =>
+    request(`/diary/comments/${commentId}`, { method: "DELETE" }),
 
   // 说说图片：上传 / 删除悬空 / 拼 URL。
   // 上传时机：用户选好图就立即上传（不是发布时再传），体验上能即时看到缩略图、

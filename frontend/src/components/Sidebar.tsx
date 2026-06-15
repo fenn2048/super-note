@@ -950,15 +950,30 @@ function ProjectSidebar() {
       <div className="space-y-0.5 py-2">
         <div
           className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            "flex items-center justify-between group/my-projects px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
             activeFilter.type === "all"
               ? "bg-app-active text-tx-primary font-medium"
               : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
           )}
           onClick={() => selectFilter({ type: "all" })}
         >
-          <Briefcase size={16} />
-          <span>{t("projects.myProjects") || "我的项目"}</span>
+          <div className="flex items-center gap-2">
+            <Briefcase size={16} />
+            <span>{t("projects.myProjects") || "我的项目"}</span>
+          </div>
+          <button
+            type="button"
+            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-projects:opacity-100 opacity-100 transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.setViewMode("projects");
+              sessionStorage.setItem("super-pending-create-project", "1");
+              actions.setMobileSidebar(false);
+              window.dispatchEvent(new CustomEvent("super:create-project-trigger"));
+            }}
+          >
+            <Plus size={14} />
+          </button>
         </div>
         <div
           className={cn(
@@ -1014,7 +1029,7 @@ function ProjectSidebar() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 opacity-0 group-hover/groups-header:opacity-100 transition-opacity"
+            className="h-5 w-5 md:opacity-0 md:group-hover/groups-header:opacity-100 opacity-100 transition-opacity"
             onClick={handleCreateGroup}
           >
             <Plus size={12} />
@@ -2829,6 +2844,36 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
               actions.setTags(allTags);
             } catch (err) {
               console.error("Failed to update tag color:", err);
+            }
+          }}
+          onRename={async () => {
+            const newName = window.prompt(t("tags.promptRename", "请输入新的标签名称"), tagColorPopover.tagName);
+            if (newName === null) return;
+            const trimmed = newName.trim();
+            if (!trimmed) {
+              alert(t("tags.nameRequired", "标签名称不能为空"));
+              return;
+            }
+            try {
+              await api.updateTag(tagColorPopover.tagId, { name: trimmed });
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to rename tag:", err);
+            }
+          }}
+          onDelete={async () => {
+            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            try {
+              await api.deleteTag(tagColorPopover.tagId);
+              if (state.selectedTagId === tagColorPopover.tagId) {
+                actions.setSelectedTag(null);
+                actions.setViewMode("all");
+              }
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to delete tag:", err);
             }
           }}
           onClose={() => setTagColorPopover(null)}

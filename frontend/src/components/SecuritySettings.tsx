@@ -163,7 +163,7 @@ function PasswordSection() {
     <section>
       <div className="flex items-center gap-2 mb-1">
         <Shield className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{t('securitySettings.title')}</h3>
+        <h3 className="text-lg font-bold text-tx-primary">{t('securitySettings.title')}</h3>
       </div>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">{t('securitySettings.description')}</p>
 
@@ -186,7 +186,7 @@ function PasswordSection() {
               type={showCurrentPassword ? "text" : "password"}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm ${
+              className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm ${
                 error && !currentPassword ? "border-red-500/50 dark:border-red-500/50" : "border-zinc-200 dark:border-zinc-700"
               }`}
               placeholder={t('securitySettings.currentPasswordPlaceholder')}
@@ -216,7 +216,7 @@ function PasswordSection() {
               type="text"
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm"
+              className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm"
               placeholder={t('securitySettings.newUsernamePlaceholder')}
               autoComplete="username"
             />
@@ -234,7 +234,7 @@ function PasswordSection() {
               type={showNewPassword ? "text" : "password"}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm"
+              className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm"
               placeholder={t('securitySettings.newPasswordPlaceholder')}
               autoComplete="new-password"
             />
@@ -266,7 +266,7 @@ function PasswordSection() {
                   type={showNewPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm ${
+                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm ${
                     confirmPassword && newPassword !== confirmPassword ? "border-red-500/50 dark:border-red-500/50" : "border-zinc-200 dark:border-zinc-700"
                   }`}
                   placeholder={t('securitySettings.confirmPasswordPlaceholder')}
@@ -457,7 +457,7 @@ function TwoFactorSection() {
     <section>
       <div className="flex items-center gap-2 mb-1">
         <Smartphone className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{t("securitySettings.twoFactor.title")}</h3>
+        <h3 className="text-lg font-bold text-tx-primary">{t("securitySettings.twoFactor.title")}</h3>
       </div>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         {status?.enabled
@@ -472,7 +472,7 @@ function TwoFactorSection() {
           {/* 状态区 */}
           <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50">
             <div className="text-sm">
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">
+              <div className="font-medium text-tx-primary">
                 {status?.enabled
                   ? t("securitySettings.twoFactor.enabledAt", { date: status.enabledAt ? new Date(status.enabledAt).toLocaleString() : "-" })
                   : t("securitySettings.twoFactor.descriptionDisabled")}
@@ -516,7 +516,7 @@ function TwoFactorSection() {
           {/* setup 状态：展示 otpauth URI + 输入 6 位码 */}
           {ui.mode === "setup" && (
             <div className="space-y-3 p-4 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-500/5">
-              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              <div className="text-sm font-medium text-tx-primary">
                 {t("securitySettings.twoFactor.setupTitle")}
               </div>
               <div className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -549,7 +549,7 @@ function TwoFactorSection() {
                   placeholder="123456"
                   inputMode="numeric"
                   maxLength={6}
-                  className="w-full px-3 py-2 text-center tracking-[0.4em] font-mono bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100"
+                  className="w-full px-3 py-2 text-center tracking-[0.4em] font-mono bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-tx-primary"
                 />
                 {ui.error && <p className="text-xs text-red-500 mt-1">{ui.error}</p>}
               </div>
@@ -576,13 +576,13 @@ function TwoFactorSection() {
           {/* disabling：请求输入 code */}
           {ui.mode === "disabling" && (
             <div className="space-y-3 p-4 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50/50 dark:bg-red-500/5">
-              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t("securitySettings.twoFactor.disableTitle")}</div>
+              <div className="text-sm font-medium text-tx-primary">{t("securitySettings.twoFactor.disableTitle")}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-400">{t("securitySettings.twoFactor.disableHint")}</div>
               <input
                 value={ui.code}
                 onChange={(e) => setUi({ ...ui, code: e.target.value })}
                 placeholder="123456"
-                className="w-full px-3 py-2 text-center tracking-[0.3em] font-mono bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100"
+                className="w-full px-3 py-2 text-center tracking-[0.3em] font-mono bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-tx-primary"
               />
               {ui.error && <p className="text-xs text-red-500">{ui.error}</p>}
               <div className="flex items-center gap-2">
@@ -608,7 +608,7 @@ function TwoFactorSection() {
           {/* 展示恢复码（仅一次） */}
           {ui.mode === "showRecovery" && (
             <div className="space-y-3 p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-500/5">
-              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              <div className="text-sm font-medium text-tx-primary">
                 {t("securitySettings.twoFactor.recoveryCodesTitle")}
               </div>
               <div className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -735,7 +735,7 @@ function SessionsSection() {
     <section>
       <div className="flex items-center gap-2 mb-1">
         <LogOut className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{t("securitySettings.sessions.title")}</h3>
+        <h3 className="text-lg font-bold text-tx-primary">{t("securitySettings.sessions.title")}</h3>
       </div>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">{t("securitySettings.sessions.description")}</p>
 
@@ -757,7 +757,7 @@ function SessionsSection() {
               >
                 <Monitor className="w-4 h-4 text-zinc-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <div className="text-sm font-medium text-tx-primary flex items-center gap-2">
                     <span className="truncate">{formatUa(s.userAgent)}</span>
                     {s.current && (
                       <span className="px-1.5 py-0.5 text-[10px] rounded bg-indigo-600 text-white flex-shrink-0">

@@ -434,10 +434,12 @@ export interface Diary {
   attachments?: { id: string; mimeType: string }[];
   visibility: string;
   voice?: { id: string; duration: number; text?: string } | null;
+  isPinned?: number;
   createdAt: string;
   /** 创建者用户名；后端 LEFT JOIN users 返回，工作区视图下用于展示"谁发的"。 */
   creatorName?: string | null;
   tags?: Tag[];
+  commentCount?: number;
 }
 
 export interface DiaryTimeline {
@@ -449,6 +451,17 @@ export interface DiaryTimeline {
 export interface DiaryStats {
   total: number;
   todayCount: number;
+}
+
+export interface DiaryComment {
+  id: string;
+  diaryId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  username: string;
+  avatarUrl: string | null;
 }
 
 // 分享

@@ -141,7 +141,7 @@ export default function WorkspaceManagement() {
       {/* 标题 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1 flex items-center gap-2">
+          <h3 className="text-lg font-bold text-tx-primary mb-1 flex items-center gap-2">
             <Building2 className="w-4 h-4" />
             {t("workspaceManagement.title")}
           </h3>
@@ -199,7 +199,7 @@ export default function WorkspaceManagement() {
                     {/* 主信息 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 truncate">
+                        <span className="text-sm font-medium text-tx-primary truncate">
                           {w.name}
                         </span>
                       </div>
@@ -458,7 +458,7 @@ function Modal({
         className="relative w-full max-w-md bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
-          <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h4>
+          <h4 className="text-sm font-semibold text-tx-primary">{title}</h4>
           <button
             onClick={onClose}
             className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"

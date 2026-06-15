@@ -120,6 +120,36 @@ export default function TagsList() {
               actions.setTags(allTags);
             } catch {}
           }}
+          onRename={async () => {
+            const newName = window.prompt(t("tags.promptRename", "请输入新的标签名称"), tagColorPopover.tagName);
+            if (newName === null) return;
+            const trimmed = newName.trim();
+            if (!trimmed) {
+              alert(t("tags.nameRequired", "标签名称不能为空"));
+              return;
+            }
+            try {
+              await api.updateTag(tagColorPopover.tagId, { name: trimmed });
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to rename tag:", err);
+            }
+          }}
+          onDelete={async () => {
+            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            try {
+              await api.deleteTag(tagColorPopover.tagId);
+              if (state.selectedTagId === tagColorPopover.tagId) {
+                actions.setSelectedTag(null);
+                actions.setViewMode("all");
+              }
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to delete tag:", err);
+            }
+          }}
           onClose={() => setTagColorPopover(null)}
         />
       )}

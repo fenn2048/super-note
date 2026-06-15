@@ -460,7 +460,7 @@ export default function DataManager() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{t('dataManager.title')}</h3>
+        <h3 className="text-lg font-bold text-tx-primary mb-1">{t('dataManager.title')}</h3>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
           {t('dataManager.description')}
         </p>
@@ -495,8 +495,8 @@ export default function DataManager() {
                 onClick={() => setScope(s.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   active
-                    ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/60 dark:hover:bg-zinc-900/40"
+                    ? "bg-white dark:bg-zinc-900 text-tx-primary shadow-sm"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-tx-primary dark:hover:text-zinc-100 hover:bg-white/60 dark:hover:bg-zinc-900/40"
                 }`}
               >
                 <Icon size={14} />
@@ -571,7 +571,7 @@ export default function DataManager() {
             const activeToneClass =
               tab.tone === "red"
                 ? "bg-white dark:bg-zinc-900 text-red-600 dark:text-red-400 shadow-sm"
-                : "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm";
+                : "bg-white dark:bg-zinc-900 text-tx-primary shadow-sm";
             return (
               <button
                 key={tab.id}
@@ -581,7 +581,7 @@ export default function DataManager() {
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   active
                     ? activeToneClass
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/60 dark:hover:bg-zinc-900/40"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-tx-primary dark:hover:text-zinc-100 hover:bg-white/60 dark:hover:bg-zinc-900/40"
                 }`}
               >
                 <Icon size={14} className={active && tab.tone === "red" ? "text-red-500" : undefined} />
@@ -597,7 +597,7 @@ export default function DataManager() {
       <section>
         <div className="flex items-center gap-2 mb-3">
           <FolderDown size={18} className="text-indigo-500" />
-          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('dataManager.exportBackup')}</h4>
+          <h4 className="text-base font-semibold text-tx-primary">{t('dataManager.exportBackup')}</h4>
         </div>
 
         {/* 普通用户且管理员已关闭"个人空间导出"开关时：展示 lock 横幅并禁用下方按钮。
@@ -699,7 +699,7 @@ export default function DataManager() {
       <section>
         <div className="flex items-center gap-2 mb-3">
           <FileUp size={18} className="text-emerald-500" />
-          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('dataManager.importNotes')}</h4>
+          <h4 className="text-base font-semibold text-tx-primary">{t('dataManager.importNotes')}</h4>
         </div>
 
         {/* 与 export 区对称：管理员关闭"个人空间导入"时，对普通用户展示 lock 横幅
@@ -1097,7 +1097,7 @@ export default function DataManager() {
                   <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
                     <AlertTriangle size={20} className="text-red-600 dark:text-red-500" />
                   </div>
-                  <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                  <h4 className="text-lg font-bold text-tx-primary">
                     {t('dataManager.resetConfirmTitle')}
                   </h4>
                 </div>
@@ -1127,7 +1127,7 @@ export default function DataManager() {
                       setResetError("");
                     }}
                     placeholder={t('dataManager.resetInputPlaceholder')}
-                    className={`w-full px-3 py-2 border rounded-lg bg-transparent text-zinc-900 dark:text-zinc-100 outline-none font-mono text-sm transition-colors ${
+                    className={`w-full px-3 py-2 border rounded-lg bg-transparent text-tx-primary outline-none font-mono text-sm transition-colors ${
                       resetError
                         ? "border-red-500/50 focus:ring-2 focus:ring-red-500/30"
                         : "border-zinc-300 dark:border-zinc-700 focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
@@ -1154,7 +1154,7 @@ export default function DataManager() {
                     }}
                     placeholder={t('dataManager.sudoPasswordPlaceholder')}
                     autoComplete="current-password"
-                    className="w-full px-3 py-2 border rounded-lg bg-transparent text-zinc-900 dark:text-zinc-100 outline-none text-sm transition-colors border-zinc-300 dark:border-zinc-700 focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                    className="w-full px-3 py-2 border rounded-lg bg-transparent text-tx-primary outline-none text-sm transition-colors border-zinc-300 dark:border-zinc-700 focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                   />
                   <p className="text-[11px] text-zinc-400 mt-1">
                     {t('dataManager.sudoPasswordHint')}
@@ -1592,7 +1592,7 @@ export function DataFileSection() {
     <section>
       <div className="flex items-center gap-2 mb-3">
         <Database size={18} className="text-violet-500" />
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <h4 className="text-base font-semibold text-tx-primary">
           {t("dataManager.dataFile.title")}
         </h4>
       </div>
@@ -1634,7 +1634,7 @@ export function DataFileSection() {
                 <div className="text-xs font-medium text-zinc-500 mb-2">
                   {t("dataManager.dataFile.myData")}
                 </div>
-                <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1.5">
+                <div className="text-lg font-semibold text-tx-primary mb-1.5">
                   {fmtBytes(info.user.totalBytes)}
                 </div>
                 <div className="space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -1658,7 +1658,7 @@ export function DataFileSection() {
                 <div className="text-xs font-medium text-zinc-500 mb-2">
                   {t("dataManager.dataFile.systemTotal")}
                 </div>
-                <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1.5">
+                <div className="text-lg font-semibold text-tx-primary mb-1.5">
                   {fmtBytes(info.dbFile.total)}
                 </div>
                 <div className="space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -1948,7 +1948,7 @@ export function DataFileSection() {
                   ) : (
                     <AlertTriangle size={16} className="text-amber-500" />
                   )}
-                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">
+                  <span className="text-xs font-semibold text-tx-primary">
                     {t("dataManager.dataFile.healthReportTitle")}
                   </span>
                 </div>
@@ -1960,19 +1960,19 @@ export function DataFileSection() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <div className="rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2">
                   <div className="text-zinc-500 dark:text-zinc-400">{t("dataManager.dataFile.healthMissingFiles")}</div>
-                  <div className="mt-1 font-semibold text-zinc-900 dark:text-zinc-100">{healthReport.missingPhysicalFiles.length}</div>
+                  <div className="mt-1 font-semibold text-tx-primary">{healthReport.missingPhysicalFiles.length}</div>
                 </div>
                 <div className="rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2">
                   <div className="text-zinc-500 dark:text-zinc-400">{t("dataManager.dataFile.healthDanglingRefs")}</div>
-                  <div className="mt-1 font-semibold text-zinc-900 dark:text-zinc-100">{healthReport.danglingReferences.length}</div>
+                  <div className="mt-1 font-semibold text-tx-primary">{healthReport.danglingReferences.length}</div>
                 </div>
                 <div className="rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2">
                   <div className="text-zinc-500 dark:text-zinc-400">{t("dataManager.dataFile.healthSharedFiles")}</div>
-                  <div className="mt-1 font-semibold text-zinc-900 dark:text-zinc-100">{healthReport.sharedPhysicalFiles.length}</div>
+                  <div className="mt-1 font-semibold text-tx-primary">{healthReport.sharedPhysicalFiles.length}</div>
                 </div>
                 <div className="rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2">
                   <div className="text-zinc-500 dark:text-zinc-400">{t("dataManager.dataFile.healthReclaimable")}</div>
-                  <div className="mt-1 font-semibold text-zinc-900 dark:text-zinc-100">{fmtBytes(healthReport.orphans.reclaimableBytes)}</div>
+                  <div className="mt-1 font-semibold text-tx-primary">{fmtBytes(healthReport.orphans.reclaimableBytes)}</div>
                 </div>
               </div>
 
@@ -2071,7 +2071,7 @@ export function DataFileSection() {
                 <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
                   <AlertTriangle size={20} className="text-amber-600 dark:text-amber-500" />
                 </div>
-                <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                <h4 className="text-lg font-bold text-tx-primary">
                   {t("dataManager.dataFile.importConfirmTitle")}
                 </h4>
               </div>
@@ -2088,7 +2088,7 @@ export function DataFileSection() {
                 onChange={(e) => { setConfirmPwd(e.target.value); setImportError(""); }}
                 placeholder={t("dataManager.sudoPasswordPlaceholder")}
                 autoComplete="current-password"
-                className="w-full px-3 py-2 border rounded-lg bg-transparent text-zinc-900 dark:text-zinc-100 outline-none text-sm transition-colors border-zinc-300 dark:border-zinc-700 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                className="w-full px-3 py-2 border rounded-lg bg-transparent text-tx-primary outline-none text-sm transition-colors border-zinc-300 dark:border-zinc-700 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
                 autoFocus
               />
 
@@ -2421,7 +2421,7 @@ function BackupSection() {
     <section>
       <div className="flex items-center gap-2 mb-3">
         <Save size={18} className="text-emerald-500" />
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <h4 className="text-base font-semibold text-tx-primary">
           {t("dataManager.backup.title")}
         </h4>
       </div>
@@ -2502,7 +2502,7 @@ function BackupSection() {
                 className={`font-semibold ${
                   status.hoursSinceLastSuccess !== null && status.hoursSinceLastSuccess > status.autoBackupIntervalHours * 2
                     ? "text-amber-600 dark:text-amber-400"
-                    : "text-zinc-800 dark:text-zinc-200"
+                    : "text-tx-secondary"
                 }`}
               >
                 {formatSince(status.hoursSinceLastSuccess)}
@@ -2523,7 +2523,7 @@ function BackupSection() {
               <div className="text-zinc-500 mb-0.5 flex items-center gap-1">
                 <HardDrive size={11} /> {t("dataManager.backup.freeSpace")}
               </div>
-              <div className="font-semibold text-zinc-800 dark:text-zinc-200">
+              <div className="font-semibold text-tx-secondary">
                 {fmtBytes(status.backupDirFreeBytes ?? 0)}
               </div>
             </div>
@@ -2576,7 +2576,7 @@ function BackupSection() {
         */}
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900/60 p-3 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            <div className="flex items-center gap-2 text-sm font-medium text-tx-secondary">
               <RefreshCw size={14} className="text-emerald-500" />
               {t("dataManager.backup.autoConfigTitle")}
             </div>
@@ -2651,7 +2651,7 @@ function BackupSection() {
                       const n = Number(e.target.value);
                       if (Number.isFinite(n)) setAutoIntervalHours(Math.max(1, Math.min(720, Math.round(n))));
                     }}
-                    className="w-16 px-2 py-1 text-xs text-right rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                    className="w-16 px-2 py-1 text-xs text-right rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-tx-secondary"
                     disabled={!autoEnabled}
                   />
                   <span className="text-xs text-zinc-500 whitespace-nowrap">
@@ -2675,7 +2675,7 @@ function BackupSection() {
                     type="time"
                     value={autoDailyAt}
                     onChange={(e) => setAutoDailyAt(e.target.value || "03:00")}
-                    className="px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                    className="px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-tx-secondary"
                     disabled={!autoEnabled}
                   />
                   <span className="text-xs text-zinc-500">
@@ -2702,7 +2702,7 @@ function BackupSection() {
                   const n = Number(e.target.value);
                   if (Number.isFinite(n)) setAutoKeepCount(Math.max(1, Math.min(100, Math.round(n))));
                 }}
-                className="w-20 px-2 py-1 text-xs text-right rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                className="w-20 px-2 py-1 text-xs text-right rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-tx-secondary"
                 disabled={!autoEnabled}
               />
               <span className="text-[11px] text-zinc-400">
@@ -2731,7 +2731,7 @@ function BackupSection() {
                     value={autoEmailTo}
                     onChange={(e) => setAutoEmailTo(e.target.value)}
                     placeholder={t("dataManager.backup.autoEmailPlaceholder")}
-                    className="flex-1 px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                    className="flex-1 px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-tx-secondary"
                     disabled={!autoEnabled}
                   />
                 </div>
@@ -2920,7 +2920,7 @@ function BackupSection() {
               {backups.map((b) => (
                 <div key={b.filename} className="flex items-center gap-3 px-3 py-2 bg-white dark:bg-zinc-900/60 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate" title={b.filename}>
+                    <div className="text-sm font-mono text-tx-secondary truncate" title={b.filename}>
                       {b.filename}
                     </div>
                     <div className="text-[11px] text-zinc-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
@@ -3037,14 +3037,14 @@ function BackupSection() {
             >
               {/* 标题栏 */}
               <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-tx-primary">
                   <Lock className="w-3.5 h-3.5 text-amber-500" />
                   {t("dataManager.backup.sudoTitle") || "身份验证"}
                 </h4>
                 <button
                   type="button"
                   onClick={() => closeSudoAsk(null)}
-                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="p-1 rounded-md text-zinc-400 hover:text-tx-primary dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
                   aria-label="close"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -3077,7 +3077,7 @@ function BackupSection() {
                     placeholder={t("dataManager.backup.sudoPasswordPlaceholder") || "输入登录密码"}
                     autoFocus
                     autoComplete="current-password"
-                    className="block w-full pl-9 pr-10 py-2.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all"
+                    className="block w-full pl-9 pr-10 py-2.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all"
                   />
                   <button
                     type="button"
@@ -3215,7 +3215,7 @@ function BackupRestoreDialog(props: {
         {/* 标题区 */}
         <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
           <ShieldAlert size={18} className="text-amber-500" />
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h3 className="text-sm font-semibold text-tx-primary">
             {t("dataManager.backup.restoreTitle")}
           </h3>
           <span className="ml-auto text-[11px] font-mono text-zinc-500 truncate max-w-[260px]" title={target.filename}>
@@ -3254,7 +3254,7 @@ function BackupRestoreDialog(props: {
                 </div>
                 <div className="rounded border border-zinc-200 dark:border-zinc-700 p-2">
                   <div className="text-zinc-500 mb-0.5">{t("dataManager.backup.schemaVersion")}</div>
-                  <div className="font-semibold text-zinc-700 dark:text-zinc-300">v{dryRun.schemaVersion}</div>
+                  <div className="font-semibold text-tx-primary">v{dryRun.schemaVersion}</div>
                 </div>
               </div>
 
@@ -3300,7 +3300,7 @@ function BackupRestoreDialog(props: {
                   onChange={(e) => setConfirmText(e.target.value)}
                   disabled={stage === "restoring"}
                   placeholder={target.filename}
-                  className="w-full px-2.5 py-1.5 text-xs font-mono rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-2.5 py-1.5 text-xs font-mono rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-tx-secondary focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </>
@@ -3309,7 +3309,7 @@ function BackupRestoreDialog(props: {
           {stage === "done" && (
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
               <CheckCircle size={32} className="text-emerald-500" />
-              <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+              <div className="text-sm font-semibold text-tx-secondary">
                 {t("dataManager.backup.restoreDoneTitle")}
               </div>
               <div className="text-xs text-zinc-500">
@@ -3484,7 +3484,7 @@ function BackupDirSection(props: {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900/60 p-4 space-y-4">
       {/* —— 标题 —— */}
-      <div className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+      <div className="flex items-center gap-2 text-sm font-medium text-tx-secondary">
         <HardDrive size={14} className="text-emerald-500" />
         {t("dataManager.backup.dirConfigTitle")}
       </div>
@@ -3526,7 +3526,7 @@ function BackupDirSection(props: {
             onChange={(e) => setInput(e.target.value)}
             placeholder={t("dataManager.backup.dirInputPlaceholder") || "/mnt/backup-volume"}
             disabled={checking || switching}
-            className="flex-1 min-w-0 px-3 text-xs font-mono bg-transparent text-zinc-800 dark:text-zinc-200 focus:outline-none disabled:opacity-50"
+            className="flex-1 min-w-0 px-3 text-xs font-mono bg-transparent text-tx-secondary focus:outline-none disabled:opacity-50"
           />
           <button
             onClick={handleCheck}
@@ -3750,7 +3750,7 @@ function BackupSendEmailDialog(props: {
           className="relative w-full max-w-md bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
         >
           <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
-            <h4 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-tx-primary">
               <Mail className="w-3.5 h-3.5 text-sky-500" />
               {t("dataManager.backup.sendEmailTitle")}
             </h4>
@@ -3820,7 +3820,7 @@ function BackupSendEmailDialog(props: {
                       className="mt-0.5 accent-sky-600"
                     />
                     <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                      <span className="block text-xs font-medium text-tx-secondary">
                         {opt.label}
                       </span>
                       <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
@@ -3850,7 +3850,7 @@ function BackupSendEmailDialog(props: {
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
               />
               {!emailValid && to && (
                 <div className="text-[11px] text-red-500 mt-1">
@@ -3873,7 +3873,7 @@ function BackupSendEmailDialog(props: {
                 rows={2}
                 maxLength={500}
                 placeholder={t("dataManager.backup.sendEmailNotePlaceholder")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 resize-none"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 resize-none"
               />
             </div>
 
@@ -3900,7 +3900,7 @@ function BackupSendEmailDialog(props: {
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+              className="px-3 py-1.5 text-xs rounded-lg text-zinc-600 hover:text-tx-primary dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
             >
               {t("common.close") || "关闭"}
             </button>
@@ -4219,7 +4219,7 @@ function SmtpConfigSection(props: {
           <ChevronRight size={14} className="text-zinc-500" />
         )}
         <SettingsIcon size={14} className="text-sky-500" />
-        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+        <span className="text-sm font-medium text-tx-secondary">
           {t("dataManager.smtp.title")}
         </span>
         <span className="ml-auto flex items-center gap-2">
@@ -4288,7 +4288,7 @@ function SmtpConfigSection(props: {
                     value={host}
                     onChange={(e) => setHost(e.target.value)}
                     placeholder="smtp.example.com"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                 </div>
                 <div>
@@ -4301,7 +4301,7 @@ function SmtpConfigSection(props: {
                     max={65535}
                     value={port}
                     onChange={(e) => setPort(Number(e.target.value) || 465)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                 </div>
               </div>
@@ -4326,7 +4326,7 @@ function SmtpConfigSection(props: {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                 />
               </div>
 
@@ -4345,7 +4345,7 @@ function SmtpConfigSection(props: {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={hasPassword ? "••••••••" : t("dataManager.smtp.passwordPlaceholder") || ""}
-                    className="w-full px-3 py-2 pr-9 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                    className="w-full px-3 py-2 pr-9 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                   <button
                     type="button"
@@ -4372,7 +4372,7 @@ function SmtpConfigSection(props: {
                     value={fromName}
                     onChange={(e) => setFromName(e.target.value)}
                     placeholder="super-note"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                 </div>
                 <div>
@@ -4384,7 +4384,7 @@ function SmtpConfigSection(props: {
                     value={fromEmail}
                     onChange={(e) => setFromEmail(e.target.value)}
                     placeholder="no-reply@example.com"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                 </div>
               </div>
@@ -4434,7 +4434,7 @@ function SmtpConfigSection(props: {
                     value={testTo}
                     onChange={(e) => setTestTo(e.target.value)}
                     placeholder="test@example.com"
-                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent text-tx-primary outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
                   />
                   <button
                     type="button"

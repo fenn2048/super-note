@@ -553,7 +553,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             >
               <BookOpen size={24} className="text-indigo-600 dark:text-indigo-400" />
             </motion.div>
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <h1 className="text-xl font-bold text-tx-primary tracking-tight">
               {t("auth.appTitle")}
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5">
@@ -642,7 +642,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                     type="text"
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value)}
-                    className="block w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm tracking-[0.3em] font-mono text-center"
+                    className="block w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm tracking-[0.3em] font-mono text-center"
                     placeholder="123456"
                     autoFocus
                     autoComplete="one-time-code"
@@ -717,7 +717,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
+                  className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
                   placeholder={isRegister ? t("auth.usernameRegisterPlaceholder") : t("auth.usernamePlaceholder")}
                   autoComplete="username"
                   autoFocus={!isClientMode}
@@ -747,7 +747,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                         type="text"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm"
+                        className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm"
                         placeholder={t("auth.displayNamePlaceholder")}
                         maxLength={40}
                       />
@@ -765,7 +765,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm"
+                        className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm"
                         placeholder="name@example.com"
                         autoComplete="email"
                       />
@@ -788,7 +788,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
+                  className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
                   placeholder="••••••••"
                   autoComplete={isRegister ? "new-password" : "current-password"}
                   required
@@ -825,7 +825,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                       type={showConfirmPassword ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 text-base md:text-sm ${
+                      className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 text-base md:text-sm ${
                         confirmPassword && password !== confirmPassword
                           ? "border-red-500/60 dark:border-red-500/60"
                           : "border-zinc-200 dark:border-zinc-700"

@@ -23,12 +23,16 @@ import {
   Sparkles,
   Search,
   Star,
+  Pin,
+  MoreHorizontal,
 } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { Diary, DiaryStats, Tag } from "@/types";
+import { Diary, DiaryStats, Tag, DiaryComment } from "@/types";
+import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
+import { registerPlugin } from "@capacitor/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Input } from "@/components/ui/input";
@@ -229,6 +233,23 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
 
   const startRecording = useCallback(async () => {
     try {
+      // On Android: request native mic permission through plugin first.
+      if (
+        typeof window !== "undefined" &&
+        (window as any).Capacitor?.getPlatform?.() === "android"
+      ) {
+        try {
+          const AppPermissions = registerPlugin<any>("AppPermissions");
+          const micRes = await AppPermissions.requestMicrophonePermission();
+          if (!micRes.granted) {
+            toast.error("需要麦克风权限才能使用录音功能，请在系统设置中授予权限");
+            return;
+          }
+        } catch (permErr) {
+          console.warn("Capacitor mic permission plugin unavailable:", permErr);
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       // 创建 AudioContext + AnalyserNode 用于波形可视化
@@ -1459,9 +1480,73 @@ function DiaryCard({
   isHighlighted?: boolean;
 }) {
   const { t } = useTranslation();
-  const [showConfirm, setShowConfirm] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState<DiaryComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+
+  useEffect(() => {
+    api.getMe().then((meData) => {
+      if (meData) setCurrentUser(meData);
+    }).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!showComments) return;
+    setLoadingComments(true);
+    api.getDiaryComments(item.id)
+      .then((commentsData) => {
+        setComments(commentsData);
+      })
+      .catch((err) => {
+        console.error("Failed to load comments:", err);
+        toast.error("加载评论失败");
+      })
+      .finally(() => setLoadingComments(false));
+  }, [showComments, item.id]);
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentText.trim() || submittingComment) return;
+    setSubmittingComment(true);
+    try {
+      const newComment = await api.postDiaryComment(item.id, newCommentText.trim());
+      setComments((prev) => [...prev, newComment]);
+      setNewCommentText("");
+      // Update parent component's item commentCount
+      onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
+      toast.success("发表评论成功");
+    } catch (err: any) {
+      console.error("Failed to add comment:", err);
+      toast.error(err?.message || "发表评论失败");
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    const ok = await confirmDialog({
+      title: "删除评论",
+      description: "确定要删除该评论吗？此操作不可撤销。",
+      confirmText: "删除",
+      cancelText: "取消"
+    });
+    if (!ok) return;
+    try {
+      await api.deleteDiaryComment(commentId);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      onUpdate({ ...item, commentCount: Math.max(0, (item.commentCount || 1) - 1) });
+      toast.success("评论已删除");
+    } catch (err: any) {
+      console.error("Failed to delete comment:", err);
+      toast.error(err?.message || "删除评论失败");
+    }
+  };
   const [isFavorited, setIsFavorited] = useState(() => {
     try {
       const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
@@ -1504,13 +1589,16 @@ function DiaryCard({
   const showCreator =
     !!item.creatorName && getCurrentWorkspace() !== "personal";
 
-  const handleDelete = () => {
-    if (!showConfirm) {
-      setShowConfirm(true);
-      setTimeout(() => setShowConfirm(false), 3000); // 3 秒后自动取消
-      return;
+  const handleDelete = async () => {
+    const ok = await confirmDialog({
+      title: "删除说说",
+      description: "确定要删除这条说说吗？此操作不可撤销。",
+      confirmText: "删除",
+      cancelText: "取消"
+    });
+    if (ok) {
+      onDelete(item.id);
     }
-    onDelete(item.id);
   };
 
   // 编辑模式直接渲染编辑器，整张卡被替换；保存/取消会回到只读视图
@@ -1583,6 +1671,11 @@ function DiaryCard({
             <div className="flex items-center justify-between mt-3 pt-2 border-t border-app-border/40">
               <div className="flex items-center gap-2 text-[11px] text-tx-tertiary min-w-0">
                 {moodEmoji && <span className="text-sm">{moodEmoji}</span>}
+                {currentUser && item.userId !== currentUser.id && item.creatorName && (
+                  <span className="font-semibold text-tx-primary shrink-0 mr-1">
+                    {item.creatorName}
+                  </span>
+                )}
                 <span className="shrink-0">{timeAgo(item.createdAt, t)}</span>
                 {/* 空间可见性标识 */}
                 {getCurrentWorkspace() !== "personal" && (
@@ -1608,66 +1701,175 @@ function DiaryCard({
                     </span>
                   </>
                 )}
-                {/* 工作区下追加发布者；与时间用「·」分隔，弱化视觉权重 */}
-                {showCreator && (
-                  <>
-                    <span className="text-tx-tertiary/60 shrink-0">·</span>
-                    <span
-                      className="flex items-center gap-1 truncate"
-                      title={t('common.createdBy', { name: item.creatorName })}
-                    >
-                      <UserIcon size={11} className="shrink-0" />
-                      <span className="truncate">{item.creatorName}</span>
-                    </span>
-                  </>
-                )}
               </div>
 
-              {/* 操作按钮：编辑 + 删除 */}
-              <div className="flex items-center gap-1">
-                {/* 收藏按钮 */}
+              {/* 操作按钮菜单：微信风格 */}
+              <div className="relative shrink-0 flex items-center">
                 <button
-                  onClick={handleToggleFavorite}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-all",
-                    "opacity-100 md:opacity-0 md:group-hover:opacity-100",
-                    isFavorited
-                      ? "text-amber-500 hover:bg-amber-500/10"
-                      : "text-tx-tertiary hover:text-amber-500 hover:bg-amber-500/10",
-                  )}
-                  title={isFavorited ? "取消收藏" : "收藏说说"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowActionMenu(!showActionMenu);
+                  }}
+                  className="p-1 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-all"
+                  title="操作菜单"
                 >
-                  <Star size={12} className={cn(isFavorited && "fill-amber-500")} />
-                  <span>{isFavorited ? "已收藏" : "收藏"}</span>
+                  <MoreHorizontal size={18} />
                 </button>
 
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-all",
-                    "opacity-100 md:opacity-0 md:group-hover:opacity-100",
-                    "text-tx-tertiary hover:text-accent-primary hover:bg-accent-primary/10",
+                <AnimatePresence>
+                  {showActionMenu && (
+                    <>
+                      {/* 点击外部关闭的 backdrop */}
+                      <div
+                        className="fixed inset-0 z-40 cursor-default"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowActionMenu(false);
+                        }}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="absolute right-0 bottom-full mb-2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl py-1 min-w-[90px] z-50 flex flex-col divide-y divide-[#3a3a3a] overflow-hidden"
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowActionMenu(false);
+                            handleToggleFavorite();
+                          }}
+                          className="px-3 py-2 text-[11px] font-medium text-left hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                        >
+                          {isFavorited ? "取消收藏" : "收藏"}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowActionMenu(false);
+                            setShowComments(!showComments);
+                          }}
+                          className="px-3 py-2 text-[11px] font-medium text-left hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                        >
+                          {showComments ? "收起评论" : (item.commentCount && item.commentCount > 0 ? `评论(${item.commentCount})` : "评论")}
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setShowActionMenu(false);
+                            try {
+                              const updated = await api.updateDiary(item.id, { isPinned: item.isPinned ? 0 : 1 });
+                              onUpdate(updated);
+                              toast.success(item.isPinned ? "已取消置顶" : "已置顶");
+                            } catch (err) {
+                              toast.error("操作失败");
+                            }
+                          }}
+                          className="px-3 py-2 text-[11px] font-medium text-left hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                        >
+                          {item.isPinned ? "取消置顶" : "置顶"}
+                        </button>
+                        {currentUser && item.userId === currentUser.id && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowActionMenu(false);
+                                setIsEditing(true);
+                              }}
+                              className="px-3 py-2 text-[11px] font-medium text-left hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                            >
+                              {t("diary.edit")}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowActionMenu(false);
+                                void handleDelete();
+                              }}
+                              className="px-3 py-2 text-[11px] font-medium text-left text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap"
+                            >
+                              {t("diary.delete")}
+                            </button>
+                          </>
+                        )}
+                      </motion.div>
+                    </>
                   )}
-                >
-                  <Edit2 size={12} />
-                  <span>{t("diary.edit")}</span>
-                </button>
-
-                {/* 删除按钮 */}
-                <button
-                  onClick={handleDelete}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-all",
-                    showConfirm
-                      ? "bg-red-500/10 text-red-500"
-                      : "opacity-100 md:opacity-0 md:group-hover:opacity-100 text-tx-tertiary hover:text-red-400 hover:bg-red-500/5",
-                  )}
-                >
-                  <Trash2 size={12} />
-                  <span>{showConfirm ? t("diary.confirmDelete") : t("diary.delete")}</span>
-                </button>
+                </AnimatePresence>
               </div>
             </div>
+
+            {/* 评论展开区 */}
+            {showComments && (
+              <div className="mt-4 pt-3 border-t border-app-border/30 space-y-3">
+                {/* 评论列表 */}
+                {loadingComments ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-4 h-4 text-accent-primary animate-spin" />
+                  </div>
+                ) : comments.length === 0 ? (
+                  <div className="text-center text-xs text-tx-tertiary py-2">暂无评论</div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {comments.map((comment) => (
+                      <div key={comment.id} className="flex items-start gap-2 text-xs">
+                        {/* 头像 */}
+                        {comment.avatarUrl ? (
+                          <img
+                            src={comment.avatarUrl}
+                            alt={comment.username}
+                            className="w-6 h-6 rounded-full object-cover mt-0.5"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-[10px] mt-0.5">
+                            {comment.username.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        {/* 评论内容 */}
+                        <div className="flex-1 min-w-0 bg-app-subtle/50 px-2.5 py-1.5 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-tx-primary">{comment.username}</span>
+                            <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
+                          </div>
+                          <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
+                        </div>
+                        {/* 删除评论 */}
+                        {(comment.userId === currentUser?.id || item.userId === currentUser?.id) && (
+                          <button
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="text-[10px] text-tx-tertiary hover:text-red-500 p-1 rounded hover:bg-app-hover self-start mt-1 transition-colors"
+                            title="删除评论"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* 发表评论输入框 */}
+                <form onSubmit={handleAddComment} className="flex gap-2 items-center pt-2">
+                  <input
+                    type="text"
+                    placeholder="写下你的评论..."
+                    value={newCommentText}
+                    onChange={(e) => setNewCommentText(e.target.value)}
+                    className="flex-1 min-w-0 bg-app-subtle border border-app-border/60 rounded-lg px-3 py-1.5 text-xs text-tx-primary focus:outline-none focus:border-accent-primary placeholder:text-tx-tertiary"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newCommentText.trim() || submittingComment}
+                    className="px-3 py-1.5 bg-accent-primary text-white disabled:opacity-40 rounded-lg text-xs font-semibold hover:bg-accent-primary/90 transition-colors flex items-center gap-1 shrink-0"
+                  >
+                    {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    <span>发送</span>
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -2616,7 +2818,11 @@ export default function DiaryCenter() {
 
   const isFiltering = preset !== "all" || visibilityFilter !== "all" || selectedTagId !== "all";
 
-  const groupedItems = groupByDate(items, t);
+  // Split items into pinned and unpinned
+  const pinnedItems = useMemo(() => items.filter((item) => item.isPinned === 1), [items]);
+  const unpinnedItems = useMemo(() => items.filter((item) => item.isPinned !== 1), [items]);
+
+  const groupedItems = useMemo(() => groupByDate(unpinnedItems, t), [unpinnedItems, t]);
 
   return (
     <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-app-bg">
@@ -2924,6 +3130,38 @@ export default function DiaryCenter() {
               </div>
             ) : (
               <div className="space-y-5">
+                {/* 置顶动态区 */}
+                {pinnedItems.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-full">
+                        <Pin size={11} className="fill-emerald-600 animate-in fade-in" />
+                        置顶动态
+                      </span>
+                      <div className="flex-1 h-px bg-emerald-500/20" />
+                    </div>
+                    <div className="space-y-3">
+                      <AnimatePresence mode="popLayout">
+                        {pinnedItems.map((item) => (
+                          <DiaryCard
+                            key={item.id}
+                            item={item}
+                            onDelete={handleDelete}
+                            onUpdate={handleUpdate}
+                            isHighlighted={highlightedId === item.id}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
+
+                {/* 时间线分割线 (若既有置顶又有普通) */}
+                {pinnedItems.length > 0 && unpinnedItems.length > 0 && (
+                  <div className="my-5 border-t border-app-border/40" />
+                )}
+
+                {/* 普通动态区 */}
                 {groupedItems.map(({ label, items: dayItems }) => (
                   <div key={label}>
                     {/* 日期分割 */}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video, AtSign, MoreHorizontal } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -10,6 +10,8 @@ import ComposerCameraModal from "@/components/ComposerCameraModal";
 import MobileCameraModal from "@/components/MobileCameraModal";
 import { registerPlugin } from "@capacitor/core";
 import { haptic } from "@/hooks/useCapacitor";
+import { WorkspaceMember } from "@/types";
+import RecordingPanel from "@/components/RecordingPanel";
 
 interface DiaryComposeModalProps {
   isOpen: boolean;
@@ -32,6 +34,141 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     return ws && ws !== "personal" ? "PUBLIC" : "PRIVATE";
   });
   const [posting, setPosting] = useState(false);
+
+  const [showMemberSelector, setShowMemberSelector] = useState(false);
+  const [showMoreOptionsSheet, setShowMoreOptionsSheet] = useState(false);
+  const [menuPlacement, setMenuPlacement] = useState<"top" | "bottom">("top");
+
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [me, setMe] = useState<any>(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  useEffect(() => {
+    if (!showMemberSelector) return;
+
+    const loadData = async () => {
+      setLoadingMembers(true);
+      try {
+        const currentUser = await api.getMe();
+        setMe(currentUser);
+
+        const ws = getCurrentWorkspace();
+        console.log("[DiaryComposeModal] ws:", ws);
+        if (ws && ws !== "personal") {
+          const allMembers = await api.getWorkspaceMembers(ws);
+          console.log("[DiaryComposeModal] allMembers:", allMembers);
+          setMembers(allMembers);
+        } else {
+          setMembers([]);
+        }
+      } catch (err) {
+        console.error("Failed to load workspace members:", err);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    loadData();
+  }, [showMemberSelector]);
+
+  const commonChineseInitials: Record<string, string> = {
+    '张': 'Z', '李': 'L', '王': 'W', '刘': 'L', '陈': 'C', '杨': 'Y', '黄': 'H', '赵': 'Z', '周': 'Z', '吴': 'W',
+    '徐': 'X', '孙': 'S', '胡': 'H', '朱': 'Z', '高': 'G', '林': 'L', '何': 'H', '郭': 'G', '马': 'M', '罗': 'L',
+    '梁': 'L', '宋': 'S', '郑': 'Z', '谢': 'X', '韩': 'H', '唐': 'T', '冯': 'F', '于': 'Y', '董': 'D', '萧': 'X',
+    '程': 'C', '曹': 'C', '袁': 'Y', '邓': 'D', '许': 'X', '傅': 'F', '沈': 'S', '曾': 'Z', '彭': 'P', '吕': 'L',
+    '苏': 'S', '卢': 'L', '蒋': 'J', '蔡': 'C', '贾': 'J', '丁': 'D', '魏': 'W', '薛': 'X', '叶': 'Y', '阎': 'Y',
+    '余': 'Y', '潘': 'P', '杜': 'D', '戴': 'D', '夏': 'X', '钟': 'Z', '汪': 'W', '田': 'T', '任': 'R', '强': 'Q',
+    '范': 'F', '方': 'F', '石': 'S', '姚': 'Y', '谭': 'T', '廖': 'L', '邹': 'Z', '熊': 'X', '金': 'J', '陆': 'L',
+    '郝': 'H', '孔': 'K', '白': 'B', '崔': 'C', '康': 'K', '毛': 'M', '邱': 'Q', '秦': 'P', '江': 'J', '史': 'S',
+    '顾': 'G', '侯': 'H', '邵': 'S', '孟': 'M', '龙': 'L', '万': 'W', '段': 'D', '雷': 'R', '钱': 'Q', '汤': 'T',
+    '尹': 'Y', '黎': 'L', '易': 'Y', '常': 'C', '武': 'W', '乔': 'Q', '贺': 'H', '赖': 'L', '龚': 'G', '文': 'W'
+  };
+
+  const getMemberInitial = (username: string): string => {
+    if (!username) return "#";
+    const char = username.trim().charAt(0);
+    if (/^[a-zA-Z]$/.test(char)) return char.toUpperCase();
+
+    const code = char.charCodeAt(0);
+    if (code >= 0x4e00 && code <= 0x9fa5) {
+      const initial = commonChineseInitials[char];
+      if (initial) return initial;
+    }
+    return "#";
+  };
+
+  const filteredMembers = members.filter((m) =>
+    m.userId !== me?.id && (
+      m.username.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+      (m.email && m.email.toLowerCase().includes(memberSearchQuery.toLowerCase()))
+    )
+  );
+
+  const groupedMembers = useMemo(() => {
+    const groups: Record<string, WorkspaceMember[]> = {};
+    for (let i = 65; i <= 90; i++) {
+      groups[String.fromCharCode(i)] = [];
+    }
+    groups["#"] = [];
+
+    filteredMembers.forEach((m) => {
+      const initial = getMemberInitial(m.username);
+      if (groups[initial]) {
+        groups[initial].push(m);
+      } else {
+        groups["#"].push(m);
+      }
+    });
+
+    return Object.keys(groups)
+      .sort((a, b) => {
+        if (a === "#") return 1;
+        if (b === "#") return -1;
+        return a.localeCompare(b);
+      })
+      .reduce<Record<string, WorkspaceMember[]>>((acc, key) => {
+        if (groups[key].length > 0) {
+          acc[key] = groups[key];
+        }
+        return acc;
+      }, {});
+  }, [filteredMembers]);
+
+  const handleConfirmMembers = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const selectedNames = members
+      .filter((m) => selectedMemberIds.includes(m.userId))
+      .map((m) => `@${m.username} `)
+      .join("");
+
+    if (selectedNames) {
+      const start = el.selectionStart || 0;
+      const end = el.selectionEnd || 0;
+      const nextText = text.slice(0, start) + selectedNames + text.slice(end);
+      setText(nextText);
+
+      setTimeout(() => {
+        el.focus();
+        const nextPos = start + selectedNames.length;
+        el.setSelectionRange(nextPos, nextPos);
+      }, 50);
+    }
+
+    setShowMemberSelector(false);
+    setSelectedMemberIds([]);
+    setMemberSearchQuery("");
+  };
+
+  const scrollToSection = (letter: string) => {
+    const element = document.getElementById(`member-section-${letter}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   const handleAddTag = useCallback(async (tagName: string) => {
     haptic.light();
@@ -246,6 +383,20 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
         mediaRecorder.onstop = async () => {
           clearInterval(durInterval);
+          if (animationFrameIdRef.current) {
+            cancelAnimationFrame(animationFrameIdRef.current);
+            animationFrameIdRef.current = null;
+          }
+          if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current = null;
+          }
+          
+          if (audioChunksRef.current.length === 0) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+
           const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
           const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
           try {
@@ -264,6 +415,36 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           }
           stream.getTracks().forEach((track) => track.stop());
         };
+
+        // Web Audio Analyser for real-time waveform visualization
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          const audioCtx = new AudioContextClass();
+          audioContextRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          analyserRef.current = analyser;
+          source.connect(analyser);
+
+          const bufferLength = analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+          dataArrayRef.current = dataArray;
+
+          const updateWave = () => {
+            analyser.getByteFrequencyData(dataArray);
+            const nextValues: number[] = [];
+            for (let i = 0; i < 25; i++) {
+              const val = dataArray[i] || 0;
+              nextValues.push(Math.max(0.05, val / 255));
+            }
+            setWaveValues(nextValues);
+            animationFrameIdRef.current = requestAnimationFrame(updateWave);
+          };
+          animationFrameIdRef.current = requestAnimationFrame(updateWave);
+        } catch (ae) {
+          console.error("Failed to initialize audio analyser:", ae);
+        }
 
         mediaRecorder.start(200);
         haptic.light();
@@ -353,6 +534,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn("Speech recognition not supported in this browser.");
+      toast.warning("当前设备环境不支持 Web 语音转文字，请尝试安装/设置 Google 应用语音服务");
       return;
     }
 
@@ -366,6 +548,28 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "zh-CN";
+
+    recognition.onstart = () => {
+      console.log("[webkitSpeechRecognition] onstart: Speech recognition started");
+    };
+    recognition.onaudiostart = () => {
+      console.log("[webkitSpeechRecognition] onaudiostart: Audio capture started");
+    };
+    recognition.onsoundstart = () => {
+      console.log("[webkitSpeechRecognition] onsoundstart: Sound detected");
+    };
+    recognition.onspeechstart = () => {
+      console.log("[webkitSpeechRecognition] onspeechstart: Speech detected");
+    };
+    recognition.onspeechend = () => {
+      console.log("[webkitSpeechRecognition] onspeechend: Speech ended");
+    };
+    recognition.onsoundend = () => {
+      console.log("[webkitSpeechRecognition] onsoundend: Sound ended");
+    };
+    recognition.onaudioend = () => {
+      console.log("[webkitSpeechRecognition] onaudioend: Audio capture ended");
+    };
 
     recognition.onresult = (event: any) => {
       let finalParts: string[] = [];
@@ -409,10 +613,25 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
+      console.error("[webkitSpeechRecognition] onerror:", event.error);
+      const errMsg = `语音识别错误: ${event.error}`;
+      toast.error(errMsg);
+      setTranscriptionText((prev) => {
+        const spacer = prev ? "\n" : "";
+        return prev + spacer + `[系统提示: ${errMsg}]`;
+      });
+      // Stop recognition on fatal errors to avoid infinite restart loop
+      if (
+        event.error === "not-allowed" ||
+        event.error === "service-not-allowed" ||
+        event.error === "language-not-supported"
+      ) {
+        stopSpeechRecognition();
+      }
     };
 
     recognition.onend = () => {
+      console.log("[webkitSpeechRecognition] onend: Session ended");
       accumulatedTranscriptRef.current += currentSessionFinalRef.current;
       currentSessionFinalRef.current = "";
       
@@ -675,6 +894,26 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           duration: duration || 1,
         });
         toast.success("录音生成成功");
+
+        // Fallback: If local speech recognition did not produce any text, but transcription is enabled,
+        // we request backend SenseVoice transcription immediately!
+        if (enableTranscription && !transcriptionText.trim()) {
+          toast.info("正在进行语音转文字...", 2000);
+          try {
+            const transcribeRes = await api.transcribeDiaryVoice(undefined, uploadRes.id);
+            if (transcribeRes && transcribeRes.text) {
+              setTranscriptionText(transcribeRes.text);
+              setText((prev) => {
+                const spacer = prev ? "\n" : "";
+                return prev + spacer + transcribeRes.text.trim();
+              });
+              toast.success("语音转文字成功");
+            }
+          } catch (transcribeErr) {
+            console.error("Backend voice transcription failed:", transcribeErr);
+            toast.error("语音转文字失败");
+          }
+        }
       } catch (e) {
         console.error("Voice upload failed:", e);
         toast.error("录音上传失败");
@@ -864,12 +1103,12 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     if (!el) return;
     const start = el.selectionStart || 0;
     const end = el.selectionEnd || 0;
-    
+
     if (start !== end) {
       setSelStart(start);
       setSelEnd(end);
       setSelectionMode(true);
-      
+
       // Calculate selection coordinates for WeChat-style menu
       setTimeout(() => {
         const selection = window.getSelection();
@@ -883,13 +1122,19 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
               menuWidth / 2 + margin,
               Math.min(window.innerWidth - (menuWidth / 2 + margin), rect.left + rect.width / 2)
             );
+            // Check if too close to the header (approx 120px to account for header + safe area)
+            const tooCloseToTop = rect.top < 120;
+            const placement = tooCloseToTop ? "bottom" : "top";
+            setMenuPlacement(placement);
+
             setMenuCoords({
-              top: rect.top - 8,
+              top: placement === "top" ? rect.top - 8 : rect.bottom + 8,
               left: left
             });
           } else {
             // Fallback
             const textareaRect = el.getBoundingClientRect();
+            setMenuPlacement("bottom");
             setMenuCoords({
               top: textareaRect.top + 20,
               left: window.innerWidth / 2
@@ -1339,6 +1584,39 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         </div>
       )}
 
+      {/* 电脑端录音实时波形与控制面板 */}
+      <AnimatePresence>
+        {recording && !isMobile && (
+          <RecordingPanel
+            duration={recordDuration}
+            waveformData={waveValues}
+            onRecordingComplete={async () => {
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+                mediaRecorderRef.current.stop();
+                haptic.medium();
+              }
+              setRecording(false);
+            }}
+            onCancel={() => {
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+                mediaRecorderRef.current.stop();
+              }
+              audioChunksRef.current = [];
+              setRecording(false);
+              setRecordDuration(0);
+              if (animationFrameIdRef.current) {
+                cancelAnimationFrame(animationFrameIdRef.current);
+                animationFrameIdRef.current = null;
+              }
+              if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+                audioContextRef.current.close().catch(() => {});
+                audioContextRef.current = null;
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* 底部操作工具栏 (紧挨着键盘上方右侧，屏幕底端对齐) */}
       <div className="p-3 bg-app-surface border-t border-app-border flex items-center justify-between shrink-0" style={{ paddingBottom: "calc(var(--safe-area-bottom) + 8px)" }}>
         {/* 左侧：可见性权限 + 清空与恢复 */}
@@ -1386,38 +1664,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           )}
         </div>
 
-        {/* 右侧：相册、拍照、录像、标签、心情表情、录音 */}
+        {/* 右侧：标签、语音、@、... 更多功能 */}
         <div className="flex items-center gap-1">
-          {/* 相册按钮 */}
-          <button
-            onClick={() => imageInputRef.current?.click()}
-            disabled={images.length >= 9}
-            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
-            title="相册导入"
-          >
-            <ImageIcon size={18} />
-          </button>
-
-          {/* 拍照按钮 */}
-          <button
-            onClick={() => setShowPhotoCamera(true)}
-            disabled={images.length >= 9}
-            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
-            title="拍摄照片"
-          >
-            <Camera size={18} />
-          </button>
-
-          {/* 录像按钮 */}
-          <button
-            onClick={() => setShowCamera(true)}
-            disabled={images.length >= 9}
-            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover disabled:opacity-40"
-            title="录制视频"
-          >
-            <Video size={18} />
-          </button>
-
           {/* 标签按钮 */}
           <button
             onClick={() => {
@@ -1433,20 +1681,9 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             <TagIcon size={18} />
           </button>
 
-          {/* 心情表情按钮 */}
-          <button
-            onClick={handleMoodBtnClick}
-            className={cn(
-              "p-2.5 rounded-xl transition-colors",
-              showMoods || mood ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover"
-            )}
-            title="添加心情表情"
-          >
-            <Smile size={18} />
-          </button>
-
           {/* 录音按钮 */}
           <button
+            type="button"
             onClick={handleMicButtonClick}
             disabled={voiceUploading || !!pendingVoice}
             className={cn(
@@ -1464,6 +1701,26 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             ) : (
               <Mic size={18} />
             )}
+          </button>
+
+          {/* @ 提醒谁看 */}
+          <button
+            type="button"
+            onClick={() => setShowMemberSelector(true)}
+            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover"
+            title="提醒谁看"
+          >
+            <AtSign size={18} />
+          </button>
+
+          {/* ... 更多功能 */}
+          <button
+            type="button"
+            onClick={() => setShowMoreOptionsSheet(true)}
+            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover"
+            title="更多功能"
+          >
+            <MoreHorizontal size={18} />
           </button>
         </div>
       </div>
@@ -1485,70 +1742,273 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       {/* 微信长按文字选中浮动菜单 */}
       {selectionMode && menuCoords && (
         <div
-          className="fixed z-[10000] -translate-x-1/2 -translate-y-full animate-in fade-in zoom-in-95 duration-100 ease-out pointer-events-auto"
+          className={cn(
+            "fixed z-[10000] -translate-x-1/2 animate-in fade-in zoom-in-95 duration-100 ease-out pointer-events-auto",
+            menuPlacement === "top" ? "-translate-y-full" : "-translate-y-0"
+          )}
           style={{
             top: `${menuCoords.top}px`,
             left: `${menuCoords.left}px`,
           }}
         >
           {/* 气泡主体 */}
-          <div className="flex items-center bg-zinc-900/95 text-white text-[11px] rounded-xl shadow-xl border border-zinc-800 divide-x divide-zinc-800/60 overflow-hidden backdrop-blur-md px-1 py-0.5 select-none">
+          <div className="flex items-center bg-app-elevated text-tx-primary text-[11px] rounded-xl shadow-xl border border-app-border divide-x divide-app-border overflow-hidden backdrop-blur-md px-1 py-0.5 select-none animate-in fade-in duration-200">
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSelectAll(); }}
-              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+              className="px-2.5 py-2 font-medium hover:bg-app-hover transition-colors whitespace-nowrap active:scale-95"
             >
               全选
             </button>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopy(); }}
-              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+              className="px-2.5 py-2 font-medium hover:bg-app-hover transition-colors whitespace-nowrap active:scale-95"
             >
               复制
             </button>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCut(); }}
-              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+              className="px-2.5 py-2 font-medium hover:bg-app-hover transition-colors whitespace-nowrap active:scale-95"
             >
               剪切
             </button>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePaste(); }}
-              className="px-2.5 py-2 font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap active:scale-95"
+              className="px-2.5 py-2 font-medium hover:bg-app-hover transition-colors whitespace-nowrap active:scale-95"
             >
               粘贴
             </button>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteSelected(); }}
-              className="px-2.5 py-2 font-medium text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors whitespace-nowrap active:scale-95"
+              className="px-2.5 py-2 font-medium text-red-500 hover:bg-red-950/20 transition-colors whitespace-nowrap active:scale-95"
             >
               删除
             </button>
           </div>
-          {/* 底部三角形小指针 */}
-          <div className="w-2 h-2 bg-zinc-900 rotate-45 border-r border-b border-zinc-800 absolute left-1/2 -translate-x-1/2 -bottom-[4px]" />
+          {/* 底部或顶部三角形小指针 */}
+          {menuPlacement === "top" ? (
+            <div className="w-2 h-2 bg-app-elevated rotate-45 border-r border-b border-app-border absolute left-1/2 -translate-x-1/2 -bottom-[4px]" />
+          ) : (
+            <div className="w-2 h-2 bg-app-elevated rotate-45 border-l border-t border-app-border absolute left-1/2 -translate-x-1/2 -top-[4px]" />
+          )}
         </div>
       )}
+
+      {/* 底部更多功能菜单 (相册/相机/视频) */}
+      <AnimatePresence>
+        {showMoreOptionsSheet && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.4 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMoreOptionsSheet(false)}
+              className="fixed inset-0 bg-black z-[1000] cursor-pointer"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 250 }}
+              className="fixed bottom-0 left-0 right-0 bg-app-elevated rounded-t-2xl z-[1001] overflow-hidden select-none safe-bottom pb-safe max-w-lg mx-auto shadow-2xl border-t border-app-border"
+            >
+              <div className="p-4 flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={images.length >= 9}
+                  onClick={() => {
+                    setShowMoreOptionsSheet(false);
+                    imageInputRef.current?.click();
+                  }}
+                  className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  从相册选择
+                </button>
+                <button
+                  type="button"
+                  disabled={images.length >= 9}
+                  onClick={() => {
+                    setShowMoreOptionsSheet(false);
+                    setShowPhotoCamera(true);
+                  }}
+                  className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  拍摄照片
+                </button>
+                <button
+                  type="button"
+                  disabled={images.length >= 9}
+                  onClick={() => {
+                    setShowMoreOptionsSheet(false);
+                    setShowCamera(true);
+                  }}
+                  className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  录制视频
+                </button>
+                <div className="h-[4px]" />
+                <button
+                  type="button"
+                  onClick={() => setShowMoreOptionsSheet(false)}
+                  className="w-full py-3.5 bg-app-hover hover:bg-app-hover/80 rounded-xl text-sm font-semibold text-tx-secondary active:scale-[0.99] transition-all"
+                >
+                  取消
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* 提醒谁看成员选择页面 (微信风格) */}
+      <AnimatePresence>
+        {showMemberSelector && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            className="fixed inset-0 bg-app-elevated z-[1002] flex flex-col select-none overflow-hidden"
+          >
+            {/* 顶部导航栏 */}
+            <div className="border-b border-app-border/50 flex items-center justify-between px-4 shrink-0 bg-app-surface" style={{ paddingTop: "var(--safe-area-top)", height: "calc(3.5rem + var(--safe-area-top))" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMemberSelector(false);
+                  setSelectedMemberIds([]);
+                  setMemberSearchQuery("");
+                }}
+                className="p-1 -ml-1 text-tx-secondary hover:text-tx-primary active:opacity-70 transition-all"
+              >
+                <X size={20} />
+              </button>
+              <span className="text-sm font-semibold text-tx-primary">提醒谁看</span>
+              <button
+                type="button"
+                onClick={handleConfirmMembers}
+                disabled={selectedMemberIds.length === 0}
+                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-500 rounded-md text-xs font-semibold text-white active:scale-95 transition-all"
+              >
+                确定{selectedMemberIds.length > 0 ? `(${selectedMemberIds.length})` : ""}
+              </button>
+            </div>
+
+            {/* 搜索框 */}
+            <div className="p-3 bg-app-surface/40 border-b border-app-border/30 shrink-0">
+              <div className="flex items-center gap-2 px-3 py-2 bg-app-surface border border-app-border/60 rounded-lg text-xs">
+                <input
+                  type="text"
+                  placeholder="搜索"
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  className="w-full bg-transparent outline-none text-tx-primary placeholder:text-tx-tertiary"
+                />
+              </div>
+            </div>
+
+            {/* 成员列表与字母索引 */}
+            <div className="flex-1 min-h-0 flex relative">
+              {/* 列表区 */}
+              <div className="flex-1 overflow-y-auto pr-8 py-2 space-y-4">
+                {loadingMembers ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-5 h-5 text-accent-primary animate-spin" />
+                  </div>
+                ) : Object.keys(groupedMembers).length === 0 ? (
+                  <div className="text-center text-tx-tertiary py-12 text-xs">
+                    无可选成员
+                  </div>
+                ) : (
+                  (Object.entries(groupedMembers) as [string, WorkspaceMember[]][]).map(([letter, list]) => (
+                    <div key={letter} id={`member-section-${letter}`} className="space-y-1">
+                      <div className="px-4 py-1 bg-app-hover/30 text-[11px] font-semibold text-tx-tertiary">
+                        {letter}
+                      </div>
+                      <div className="divide-y divide-app-border/30">
+                        {list.map((m: WorkspaceMember) => {
+                          const isChecked = selectedMemberIds.includes(m.userId);
+                          return (
+                            <div
+                              key={m.userId}
+                              onClick={() => {
+                                setSelectedMemberIds((prev: string[]) =>
+                                  isChecked
+                                    ? prev.filter((id: string) => id !== m.userId)
+                                    : [...prev, m.userId]
+                                );
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 hover:bg-app-hover/40 active:bg-app-hover/70 transition-colors cursor-pointer"
+                            >
+                              {/* 圆形选择框 */}
+                              <div
+                                className={cn(
+                                  "w-5 h-5 rounded-full border flex items-center justify-center transition-all",
+                                  isChecked
+                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                    : "border-app-border/80 bg-transparent"
+                                )}
+                              >
+                                {isChecked && <Check size={12} strokeWidth={3} />}
+                              </div>
+                              {/* 头像 */}
+                              <div className="w-9 h-9 rounded-full bg-accent-primary/10 flex items-center justify-center text-accent-primary font-bold text-sm overflow-hidden shrink-0 border border-app-border/30">
+                                {m.avatarUrl ? (
+                                  <img src={m.avatarUrl} alt={m.username} className="w-full h-full object-cover" />
+                                ) : (
+                                  m.username.charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              {/* 名字 */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-tx-primary font-medium truncate">{m.username}</p>
+                                {m.email && <p className="text-[10px] text-tx-tertiary truncate">{m.email}</p>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* 字母侧边栏 */}
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 w-6 flex flex-col items-center gap-1 py-2 rounded-lg bg-app-surface/30 backdrop-blur-sm border border-app-border/20 text-[10px] font-bold text-tx-tertiary select-none">
+                {Object.keys(groupedMembers).map((letter) => (
+                  <button
+                    key={letter}
+                    onClick={() => scrollToSection(letter)}
+                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-emerald-500 hover:text-white active:scale-90 transition-all"
+                  >
+                    {letter}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
       {/* 全屏录音遮罩 */}
       {showVoiceRecorder && (
-        <div className="fixed inset-0 z-[80] bg-gradient-to-b from-zinc-900 via-zinc-950 to-black text-white flex flex-col justify-between p-6 overflow-hidden">
+        <div className="fixed inset-0 z-[80] bg-gradient-to-b from-[#0e1117] via-[#0b0d13] to-black text-white flex flex-col justify-between p-6 overflow-hidden">
           {/* 顶栏 */}
           <div className="flex items-center justify-between" style={{ paddingTop: "var(--safe-area-top)" }}>
             <button
               onClick={handleCancelVoiceRecord}
-              className="p-2 rounded-full bg-white/5 border border-white/10 text-zinc-400 hover:text-white active:scale-95 transition-colors"
+              className="p-2 rounded-full bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
             >
               <X size={20} />
             </button>
-            <span className="text-sm font-semibold tracking-wider text-zinc-200">录音说说</span>
+            <span className="text-sm font-semibold tracking-wider text-white/90">录音说说</span>
             <button
               onClick={handleToggleTranscription}
               className={cn(
                 "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 shadow-sm",
                 enableTranscription
-                  ? "bg-accent-primary/25 border-accent-primary/40 text-violet-300"
-                  : "bg-white/5 border-white/10 text-zinc-500"
+                  ? "bg-[#6366f1]/25 border-[#6366f1]/40 text-indigo-200"
+                  : "bg-white/5 border-white/10 text-white/40 hover:text-white/60 hover:bg-white/10"
               )}
             >
               {enableTranscription ? "转文字: 开" : "转文字: 关"}
@@ -1556,21 +2016,21 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           </div>
 
           {/* 中间麦克风 (Area 1 - Waveform + Mic status) */}
-          <div className="flex-1 flex flex-col items-center justify-center space-y-8 min-h-0">
+          <div className="flex-1 flex flex-col items-center justify-center space-y-8 min-h-0 mt-4">
             {/* Live Transcription Box */}
-            <div className="relative w-full max-w-sm md:max-w-md flex-1 min-h-[260px] max-h-[45vh] bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-4.5 flex flex-col overflow-hidden shadow-2xl">
+            <div className="relative w-full max-w-sm md:max-w-md flex-1 min-h-[260px] max-h-[45vh] bg-white/[0.03] border border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 flex flex-col overflow-hidden shadow-2xl">
               <div 
                 ref={transcriptionScrollRef}
                 className="flex-1 overflow-y-auto pr-2 space-y-1.5 scroll-smooth"
               >
                 {transcriptionText ? (
-                  <p className="text-sm font-semibold text-zinc-200 leading-relaxed whitespace-pre-wrap text-left">
+                  <p className="text-sm font-semibold text-white/95 leading-relaxed whitespace-pre-wrap text-left">
                     {transcriptionText}
                   </p>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-500">
-                    <Mic className="text-zinc-600/50 animate-pulse" size={22} />
-                    <p className="text-xs text-zinc-500 italic text-center">
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-white/30">
+                    <Mic className="text-white/20 animate-pulse" size={22} />
+                    <p className="text-xs text-white/40 italic text-center">
                       {recording && !isPaused ? "开始说话，实时转文字将在此处显示..." : "等待说话..."}
                     </p>
                   </div>
@@ -1583,14 +2043,14 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
                 <motion.div
                   animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0.1, 0.5] }}
                   transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                  className="absolute w-32 h-32 rounded-full bg-accent-primary/20 blur-xl"
+                  className="absolute w-32 h-32 rounded-full bg-[#6366f1]/20 blur-xl"
                 />
               )}
               <div
                 className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl z-10 transition-all duration-300"
                 style={{
-                  backgroundColor: recording && !isPaused ? "var(--color-accent-primary)" : "rgba(255,255,255,0.05)",
-                  border: "2px solid rgba(255,255,255,0.1)",
+                  backgroundColor: recording && !isPaused ? "#6366f1" : "rgba(255,255,255,0.08)",
+                  border: "2px solid rgba(255,255,255,0.15)",
                   color: "white"
                 }}
               >
@@ -1615,10 +2075,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             </div>
 
             <div className="text-center space-y-2">
-              <span className="text-3xl font-bold text-zinc-100 tracking-wide font-mono">
+              <span className="text-3xl font-bold text-white tracking-wide font-mono">
                 {Math.floor(recordDuration / 60).toString().padStart(2, "0")}:{(recordDuration % 60).toString().padStart(2, "0")}
               </span>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-white/50">
                 {isPaused ? "录音已暂停" : recording ? "正在录音，点击下方按钮暂停或完成" : "已停止，点击下方完成保存"}
               </p>
             </div>
@@ -1629,7 +2089,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             {/* 取消按钮 */}
             <button
               onClick={handleCancelVoiceRecord}
-              className="w-14 h-14 rounded-full border border-white/10 bg-white/5 text-zinc-400 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg hover:bg-white/10 hover:text-white"
+              className="w-14 h-14 rounded-full border border-white/10 bg-white/5 text-white/60 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg hover:bg-white/10 hover:text-white"
             >
               <X size={18} className="mb-0.5" />
               <span>取消</span>
@@ -1642,8 +2102,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
               className={cn(
                 "w-16 h-16 rounded-full flex flex-col items-center justify-center active:scale-95 transition-all text-xs font-bold shadow-lg disabled:opacity-40 disabled:pointer-events-none",
                 isPaused
-                  ? "bg-accent-primary text-white"
-                  : "bg-white/5 border border-white/15 text-zinc-200 hover:bg-white/10"
+                  ? "bg-[#6366f1] text-white hover:bg-[#4f46e5]"
+                  : "bg-white/5 border border-white/15 text-white/80 hover:bg-white/10 hover:text-white"
               )}
             >
               {isPaused ? (
@@ -1663,7 +2123,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             <button
               onClick={handleFinishVoiceRecord}
               disabled={recordDuration === 0 && !recording}
-              className="w-14 h-14 rounded-full text-white bg-accent-primary hover:bg-accent-primary/90 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg disabled:opacity-40 disabled:pointer-events-none"
+              className="w-14 h-14 rounded-full text-white bg-[#6366f1] hover:bg-[#4f46e5] flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg disabled:opacity-40 disabled:pointer-events-none"
             >
               <Check size={18} className="mb-0.5" />
               <span>完成</span>

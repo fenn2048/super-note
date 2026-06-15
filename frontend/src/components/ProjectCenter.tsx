@@ -720,6 +720,22 @@ export default function ProjectCenter() {
     setShowCreateModal(true);
   };
 
+  useEffect(() => {
+    const handleTrigger = () => {
+      handleOpenCreateModal();
+    };
+    window.addEventListener("super:create-project-trigger", handleTrigger);
+
+    if (sessionStorage.getItem("super-pending-create-project") === "1") {
+      sessionStorage.removeItem("super-pending-create-project");
+      handleOpenCreateModal();
+    }
+
+    return () => {
+      window.removeEventListener("super:create-project-trigger", handleTrigger);
+    };
+  }, [workspaceId, activeFilter]);
+
   const handleOpenEditModal = (proj: Project, e: React.MouseEvent) => {
     e.stopPropagation();
     setIsEditingProject(true);

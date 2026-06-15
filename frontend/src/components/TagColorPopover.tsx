@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 // 预设颜色面板 — 与 TagColorPicker 保持一致的 16 色
@@ -19,6 +19,8 @@ interface TagColorPopoverProps {
   onPick: (color: string) => void;
   onClose: () => void;
   title?: string;
+  onRename?: () => void;
+  onDelete?: () => void;
 }
 
 /**
@@ -26,7 +28,7 @@ interface TagColorPopoverProps {
  * 适用于右键菜单 / 长按菜单触发的颜色选择场景。
  */
 export default function TagColorPopover({
-  x, y, currentColor, onPick, onClose, title,
+  x, y, currentColor, onPick, onClose, title, onRename, onDelete,
 }: TagColorPopoverProps) {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -115,6 +117,39 @@ export default function TagColorPopover({
           );
         })}
       </div>
+      {(onRename || onDelete) && (
+        <>
+          <div className="h-[1px] bg-app-border my-2" />
+          <div className="flex flex-col gap-0.5">
+            {onRename && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 px-1.5 py-1 text-xs text-tx-secondary hover:text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                onClick={() => {
+                  onRename();
+                  onClose();
+                }}
+              >
+                <Pencil size={12} />
+                <span>{t("tags.rename", "重命名")}</span>
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 px-1.5 py-1 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition-colors text-left"
+                onClick={() => {
+                  onDelete();
+                  onClose();
+                }}
+              >
+                <Trash2 size={12} />
+                <span>{t("tags.deleteTag", "删除标签")}</span>
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>,
     document.body
   );

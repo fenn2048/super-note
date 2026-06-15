@@ -10,7 +10,7 @@ const isProd = process.env.NODE_ENV === "production";
 
 const config: CapacitorConfig = {
   appId: "com.super.note",
-  appName: "Ark Notes",
+  appName: "星空笔记",
   webDir: "dist",
   server: {
     // 允许 HTTP 明文（连接局域网 IP / HTTP 服务器需要）

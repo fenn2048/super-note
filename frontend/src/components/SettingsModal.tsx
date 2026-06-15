@@ -169,7 +169,7 @@ function VersionCompareCard() {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">版本信息</h3>
+        <h3 className="text-sm font-semibold text-tx-primary">版本信息</h3>
         <button
           type="button"
           onClick={handleRetry}
@@ -185,7 +185,7 @@ function VersionCompareCard() {
       <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2 text-xs">
         {/* 客户端 */}
         <span className="text-zinc-500 dark:text-zinc-400">当前客户端</span>
-        <span className="font-mono text-zinc-900 dark:text-zinc-100">v{clientVersion}</span>
+        <span className="font-mono text-tx-primary">v{clientVersion}</span>
         <span className="text-zinc-400 dark:text-zinc-600">
           {typeof navigator !== "undefined" && navigator.userAgent.includes("Electron")
             ? "Desktop"
@@ -196,7 +196,7 @@ function VersionCompareCard() {
 
         {/* 服务端 */}
         <span className="text-zinc-500 dark:text-zinc-400">服务端</span>
-        <span className="font-mono text-zinc-900 dark:text-zinc-100">
+        <span className="font-mono text-tx-primary">
           {serverError ? (
             <span className="text-amber-500">unknown</span>
           ) : serverVersion ? (
@@ -217,7 +217,7 @@ function VersionCompareCard() {
 
         {/* GitHub 最新 release */}
         <span className="text-zinc-500 dark:text-zinc-400">最新发布</span>
-        <span className="font-mono text-zinc-900 dark:text-zinc-100 truncate">
+        <span className="font-mono text-tx-primary truncate">
           {release?.available ? (
             <a
               href={release.htmlUrl}
@@ -406,7 +406,7 @@ function DeveloperPanel() {
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+              <span className="text-sm font-medium text-tx-primary">
                 {t('settings.debugFilesQueryLabel')}
               </span>
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />}
@@ -455,7 +455,7 @@ function AboutPanel() {
     <div className="space-y-6">
       {/* 标题区 */}
       <div className="text-center py-4">
-        <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{t('about.appName')}</h2>
+        <h2 className="text-2xl font-bold text-tx-primary">{t('about.appName')}</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{t('about.slogan')}</p>
         <span className="inline-block mt-2 px-3 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary text-xs font-medium">
           {t('about.version')} {__APP_VERSION__}
@@ -474,7 +474,7 @@ function AboutPanel() {
 
       {/* 核心能力 */}
       <div>
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3">{t('about.features')}</h3>
+        <h3 className="text-sm font-semibold text-tx-primary mb-3">{t('about.features')}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
             'featureEditor', 'featureAI', 'featureClipper',
@@ -492,7 +492,7 @@ function AboutPanel() {
 
       {/* 插件与客户端下载 */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-tx-primary flex items-center gap-2">
           <Download size={15} className="text-accent-primary" />
           下载扩展与客户端 (Debug 自签名版)
         </h3>
@@ -505,7 +505,7 @@ function AboutPanel() {
             <div className="flex items-center gap-2.5 min-w-0">
               <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Chrome 剪藏插件</div>
+                <div className="text-xs font-semibold text-tx-primary truncate">Chrome 剪藏插件</div>
                 <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-chrome.zip</div>
               </div>
             </div>
@@ -524,7 +524,7 @@ function AboutPanel() {
             <div className="flex items-center gap-2.5 min-w-0">
               <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Edge 剪藏插件</div>
+                <div className="text-xs font-semibold text-tx-primary truncate">Edge 剪藏插件</div>
                 <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-edge.zip</div>
               </div>
             </div>
@@ -543,7 +543,7 @@ function AboutPanel() {
             <div className="flex items-center gap-2.5 min-w-0">
               <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Firefox 剪藏插件</div>
+                <div className="text-xs font-semibold text-tx-primary truncate">Firefox 剪藏插件</div>
                 <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-firefox.zip</div>
               </div>
             </div>
@@ -562,7 +562,7 @@ function AboutPanel() {
             <div className="flex items-center gap-2.5 min-w-0">
               <Smartphone size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">Android 客户端</div>
+                <div className="text-xs font-semibold text-tx-primary truncate">Android 客户端</div>
                 <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-note-debug.apk</div>
               </div>
             </div>
@@ -747,7 +747,7 @@ function SwitchesPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+        <h3 className="text-lg font-bold text-tx-primary mb-1">
           {t('settings.switchesTitle')}
         </h3>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -765,7 +765,7 @@ function SwitchesPanel() {
               className="mt-0.5 w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
             />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-none">
+              <div className="text-xs font-medium text-tx-primary leading-none">
                 {item.label}
               </div>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
@@ -777,7 +777,7 @@ function SwitchesPanel() {
 
         <div className="flex items-center justify-between px-3 py-2.5 hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
           <div className="flex-1 min-w-0 pr-4">
-            <div className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-none">
+            <div className="text-xs font-medium text-tx-primary leading-none">
               健康休息提醒间隔
             </div>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
@@ -787,7 +787,7 @@ function SwitchesPanel() {
           <select
             value={userPrefs.reminderInterval}
             onChange={(e) => setUserPref("reminderInterval", Number(e.target.value))}
-            className="text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            className="text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-tx-primary px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
           >
             <option value={15}>15 分钟</option>
             <option value={30}>30 分钟 (默认)</option>
@@ -808,7 +808,7 @@ function SwitchesPanel() {
               className="mt-0.5 w-3.5 h-3.5 accent-indigo-600 cursor-pointer disabled:opacity-50"
             />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-none flex items-center gap-1.5">
+              <div className="text-xs font-medium text-tx-primary leading-none flex items-center gap-1.5">
                 隐藏桌面端菜单栏
                 {savingKey === "menuBar" && <Loader2 size={12} className="animate-spin text-zinc-400" />}
               </div>
@@ -829,7 +829,7 @@ function SwitchesPanel() {
               className="mt-0.5 w-3.5 h-3.5 accent-indigo-600 cursor-pointer disabled:opacity-50"
             />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-none flex items-center gap-1.5">
+              <div className="text-xs font-medium text-tx-primary leading-none flex items-center gap-1.5">
                 关闭网页端页面
                 {savingKey === "webUi" && <Loader2 size={12} className="animate-spin text-zinc-400" />}
               </div>
@@ -990,7 +990,7 @@ function AppearancePanel() {
     <div className="space-y-6">
       {/* 站点标识 */}
       <div>
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{t('settings.siteIdentity')}</h3>
+        <h3 className="text-lg font-bold text-tx-primary mb-1">{t('settings.siteIdentity')}</h3>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">{t('settings.siteIdentityDesc')}</p>
         {!isAdmin && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
@@ -1057,7 +1057,7 @@ function AppearancePanel() {
                 onChange={(e) => { setTitle(e.target.value); setSaveMessage(""); }}
                 maxLength={20}
                 disabled={!isAdmin}
-                className="w-full px-3 py-2 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full px-3 py-2 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 placeholder={t('settings.siteNamePlaceholder')}
               />
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-right">{title.length} / 20</p>
@@ -1089,7 +1089,7 @@ function AppearancePanel() {
 
       {/* 外观与主题 */}
       <div>
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{t('settings.appearanceTheme')}</h3>
+        <h3 className="text-lg font-bold text-tx-primary mb-1">{t('settings.appearanceTheme')}</h3>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">{t('settings.appearanceThemeDesc')}</p>
       </div>
 
@@ -1129,7 +1129,7 @@ function AppearancePanel() {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setFontDropdownOpen(!fontDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 hover:border-accent-primary/50 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-sm text-tx-primary hover:border-accent-primary/50 transition-colors"
             >
               <span className="flex items-center gap-2">
                 <Type size={14} className="text-zinc-400" />
@@ -1426,7 +1426,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                 className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 shrink-0"
                 style={{ paddingTop: 'calc(var(--safe-area-top) + 12px)' }}
               >
-                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{t('settings.title')}</h2>
+                <h2 className="text-base font-bold text-tx-primary">{t('settings.title')}</h2>
                 <button
                   type="button"
                   onClick={onClose}
@@ -1455,7 +1455,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                           <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
                             <Icon className="w-4 h-4" />
                           </span>
-                          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{tab.label}</span>
+                          <span className="text-sm font-semibold text-tx-primary">{tab.label}</span>
                         </div>
                         <ChevronRight className="w-4 h-4 text-zinc-400" />
                       </button>
@@ -1479,11 +1479,11 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                 <button
                   type="button"
                   onClick={() => setCurrentMobilePage("menu")}
-                  className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 rounded-lg active:scale-95 transition-transform"
+                  className="p-1.5 text-zinc-500 hover:text-tx-primary dark:text-zinc-400 dark:hover:text-zinc-200 rounded-lg active:scale-95 transition-transform"
                 >
                   <ChevronRight className="w-5 h-5 rotate-180" />
                 </button>
-                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex-1">
+                <h2 className="text-base font-bold text-tx-primary flex-1">
                   {SETTING_TABS.find(t => t.id === currentMobilePage)?.label || "设置"}
                 </h2>
                 <button
@@ -1531,7 +1531,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
             <div className="hidden md:flex w-56 flex-shrink-0 bg-zinc-50 dark:bg-zinc-900/50 border-r border-zinc-200 dark:border-zinc-800 p-4 flex-col">
               <div className="flex items-center gap-2 mb-6 px-2">
                 <Settings className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{t('settings.title')}</span>
+                <span className="font-bold text-sm text-tx-primary">{t('settings.title')}</span>
               </div>
 
               <nav className="flex-1 space-y-0.5">
