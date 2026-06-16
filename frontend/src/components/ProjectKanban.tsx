@@ -386,12 +386,13 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
                 const hasChecklist = checklistTotal > 0;
 
                 const isDark = document.documentElement.classList.contains("dark");
-                const cardColor = task.titleColor || stage.bgColor;
-                const hasCustomColor = cardColor && TASK_COLOR_MAP[cardColor];
+                const cardColor = task.titleColor || stage.bgColor || "";
+                const hasCustomColor = cardColor ? !!TASK_COLOR_MAP[cardColor] : false;
                 const customStyles = hasCustomColor ? TASK_COLOR_MAP[cardColor] : null;
 
-                const hasTitleColor = task.titleColor && TASK_COLOR_MAP[task.titleColor];
-                const titleStyle = hasTitleColor ? { color: TASK_COLOR_MAP[task.titleColor].font } : {};
+                const titleColor = task.titleColor || "";
+                const hasTitleColor = titleColor ? !!TASK_COLOR_MAP[titleColor] : false;
+                const titleStyle = hasTitleColor ? { color: TASK_COLOR_MAP[titleColor].font } : {};
 
                 return (
                   <div
