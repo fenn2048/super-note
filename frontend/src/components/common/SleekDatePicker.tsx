@@ -22,12 +22,13 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 
 interface SleekDatePickerProps {
-  value: string; // YYYY-MM-DD
+  value: string; // YYYY-MM-DD or YYYY-MM-DD HH:mm
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
   align?: "left" | "right";
   variant?: "default" | "mobile-form";
+  showTime?: boolean;
 }
 
 export default function SleekDatePicker({
@@ -36,7 +37,8 @@ export default function SleekDatePicker({
   placeholder = "选择日期",
   className,
   align = "left",
-  variant = "default"
+  variant = "default",
+  showTime = false
 }: SleekDatePickerProps) {
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language.startsWith("zh") ? zhCN : enUS;
@@ -48,21 +50,53 @@ export default function SleekDatePicker({
   const popoverRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{ top: number; left: number; showAbove: boolean } | null>(null);
 
-  // Parse current value string into Date object, default to today if empty/invalid
-  const selectedDate = value ? parse(value, "yyyy-MM-dd", new Date()) : null;
+  const parseValue = (val: string) => {
+    if (!val) return null;
+    try {
+      if (val.includes(" ")) {
+        const d = parse(val, "yyyy-MM-dd HH:mm", new Date());
+        return isNaN(d.getTime()) ? null : d;
+      } else {
+        const d = parse(val, "yyyy-MM-dd", new Date());
+        return isNaN(d.getTime()) ? null : d;
+      }
+    } catch {
+      return null;
+    }
+  };
+
+  const selectedDate = value ? parseValue(value) : null;
+  const [tempDate, setTempDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const initialDate = selectedDate || new Date();
+      setTempDate(initialDate);
+      setCurrentMonth(initialDate);
+    } else {
+      setTempDate(null);
+    }
+  }, [isOpen, value]);
 
   // Format label to show to user
   const getDisplayLabel = () => {
-    if (!selectedDate) return placeholder;
-    if (isToday(selectedDate)) return t("calendar.today");
-    if (isTomorrow(selectedDate)) return t("calendar.tomorrow", { defaultValue: "明天" });
+    if (!value) return placeholder;
+    const parsed = parseValue(value);
+    if (!parsed) return placeholder;
     
-    // Check if past (overdue)
-    if (isPast(selectedDate)) {
-      return `${t("calendar.overdue", { defaultValue: "逾期" })} ${format(selectedDate, "MM/dd")}`;
+    if (isToday(parsed)) {
+      return `${t("calendar.today")}${value.includes(" ") ? " " + value.split(" ")[1] : ""}`;
+    }
+    if (isTomorrow(parsed)) {
+      return `${t("calendar.tomorrow", { defaultValue: "明天" })}${value.includes(" ") ? " " + value.split(" ")[1] : ""}`;
     }
     
-    return format(selectedDate, "yyyy-MM-dd");
+    // Check if past (overdue)
+    if (isPast(parsed) && !isToday(parsed)) {
+      return `${t("calendar.overdue", { defaultValue: "逾期" })} ${format(parsed, value.includes(" ") ? "MM/dd HH:mm" : "MM/dd")}`;
+    }
+    
+    return value;
   };
 
   const getLabelClass = () => {
@@ -134,13 +168,6 @@ export default function SleekDatePicker({
     };
   }, [isOpen, align]);
 
-  // Adjust month viewing when opening calendar
-  useEffect(() => {
-    if (isOpen && selectedDate) {
-      setCurrentMonth(selectedDate);
-    }
-  }, [isOpen]);
-
   // Month navigation
   const prevMonth = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -160,7 +187,32 @@ export default function SleekDatePicker({
 
   // Date cell click
   const handleDateClick = (day: Date) => {
-    onChange(format(day, "yyyy-MM-dd"));
+    if (showTime) {
+      const newDate = new Date(tempDate || new Date());
+      newDate.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
+      setTempDate(newDate);
+    } else {
+      onChange(format(day, "yyyy-MM-dd"));
+      setIsOpen(false);
+    }
+  };
+
+  const handleTodayClick = () => {
+    const today = new Date();
+    if (showTime) {
+      const newDate = new Date(tempDate || new Date());
+      newDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
+      setTempDate(newDate);
+    } else {
+      onChange(format(today, "yyyy-MM-dd"));
+      setIsOpen(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (tempDate) {
+      onChange(format(tempDate, showTime ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd"));
+    }
     setIsOpen(false);
   };
 
@@ -255,7 +307,8 @@ export default function SleekDatePicker({
           <div className="grid grid-cols-7 gap-0.5">
             {days.map((day, idx) => {
               const isCurrentMonth = isSameMonth(day, currentMonth);
-              const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+              const activeDay = tempDate || selectedDate;
+              const isSelected = activeDay ? isSameDay(day, activeDay) : false;
               const isDayToday = isToday(day);
 
               return (
@@ -277,24 +330,71 @@ export default function SleekDatePicker({
             })}
           </div>
 
+          {/* Time Selector Dropdowns */}
+          {showTime && tempDate && (
+            <div className="flex items-center justify-between border-t border-app-border/40 mt-3 pt-3 px-1">
+              <span className="text-[11px] font-bold text-tx-secondary">时间</span>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={format(tempDate, "HH")}
+                  onChange={(e) => {
+                    const newDate = new Date(tempDate);
+                    newDate.setHours(parseInt(e.target.value, 10));
+                    setTempDate(newDate);
+                  }}
+                  className="text-xs bg-app-sidebar border border-app-border rounded px-1.5 py-0.5 focus:outline-none focus:border-accent-primary text-tx-primary font-medium"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0")).map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <span className="text-tx-secondary text-xs">:</span>
+                <select
+                  value={format(tempDate, "mm")}
+                  onChange={(e) => {
+                    const newDate = new Date(tempDate);
+                    newDate.setMinutes(parseInt(e.target.value, 10));
+                    setTempDate(newDate);
+                  }}
+                  className="text-xs bg-app-sidebar border border-app-border rounded px-1.5 py-0.5 focus:outline-none focus:border-accent-primary text-tx-primary font-medium"
+                >
+                  {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Footer controls */}
           <div className="flex items-center justify-between border-t border-app-border/40 mt-3 pt-2 px-0.5">
             <button
-              onClick={() => handleDateClick(new Date())}
+              onClick={handleTodayClick}
               type="button"
               className="text-[10px] font-semibold text-accent-primary hover:underline transition-all"
             >
               {t("calendar.today")}
             </button>
-            {selectedDate && (
-              <button
-                onClick={handleClear}
-                type="button"
-                className="text-[10px] font-semibold text-tx-tertiary hover:text-accent-danger transition-all"
-              >
-                {t("calendar.clear", { defaultValue: "清除" })}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {showTime && (
+                <button
+                  onClick={handleConfirm}
+                  type="button"
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-accent-primary hover:bg-accent-primary/95 text-white transition-all shadow-sm"
+                >
+                  {t("common.confirm") || "确定"}
+                </button>
+              )}
+              {value && (
+                <button
+                  onClick={handleClear}
+                  type="button"
+                  className="text-[10px] font-semibold text-tx-tertiary hover:text-accent-danger transition-all"
+                >
+                  {t("calendar.clear", { defaultValue: "清除" })}
+                </button>
+              )}
+            </div>
           </div>
         </div>,
         document.body

@@ -610,6 +610,7 @@ export interface ProjectStage {
   name: string;
   sortOrder: number;
   createdAt: string;
+  bgColor?: string | null;
   tasks?: ProjectTask[];
 }
 
@@ -631,6 +632,7 @@ export interface ProjectTask {
   remindAt: string | null;
   createdAt: string;
   updatedAt: string;
+  titleColor?: string | null;
   assigneeName?: string;
   assigneeDisplayName?: string;
   assigneeAvatarUrl?: string | null;

@@ -84,10 +84,17 @@ export default function MobileTaskCreateModal({
     setDueDate(dateVal);
     if (dateVal) {
       try {
-        const [year, month, day] = dateVal.split("-").map(Number);
+        const hasTime = dateVal.includes(" ");
+        const datePart = hasTime ? dateVal.split(" ")[0] : dateVal;
+        const timePart = hasTime ? dateVal.split(" ")[1] : "";
+        const [year, month, day] = datePart.split("-").map(Number);
         const date = new Date(year, month - 1, day);
         date.setDate(date.getDate() - 1);
-        setRemindAt(format(date, "yyyy-MM-dd"));
+        if (hasTime) {
+          setRemindAt(`${format(date, "yyyy-MM-dd")} ${timePart}`);
+        } else {
+          setRemindAt(format(date, "yyyy-MM-dd"));
+        }
       } catch {
         setRemindAt("");
       }
@@ -295,6 +302,7 @@ export default function MobileTaskCreateModal({
                         placeholder="添加截止日期"
                         className="w-full"
                         variant="mobile-form"
+                        showTime={true}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -305,6 +313,7 @@ export default function MobileTaskCreateModal({
                         placeholder="添加提醒日期"
                         className="w-full"
                         variant="mobile-form"
+                        showTime={true}
                       />
                     </div>
                   </div>

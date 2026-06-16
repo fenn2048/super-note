@@ -1617,6 +1617,20 @@ export const MIGRATIONS: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_diary_comments_diary ON diary_comments(diaryId);");
     },
   },
+  {
+    version: 23,
+    name: "project-tasks-color-and-stages-bg",
+    up: (db) => {
+      const taskCols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!taskCols.some((c) => c.name === "titleColor")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN titleColor TEXT DEFAULT NULL");
+      }
+      const stageCols = db.prepare("PRAGMA table_info(project_stages)").all() as { name: string }[];
+      if (!stageCols.some((c) => c.name === "bgColor")) {
+        db.exec("ALTER TABLE project_stages ADD COLUMN bgColor TEXT DEFAULT NULL");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

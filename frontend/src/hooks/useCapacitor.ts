@@ -345,8 +345,12 @@ export async function syncTaskNotification(task: Task) {
       return;
     }
 
-    const [year, month, day] = task.remindAt.split("-").map(Number);
-    const scheduleDate = new Date(year, month - 1, day, 9, 0, 0);
+    const hasTime = task.remindAt.includes(" ");
+    const datePart = hasTime ? task.remindAt.split(" ")[0] : task.remindAt;
+    const timePart = hasTime ? task.remindAt.split(" ")[1] : "09:00";
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour, minute] = timePart.split(":").map(Number);
+    const scheduleDate = new Date(year, month - 1, day, hour, minute, 0);
 
     if (scheduleDate.getTime() > Date.now()) {
       const granted = await checkAndRequestPermissions();
@@ -391,8 +395,12 @@ export async function syncAllTaskNotifications(tasks: Task[]) {
         continue;
       }
 
-      const [year, month, day] = task.remindAt.split("-").map(Number);
-      const scheduleDate = new Date(year, month - 1, day, 9, 0, 0);
+      const hasTime = task.remindAt.includes(" ");
+      const datePart = hasTime ? task.remindAt.split(" ")[0] : task.remindAt;
+      const timePart = hasTime ? task.remindAt.split(" ")[1] : "09:00";
+      const [year, month, day] = datePart.split("-").map(Number);
+      const [hour, minute] = timePart.split(":").map(Number);
+      const scheduleDate = new Date(year, month - 1, day, hour, minute, 0);
 
       if (scheduleDate.getTime() > Date.now()) {
         idsToKeep.add(notificationId);

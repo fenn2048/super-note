@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import {
   Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus,
-  Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal
+  Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles
 } from "lucide-react";
 import GenericTagInput from "@/components/GenericTagInput";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/lib/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
+import { cn } from "@/lib/utils";
+
+export const TASK_COLOR_MAP: Record<string, { font: string; borderLight: string; borderDark: string; bgLight: string; bgDark: string }> = {
+  red: { font: "#ef4444", borderLight: "#fca5a5", borderDark: "#7f1d1d", bgLight: "#fef2f2", bgDark: "#450a0a" },
+  orange: { font: "#f97316", borderLight: "#fed7aa", borderDark: "#7c2d12", bgLight: "#fff7ed", bgDark: "#431407" },
+  green: { font: "#22c55e", borderLight: "#bbf7d0", borderDark: "#064e3b", bgLight: "#f0fdf4", bgDark: "#022c22" },
+  blue: { font: "#3b82f6", borderLight: "#bfdbfe", borderDark: "#1e3a8a", bgLight: "#eff6ff", bgDark: "#172554" },
+  purple: { font: "#a855f7", borderLight: "#e9d5ff", borderDark: "#581c87", bgLight: "#faf5ff", bgDark: "#3b0764" }
+};
 
 interface ProjectKanbanProps {
   project: Project;
@@ -26,6 +35,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
   const { t } = useTranslation();
   const [newStageName, setNewStageName] = useState("");
   const [addingStage, setAddingStage] = useState(false);
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
 
   // Task creation state
   const [addingTaskToStage, setAddingTaskToStage] = useState<string | null>(null);
@@ -125,6 +135,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
         checklists: activeTask.checklists || [],
         participants: activeTask.participants?.map((p) => p.userId) || [],
         tags: activeTask.tags?.map((t) => t.id) || [],
+        titleColor: activeTask.titleColor || null,
       });
       toast.success("保存成功");
       onRefresh();
@@ -247,185 +258,276 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
   return (
     <div className="flex-1 flex gap-4 overflow-x-auto p-4 md:p-6 h-full pb-20 select-none">
       {/* Stages List */}
-      {stages.map((stage) => (
-        <div
-          key={stage.id}
-          className="w-72 shrink-0 bg-app-sidebar border border-app-border rounded-xl flex flex-col h-full max-h-[85vh] shadow-sm overflow-hidden"
-        >
-          {/* Stage Header */}
-          <div className="p-3 border-b border-app-border flex items-center justify-between shrink-0 bg-app-hover/35">
-            {editingStageId === stage.id ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleRenameStage(stage.id);
-                }}
-                className="flex items-center gap-1.5 w-full"
-              >
-                <Input
-                  value={editingStageName}
-                  onChange={(e) => setEditingStageName(e.target.value)}
-                  className="h-7 text-xs px-2 py-0.5 focus-visible:ring-1"
-                  autoFocus
-                  onBlur={() => handleRenameStage(stage.id)}
-                />
-              </form>
-            ) : (
-              <div className="flex items-center gap-2 group/header w-full justify-between">
-                <span
-                  className="font-bold text-xs text-tx-primary cursor-pointer truncate"
-                  onClick={() => {
-                    setEditingStageId(stage.id);
-                    setEditingStageName(stage.name);
-                  }}
-                >
-                  {stage.name}
-                </span>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-app-hover text-tx-secondary">
-                    {stage.tasks?.length || 0}
-                  </span>
-                  <button
-                    className="p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-all opacity-0 group-hover/header:opacity-100"
-                    onClick={() => handleDeleteStage(stage.id)}
-                    title="删除列表"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
+      {stages.map((stage) => {
+        const isDragOver = dragOverStageId === stage.id;
+        return (
+          <div
+            key={stage.id}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (dragOverStageId !== stage.id) setDragOverStageId(stage.id);
+            }}
+            onDragLeave={() => {
+              if (dragOverStageId === stage.id) setDragOverStageId(null);
+            }}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setDragOverStageId(null);
+              const taskId = e.dataTransfer.getData("text/plain");
+              if (!taskId) return;
+              try {
+                await api.updateProjectTask(taskId, { stageId: stage.id });
+                onRefresh();
+              } catch (err: any) {
+                toast.error(err?.message || "移动任务失败");
+              }
+            }}
+            className={cn(
+              "w-72 shrink-0 bg-app-sidebar border rounded-xl flex flex-col h-full max-h-[85vh] shadow-sm overflow-hidden transition-all duration-200",
+              isDragOver ? "border-accent-primary ring-2 ring-accent-primary/20 bg-app-active/10" : "border-app-border"
             )}
-          </div>
-
-          {/* Cards List container */}
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5">
-            {stage.tasks?.map((task) => {
-              const checklistTotal = task.checklists?.length || 0;
-              const checklistCompleted = task.checklists?.filter((c) => c.isCompleted === 1).length || 0;
-              const hasChecklist = checklistTotal > 0;
-
-              return (
-                <div
-                  key={task.id}
-                  onClick={() => setActiveTask(task)}
-                  className="bg-app-bg border border-app-border hover:border-app-border/80 rounded-xl p-3.5 space-y-3 shadow-sm hover:shadow-md transition-all cursor-pointer group/card animate-in fade-in duration-200"
-                >
-                  {/* Task Tags list */}
-                  {task.tags && task.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {task.tags.map((tag) => (
-                        <span
-                          key={tag.id}
-                          style={{
-                            backgroundColor: `${tag.color}15`,
-                            borderColor: `${tag.color}35`,
-                            color: tag.color,
-                          }}
-                          className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase border tracking-wider shrink-0"
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Title */}
-                  <h4
-                    className={`text-xs font-semibold text-tx-primary leading-snug break-words ${
-                      task.isCompleted === 1 ? "line-through opacity-55 decoration-tx-primary/30" : ""
-                    }`}
+          >
+            {/* Stage Header */}
+            <div className="p-3 border-b border-app-border flex items-center justify-between shrink-0 bg-app-hover/35">
+              {editingStageId === stage.id ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleRenameStage(stage.id);
+                    }}
+                    className="flex items-center gap-1.5 w-full"
                   >
-                    {task.title}
-                  </h4>
-
-                  {/* Bottom Stats Meta info */}
-                  <div className="flex items-center justify-between text-[10px] text-tx-tertiary pt-1.5 border-t border-app-border/40 shrink-0">
-                    <div className="flex items-center gap-2">
-                      {/* Dates */}
-                      {(task.startDate || task.endDate) && (
-                        <div className="flex items-center gap-0.5 font-mono">
-                          <Calendar size={11} />
-                          <span>
-                            {task.endDate
-                              ? new Date(task.endDate).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
-                              : "-"}
-                          </span>
-                        </div>
+                    <Input
+                      value={editingStageName}
+                      onChange={(e) => setEditingStageName(e.target.value)}
+                      className="h-7 text-xs px-2 py-0.5 focus-visible:ring-1"
+                      autoFocus
+                      onBlur={() => handleRenameStage(stage.id)}
+                    />
+                  </form>
+                  {/* Stage Card Bg selection */}
+                  <div className="flex items-center gap-1.5 py-0.5">
+                    <span className="text-[9px] text-tx-tertiary font-semibold uppercase tracking-wider shrink-0">卡片背景:</span>
+                    <button
+                      type="button"
+                      onMouseDown={async (e) => {
+                        e.preventDefault();
+                        try {
+                          await api.updateProjectStage(stage.id, { bgColor: null });
+                          onRefresh();
+                        } catch {}
+                      }}
+                      className={cn(
+                        "w-4 h-4 rounded-full border flex items-center justify-center text-[8px] text-tx-tertiary hover:bg-app-hover bg-app-bg shrink-0",
+                        !stage.bgColor && "ring-1 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
                       )}
-
-                      {/* Checklist */}
-                      {hasChecklist && (
-                        <div className="flex items-center gap-0.5">
-                          <CheckSquare size={11} />
-                          <span>
-                            {checklistCompleted}/{checklistTotal}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Assignee Avatar */}
-                    {task.assigneeId ? (
-                      task.assigneeAvatarUrl ? (
-                        <img
-                          src={task.assigneeAvatarUrl}
-                          alt={task.assigneeDisplayName || task.assigneeName}
-                          className="w-5 h-5 rounded-full border border-app-border object-cover"
+                      title="无颜色"
+                    >
+                      <X size={8} />
+                    </button>
+                    {Object.keys(TASK_COLOR_MAP).map((colorKey) => {
+                      const colorInfo = TASK_COLOR_MAP[colorKey];
+                      const isSelected = stage.bgColor === colorKey;
+                      return (
+                        <button
+                          key={colorKey}
+                          type="button"
+                          onMouseDown={async (e) => {
+                            e.preventDefault();
+                            try {
+                              await api.updateProjectStage(stage.id, { bgColor: colorKey });
+                              onRefresh();
+                            } catch {}
+                          }}
+                          className={cn(
+                            "w-4 h-4 rounded-full border transition-all hover:scale-110 shrink-0",
+                            isSelected && "ring-1 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
+                          )}
+                          style={{ backgroundColor: colorInfo.font }}
+                          title={colorKey}
                         />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-accent-primary/10 border border-app-border flex items-center justify-center text-[9px] font-bold text-accent-primary uppercase">
-                          {(task.assigneeDisplayName || task.assigneeName || "").slice(0, 1)}
-                        </div>
-                      )
-                    ) : null}
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
-
-            {/* Inline task composer */}
-            {addingTaskToStage === stage.id ? (
-              <div className="bg-app-bg border border-app-border rounded-xl p-2.5 space-y-2">
-                <Input
-                  placeholder={t("projects.taskTitlePlaceholder") || "输入任务标题…"}
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="h-8 text-xs focus-visible:ring-1 border-app-border"
-                  autoFocus
-                />
-                <div className="flex items-center gap-1.5 justify-end">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setAddingTaskToStage(null)}
-                    className="h-7 text-xs px-2.5"
+              ) : (
+                <div className="flex items-center gap-2 group/header w-full justify-between">
+                  <span
+                    className="font-bold text-xs text-tx-primary cursor-pointer truncate"
+                    onClick={() => {
+                      setEditingStageId(stage.id);
+                      setEditingStageName(stage.name);
+                    }}
                   >
-                    {t("common.cancel") || "取消"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => handleAddTask(stage.id)}
-                    className="h-7 text-xs px-2.5 bg-accent-primary hover:bg-accent-primary/95 text-white"
-                  >
-                    {t("common.add") || "确认"}
-                  </Button>
+                    {stage.name}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-app-hover text-tx-secondary">
+                      {stage.tasks?.length || 0}
+                    </span>
+                    <button
+                      className="p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-all opacity-0 group-hover/header:opacity-100"
+                      onClick={() => handleDeleteStage(stage.id)}
+                      title="删除列表"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setAddingTaskToStage(stage.id);
-                  setNewTaskTitle("");
-                }}
-                className="w-full flex items-center justify-center gap-1 py-1.5 border border-dashed border-app-border/60 rounded-xl hover:border-app-border text-tx-tertiary hover:text-tx-secondary text-[11px] font-semibold transition-all"
-              >
-                <Plus size={12} />
-                <span>{t("projects.addTask") || "添加任务"}</span>
-              </button>
-            )}
+              )}
+            </div>
+
+            {/* Cards List container */}
+            <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5">
+              {stage.tasks?.map((task) => {
+                const checklistTotal = task.checklists?.length || 0;
+                const checklistCompleted = task.checklists?.filter((c) => c.isCompleted === 1).length || 0;
+                const hasChecklist = checklistTotal > 0;
+
+                const isDark = document.documentElement.classList.contains("dark");
+                const cardColor = task.titleColor || stage.bgColor;
+                const hasCustomColor = cardColor && TASK_COLOR_MAP[cardColor];
+                const customStyles = hasCustomColor ? TASK_COLOR_MAP[cardColor] : null;
+
+                const hasTitleColor = task.titleColor && TASK_COLOR_MAP[task.titleColor];
+                const titleStyle = hasTitleColor ? { color: TASK_COLOR_MAP[task.titleColor].font } : {};
+
+                return (
+                  <div
+                    key={task.id}
+                    onClick={() => setActiveTask(task)}
+                    draggable={true}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", task.id);
+                    }}
+                    style={customStyles ? {
+                      backgroundColor: isDark ? customStyles.bgDark : customStyles.bgLight,
+                      borderColor: isDark ? customStyles.borderDark : customStyles.borderLight,
+                    } : {}}
+                    className={cn(
+                      "bg-app-bg border border-app-border rounded-xl p-3.5 space-y-3 shadow-sm hover:shadow-md transition-all cursor-pointer group/card animate-in fade-in duration-200",
+                      !customStyles && "hover:border-app-border/80"
+                    )}
+                  >
+                    {/* Task Tags list */}
+                    {task.tags && task.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {task.tags.map((tag) => (
+                          <span
+                            key={tag.id}
+                            style={{
+                              backgroundColor: `${tag.color}15`,
+                              borderColor: `${tag.color}35`,
+                              color: tag.color,
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase border tracking-wider shrink-0"
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Title */}
+                    <h4
+                      style={titleStyle}
+                      className={`text-xs font-semibold text-tx-primary leading-snug break-words ${
+                        task.isCompleted === 1 ? "line-through opacity-55 decoration-tx-primary/30" : ""
+                      }`}
+                    >
+                      {task.title}
+                    </h4>
+
+                    {/* Bottom Stats Meta info */}
+                    <div className="flex items-center justify-between text-[10px] text-tx-tertiary pt-1.5 border-t border-app-border/40 shrink-0">
+                      <div className="flex items-center gap-2">
+                        {/* Dates */}
+                        {(task.startDate || task.endDate) && (
+                          <div className="flex items-center gap-0.5 font-mono">
+                            <Calendar size={11} />
+                            <span>
+                              {task.endDate
+                                ? new Date(task.endDate).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
+                                : "-"}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Checklist */}
+                        {hasChecklist && (
+                          <div className="flex items-center gap-0.5">
+                            <CheckSquare size={11} />
+                            <span>
+                              {checklistCompleted}/{checklistTotal}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Assignee Avatar */}
+                      {task.assigneeId ? (
+                        task.assigneeAvatarUrl ? (
+                          <img
+                            src={task.assigneeAvatarUrl}
+                            alt={task.assigneeDisplayName || task.assigneeName}
+                            className="w-5 h-5 rounded-full border border-app-border object-cover"
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-accent-primary/10 border border-app-border flex items-center justify-center text-[9px] font-bold text-accent-primary uppercase">
+                            {(task.assigneeDisplayName || task.assigneeName || "").slice(0, 1)}
+                          </div>
+                        )
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Inline task composer */}
+              {addingTaskToStage === stage.id ? (
+                <div className="bg-app-bg border border-app-border rounded-xl p-2.5 space-y-2">
+                  <Input
+                    placeholder={t("projects.taskTitlePlaceholder") || "输入任务标题…"}
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    className="h-8 text-xs focus-visible:ring-1 border-app-border"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setAddingTaskToStage(null)}
+                      className="h-7 text-xs px-2.5"
+                    >
+                      {t("common.cancel") || "取消"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddTask(stage.id)}
+                      className="h-7 text-xs px-2.5 bg-accent-primary hover:bg-accent-primary/95 text-white"
+                    >
+                      {t("common.add") || "确认"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setAddingTaskToStage(stage.id);
+                    setNewTaskTitle("");
+                  }}
+                  className="w-full flex items-center justify-center gap-1 py-1.5 border border-dashed border-app-border/60 rounded-xl hover:border-app-border text-tx-tertiary hover:text-tx-secondary text-[11px] font-semibold transition-all"
+                >
+                  <Plus size={12} />
+                  <span>{t("projects.addTask") || "添加任务"}</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Add Stage Column entry */}
       {addingStage ? (
@@ -600,6 +702,44 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
                     </div>
                   )}
                 </div>
+
+                 {/* Title Color selector */}
+                 <div className="flex items-center gap-3 relative">
+                   <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 shrink-0">
+                     <Sparkles size={13} />
+                     <span>标题颜色</span>
+                   </div>
+                   <div className="flex-1 flex items-center gap-1.5">
+                     <button
+                       type="button"
+                       onClick={() => setActiveTask((prev) => prev ? { ...prev, titleColor: null } : null)}
+                       className={cn(
+                         "w-5 h-5 rounded-full border flex items-center justify-center text-[10px] text-tx-tertiary hover:bg-app-hover bg-app-bg shrink-0",
+                         !activeTask.titleColor && "ring-2 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
+                       )}
+                       title="无颜色"
+                     >
+                       <X size={10} />
+                     </button>
+                     {Object.keys(TASK_COLOR_MAP).map((colorKey) => {
+                       const colorInfo = TASK_COLOR_MAP[colorKey];
+                       const isSelected = activeTask.titleColor === colorKey;
+                       return (
+                         <button
+                           key={colorKey}
+                           type="button"
+                           onClick={() => setActiveTask((prev) => prev ? { ...prev, titleColor: colorKey } : null)}
+                           className={cn(
+                             "w-5 h-5 rounded-full border transition-all hover:scale-110 shrink-0",
+                             isSelected && "ring-2 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
+                           )}
+                           style={{ backgroundColor: colorInfo.font }}
+                           title={colorKey}
+                         />
+                       );
+                     })}
+                   </div>
+                 </div>
 
                 {/* Timeline dates */}
                 <div className="flex items-center gap-3">

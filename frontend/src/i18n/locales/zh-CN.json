@@ -157,7 +157,8 @@
     "emojiSmileys": "表情",
     "emojiTech": "科技",
     "emojiNature": "自然",
-    "emojiFood": "食物"
+    "emojiFood": "食物",
+    "noFavorites": "暂无收藏",
   },
   "noteList": {
     "moveTo": "移动到...",
@@ -1838,7 +1839,7 @@
     "confirmDeleteGroup": "确定要删除该分组吗？此操作不可撤销。",
     "noGroups": "无分组",
     "noFavorites": "暂无收藏",
-    "personalTodo": "个人TODO",
+    "personalTodo": "个人待办",
     "tasksCount":"个任务"
   },
   "calendar": {

@@ -44,6 +44,7 @@ public class MainActivity extends BridgeActivity {
         // Inject download bridge and customize WebChromeClient for permissions
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
+            this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
             
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
@@ -113,6 +114,26 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception e) {
                 e.printStackTrace();
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "保存文件失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }
+    }
+
+    public class AndroidKeepAliveBridge {
+        @JavascriptInterface
+        public void updateAuthInfo(String serverUrl, String token, String userId) {
+            android.content.SharedPreferences sharedPref = getSharedPreferences("SuperNotePrefs", android.content.Context.MODE_PRIVATE);
+            android.content.SharedPreferences.Editor editor = sharedPref.edit();
+            editor.putString("serverUrl", serverUrl);
+            editor.putString("token", token);
+            editor.putString("userId", userId);
+            editor.apply();
+
+            // Restart KeepAliveService to pickup new auth info
+            Intent serviceIntent = new Intent(MainActivity.this, KeepAliveService.class);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
             }
         }
     }

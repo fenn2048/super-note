@@ -7,7 +7,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
@@ -95,8 +95,20 @@ export default function TagsList() {
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                       <span className="flex-1 truncate">{tag.name}</span>
                       {tag.noteCount !== undefined && (
-                        <span className="text-[10px] text-tx-tertiary tabular-nums">{tag.noteCount}</span>
+                        <span className="text-[10px] text-tx-tertiary tabular-nums group-hover/tag:hidden">{tag.noteCount}</span>
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTagColorPopover({ tagId: tag.id, tagName: tag.name, color: tag.color, x: rect.left, y: rect.bottom + 4 });
+                        }}
+                        className="hidden group-hover/tag:flex items-center justify-center p-0.5 rounded text-tx-tertiary hover:text-tx-primary hover:bg-app-active/40"
+                      >
+                        <MoreHorizontal size={12} />
+                      </button>
                     </div>
                   );
                 })

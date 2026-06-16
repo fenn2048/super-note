@@ -384,10 +384,17 @@ export default function ProjectCenter() {
   const calculateDefaultReminderDate = (dateStr: string) => {
     if (!dateStr) return "";
     try {
-      const [year, month, day] = dateStr.split("-").map(Number);
+      const hasTime = dateStr.includes(" ");
+      const datePart = hasTime ? dateStr.split(" ")[0] : dateStr;
+      const timePart = hasTime ? dateStr.split(" ")[1] : "";
+      const [year, month, day] = datePart.split("-").map(Number);
       const date = new Date(year, month - 1, day);
       date.setDate(date.getDate() - 1);
-      return format(date, "yyyy-MM-dd");
+      if (hasTime) {
+        return `${format(date, "yyyy-MM-dd")} ${timePart}`;
+      } else {
+        return format(date, "yyyy-MM-dd");
+      }
     } catch {
       return "";
     }
@@ -1494,6 +1501,7 @@ export default function ProjectCenter() {
                     value={quickAddDueDate}
                     onChange={setQuickAddDueDate}
                     placeholder={t("projects.dueDate") || "截止日期"}
+                    showTime={true}
                   />
                 </div>
 
@@ -2221,6 +2229,7 @@ export default function ProjectCenter() {
                     }}
                     className="w-full"
                     placeholder="选择截止日期"
+                    showTime={true}
                   />
                 </div>
 
@@ -2232,6 +2241,7 @@ export default function ProjectCenter() {
                     onChange={setTaskRemindAt}
                     className="w-full"
                     placeholder="选择提醒日期"
+                    showTime={true}
                   />
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { BookOpen, Sparkles, Users, Key, Database, Smile, Rocket, HelpCircle, Shield, ArrowRight, Globe } from "lucide-react";
 
-type SectionId = "quickstart" | "workspace" | "editor" | "data" | "health" | "clipper";
+type SectionId = "quickstart" | "workspace" | "projects" | "editor" | "data" | "health" | "clipper";
 
 export default function ManualPanel() {
   const [activeSection, setActiveSection] = useState<SectionId>("quickstart");
@@ -9,10 +9,11 @@ export default function ManualPanel() {
   const menuItems = [
     { id: "quickstart" as const, label: "🚀 快速上手", desc: "创建笔记与基础操作" },
     { id: "workspace" as const, label: "🏠 家庭空间与协作", desc: "多用户共享与邀请" },
+    { id: "projects" as const, label: "📋 项目协作与看板", desc: "拖拽卡片与颜色主题" },
     { id: "editor" as const, label: "✍️ 智能排版与快捷键", desc: "编辑技巧与阅读密度" },
     { id: "clipper" as const, label: "🌐 浏览器剪藏插件", desc: "网页内容一键剪藏" },
     { id: "data" as const, label: "🔒 数据管理与安全", desc: "自动备份与恢复" },
-    { id: "health" as const, label: "🛸 健康关怀提醒", desc: "太空飞船休息提醒" },
+    { id: "health" as const, label: "🛸 健康关怀提醒", desc: "太空飞船与实时监测" },
   ];
 
   return (
@@ -140,6 +141,50 @@ export default function ManualPanel() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "projects" && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-lg font-bold flex items-center gap-2 mb-2 text-zinc-950 dark:text-zinc-50">
+                <Users className="w-5 h-5 text-indigo-500" />
+                项目协作与看板管理
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                在工作区中，您可以使用“项目”功能来进行深度团队协作、任务跟进与进度同步。
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800/60">
+              <h3 className="text-sm font-semibold mb-2.5 text-zinc-900 dark:text-zinc-100">📌 看板与任务核心特性</h3>
+              <ul className="space-y-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <li className="flex items-start gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-500" />
+                  <span><strong>可视化拖拽看板</strong>：在电脑端，您可以直接通过鼠标将任务卡片在不同的列表（阶段）之间自由拖动，实现任务状态的快速迁移。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-500" />
+                  <span><strong>个性化配色风格</strong>：支持为不同的列表阶段设置卡片底色（红/橙/绿/蓝/紫），同时可定制特定任务的标题颜色。卡片样式将根据自定义配置动态展示。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-500" />
+                  <span><strong>精确到分钟的提醒</strong>：在设置任务的截止日期和提醒时间时，点击时间选择器除了选择天数外，还能配置具体的小时与分钟（例如 <code>2026-06-16 10:35</code>），定时精准向移动端/桌面推送系统提醒。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-500" />
+                  <span><strong>共享成员智能指派</strong>：将项目公开（对工作区全员可见）后，在编辑任务或讨论区输入 <code>@</code> 时，系统会自动读取并展示工作区的全部成员供您快捷选择和提及。</span>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">🏷️ 标签及说说优化</h3>
+              <ul className="list-disc pl-4 space-y-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <li><strong>标签管理</strong>：在侧边栏的标签列表上，将鼠标悬停在特定标签上会触发操作按钮，支持对其进行重命名或删除。</li>
+                <li><strong>说说微信风格菜单</strong>：在说说日记列表中，点击右侧的“...”操作按钮将横向滑出包含收藏、评论、置顶、编辑、删除的工具条。点击屏幕中任何空白位置即可自动收起。</li>
+              </ul>
             </div>
           </div>
         )}
@@ -318,10 +363,10 @@ export default function ManualPanel() {
             <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
               <h3 className="text-xs font-bold mb-1 flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
                 <Shield className="w-4 h-4" />
-                特别说明：颈椎健康休息室
+                特别说明：颈椎健康实时监测
               </h3>
               <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                休息室中提供的<strong>“收敛下巴，对齐颈椎”</strong>动作校准目前是一个趣味模拟互动，采用手动的“对齐滑块”进行，<strong>并不需要也未实际开启您的摄像头</strong>进行实时图像分析，请放心体验。
+                休息室中提供的<strong>“颈部动作实时监测”</strong>功能支持通过摄像头进行姿势校准。您可以选择开启摄像头，图像仅在您的本地浏览器进行渲染和偏差对准分析，绝不上传到任何服务器，安全保护您的隐私。如果您拒绝了摄像头权限，系统会自动降级为普通趣味模拟练习（由滑块或时间控制），并展示可爱的飞船警告卡片。
               </p>
             </div>
 

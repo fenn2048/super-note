@@ -1095,6 +1095,7 @@ function initSchema(db: Database.Database) {
       projectId TEXT NOT NULL,
       name TEXT NOT NULL,
       sortOrder INTEGER DEFAULT 0,
+      bgColor TEXT DEFAULT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
@@ -1112,6 +1113,7 @@ function initSchema(db: Database.Database) {
       description TEXT DEFAULT '',
       cover TEXT DEFAULT '',
       sortOrder INTEGER DEFAULT 0,
+      titleColor TEXT DEFAULT NULL,
       creatorId TEXT NOT NULL,
       modifierId TEXT NOT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),

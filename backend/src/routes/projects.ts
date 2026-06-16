@@ -306,12 +306,24 @@ projectsRouter.get("/:id", (c) => {
     WHERE p.id = ?
   `).get(id) as any;
 
-  const members = db.prepare(`
-    SELECT pm.userId, pm.role, u.username, u.displayName, u.avatarUrl
-    FROM project_members pm
-    JOIN users u ON pm.userId = u.id
-    WHERE pm.projectId = ?
-  `).all(id);
+  let members;
+  if (projectDetails.visibility === "PUBLIC" && projectDetails.workspaceId) {
+    members = db.prepare(`
+      SELECT DISTINCT wm.userId,
+             CASE WHEN wm.role = 'owner' THEN 'owner' WHEN wm.role = 'admin' THEN 'admin' ELSE 'member' END as role,
+             u.username, u.displayName, u.avatarUrl
+      FROM workspace_members wm
+      JOIN users u ON wm.userId = u.id
+      WHERE wm.workspaceId = ?
+    `).all(projectDetails.workspaceId);
+  } else {
+    members = db.prepare(`
+      SELECT pm.userId, pm.role, u.username, u.displayName, u.avatarUrl
+      FROM project_members pm
+      JOIN users u ON pm.userId = u.id
+      WHERE pm.projectId = ?
+    `).all(id);
+  }
 
   projectDetails.members = members;
   return c.json(projectDetails);
@@ -480,7 +492,7 @@ projectsRouter.put("/stages/:stageId", async (c) => {
   const userId = c.req.header("X-User-Id")!;
   const stageId = c.req.param("stageId");
   const body = await c.req.json();
-  const { name, sortOrder } = body;
+  const { name, sortOrder, bgColor } = body;
 
   const stage = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId) as { name: string; projectId: string } | undefined;
   if (!stage) return c.json({ error: "阶段不存在" }, 404);
@@ -493,6 +505,9 @@ projectsRouter.put("/stages/:stageId", async (c) => {
   }
   if (sortOrder !== undefined) {
     db.prepare("UPDATE project_stages SET sortOrder = ? WHERE id = ?").run(sortOrder, stageId);
+  }
+  if (bgColor !== undefined) {
+    db.prepare("UPDATE project_stages SET bgColor = ? WHERE id = ?").run(bgColor, stageId);
   }
 
   const updated = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId);
@@ -525,7 +540,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null } = body;
+  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
 
@@ -534,9 +549,9 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const sortOrder = (maxSort.max ?? -1) + 1;
 
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt);
+    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor);
 
   // Add participants
   if (Array.isArray(participants)) {
@@ -569,7 +584,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt } = body;
+  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor } = body;
 
   const updates: string[] = [];
   const params: any[] = [];
@@ -585,6 +600,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (sortOrder !== undefined) { updates.push("sortOrder = ?"); params.push(sortOrder); }
   if (priority !== undefined) { updates.push("priority = ?"); params.push(priority); }
   if (remindAt !== undefined) { updates.push("remindAt = ?"); params.push(remindAt); }
+  if (titleColor !== undefined) { updates.push("titleColor = ?"); params.push(titleColor); }
 
   if (updates.length > 0) {
     updates.push("modifierId = ?");

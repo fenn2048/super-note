@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
+import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 
 interface ProjectDiscussionProps {
   project: Project;
@@ -25,6 +26,10 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Autocomplete @mention states
+  const [composerCursorPos, setComposerCursorPos] = useState(0);
+  const composerMention = useMentionState(content, composerCursorPos);
 
   // Link card state
   const [linkedCards, setLinkedCards] = useState<Array<{ type: "task" | "note"; id: string; title: string }>>([]);
@@ -255,12 +260,38 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         </div>
       )}
 
+      {composerMention && (
+        <div className="relative z-50 px-3 bg-app-sidebar/20">
+          <MentionPicker
+            search={composerMention.search}
+            onSelect={(user) => {
+              const newText = replaceMentionText(content, composerCursorPos, composerMention.startIndex, user.username);
+              setContent(newText);
+              setComposerCursorPos(composerMention.startIndex + user.username.length + 2);
+              composerMention.clear();
+            }}
+            onClose={composerMention.clear}
+          />
+        </div>
+      )}
+
       {/* Text Composer Form */}
       <form onSubmit={handleSend} className="p-3 border-t border-app-border bg-app-sidebar flex items-center gap-2 shrink-0">
         <div className="relative flex-1 flex items-center bg-app-bg border border-app-border rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-accent-primary focus-within:border-accent-primary transition-all">
           <Input
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              setContent(e.target.value);
+              setComposerCursorPos(e.target.selectionStart || 0);
+            }}
+            onKeyUp={(e) => {
+              const target = e.target as HTMLInputElement;
+              setComposerCursorPos(target.selectionStart || 0);
+            }}
+            onSelect={(e) => {
+              const target = e.target as HTMLInputElement;
+              setComposerCursorPos(target.selectionStart || 0);
+            }}
             placeholder={t("projects.typeMessage") || "输入讨论内容…"}
             className="flex-1 border-none bg-transparent h-7 text-xs focus-visible:ring-0 p-0 placeholder:text-tx-tertiary"
             disabled={sending}

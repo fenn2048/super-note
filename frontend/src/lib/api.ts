@@ -1110,7 +1110,7 @@ export const api = {
 
   getProjectStages: (projectId: string) => request<ProjectStage[]>(`/projects/${projectId}/stages`),
   createProjectStage: (projectId: string, data: { name: string }) => request<ProjectStage>(`/projects/${projectId}/stages`, { method: "POST", body: JSON.stringify(data) }),
-  updateProjectStage: (stageId: string, data: { name?: string; sortOrder?: number }) => request<ProjectStage>(`/projects/stages/${stageId}`, { method: "PUT", body: JSON.stringify(data) }),
+  updateProjectStage: (stageId: string, data: { name?: string; sortOrder?: number; bgColor?: string | null }) => request<ProjectStage>(`/projects/stages/${stageId}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteProjectStage: (stageId: string) => request<{ message: string }>(`/projects/stages/${stageId}`, { method: "DELETE" }),
 
   getMyTasks: (workspaceId?: string, filter?: string) => {

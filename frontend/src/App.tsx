@@ -1802,6 +1802,24 @@ function AuthGate() {
   /** 当前 token（用于引导对话框写入 secure storage） */
   const [activeToken, setActiveToken] = useState<string>("");
 
+  // Synchronize credentials to Android native bridge for background notifications
+  useEffect(() => {
+    const cap = (window as any).Capacitor;
+    if (cap && cap.getPlatform() === "android") {
+      const bridge = (window as any).AndroidKeepAliveBridge;
+      if (bridge && bridge.updateAuthInfo) {
+        const serverUrl = getServerUrl();
+        const token = activeToken || localStorage.getItem("super-token") || "";
+        const userId = user?.id || "";
+        try {
+          bridge.updateAuthInfo(serverUrl, token, userId);
+        } catch (e) {
+          console.error("Failed to sync auth info to Android bridge:", e);
+        }
+      }
+    }
+  }, [user?.id, activeToken]);
+
   // Phase B: 用户登录态确立后启动同步引擎（绑定 IDB + 全量 pull）。
   // 任何登录入口（密码 / 快速登录 / 桌面零登录）最终都会落到 setUser，
   // 这里集中接管，避免每个入口都重复挂钩。失败不阻塞 UI。
