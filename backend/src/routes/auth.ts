@@ -103,22 +103,7 @@ function verifyPasswordCompat(input: string, storedHash: string): boolean {
   return sha256 === storedHash;
 }
 
-// 体验账号（isDemo=1）禁止修改账号安全信息：用户名 / 密码 / 2FA。
-//   - 标记方式：DB 里 UPDATE users SET isDemo=1 WHERE username='demo';
-//   - 检查放在常规参数校验之后、真正写库之前，命中即返回 403。
-//   - 用 try/catch 容错：老库尚未迁移补列时 SELECT isDemo 会抛错，此时
-//     视为非 demo（保持向后兼容）。
-function isDemoUser(userId: string): boolean {
-  if (!userId) return false;
-  try {
-    const row = getDb()
-      .prepare("SELECT isDemo FROM users WHERE id = ?")
-      .get(userId) as { isDemo?: number } | undefined;
-    return !!row && row.isDemo === 1;
-  } catch {
-    return false;
-  }
-}
+
 
 // 从请求中解析当前 userId（auth 路由未走全局 JWT 中间件，必要处手动解析）
 // 同时校验 tokenVersion，禁用/改密后旧 token 不再可用。
@@ -382,9 +367,7 @@ auth.post("/login", async (c) => {
 auth.post("/change-password", async (c) => {
   const userId = extractUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
-  if (isDemoUser(userId)) {
-    return c.json({ error: "体验账号不允许修改账号信息", code: "DEMO_LOCKED" }, 403);
-  }
+
 
   const body = await c.req.json();
   const { currentPassword, newUsername, newPassword } = body as {
@@ -709,9 +692,7 @@ function consumeRecoveryCode(userId: string, input: string): boolean {
 auth.post("/2fa/setup", async (c) => {
   const userId = extractUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
-  if (isDemoUser(userId)) {
-    return c.json({ error: "体验账号不允许修改账号信息", code: "DEMO_LOCKED" }, 403);
-  }
+
   const db = getDb();
   const user = db
     .prepare("SELECT id, username, twoFactorSecret FROM users WHERE id = ?")
@@ -739,9 +720,7 @@ auth.post("/2fa/setup", async (c) => {
 auth.post("/2fa/activate", async (c) => {
   const userId = extractUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
-  if (isDemoUser(userId)) {
-    return c.json({ error: "体验账号不允许修改账号信息", code: "DEMO_LOCKED" }, 403);
-  }
+
   const body = (await c.req.json().catch(() => ({}))) as { pending?: string; code?: string };
   if (!body.pending || !body.code) {
     return c.json({ error: "参数缺失" }, 400);
@@ -775,9 +754,7 @@ auth.post("/2fa/activate", async (c) => {
 auth.post("/2fa/disable", async (c) => {
   const userId = extractUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
-  if (isDemoUser(userId)) {
-    return c.json({ error: "体验账号不允许修改账号信息", code: "DEMO_LOCKED" }, 403);
-  }
+
   const db = getDb();
   const user = db
     .prepare("SELECT id, tokenVersion, twoFactorSecret FROM users WHERE id = ?")
@@ -926,9 +903,7 @@ auth.get("/2fa/status", (c) => {
 auth.post("/2fa/regenerate-recovery-codes", async (c) => {
   const userId = extractUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
-  if (isDemoUser(userId)) {
-    return c.json({ error: "体验账号不允许修改账号信息", code: "DEMO_LOCKED" }, 403);
-  }
+
   const db = getDb();
   const user = db
     .prepare("SELECT id, tokenVersion, twoFactorSecret FROM users WHERE id = ?")

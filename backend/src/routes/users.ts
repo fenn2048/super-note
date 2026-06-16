@@ -12,6 +12,8 @@
  *   DELETE /api/users/:id             - 删除用户（不可删除自己；不可删除最后一个管理员）
  */
 import { Hono } from "hono";
+import * as fs from "fs";
+import * as path from "path";
 import { v4 as uuid } from "uuid";
 import bcrypt from "bcryptjs";
 import { getDb } from "../db/schema";
@@ -752,6 +754,130 @@ users.delete("/:id", requireAdmin, async (c) => {
   );
 
   return c.json({ success: true, transferred: !!receiver, moved });
+});
+
+const AVATARS_DIR = path.join(process.cwd(), "data", "avatars");
+const MIME_MAP: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp"
+};
+
+function ensureAvatarsDir() {
+  if (!fs.existsSync(AVATARS_DIR)) {
+    fs.mkdirSync(AVATARS_DIR, { recursive: true });
+  }
+}
+
+function deleteUserAvatarFiles(userId: string) {
+  ensureAvatarsDir();
+  const files = fs.readdirSync(AVATARS_DIR);
+  for (const f of files) {
+    if (f.startsWith(userId + ".")) {
+      try {
+        fs.unlinkSync(path.join(AVATARS_DIR, f));
+      } catch (err) {
+        // ignore
+      }
+    }
+  }
+}
+
+export async function handleGetAvatar(c: any) {
+  const userId = c.req.param("userId");
+  ensureAvatarsDir();
+  const files = fs.readdirSync(AVATARS_DIR);
+  const userFile = files.find((f) => f.startsWith(userId + "."));
+  if (!userFile) {
+    return c.json({ error: "Avatar not found" }, 404);
+  }
+  const filePath = path.join(AVATARS_DIR, userFile);
+  const ext = path.extname(userFile).toLowerCase();
+  const mimeType = MIME_MAP[ext] || "application/octet-stream";
+  try {
+    const buffer = fs.readFileSync(filePath);
+    return c.body(buffer, 200, { "Content-Type": mimeType });
+  } catch (err) {
+    return c.json({ error: "Failed to read avatar" }, 500);
+  }
+}
+
+users.post("/avatar", async (c) => {
+  const userId = c.req.header("X-User-Id") || "";
+  if (!userId) {
+    return c.json({ error: "未授权" }, 401);
+  }
+
+  let body: Record<string, any>;
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    return c.json({ error: "invalid multipart body" }, 400);
+  }
+
+  const file = body.file;
+  if (!(file instanceof File)) {
+    return c.json({ error: "file 字段缺失或非文件" }, 400);
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    return c.json({ error: "图片文件不能超过 5MB" }, 400);
+  }
+
+  const mime = (file.type || "application/octet-stream").toLowerCase();
+  const allowedMimes = new Set(["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]);
+  if (!allowedMimes.has(mime)) {
+    return c.json({ error: "只支持图片格式 (png/jpg/gif/webp)" }, 400);
+  }
+
+  let ext = "png";
+  if (mime.includes("jpeg") || mime.includes("jpg")) ext = "jpg";
+  else if (mime.includes("gif")) ext = "gif";
+  else if (mime.includes("webp")) ext = "webp";
+
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(await file.arrayBuffer());
+  } catch (err: any) {
+    return c.json({ error: `读取上传文件失败: ${err?.message || err}` }, 500);
+  }
+
+  try {
+    deleteUserAvatarFiles(userId);
+    const savePath = path.join(AVATARS_DIR, `${userId}.${ext}`);
+    fs.writeFileSync(savePath, buffer);
+
+    const db = getDb();
+    const avatarUrl = `/api/users/avatar/${userId}`;
+    db.prepare("UPDATE users SET avatarUrl = ?, updatedAt = datetime('now') WHERE id = ?").run(avatarUrl, userId);
+
+    invalidateUserAuthCache(userId);
+
+    return c.json({ success: true, avatarUrl: `${avatarUrl}?t=${Date.now()}` });
+  } catch (err: any) {
+    return c.json({ error: `保存头像失败: ${err?.message || err}` }, 500);
+  }
+});
+
+users.delete("/avatar", async (c) => {
+  const userId = c.req.header("X-User-Id") || "";
+  if (!userId) {
+    return c.json({ error: "未授权" }, 401);
+  }
+
+  try {
+    deleteUserAvatarFiles(userId);
+    const db = getDb();
+    db.prepare("UPDATE users SET avatarUrl = NULL, updatedAt = datetime('now') WHERE id = ?").run(userId);
+
+    invalidateUserAuthCache(userId);
+
+    return c.json({ success: true });
+  } catch (err: any) {
+    return c.json({ error: `删除头像失败: ${err?.message || err}` }, 500);
+  }
 });
 
 export default users;

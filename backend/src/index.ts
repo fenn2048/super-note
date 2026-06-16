@@ -38,7 +38,7 @@ import { sharesRouter, sharedRouter } from "./routes/shares";
 import workspacesRouter from "./routes/workspaces";
 import clipRouter from "./routes/clip";
 import authRouter from "./routes/auth";
-import usersRouter from "./routes/users";
+import usersRouter, { handleGetAvatar } from "./routes/users";
 import tokensRouter from "./routes/tokens";
 import userMigrationRouter from "./routes/user-migration";
 import versionRouter, { resolveAppVersion } from "./routes/version";
@@ -292,7 +292,14 @@ function touchSessionLastSeen(sessionId: string) {
   }
 }
 
+app.get("/api/users/avatar/:userId", handleGetAvatar);
+
 app.use("/api/*", async (c, next) => {
+  if (c.req.method === "GET" && c.req.path.startsWith("/api/users/avatar/")) {
+    await next();
+    return;
+  }
+
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

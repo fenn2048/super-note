@@ -2,14 +2,18 @@ import React from "react";
 import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Circle, Calendar, User, Tag, FileText, ArrowRight } from "lucide-react";
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 interface ProjectListProps {
   stages: ProjectStage[];
   onTaskClick?: (task: ProjectTask) => void;
   onToggleTaskComplete?: (taskId: string, currentCompleted: number) => void;
+  onRefresh?: () => void;
 }
 
-export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete }: ProjectListProps) {
+export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete, onRefresh }: ProjectListProps) {
   const { t } = useTranslation();
 
   const formatDate = (dateStr: string | null) => {
@@ -69,6 +73,7 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete 
                         <th className="p-3 min-w-[200px]">{t("projects.taskName") || "任务名称"}</th>
                         <th className="p-3 w-28">{t("projects.assignee") || "负责人"}</th>
                         <th className="p-3 w-36">{t("projects.timeline") || "时间周期"}</th>
+                        <th className="p-3 w-40">进度</th>
                         <th className="p-3 min-w-[150px]">{t("projects.tags") || "标签"}</th>
                         <th className="p-3 w-24 text-right"></th>
                       </tr>
@@ -143,6 +148,49 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete 
                                 <span className="text-tx-tertiary scale-75">~</span>
                               )}
                               <span>{formatDate(task.endDate)}</span>
+                            </div>
+                          </td>
+
+                          {/* Progress Column */}
+                          <td className="p-3 w-40" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col gap-1 w-full max-w-[150px]">
+                              <div className="flex items-center justify-between text-[10px] text-tx-tertiary">
+                                <span>{task.progress || 0}%</span>
+                              </div>
+                              <div className="w-full bg-app-hover/50 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-accent-primary h-full transition-all duration-300"
+                                  style={{ width: `${task.progress || 0}%` }}
+                                />
+                              </div>
+                              <div className="flex gap-0.5 mt-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                {[0, 25, 50, 75, 100].map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const isCompleted = p === 100 ? 1 : 0;
+                                        await api.updateProjectTask(task.id, {
+                                          isCompleted,
+                                          progress: p,
+                                        });
+                                        onRefresh?.();
+                                      } catch (err: any) {
+                                        toast.error(err?.message || "更新进度失败");
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex-1 py-0.5 text-[9px] font-mono rounded transition-colors text-center border border-transparent",
+                                      (task.progress || 0) === p
+                                        ? "bg-accent-primary text-white border-accent-primary"
+                                        : "bg-app-sidebar/40 hover:bg-app-hover hover:text-tx-primary text-tx-tertiary"
+                                    )}
+                                  >
+                                    {p}%
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </td>
 

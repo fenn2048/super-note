@@ -116,6 +116,23 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     };
   }, []);
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const fetchUser = useCallback(async () => {
+    try {
+      const user = await api.getMe();
+      setCurrentUser(user);
+    } catch (err) {
+      console.error("Failed to fetch user in NavRail:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUser();
+    window.addEventListener("super:profile-updated", fetchUser);
+    return () => window.removeEventListener("super:profile-updated", fetchUser);
+  }, [fetchUser]);
+
   // D-2：迁移向导弹窗。点"切换到云端"会先弹出，让用户选择是否把本地数据迁过去。
   const [showMigration, setShowMigration] = useState(false);
   const [desktopInfo, setDesktopInfo] = useState<AppInfo | null>(null);
@@ -347,6 +364,38 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
       </div>
 
       <div className={cn("my-2 border-t border-app-border/60", showLabel ? "w-8" : "w-6")} aria-hidden />
+
+      {/* 用户头像与用户名首字 (在铃铛上方，悬停显示全名) */}
+      {currentUser && (
+        <div
+          title={currentUser.displayName || currentUser.username}
+          className={cn(
+            itemBaseClass,
+            "flex flex-col items-center justify-center gap-1 group/avatar cursor-pointer hover:bg-app-hover/50 rounded-lg p-1 text-tx-secondary transition-all mb-1"
+          )}
+          onClick={() => window.dispatchEvent(new CustomEvent("super:open-settings"))}
+        >
+          <div className="relative">
+            {currentUser.avatarUrl ? (
+              <img
+                src={currentUser.avatarUrl.startsWith("http") ? currentUser.avatarUrl : `${getServerUrl()}${currentUser.avatarUrl}`}
+                alt=""
+                className="w-7 h-7 rounded-full object-cover border border-app-border group-hover/avatar:border-accent-primary transition-colors"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-accent-primary/10 border border-app-border flex items-center justify-center text-[11px] font-extrabold text-accent-primary uppercase group-hover/avatar:border-accent-primary transition-colors">
+                {(currentUser.displayName || currentUser.username || "").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+          </div>
+          <span className={cn(
+            "text-[9px] leading-none mt-0.5 max-w-full truncate font-medium text-tx-tertiary group-hover/avatar:text-tx-secondary",
+            showLabel && "text-[10px] font-bold text-tx-secondary"
+          )}>
+            {(currentUser.displayName || currentUser.username || "").slice(0, 1)}
+          </span>
+        </div>
+      )}
 
       {/* 底部：消息盒子 + 设置 + 登出 */}
       <button

@@ -633,6 +633,7 @@ export interface ProjectTask {
   createdAt: string;
   updatedAt: string;
   titleColor?: string | null;
+  progress?: number;
   assigneeName?: string;
   assigneeDisplayName?: string;
   assigneeAvatarUrl?: string | null;

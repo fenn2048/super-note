@@ -15,10 +15,11 @@ import {
   RefreshCw,
   Monitor,
   Lock,
+  Camera,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
-import { api, broadcastLogout, withSudo } from "@/lib/api";
+import { api, broadcastLogout, withSudo, getServerUrl } from "@/lib/api";
 import {
   confirm as confirmDialog,
   prompt as promptDialog,
@@ -54,45 +55,152 @@ function QRCodeCanvas({ text }: { text: string }): JSX.Element {
   );
 }
 
-/**
- * 顶层组件：组合账号/密码修改 + 2FA + 会话管理三个区块。
- * 这样后端的 Phase 6（2FA + session 管理）也有一个用户可见的入口。
- *
- * v15：体验账号（user.isDemo === true）隐藏“修改账号密码”和“两步验证”两个区块，
- * 只保留“会话管理”，同时在顶部给出提示。
- */
-export default function SecuritySettings() {
+function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void }) {
   const { t } = useTranslation();
-  const [isDemo, setIsDemo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getMe()
-      .then((u) => {
-        if (!cancelled) setIsDemo(!!(u as any)?.isDemo);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError("");
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await api.uploadAvatar(formData);
+      if (res.success) {
+        onUpdate();
+        // Dispatch custom event to notify NavRail to update
+        window.dispatchEvent(new CustomEvent("super:profile-updated"));
+      } else {
+        setError(t("securitySettings.uploadFailed", { defaultValue: "上传头像失败" }));
+      }
+    } catch (err: any) {
+      setError(err?.message || t("securitySettings.uploadFailed", { defaultValue: "上传头像失败" }));
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    if (!window.confirm(t("securitySettings.confirmDeleteAvatar", { defaultValue: "确认要删除头像吗？" }))) {
+      return;
+    }
+
+    setError("");
+    try {
+      await api.deleteAvatar();
+      onUpdate();
+      window.dispatchEvent(new CustomEvent("super:profile-updated"));
+    } catch (err: any) {
+      setError(err?.message || t("securitySettings.deleteAvatarFailed", { defaultValue: "删除头像失败" }));
+    }
+  };
+
+  if (!user) return null;
+
+  const firstChar = user.displayName ? user.displayName[0] : (user.username ? user.username[0] : "");
+  const avatarUrl = user.avatarUrl ? (user.avatarUrl.startsWith("http") ? user.avatarUrl : (getServerUrl() + user.avatarUrl)) : null;
 
   return (
-    <div className="space-y-10">
-      {isDemo && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-          <Lock className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div>
-            {t(
-              "securitySettings.demoLocked",
-              { defaultValue: "体验账号不允许修改账号密码、用户名或启用两步验证。如需完整体验，请注册个人账号。" },
+    <section className="border-b border-app-border pb-8">
+      <div className="flex items-center gap-2 mb-1">
+        <User className="w-4 h-4 text-indigo-500" />
+        <h3 className="text-lg font-bold text-tx-primary">{t('securitySettings.profileTitle', { defaultValue: "个人资料" })}</h3>
+      </div>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+        {t('securitySettings.profileDescription', { defaultValue: "设置您的个人头像和公开资料。" })}
+      </p>
+
+      <div className="flex items-center gap-6">
+        <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt="Avatar"
+              className="w-20 h-20 rounded-full object-cover border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-all duration-300"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center text-2xl font-bold border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-all duration-300">
+              {firstChar.toUpperCase()}
+            </div>
+          )}
+          <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            {isUploading ? (
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
+            ) : (
+              <Camera className="w-6 h-6 text-white" />
             )}
           </div>
         </div>
-      )}
-      {!isDemo && <PasswordSection />}
-      {!isDemo && <TwoFactorSection />}
+
+        <div className="space-y-2">
+          <div className="flex gap-3">
+            <button
+              onClick={handleAvatarClick}
+              disabled={isUploading}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+            >
+              {t('securitySettings.uploadAvatar', { defaultValue: "上传新头像" })}
+            </button>
+            {user.avatarUrl && (
+              <button
+                onClick={handleDeleteAvatar}
+                className="px-4 py-2 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-red-500 rounded-xl text-sm font-medium transition-colors"
+              >
+                {t('securitySettings.deleteAvatar', { defaultValue: "删除头像" })}
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">
+            {t('securitySettings.avatarLimit', { defaultValue: "支持 JPG, PNG, GIF, WEBP, SVG 格式，最大 5MB。" })}
+          </p>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+      </div>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden"
+      />
+    </section>
+  );
+}
+
+export default function SecuritySettings() {
+  const { t } = useTranslation();
+  const [user, setUser] = useState<any>(null);
+
+  const fetchUser = useCallback(() => {
+    api
+      .getMe()
+      .then((u) => {
+        setUser(u);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
+
+  return (
+    <div className="space-y-10">
+      <ProfileSection user={user} onUpdate={fetchUser} />
+      <PasswordSection />
+      <TwoFactorSection />
       <SessionsSection />
     </div>
   );

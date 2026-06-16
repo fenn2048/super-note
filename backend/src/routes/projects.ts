@@ -540,7 +540,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null } = body;
+  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0 } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
 
@@ -549,9 +549,9 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const sortOrder = (maxSort.max ?? -1) + 1;
 
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor);
+    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress);
 
   // Add participants
   if (Array.isArray(participants)) {
@@ -578,20 +578,41 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const taskId = c.req.param("taskId");
   const body = await c.req.json();
 
-  const task = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId) as { projectId: string; stageId: string } | undefined;
+  const task = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId) as any;
   if (!task) return c.json({ error: "任务不存在" }, 404);
 
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor } = body;
+  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress } = body;
+
+  let finalIsCompleted = isCompleted;
+  let finalProgress = progress;
+
+  if (finalProgress !== undefined) {
+    const progVal = Number(finalProgress);
+    if (progVal === 100) {
+      finalIsCompleted = 1;
+    } else {
+      finalIsCompleted = 0;
+    }
+  } else if (finalIsCompleted !== undefined) {
+    const compVal = (finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0;
+    if (compVal === 1) {
+      finalProgress = 100;
+    } else {
+      if (task && task.progress === 100) {
+        finalProgress = 0;
+      }
+    }
+  }
 
   const updates: string[] = [];
   const params: any[] = [];
 
   if (title !== undefined) { updates.push("title = ?"); params.push(title); }
   if (description !== undefined) { updates.push("description = ?"); params.push(description); }
-  if (isCompleted !== undefined) { updates.push("isCompleted = ?"); params.push(isCompleted); }
+  if (finalIsCompleted !== undefined) { updates.push("isCompleted = ?"); params.push((finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0); }
   if (assigneeId !== undefined) { updates.push("assigneeId = ?"); params.push(assigneeId); }
   if (startDate !== undefined) { updates.push("startDate = ?"); params.push(startDate); }
   if (endDate !== undefined) { updates.push("endDate = ?"); params.push(endDate); }
@@ -601,6 +622,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (priority !== undefined) { updates.push("priority = ?"); params.push(priority); }
   if (remindAt !== undefined) { updates.push("remindAt = ?"); params.push(remindAt); }
   if (titleColor !== undefined) { updates.push("titleColor = ?"); params.push(titleColor); }
+  if (finalProgress !== undefined) { updates.push("progress = ?"); params.push(finalProgress); }
 
   if (updates.length > 0) {
     updates.push("modifierId = ?");

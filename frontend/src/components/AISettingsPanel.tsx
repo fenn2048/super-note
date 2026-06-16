@@ -233,8 +233,8 @@ export default function AISettingsPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{t("ai.title")}</h3>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("ai.description")}</p>
+          <h3 className="text-lg font-bold text-tx-primary mb-1">{t("ai.title")}</h3>
+          <p className="text-sm text-tx-secondary">{t("ai.description")}</p>
         </div>
         {isConfigured && (
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
@@ -246,7 +246,7 @@ export default function AISettingsPanel() {
 
       {/* Provider 卡片列表 */}
       <div className="space-y-2">
-        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t("ai.provider")}</label>
+        <label className="text-xs font-medium text-tx-secondary">{t("ai.provider")}</label>
         <div className="space-y-2">
           {PROVIDER_PRESETS.map(p => {
             const isSelected = settings.ai_provider === p.id;
@@ -274,13 +274,13 @@ export default function AISettingsPanel() {
                   <div className="flex items-center gap-2">
                     <span className={cn(
                       "text-sm font-semibold",
-                      isSelected ? "text-accent-primary" : "text-zinc-800 dark:text-zinc-200"
+                    isSelected ? "text-accent-primary" : "text-tx-primary"
                     )}>
                       {p.name}
                     </span>
-                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{t(p.desc)}</span>
+                    <span className="text-[10px] text-tx-tertiary">{t(p.desc)}</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
+                  <p className="text-[11px] text-tx-tertiary mt-0.5 truncate">
                     {p.models}
                   </p>
                 </div>
@@ -301,35 +301,35 @@ export default function AISettingsPanel() {
           <div className={cn("w-6 h-6 rounded-md flex items-center justify-center bg-gradient-to-br text-white", currentPreset?.color || "from-zinc-500 to-zinc-600")}>
             <Zap size={12} />
           </div>
-          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+          <span className="text-sm font-semibold text-tx-primary">
             {currentPreset?.name || settings.ai_provider}
           </span>
-          <span className="text-[10px] text-zinc-400">{t("ai.configLabel")}</span>
+          <span className="text-[10px] text-tx-tertiary">{t("ai.configLabel")}</span>
         </div>
 
         {/* API URL */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t("ai.apiUrl")}</label>
+          <label className="text-xs font-medium text-tx-secondary">{t("ai.apiUrl")}</label>
           <input
             type="text"
             value={settings.ai_api_url}
             onChange={(e) => setSettings(prev => ({ ...prev, ai_api_url: e.target.value }))}
             placeholder={currentPreset?.url || "https://api.openai.com/v1"}
-            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
           />
         </div>
 
         {/* API Key */}
         {needsKey && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t("ai.apiKey")}</label>
+            <label className="text-xs font-medium text-tx-secondary">{t("ai.apiKey")}</label>
             <div className="relative">
               <input
                 type={showKey ? "text" : "password"}
                 value={localKey}
                 onChange={(e) => { setLocalKey(e.target.value); setTestResult(null); }}
                 placeholder={settings.ai_api_key_set ? t("ai.apiKeySet") : "sk-..."}
-                className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
               />
               <button
                 onClick={() => setShowKey(!showKey)}
@@ -343,7 +343,7 @@ export default function AISettingsPanel() {
 
         {/* Model */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t("ai.model")}</label>
+          <label className="text-xs font-medium text-tx-secondary">{t("ai.model")}</label>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <input
@@ -358,7 +358,7 @@ export default function AISettingsPanel() {
                   }
                 }}
                 placeholder={currentPreset?.defaultModel || "gpt-4o-mini"}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
               />
               {modelDropdownOpen && models.length > 0 && (
                 <>

@@ -1132,6 +1132,29 @@ export const api = {
   addProjectMember: (projectId: string, memberUserId: string, role?: string) => request<{ message: string }>(`/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ memberUserId, role }) }),
   removeProjectMember: (projectId: string, memberUserId: string) => request<{ message: string }>(`/projects/${projectId}/members/${memberUserId}`, { method: "DELETE" }),
 
+  // Avatars
+  uploadAvatar: async (fileOrFormData: File | FormData): Promise<{ success: boolean; avatarUrl: string }> => {
+    const token = getToken();
+    const body = fileOrFormData instanceof FormData ? fileOrFormData : (() => {
+      const form = new FormData();
+      form.append("file", fileOrFormData);
+      return form;
+    })();
+    const res = await fetch(`${getBaseUrl()}/users/avatar`, {
+      method: "POST",
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `头像上传失败: ${res.status}`);
+    }
+    return res.json();
+  },
+  deleteAvatar: async (): Promise<{ success: boolean }> => {
+    return request("/users/avatar", { method: "DELETE" });
+  },
+
   // Security
   // 注意：后端在修改密码成功后会 bump tokenVersion，让其它端旧 token 立即失效，
   //      同时下发一张新 token 给当前请求方。前端必须把新 token 写回 localStorage，

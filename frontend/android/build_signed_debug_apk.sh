@@ -16,6 +16,34 @@ STORE_PASS="${STORE_PASS:-android}"
 KEY_PASS="${KEY_PASS:-android}"
 OUT_DIR="${OUT_DIR:-$ANDROID_PROJECT_DIR/output}"
 
+# Auto-increment version in package.json and app/build.gradle
+echo "==== Auto-incrementing version ===="
+node -e "
+const fs = require('fs');
+const path = require('path');
+const pkgPath = path.join('$SCRIPT_DIR', '../../package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+const parts = (pkg.version || '1.0.0').split('.').map(Number);
+if (parts.length === 3) { parts[2]++; } else { parts.push(1); }
+const nextVersion = parts.join('.');
+pkg.version = nextVersion;
+fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+console.log('Incremented root package.json version to:', nextVersion);
+
+const gradlePath = path.join('$SCRIPT_DIR', 'app/build.gradle');
+if (fs.existsSync(gradlePath)) {
+  let gradle = fs.readFileSync(gradlePath, 'utf8');
+  const major = parts[0] || 1;
+  const minor = parts[1] || 0;
+  const patch = parts[2] || 0;
+  const nextCode = major * 10000 + minor * 100 + patch;
+  gradle = gradle.replace(/versionCode\\s+\\d+/, 'versionCode ' + nextCode);
+  gradle = gradle.replace(/versionName\\s+\\\"[^\\\"]+\\\"/, 'versionName \"' + nextVersion + '\"');
+  fs.writeFileSync(gradlePath, gradle);
+  console.log('Updated build.gradle with versionCode:', nextCode, 'versionName:', nextVersion);
+}
+"
+
 # Find Java Home
 if [ -z "${JAVA_HOME:-}" ]; then
   if [ -d "$HOME/.local/jdk-21.0.11+10/Contents/Home" ]; then
@@ -133,17 +161,28 @@ fi
 
 npm run build
 # Sync web build output to Android assets directory.
-# cap sync is NOT used because @capacitor/cli may not be installed;
-# direct cp is simpler and always works for web assets.
-if [ "$SKIP_ANDROID_BUILD" -eq 0 ] && [ -d "android/app/src/main/assets/public" ]; then
+if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
   echo "Syncing dist/ to Android assets..."
-  cp -r dist/* android/app/src/main/assets/public/
+  if [ -d "android/app/src/main/assets/public" ]; then
+    rm -rf android/app/src/main/assets/public/*
+  fi
+  if npx cap copy android 2>/dev/null; then
+    echo "Sync via Capacitor CLI completed."
+  else
+    echo "Capacitor CLI copy failed or not found, falling back to manual copy..."
+    mkdir -p android/app/src/main/assets/public
+    cp -r dist/* android/app/src/main/assets/public/
+  fi
 fi
 popd >/dev/null
 
 # 3. Build signed Android APK if SDK tools exist
 if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
   echo "==== Building and signing Android App ===="
+  # Clean old APK outputs to prevent picking up stale builds
+  rm -rf "$OUT_DIR"/*
+  find "$ANDROID_PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" -exec rm -f {} + 2>/dev/null || true
+
   # Generate keystore if missing
   if [ ! -f "$KEYSTORE_PATH" ]; then
     echo "Keystore not found at $KEYSTORE_PATH. Generating..."
@@ -164,7 +203,7 @@ if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
   # Build debug APK
   echo "Starting Gradle assembleDebug..."
   pushd "$ANDROID_PROJECT_DIR" >/dev/null
-  ./gradlew clean assembleDebug -x lint || true
+  ./gradlew clean assembleDebug -x lint
   popd >/dev/null
 
   # Locate the produced APK

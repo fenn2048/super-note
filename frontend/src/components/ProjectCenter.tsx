@@ -334,9 +334,23 @@ export default function ProjectCenter() {
   const [roleFilter, setRoleFilter] = useState<"assigned" | "created" | "participating">("assigned");
   const [statusFilter, setStatusFilter] = useState<"pending" | "today" | "overdue" | "completed">("pending");
   const [wsMembers, setWsMembers] = useState<any[]>([]);
-  // 任务搜索状态现在由 Sidebar 统一管理，这里只保留本地状态用于同步
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  // 监听来自全局的任务打开事件
+  useEffect(() => {
+    const handleOpenTask = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const taskId = customEvent.detail;
+      if (taskId) {
+        setActiveTaskId(taskId);
+        setDetailTab("kanban");
+      }
+    };
+    window.addEventListener("super:open-project-task", handleOpenTask);
+    return () => window.removeEventListener("super:open-project-task", handleOpenTask);
+  }, []);
 
   // 监听来自 Sidebar 的任务搜索状态变化
   useEffect(() => {
@@ -817,7 +831,9 @@ export default function ProjectCenter() {
 
   const handleToggleTaskComplete = async (taskId: string, currentCompleted: number) => {
     try {
-      await api.updateProjectTask(taskId, { isCompleted: currentCompleted === 1 ? 0 : 1 });
+      const isCompleted = currentCompleted === 1 ? 0 : 1;
+      const progress = isCompleted === 1 ? 100 : 0;
+      await api.updateProjectTask(taskId, { isCompleted, progress });
       // Re-fetch project details stages
       if (selectedProject) {
         const stages = await api.getProjectStages(selectedProject.id);
@@ -1108,6 +1124,8 @@ export default function ProjectCenter() {
                   setProjectStages(stages);
                 }}
                 onToggleTaskComplete={handleToggleTaskComplete}
+                initialActiveTaskId={activeTaskId}
+                onClearActiveTaskId={() => setActiveTaskId(null)}
               />
             )}
             {detailTab === "list" && (
@@ -1115,6 +1133,10 @@ export default function ProjectCenter() {
                 stages={projectStages}
                 onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
                 onToggleTaskComplete={handleToggleTaskComplete}
+                onRefresh={async () => {
+                  const stages = await api.getProjectStages(selectedProject.id);
+                  setProjectStages(stages);
+                }}
               />
             )}
             {detailTab === "discussion" && (

@@ -29,9 +29,19 @@ interface ProjectKanbanProps {
   onRefresh: () => void;
   onTaskClick?: (task: ProjectTask) => void;
   onToggleTaskComplete?: (taskId: string, currentCompleted: number) => void;
+  initialActiveTaskId?: string | null;
+  onClearActiveTaskId?: () => void;
 }
 
-export default function ProjectKanban({ project, stages, onRefresh, onTaskClick, onToggleTaskComplete }: ProjectKanbanProps) {
+export default function ProjectKanban({
+  project,
+  stages,
+  onRefresh,
+  onTaskClick,
+  onToggleTaskComplete,
+  initialActiveTaskId,
+  onClearActiveTaskId
+}: ProjectKanbanProps) {
   const { t } = useTranslation();
   const [newStageName, setNewStageName] = useState("");
   const [addingStage, setAddingStage] = useState(false);
@@ -50,6 +60,24 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
+
+  const handleCloseModal = () => {
+    setActiveTask(null);
+    onClearActiveTaskId?.();
+  };
+
+  // Listen to initialActiveTaskId
+  useEffect(() => {
+    if (initialActiveTaskId) {
+      for (const stage of stages) {
+        const task = stage.tasks?.find((t) => t.id === initialActiveTaskId);
+        if (task) {
+          setActiveTask(task);
+          break;
+        }
+      }
+    }
+  }, [initialActiveTaskId, stages]);
 
   // Listen to open-task events from other components (like Calendar or Discussion)
   useEffect(() => {
@@ -129,6 +157,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
         title: activeTask.title,
         description: activeTask.description,
         isCompleted: activeTask.isCompleted,
+        progress: activeTask.progress || 0,
         assigneeId: activeTask.assigneeId,
         startDate: activeTask.startDate || null,
         endDate: activeTask.endDate || null,
@@ -141,7 +170,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
       onRefresh();
       // Re-fetch stage details to get formatted names for the assignee, etc.
       // For now, we can just update local copy or let refresh trigger it.
-      setActiveTask(null);
+      handleCloseModal();
     } catch (err: any) {
       toast.error(err?.message || "更新任务失败");
     }
@@ -151,7 +180,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
     if (!confirm("确定要删除该任务吗？")) return;
     try {
       await api.deleteProjectTask(taskId);
-      setActiveTask(null);
+      handleCloseModal();
       onRefresh();
     } catch (err: any) {
       toast.error(err?.message || "删除任务失败");
@@ -440,6 +469,47 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
                       {task.title}
                     </h4>
 
+                    {/* Progress Bar & Quick Pickers */}
+                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between text-[9px] text-tx-tertiary">
+                        <span>进度: {task.progress || 0}%</span>
+                      </div>
+                      <div className="w-full bg-app-hover/50 h-1 rounded-full overflow-hidden">
+                        <div
+                          className="bg-accent-primary h-full transition-all duration-300"
+                          style={{ width: `${task.progress || 0}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                        {[0, 25, 50, 75, 100].map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const isCompleted = p === 100 ? 1 : 0;
+                                await api.updateProjectTask(task.id, {
+                                  isCompleted,
+                                  progress: p,
+                                });
+                                onRefresh();
+                              } catch (err: any) {
+                                toast.error(err?.message || "更新进度失败");
+                              }
+                            }}
+                            className={cn(
+                              "flex-1 py-0.5 text-[8px] font-mono rounded transition-colors text-center border border-transparent",
+                              (task.progress || 0) === p
+                                ? "bg-accent-primary text-white border-accent-primary"
+                                : "bg-app-sidebar/40 hover:bg-app-hover hover:text-tx-primary text-tx-tertiary"
+                            )}
+                          >
+                            {p}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Bottom Stats Meta info */}
                     <div className="flex items-center justify-between text-[10px] text-tx-tertiary pt-1.5 border-t border-app-border/40 shrink-0">
                       <div className="flex items-center gap-2">
@@ -584,9 +654,12 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
               <div className="flex items-center gap-2">
                 <button
                   onClick={() =>
-                    setActiveTask((prev) =>
-                      prev ? { ...prev, isCompleted: prev.isCompleted === 1 ? 0 : 1 } : null
-                    )
+                    setActiveTask((prev) => {
+                      if (!prev) return null;
+                      const nextCompleted = prev.isCompleted === 1 ? 0 : 1;
+                      const nextProgress = nextCompleted === 1 ? 100 : 0;
+                      return { ...prev, isCompleted: nextCompleted, progress: nextProgress };
+                    })
                   }
                   className="text-tx-tertiary hover:text-accent-primary transition-colors focus:outline-none"
                 >
@@ -862,6 +935,65 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
                 </div>
               </div>
 
+              {/* Progress Slider */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold text-tx-primary tracking-wide">
+                    {t("projects.progress") || "任务进度"}
+                  </h5>
+                  <span className="text-xs font-semibold text-accent-primary font-mono">
+                    {activeTask.progress || 0}%
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-app-sidebar/20 p-3 rounded-xl border border-app-border/50">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={activeTask.progress || 0}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setActiveTask((prev) => {
+                        if (!prev) return null;
+                        return {
+                          ...prev,
+                          progress: val,
+                          isCompleted: val === 100 ? 1 : 0
+                        };
+                      });
+                    }}
+                    className="flex-1 h-1.5 bg-app-sidebar rounded-lg appearance-none cursor-pointer accent-accent-primary focus:outline-none"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {[0, 25, 50, 75, 100].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setActiveTask((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              progress: p,
+                              isCompleted: p === 100 ? 1 : 0
+                            };
+                          });
+                        }}
+                        className={cn(
+                          "px-2 py-1 rounded text-[10px] font-mono font-bold transition-colors border",
+                          (activeTask.progress || 0) === p
+                            ? "bg-accent-primary text-white border-accent-primary"
+                            : "bg-app-bg border-app-border hover:bg-app-hover text-tx-secondary hover:text-tx-primary"
+                        )}
+                      >
+                        {p}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Description */}
               <div className="space-y-1.5">
                 <h5 className="text-xs font-bold text-tx-primary tracking-wide">
@@ -947,7 +1079,7 @@ export default function ProjectKanban({ project, stages, onRefresh, onTaskClick,
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setActiveTask(null)}
+                onClick={handleCloseModal}
                 className="text-xs"
               >
                 {t("common.cancel") || "取消"}

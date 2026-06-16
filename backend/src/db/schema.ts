@@ -1114,6 +1114,7 @@ function initSchema(db: Database.Database) {
       cover TEXT DEFAULT '',
       sortOrder INTEGER DEFAULT 0,
       titleColor TEXT DEFAULT NULL,
+      progress INTEGER DEFAULT 0,
       creatorId TEXT NOT NULL,
       modifierId TEXT NOT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),

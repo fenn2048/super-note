@@ -39,7 +39,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, getServerUrl } from "@/lib/api";
 import { RefreshCw, X, AlertTriangle, ExternalLink } from "lucide-react";
 
 // 编译期常量兜底：开发态走 HMR / 旧构建可能没注入，统一给"取不到"的哨兵值。
@@ -307,10 +307,13 @@ export default function UpdateNotifier() {
 
   const handleOpenDownload = () => {
     // Android WebView 里点超链接有时会被拦住；统一用 window.open 兜底到系统浏览器。
+    const downloadUrl = isAndroidNative()
+      ? `${getServerUrl()}/downloads/super-note-debug.apk`
+      : "https://github.com/cropflre/super-note/releases/latest";
     try {
-      window.open(APK_DOWNLOAD_URL, "_blank", "noopener,noreferrer");
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
     } catch {
-      window.location.href = APK_DOWNLOAD_URL;
+      window.location.href = downloadUrl;
     }
   };
 
@@ -363,12 +366,21 @@ export default function UpdateNotifier() {
           有新版本 <span className="font-mono font-semibold">v{state.serverDisplay}</span>
           ，当前 <span className="font-mono opacity-80">v{CLIENT_VERSION}</span>
         </span>
-        <button
-          onClick={handleReload}
-          className="flex-shrink-0 px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium"
-        >
-          刷新
-        </button>
+        {isAndroidNative() ? (
+          <button
+            onClick={handleOpenDownload}
+            className="flex-shrink-0 px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium"
+          >
+            下载更新
+          </button>
+        ) : (
+          <button
+            onClick={handleReload}
+            className="flex-shrink-0 px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium"
+          >
+            刷新
+          </button>
+        )}
         <button
           onClick={handleDismiss}
           className="flex-shrink-0 p-1 rounded-md hover:bg-white/20 transition-colors"

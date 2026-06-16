@@ -1631,6 +1631,16 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 24,
+    name: "project-tasks-progress",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!cols.some((c) => c.name === "progress")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN progress INTEGER NOT NULL DEFAULT 0");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */
