@@ -643,7 +643,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress } = body;
+  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -677,6 +677,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (endDate !== undefined) { updates.push("endDate = ?"); params.push(endDate); }
   if (cover !== undefined) { updates.push("cover = ?"); params.push(cover); }
   if (stageId !== undefined) { updates.push("stageId = ?"); params.push(stageId); }
+  if (projectId !== undefined) { updates.push("projectId = ?"); params.push(projectId); }
   if (sortOrder !== undefined) { updates.push("sortOrder = ?"); params.push(sortOrder); }
   if (priority !== undefined) { updates.push("priority = ?"); params.push(priority); }
   if (remindAt !== undefined) { updates.push("remindAt = ?"); params.push(remindAt); }

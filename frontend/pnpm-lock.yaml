@@ -32,6 +32,9 @@ importers:
       '@capacitor/status-bar':
         specifier: ^8.0.1
         version: 8.0.2(@capacitor/core@8.4.0)
+      '@capawesome/capacitor-badge':
+        specifier: ^8.0.2
+        version: 8.0.2(@capacitor/core@8.4.0)
       '@codemirror/autocomplete':
         specifier: ^6.18.0
         version: 6.20.3
@@ -72,58 +75,58 @@ importers:
         specifier: ^3.26.0
         version: 3.26.0(@tiptap/pm@3.26.0)
       '@tiptap/extension-code-block-lowlight':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/extension-code-block@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)(highlight.js@11.11.1)(lowlight@3.3.0)
       '@tiptap/extension-highlight':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/extension-image':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/extension-mention':
-        specifier: ^3.25.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)(@tiptap/suggestion@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-placeholder':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/extensions@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-table':
-        specifier: ^3.20.4
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)
       '@tiptap/extension-table-cell':
-        specifier: ^3.20.4
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/extension-table@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-table-header':
-        specifier: ^3.20.4
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/extension-table@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-table-row':
-        specifier: ^3.20.4
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/extension-table@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-task-item':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/extension-list@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-task-list':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/extension-list@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
       '@tiptap/extension-text-align':
-        specifier: ^3.22.3
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/extension-text-style':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/extension-underline':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/pm':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0
       '@tiptap/react':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0(@floating-ui/dom@1.7.6)(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tiptap/starter-kit':
-        specifier: ^3.19.0
+        specifier: ^3.26.0
         version: 3.26.0
       '@tiptap/suggestion':
-        specifier: ^3.25.0
+        specifier: ^3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)
       bonjour:
         specifier: ^3.5.0
@@ -475,6 +478,11 @@ packages:
 
   '@capacitor/status-bar@8.0.2':
     resolution: {integrity: sha512-WXs8YB8B9eEaPZz+bcdY6t2nForF1FLoj/JU0Dl9RRgQnddnS98FEEyDooQhaY7wivr000j4+SC1FyeJkrFO7A==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capawesome/capacitor-badge@8.0.2':
+    resolution: {integrity: sha512-4ZnRyFvViaokupdrOi3OkoBurH+23hnxni+PYq5C1ObNLYbhty/WK8BzMtndCv0S47XjGBLjQ9DJsYj3JDVxGQ==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -4285,6 +4293,10 @@ snapshots:
       '@capacitor/core': 8.4.0
 
   '@capacitor/status-bar@8.0.2(@capacitor/core@8.4.0)':
+    dependencies:
+      '@capacitor/core': 8.4.0
+
+  '@capawesome/capacitor-badge@8.0.2(@capacitor/core@8.4.0)':
     dependencies:
       '@capacitor/core': 8.4.0
 

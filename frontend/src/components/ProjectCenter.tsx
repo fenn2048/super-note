@@ -1998,11 +1998,11 @@ export default function ProjectCenter() {
 
               {/* Description */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.description") || "项目描述"}</label>
+                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.description") || "任务描述"}</label>
                 <Textarea
                   value={projDesc}
                   onChange={(e) => setProjDesc(e.target.value)}
-                  placeholder={t("projects.projDescPlaceholder") || "输入项目描述信息…"}
+                  placeholder={t("projects.projDescPlaceholder") || "输入任务描述信息…"}
                   className="text-xs leading-relaxed min-h-[80px] border-app-border rounded-xl"
                 />
               </div>
