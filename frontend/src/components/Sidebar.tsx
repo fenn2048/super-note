@@ -379,7 +379,7 @@ function MoveNotebookModal({
 
 
 
-function NotebookItem({
+const NotebookItem = React.memo(function NotebookItemInner({
   notebook, depth, onSelect, selectedId, onToggle, onContextMenu, onLongPress,
   editingId, editValue, onEditChange, onEditSubmit, onEditCancel,
   onIconChange,
@@ -648,10 +648,10 @@ function NotebookItem({
       </AnimatePresence>
     </>
   );
-}
+});
 
 /** Inline note item - rendered inside expanded notebook tree */
-function NoteNoteItem({
+const NoteNoteItem = React.memo(function NoteNoteItemInner({
   note, depth, isActive, onSelect, onDelete, onRename, onToggleFavorite, onTogglePin,
 }: {
   note: NoteListItem; depth: number; isActive: boolean;
@@ -757,7 +757,7 @@ function NoteNoteItem({
       )}
     </>
   );
-}
+});
 
 // 笔记本右键菜单项 - 在组件内使用 t() 动态生成
 
