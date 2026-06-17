@@ -1735,7 +1735,7 @@ function DiaryCard({
                       animate={{ opacity: 1, scale: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.95, x: 10 }}
                       transition={{ duration: 0.15, ease: "easeOut" }}
-                      className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] overflow-hidden"
+                      className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
                     >
                       <button
                         onClick={(e) => {
@@ -1743,7 +1743,7 @@ function DiaryCard({
                           setShowActionMenu(false);
                           handleToggleFavorite();
                         }}
-                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
                       >
                         <Star size={12} className={cn(isFavorited && "fill-yellow-400 text-yellow-400")} />
                         <span>{isFavorited ? "取消收藏" : "收藏"}</span>
@@ -1754,7 +1754,7 @@ function DiaryCard({
                           setShowActionMenu(false);
                           setShowComments(!showComments);
                         }}
-                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
                       >
                         <MessageCircle size={12} />
                         <span>{showComments ? "收起评论" : (item.commentCount && item.commentCount > 0 ? `评论(${item.commentCount})` : "评论")}</span>
@@ -1771,7 +1771,7 @@ function DiaryCard({
                             toast.error("操作失败");
                           }
                         }}
-                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
                       >
                         <Pin size={12} className={cn(item.isPinned && "fill-white")} />
                         <span>{item.isPinned ? "取消置顶" : "置顶"}</span>
@@ -1784,7 +1784,7 @@ function DiaryCard({
                               setShowActionMenu(false);
                               setIsEditing(true);
                             }}
-                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap"
+                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
                           >
                             <Edit2 size={12} />
                             <span>{t("diary.edit")}</span>
@@ -1795,7 +1795,7 @@ function DiaryCard({
                               setShowActionMenu(false);
                               void handleDelete();
                             }}
-                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap"
+                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap shrink-0"
                           >
                             <Trash2 size={12} />
                             <span>{t("diary.delete")}</span>
