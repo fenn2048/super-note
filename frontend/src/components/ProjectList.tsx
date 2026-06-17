@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Circle, Calendar, User, Tag, FileText, ArrowRight } from "lucide-react";
@@ -15,6 +15,8 @@ interface ProjectListProps {
 
 export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete, onRefresh }: ProjectListProps) {
   const { t } = useTranslation();
+  const [editingProgressTaskId, setEditingProgressTaskId] = useState<string | null>(null);
+  const [editingProgressValue, setEditingProgressValue] = useState<string>("");
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
@@ -154,42 +156,60 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete,
                           {/* Progress Column */}
                           <td className="p-3 w-40" onClick={(e) => e.stopPropagation()}>
                             <div className="flex flex-col gap-1 w-full max-w-[150px]">
-                              <div className="flex items-center justify-between text-[10px] text-tx-tertiary">
-                                <span>{task.progress || 0}%</span>
+                              <div
+                                className="flex items-center justify-between text-[10px] text-tx-tertiary cursor-pointer hover:text-tx-secondary"
+                                onDoubleClick={() => {
+                                  setEditingProgressTaskId(task.id);
+                                  setEditingProgressValue(String(task.progress || 0));
+                                }}
+                                title="双击编辑进度"
+                              >
+                                {editingProgressTaskId === task.id ? (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={editingProgressValue}
+                                    autoFocus
+                                    className="w-14 h-5 text-[10px] px-1 rounded border border-accent-primary/60 bg-app-bg text-tx-primary outline-none font-mono"
+                                    onChange={(e) => setEditingProgressValue(e.target.value)}
+                                    onBlur={async () => {
+                                      const val = Math.min(100, Math.max(0, parseInt(editingProgressValue, 10) || 0));
+                                      try {
+                                        await api.updateProjectTask(task.id, {
+                                          progress: val,
+                                          isCompleted: val === 100 ? 1 : 0,
+                                        });
+                                        onRefresh?.();
+                                      } catch (err: any) {
+                                        toast.error(err?.message || "更新进度失败");
+                                      }
+                                      setEditingProgressTaskId(null);
+                                    }}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === "Enter") {
+                                        (e.target as HTMLInputElement).blur();
+                                      } else if (e.key === "Escape") {
+                                        setEditingProgressTaskId(null);
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <span
+                                    onDoubleClick={() => {
+                                      setEditingProgressTaskId(task.id);
+                                      setEditingProgressValue(String(task.progress || 0));
+                                    }}
+                                  >
+                                    {task.progress || 0}%
+                                  </span>
+                                )}
                               </div>
                               <div className="w-full bg-app-hover/50 h-1.5 rounded-full overflow-hidden">
                                 <div
                                   className="bg-accent-primary h-full transition-all duration-300"
                                   style={{ width: `${task.progress || 0}%` }}
                                 />
-                              </div>
-                              <div className="flex gap-0.5 mt-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                                {[0, 25, 50, 75, 100].map((p) => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    onClick={async () => {
-                                      try {
-                                        const isCompleted = p === 100 ? 1 : 0;
-                                        await api.updateProjectTask(task.id, {
-                                          isCompleted,
-                                          progress: p,
-                                        });
-                                        onRefresh?.();
-                                      } catch (err: any) {
-                                        toast.error(err?.message || "更新进度失败");
-                                      }
-                                    }}
-                                    className={cn(
-                                      "flex-1 py-0.5 text-[9px] font-mono rounded transition-colors text-center border border-transparent",
-                                      (task.progress || 0) === p
-                                        ? "bg-accent-primary text-white border-accent-primary"
-                                        : "bg-app-sidebar/40 hover:bg-app-hover hover:text-tx-primary text-tx-tertiary"
-                                    )}
-                                  >
-                                    {p}%
-                                  </button>
-                                ))}
                               </div>
                             </div>
                           </td>

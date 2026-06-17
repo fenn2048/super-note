@@ -781,6 +781,16 @@ function ProjectSidebar() {
   const [favsExpanded, setFavsExpanded] = useState(true);
   const [projectTagsExpanded, setProjectTagsExpanded] = useState(true);
   const [workspaceId, setWorkspaceId] = useState(getCurrentWorkspace());
+  const projTagLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projTagLongPressFired = useRef(false);
+  // 标签颜色选择浮层状态（通过右键 / 长按触发，项目侧栏专用）
+  const [tagColorPopover, setTagColorPopover] = useState<{
+    tagId: string;
+    tagName: string;
+    color: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => {
     const handleWsChange = () => {
@@ -944,7 +954,7 @@ function ProjectSidebar() {
 
   const favoriteProjects = projects.filter(p => favorites.includes(p.id));
 
-  return (
+  return (<>
     <ScrollArea className="flex-1 min-h-0 px-2 space-y-4">
       {/* Top Section */}
       <div className="space-y-0.5 py-2">
@@ -1133,8 +1143,8 @@ function ProjectSidebar() {
           onClick={() => setProjectTagsExpanded(!projectTagsExpanded)}
           className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
         >
-          <span className="text-xs font-semibold text-tx-tertiary uppercase tracking-wider">
-            {t("projects.tagFilter") || "标签筛选"}
+          <span className="text-xs font-semibold text-tx-primary uppercase tracking-wider">
+            {t("sidebar.tags") || "标签"}
           </span>
           <ChevronDown
             size={14}
@@ -1186,7 +1196,60 @@ function ProjectSidebar() {
                             ? "bg-app-active text-tx-primary font-medium"
                             : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
                         )}
-                        onClick={() => selectTagFilter(tag.id)}
+                        onClick={() => {
+                          if (projTagLongPressFired.current) {
+                            projTagLongPressFired.current = false;
+                            return;
+                          }
+                          selectTagFilter(tag.id);
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setTagColorPopover({
+                            tagId: tag.id,
+                            tagName: tag.name,
+                            color: tag.color,
+                            x: e.clientX,
+                            y: e.clientY,
+                          });
+                        }}
+                        onTouchStart={(e) => {
+                          const touch = e.touches[0];
+                          if (!touch) return;
+                          const startX = touch.clientX;
+                          const startY = touch.clientY;
+                          projTagLongPressFired.current = false;
+                          if (projTagLongPressTimer.current) clearTimeout(projTagLongPressTimer.current);
+                          projTagLongPressTimer.current = setTimeout(() => {
+                            projTagLongPressFired.current = true;
+                            setTagColorPopover({
+                              tagId: tag.id,
+                              tagName: tag.name,
+                              color: tag.color,
+                              x: startX,
+                              y: startY,
+                            });
+                          }, 500);
+                        }}
+                        onTouchMove={(e) => {
+                          if (projTagLongPressTimer.current) {
+                            clearTimeout(projTagLongPressTimer.current);
+                            projTagLongPressTimer.current = null;
+                          }
+                        }}
+                        onTouchEnd={() => {
+                          if (projTagLongPressTimer.current) {
+                            clearTimeout(projTagLongPressTimer.current);
+                            projTagLongPressTimer.current = null;
+                          }
+                        }}
+                        onTouchCancel={() => {
+                          if (projTagLongPressTimer.current) {
+                            clearTimeout(projTagLongPressTimer.current);
+                            projTagLongPressTimer.current = null;
+                          }
+                        }}
                       >
                         <span
                           className="shrink-0 inline-block rounded-full"
@@ -1207,7 +1270,69 @@ function ProjectSidebar() {
         </AnimatePresence>
       </div>
     </ScrollArea>
-  );
+
+    {/* 项目标签颜色选择浮层：右键 / 长按触发 */}
+    {tagColorPopover && (
+      <TagColorPopover
+        x={tagColorPopover.x}
+        y={tagColorPopover.y}
+        currentColor={tagColorPopover.color}
+        title={tagColorPopover.tagName}
+        onPick={async (color) => {
+          try {
+            await api.updateTag(tagColorPopover.tagId, { color });
+            const allTags = await api.getTags();
+            actions.setTags(allTags);
+            if (workspaceId) {
+              api.getTags(workspaceId).then(setProjectTags).catch(() => {});
+            }
+          } catch (err) {
+            console.error("Failed to update tag color:", err);
+          }
+        }}
+        onRename={async () => {
+          const newName = window.prompt(t("tags.promptRename", "请输入新的标签名称"), tagColorPopover.tagName);
+          if (newName === null) return;
+          const trimmed = newName.trim();
+          if (!trimmed) {
+            alert(t("tags.nameRequired", "标签名称不能为空"));
+            return;
+          }
+          try {
+            await api.updateTag(tagColorPopover.tagId, { name: trimmed });
+            const allTags = await api.getTags();
+            actions.setTags(allTags);
+            if (workspaceId) {
+              api.getTags(workspaceId).then(setProjectTags).catch(() => {});
+            }
+          } catch (err) {
+            console.error("Failed to rename tag:", err);
+          }
+        }}
+        onDelete={async () => {
+          if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+          try {
+            await api.deleteTag(tagColorPopover.tagId);
+            if (state.selectedTagId === tagColorPopover.tagId) {
+              actions.setSelectedTag(null);
+              actions.setViewMode("all");
+            }
+            if (selectedProjectTagId === tagColorPopover.tagId) {
+              selectTagFilter(null);
+            }
+            const allTags = await api.getTags();
+            actions.setTags(allTags);
+            if (workspaceId) {
+              api.getTags(workspaceId).then(setProjectTags).catch(() => {});
+            }
+          } catch (err) {
+            console.error("Failed to delete tag:", err);
+          }
+        }}
+        onClose={() => setTagColorPopover(null)}
+      />
+    )}
+  </>);
 }
 
 /**
@@ -2830,7 +2955,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         )}
       </AnimatePresence>
 
-      {/* 标签颜色选择浮层：右键 / 长按触发 */}
+      {/* 标签颜色选择浮层：右键 / 长按触发（笔记本标签） */}
       {tagColorPopover && (
         <TagColorPopover
           x={tagColorPopover.x}

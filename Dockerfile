@@ -62,7 +62,7 @@ RUN if [ -n "$APK_MIRROR" ]; then \
 
 # 复制整个项目（包含 clipper 插件、整个 frontend 目录、根 package.json）
 COPY package.json ./
-COPY packages/nowen-clipper ./packages/nowen-clipper
+COPY packages/supernote-clipper ./packages/supernote-clipper
 COPY frontend ./frontend
 
 # 运行整合了打包插件、编译前端、可跳过安卓打包的自签名编译脚本
@@ -88,11 +88,14 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# tsc 纯 JS 架构无关，但 npm ci 会触发 better-sqlite3 / sqlite-vec 编译
-RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers
+# tsc 纯 JS 架构无关，但 npm ci 会触发 better-sqlite3 / sqlite-vec / sharp 编译
+# vips-dev + fftw-dev 是 sharp 在 Alpine (musl) 下从源码编译的依赖
+RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers vips-dev fftw-dev
 
 COPY backend/package.json backend/package-lock.json ./
-RUN npm install --no-audit --no-fund --legacy-peer-deps
+# 告知 sharp 选取 linux-musl 预构建包，而非 glibc 版
+RUN npm_config_platform=linux npm_config_libc=musl \
+    npm install --no-audit --no-fund --legacy-peer-deps
 COPY backend/ .
 RUN npx tsc
 
@@ -127,8 +130,11 @@ RUN apk add --no-cache tini docker-cli
 # 根 package.json 是运行时版本号的真相源
 COPY package.json ./package.json
 COPY backend/package.json backend/package-lock.json ./backend/
-RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers \
-    && cd backend && npm install --omit=dev --no-audit --no-fund --legacy-peer-deps \
+# vips-dev + fftw-dev 供 sharp 在 Alpine (musl) 下编译或加载预构建二进制
+RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers vips-dev fftw-dev \
+    && cd backend \
+    && npm_config_platform=linux npm_config_libc=musl \
+       npm install --omit=dev --no-audit --no-fund --legacy-peer-deps \
     && apk del .build-deps \
     && npm cache clean --force \
     && rm -rf /root/.npm /tmp/* /var/cache/apk/*

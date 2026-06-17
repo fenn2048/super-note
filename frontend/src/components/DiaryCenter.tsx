@@ -39,7 +39,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/lib/toast";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { useApp } from "@/store/AppContext";
+import { useApp, useAppActions } from "@/store/AppContext";
+import TagColorPopover from "@/components/TagColorPopover";
 import GenericTagInput from "@/components/GenericTagInput";
 import DiaryCalendar from "@/components/DiaryCalendar";
 import DiaryHeatMap from "@/components/DiaryHeatMap";
@@ -2543,7 +2544,13 @@ ScrollContainer.displayName = "ScrollContainer";
 export default function DiaryCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
+  const actions = useAppActions();
   const [items, setItems] = useState<Diary[]>([]);
+  const [tagColorPopover, setTagColorPopover] = useState<{
+    tagId: string; tagName: string; color: string; x: number; y: number;
+  } | null>(null);
+  const tagLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagLongPressFired = useRef(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -2919,8 +2926,8 @@ export default function DiaryCenter() {
 
           {/* 标签筛选区域 */}
           <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-tx-tertiary px-1 mb-2">
-              {t('diary.tagFilter') || "标签筛选"}
+            <div className="text-xs font-semibold uppercase tracking-wider text-tx-primary px-1 mb-2">
+              {t('sidebar.tags') || "标签"}
             </div>
             <div className="space-y-1">
               {/* "全部"按钮 */}
@@ -2940,7 +2947,60 @@ export default function DiaryCenter() {
               {state.tags.map((tag) => (
                 <button
                   key={tag.id}
-                  onClick={() => setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id)}
+                  onClick={() => {
+                    if (tagLongPressFired.current) {
+                      tagLongPressFired.current = false;
+                      return;
+                    }
+                    setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setTagColorPopover({
+                      tagId: tag.id,
+                      tagName: tag.name,
+                      color: tag.color,
+                      x: e.clientX,
+                      y: e.clientY,
+                    });
+                  }}
+                  onTouchStart={(e) => {
+                    const touch = e.touches[0];
+                    if (!touch) return;
+                    const startX = touch.clientX;
+                    const startY = touch.clientY;
+                    tagLongPressFired.current = false;
+                    if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
+                    tagLongPressTimer.current = setTimeout(() => {
+                      tagLongPressFired.current = true;
+                      setTagColorPopover({
+                        tagId: tag.id,
+                        tagName: tag.name,
+                        color: tag.color,
+                        x: startX,
+                        y: startY,
+                      });
+                    }, 500);
+                  }}
+                  onTouchMove={(e) => {
+                    if (tagLongPressTimer.current) {
+                      clearTimeout(tagLongPressTimer.current);
+                      tagLongPressTimer.current = null;
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    if (tagLongPressTimer.current) {
+                      clearTimeout(tagLongPressTimer.current);
+                      tagLongPressTimer.current = null;
+                    }
+                  }}
+                  onTouchCancel={() => {
+                    if (tagLongPressTimer.current) {
+                      clearTimeout(tagLongPressTimer.current);
+                      tagLongPressTimer.current = null;
+                    }
+                  }}
                   className={cn(
                     "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
                     selectedTagId === tag.id
@@ -3217,6 +3277,57 @@ export default function DiaryCenter() {
           </div>
         </ScrollContainer>
       </PullToRefresh>
+      {tagColorPopover && (
+        <TagColorPopover
+          x={tagColorPopover.x}
+          y={tagColorPopover.y}
+          currentColor={tagColorPopover.color}
+          title={tagColorPopover.tagName}
+          onPick={async (color) => {
+            try {
+              await api.updateTag(tagColorPopover.tagId, { color });
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to update tag color:", err);
+            }
+          }}
+          onRename={async () => {
+            const newName = window.prompt(t("tags.promptRename", "请输入新的标签名称"), tagColorPopover.tagName);
+            if (newName === null) return;
+            const trimmed = newName.trim();
+            if (!trimmed) {
+              alert(t("tags.nameRequired", "标签名称不能为空"));
+              return;
+            }
+            try {
+              await api.updateTag(tagColorPopover.tagId, { name: trimmed });
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to rename tag:", err);
+            }
+          }}
+          onDelete={async () => {
+            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            try {
+              await api.deleteTag(tagColorPopover.tagId);
+              if (selectedTagId === tagColorPopover.tagId) {
+                setSelectedTagId("all");
+              }
+              if (state.selectedTagId === tagColorPopover.tagId) {
+                actions.setSelectedTag(null);
+                actions.setViewMode("all");
+              }
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to delete tag:", err);
+            }
+          }}
+          onClose={() => setTagColorPopover(null)}
+        />
+      )}
     </div>
     </div>
   );

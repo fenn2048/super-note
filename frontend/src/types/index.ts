@@ -642,6 +642,7 @@ export interface ProjectTask {
   participants?: Array<{ userId: string; username: string; displayName: string | null; avatarUrl: string | null }>;
   tags?: Array<{ id: string; name: string; color: string }>;
   checklists?: ProjectTaskChecklist[];
+  attachments?: Array<{ id: string; filename: string; mimeType: string; size: number }>;
 }
 
 export interface ProjectTaskChecklist {

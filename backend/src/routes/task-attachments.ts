@@ -33,10 +33,8 @@ import path from "path";
 import { ensureAttachmentsDir, getAttachmentsDir, MIME_TO_EXT } from "./attachments";
 import { getUserWorkspaceRole, canManageResource } from "../middleware/acl";
 
-// 与 attachments 一致的 MIME 白名单（图片类）。
-// 任务附件场景几乎都是截图/示意图，先与笔记模块保持一致；后续若要支持文件
-// 附件再放宽。
-const ALLOWED_IMAGE_MIMES = new Set([
+// 与 attachments 一致的 MIME 白名单（图片类）以及新增的视频类型。
+const ALLOWED_MIMES = new Set([
   "image/png",
   "image/jpeg",
   "image/gif",
@@ -45,7 +43,19 @@ const ALLOWED_IMAGE_MIMES = new Set([
   "image/svg+xml",
   "image/x-icon",
   "image/vnd.microsoft.icon",
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/quicktime",
+  "video/mpeg",
+  "video/x-matroska",
 ]);
+
+const MIME_TO_EXT_EXTENDED: Record<string, string> = {
+  ...MIME_TO_EXT,
+  "video/mpeg": "mpeg",
+  "video/x-matroska": "mkv",
+};
 
 // 单个附件最大 50MB（与 attachments 对齐）。
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
@@ -123,14 +133,28 @@ app.post("/", async (c) => {
   // 解析 workspaceId：有 taskId 从 task 行继承；否则走 query。
   let effectiveWorkspaceId: string | null = null;
   if (taskId) {
-    const task = db
+    let task = db
       .prepare("SELECT userId, workspaceId FROM tasks WHERE id = ?")
       .get(taskId) as { userId: string; workspaceId: string | null } | undefined;
-    if (!task) return c.json({ error: "任务不存在" }, 404);
-    if (!canManageResource(task.userId, task.workspaceId, userId)) {
-      return c.json({ error: "无权向该任务上传附件", code: "FORBIDDEN" }, 403);
+    if (!task) {
+      const pTask = db
+        .prepare("SELECT creatorId, projectId FROM project_tasks WHERE id = ?")
+        .get(taskId) as { creatorId: string; projectId: string } | undefined;
+      if (!pTask) return c.json({ error: "任务不存在" }, 404);
+      const project = db
+        .prepare("SELECT ownerId, workspaceId FROM projects WHERE id = ?")
+        .get(pTask.projectId) as { ownerId: string; workspaceId: string | null } | undefined;
+      if (!project) return c.json({ error: "所属项目不存在" }, 404);
+      if (!canManageResource(pTask.creatorId || project.ownerId, project.workspaceId, userId)) {
+        return c.json({ error: "无权向该任务上传附件", code: "FORBIDDEN" }, 403);
+      }
+      effectiveWorkspaceId = project.workspaceId;
+    } else {
+      if (!canManageResource(task.userId, task.workspaceId, userId)) {
+        return c.json({ error: "无权向该任务上传附件", code: "FORBIDDEN" }, 403);
+      }
+      effectiveWorkspaceId = task.workspaceId;
     }
-    effectiveWorkspaceId = task.workspaceId;
   } else {
     const raw = c.req.query("workspaceId");
     if (raw && raw !== "personal") {
@@ -147,13 +171,13 @@ app.post("/", async (c) => {
     );
   }
   const mime = (file.type || "application/octet-stream").toLowerCase();
-  if (!ALLOWED_IMAGE_MIMES.has(mime)) {
+  if (!ALLOWED_MIMES.has(mime)) {
     return c.json({ error: `不支持的 MIME 类型: ${mime}` }, 415);
   }
 
   ensureAttachmentsDir();
   const id = uuid();
-  const ext = MIME_TO_EXT[mime] || "bin";
+  const ext = MIME_TO_EXT_EXTENDED[mime] || "bin";
   const filename = `${id}.${ext}`;
   const savePath = path.join(getAttachmentsDir(), filename);
 
@@ -212,16 +236,34 @@ app.patch("/:id/bind", async (c) => {
     return c.json({ error: "无权绑定该附件", code: "FORBIDDEN" }, 403);
   }
 
+  let taskUserId: string;
+  let taskWorkspaceId: string | null = null;
+  
   const task = db
     .prepare("SELECT userId, workspaceId FROM tasks WHERE id = ?")
     .get(taskId) as { userId: string; workspaceId: string | null } | undefined;
-  if (!task) return c.json({ error: "任务不存在" }, 404);
-  if (!canManageResource(task.userId, task.workspaceId, userId)) {
+  if (!task) {
+    const pTask = db
+      .prepare("SELECT creatorId, projectId FROM project_tasks WHERE id = ?")
+      .get(taskId) as { creatorId: string; projectId: string } | undefined;
+    if (!pTask) return c.json({ error: "任务不存在" }, 404);
+    const project = db
+      .prepare("SELECT ownerId, workspaceId FROM projects WHERE id = ?")
+      .get(pTask.projectId) as { ownerId: string; workspaceId: string | null } | undefined;
+    if (!project) return c.json({ error: "所属项目不存在" }, 404);
+    taskUserId = pTask.creatorId || project.ownerId;
+    taskWorkspaceId = project.workspaceId;
+  } else {
+    taskUserId = task.userId;
+    taskWorkspaceId = task.workspaceId;
+  }
+  
+  if (!canManageResource(taskUserId, taskWorkspaceId, userId)) {
     return c.json({ error: "无权操作该任务", code: "FORBIDDEN" }, 403);
   }
 
   db.prepare("UPDATE task_attachments SET taskId = ?, workspaceId = ? WHERE id = ?")
-    .run(taskId, task.workspaceId, id);
+    .run(taskId, taskWorkspaceId, id);
   return c.json({ success: true });
 });
 
@@ -246,17 +288,32 @@ app.delete("/:id", (c) => {
   if (!row) return c.json({ error: "附件不存在" }, 404);
 
   if (row.taskId) {
-    // 已绑定 → 走 canManageResource，允许 admin/owner 或原上传者删除。
-    // 需要获取 task 的 userId（canManageResource 按创建者本人判断）；用附件
-    // 行的 userId 足以代表"上传者"，但我们要的是"任务创建者"这一维度——
-    // 读一次 task 行以免混淆。
+    let taskUserId: string | null = null;
+    let taskWorkspaceId: string | null = null;
+    
     const task = db
       .prepare("SELECT userId, workspaceId FROM tasks WHERE id = ?")
       .get(row.taskId) as { userId: string; workspaceId: string | null } | undefined;
-    // task 行可能已被删：此时 DB 的 CASCADE 应该已经把附件也清了，但仍可能
-    // 有一瞬的竞态。保守按"上传者本人"判定。
-    const ok = task
-      ? canManageResource(task.userId, task.workspaceId, userId) || row.userId === userId
+    if (task) {
+      taskUserId = task.userId;
+      taskWorkspaceId = task.workspaceId;
+    } else {
+      const pTask = db
+        .prepare("SELECT creatorId, projectId FROM project_tasks WHERE id = ?")
+        .get(row.taskId) as { creatorId: string; projectId: string } | undefined;
+      if (pTask) {
+        const project = db
+          .prepare("SELECT ownerId, workspaceId FROM projects WHERE id = ?")
+          .get(pTask.projectId) as { ownerId: string; workspaceId: string | null } | undefined;
+        if (project) {
+          taskUserId = pTask.creatorId || project.ownerId;
+          taskWorkspaceId = project.workspaceId;
+        }
+      }
+    }
+    
+    const ok = taskUserId
+      ? canManageResource(taskUserId, taskWorkspaceId, userId) || row.userId === userId
       : row.userId === userId;
     if (!ok) return c.json({ error: "无权删除该附件", code: "FORBIDDEN" }, 403);
   } else {

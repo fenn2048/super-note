@@ -13,7 +13,8 @@ import { api, getCurrentWorkspace } from "@/lib/api";
 import { Task, TaskFilter, TaskPriority, TaskStats, Workspace, Tag } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { useApp } from "@/store/AppContext";
+import { useApp, useAppActions } from "@/store/AppContext";
+import TagColorPopover from "@/components/TagColorPopover";
 import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 import TaskCalendar from "@/components/TaskCalendar";
@@ -1061,6 +1062,12 @@ export default function TaskCenter() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const actions = useAppActions();
+  const [tagColorPopover, setTagColorPopover] = useState<{
+    tagId: string; tagName: string; color: string; x: number; y: number;
+  } | null>(null);
+  const tagLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagLongPressFired = useRef(false);
   const [newTitle, setNewTitle] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1324,7 +1331,7 @@ export default function TaskCenter() {
 
           {state.tags.length > 0 && (
             <div className="mt-4 pt-4 border-t border-app-border/60">
-              <div className="px-3 mb-1.5 text-xs font-semibold text-tx-tertiary uppercase tracking-wider">
+               <div className="px-3 mb-1.5 text-xs font-semibold text-tx-tertiary uppercase tracking-wider">
                 {t('tags.title', '标签')}
               </div>
               <div className="space-y-0.5">
@@ -1332,8 +1339,59 @@ export default function TaskCenter() {
                   <button
                     key={tag.id}
                     onClick={() => {
+                      if (tagLongPressFired.current) {
+                        tagLongPressFired.current = false;
+                        return;
+                      }
                       setSelectedTagId(selectedTagId === tag.id ? null : tag.id);
                       setSelectedTask(null);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setTagColorPopover({
+                        tagId: tag.id,
+                        tagName: tag.name,
+                        color: tag.color,
+                        x: e.clientX,
+                        y: e.clientY,
+                      });
+                    }}
+                    onTouchStart={(e) => {
+                      const touch = e.touches[0];
+                      if (!touch) return;
+                      const startX = touch.clientX;
+                      const startY = touch.clientY;
+                      tagLongPressFired.current = false;
+                      if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
+                      tagLongPressTimer.current = setTimeout(() => {
+                        tagLongPressFired.current = true;
+                        setTagColorPopover({
+                          tagId: tag.id,
+                          tagName: tag.name,
+                          color: tag.color,
+                          x: startX,
+                          y: startY,
+                        });
+                      }, 500);
+                    }}
+                    onTouchMove={(e) => {
+                      if (tagLongPressTimer.current) {
+                        clearTimeout(tagLongPressTimer.current);
+                        tagLongPressTimer.current = null;
+                      }
+                    }}
+                    onTouchEnd={() => {
+                      if (tagLongPressTimer.current) {
+                        clearTimeout(tagLongPressTimer.current);
+                        tagLongPressTimer.current = null;
+                      }
+                    }}
+                    onTouchCancel={() => {
+                      if (tagLongPressTimer.current) {
+                        clearTimeout(tagLongPressTimer.current);
+                        tagLongPressTimer.current = null;
+                      }
                     }}
                     className={cn(
                       "w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors text-left",
@@ -1389,8 +1447,59 @@ export default function TaskCenter() {
               <button
                 key={tag.id}
                 onClick={() => {
+                  if (tagLongPressFired.current) {
+                    tagLongPressFired.current = false;
+                    return;
+                  }
                   setSelectedTagId(selectedTagId === tag.id ? null : tag.id);
                   setSelectedTask(null);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setTagColorPopover({
+                    tagId: tag.id,
+                    tagName: tag.name,
+                    color: tag.color,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }}
+                onTouchStart={(e) => {
+                  const touch = e.touches[0];
+                  if (!touch) return;
+                  const startX = touch.clientX;
+                  const startY = touch.clientY;
+                  tagLongPressFired.current = false;
+                  if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
+                  tagLongPressTimer.current = setTimeout(() => {
+                    tagLongPressFired.current = true;
+                    setTagColorPopover({
+                      tagId: tag.id,
+                      tagName: tag.name,
+                      color: tag.color,
+                      x: startX,
+                      y: startY,
+                    });
+                  }, 500);
+                }}
+                onTouchMove={(e) => {
+                  if (tagLongPressTimer.current) {
+                    clearTimeout(tagLongPressTimer.current);
+                    tagLongPressTimer.current = null;
+                  }
+                }}
+                onTouchEnd={() => {
+                  if (tagLongPressTimer.current) {
+                    clearTimeout(tagLongPressTimer.current);
+                    tagLongPressTimer.current = null;
+                  }
+                }}
+                onTouchCancel={() => {
+                  if (tagLongPressTimer.current) {
+                    clearTimeout(tagLongPressTimer.current);
+                    tagLongPressTimer.current = null;
+                  }
                 }}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors shrink-0 border",
@@ -1484,6 +1593,57 @@ export default function TaskCenter() {
           />
         )}
       </AnimatePresence>
+      {tagColorPopover && (
+        <TagColorPopover
+          x={tagColorPopover.x}
+          y={tagColorPopover.y}
+          currentColor={tagColorPopover.color}
+          title={tagColorPopover.tagName}
+          onPick={async (color) => {
+            try {
+              await api.updateTag(tagColorPopover.tagId, { color });
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to update tag color:", err);
+            }
+          }}
+          onRename={async () => {
+            const newName = window.prompt(t("tags.promptRename", "请输入新的标签名称"), tagColorPopover.tagName);
+            if (newName === null) return;
+            const trimmed = newName.trim();
+            if (!trimmed) {
+              alert(t("tags.nameRequired", "标签名称不能为空"));
+              return;
+            }
+            try {
+              await api.updateTag(tagColorPopover.tagId, { name: trimmed });
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to rename tag:", err);
+            }
+          }}
+          onDelete={async () => {
+            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            try {
+              await api.deleteTag(tagColorPopover.tagId);
+              if (selectedTagId === tagColorPopover.tagId) {
+                setSelectedTagId(null);
+              }
+              if (state.selectedTagId === tagColorPopover.tagId) {
+                actions.setSelectedTag(null);
+                actions.setViewMode("all");
+              }
+              const allTags = await api.getTags();
+              actions.setTags(allTags);
+            } catch (err) {
+              console.error("Failed to delete tag:", err);
+            }
+          }}
+          onClose={() => setTagColorPopover(null)}
+        />
+      )}
     </div>
   );
 }

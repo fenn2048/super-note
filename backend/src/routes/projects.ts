@@ -5,6 +5,49 @@ import { v4 as uuid } from "uuid";
 
 const projectsRouter = new Hono();
 
+// Helper to get project task with all associations (participants, tags, checklists, attachments)
+function getFullProjectTask(db: any, taskId: string) {
+  const task = db.prepare(`
+    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl,
+      (SELECT COUNT(*) FROM project_task_checklists WHERE taskId = pt.id) as checklistTotal,
+      (SELECT COUNT(*) FROM project_task_checklists WHERE taskId = pt.id AND isCompleted = 1) as checklistCompleted
+    FROM project_tasks pt
+    LEFT JOIN users u ON pt.assigneeId = u.id
+    WHERE pt.id = ?
+  `).get(taskId) as any;
+  
+  if (!task) return null;
+
+  task.participants = db.prepare(`
+    SELECT ptm.userId, u.username, u.displayName, u.avatarUrl
+    FROM project_task_members ptm
+    JOIN users u ON ptm.userId = u.id
+    WHERE ptm.taskId = ?
+  `).all(taskId);
+
+  task.tags = db.prepare(`
+    SELECT t.id, t.userId, t.name, t.color, t.createdAt
+    FROM project_task_tags ptt
+    JOIN tags t ON ptt.tagId = t.id
+    WHERE ptt.taskId = ?
+  `).all(taskId);
+  
+  task.checklists = db.prepare(`
+    SELECT * FROM project_task_checklists
+    WHERE taskId = ?
+    ORDER BY sortOrder ASC
+  `).all(taskId);
+
+  task.attachments = db.prepare(`
+    SELECT id, filename, mimeType, size, path, createdAt
+    FROM task_attachments
+    WHERE taskId = ?
+    ORDER BY createdAt ASC
+  `).all(taskId);
+
+  return task;
+}
+
 // Helper to check if project exists and user has access
 function getProjectPermission(projectId: string, userId: string) {
   const db = getDb();
@@ -186,6 +229,14 @@ projectsRouter.get("/my-tasks", (c) => {
       ORDER BY sortOrder ASC
     `).all(task.id);
     task.checklists = checklists;
+
+    const attachments = db.prepare(`
+      SELECT id, filename, mimeType, size, path, createdAt
+      FROM task_attachments
+      WHERE taskId = ?
+      ORDER BY createdAt ASC
+    `).all(task.id);
+    task.attachments = attachments;
   }
 
   return c.json(tasks);
@@ -457,6 +508,14 @@ projectsRouter.get("/:id/stages", (c) => {
         ORDER BY sortOrder ASC
       `).all(task.id);
       task.checklists = checklists;
+
+      const attachments = db.prepare(`
+        SELECT id, filename, mimeType, size, path, createdAt
+        FROM task_attachments
+        WHERE taskId = ?
+        ORDER BY createdAt ASC
+      `).all(task.id);
+      task.attachments = attachments;
     }
     stage.tasks = tasks;
   }
@@ -567,7 +626,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
     }
   }
 
-  const newTask = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId);
+  const newTask = getFullProjectTask(db, taskId);
   return c.json(newTask);
 });
 
@@ -669,7 +728,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
     }
   }
 
-  const updatedTask = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId);
+  const updatedTask = getFullProjectTask(db, taskId);
   return c.json(updatedTask);
 });
 

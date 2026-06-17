@@ -1487,7 +1487,7 @@
     "title": "说说",
     "placeholder": "此刻想说点什么...",
     "searchPlaceholder": "搜索说说...",
-    "tagFilter": "标签筛选",
+    "tagFilter": "标签",
     "allTags": "全部标签",
     "post": "发布",
     "mood": "心情",
@@ -1811,7 +1811,7 @@
     "noAssignee": "暂无负责人",
     "clearAssignee": "取消指派",
     "addTag": "添加标签",
-    "tagFilter": "标签过滤",
+    "tagFilter": "标签",
     "addParticipant": "添加成员",
     "checklist": "任务清单",
     "addChecklistItem": "添加清单项…",
@@ -1840,7 +1840,9 @@
     "noGroups": "无分组",
     "noFavorites": "暂无收藏",
     "personalTodo": "个人待办",
-    "tasksCount":"个任务"
+    "tasksCount":"个任务",
+    "members": "项目成员",
+    "pending": "进行中"
   },
   "calendar": {
     "today": "今天",

@@ -359,7 +359,7 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
   }
 
   const created = db.prepare(`
-    SELECT diaries.*, users.username AS creatorName,
+    SELECT diaries.*, COALESCE(users.displayName, users.username) AS creatorName,
            (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
             FROM tags t
             JOIN diary_tags dt ON t.id = dt.tagId
@@ -477,12 +477,12 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
     finalArgs.push(cursor);
   }
 
-  const selectFields = `diaries.*, users.username AS creatorName,
+  const selectFields = `diaries.*, COALESCE(users.displayName, users.username) AS creatorName,
     (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
      FROM tags t
      JOIN diary_tags dt ON t.id = dt.tagId
      WHERE dt.diaryId = diaries.id) AS tagsJson,
-    (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount`;
+     (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount`;
 
   const rows = db
     .prepare(
@@ -746,7 +746,7 @@ diary.put("/:id", (c) => {
     // 返回更新后的整条记录（顺手 LEFT JOIN 取 creatorName 保持契约一致）
     const updated = db
       .prepare(
-        `SELECT diaries.*, users.username AS creatorName,
+        `SELECT diaries.*, COALESCE(users.displayName, users.username) AS creatorName,
                 (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
                  FROM tags t
                  JOIN diary_tags dt ON t.id = dt.tagId
@@ -1287,7 +1287,7 @@ diary.get("/:id/comments", (c) => {
   }
 
   const comments = db.prepare(`
-    SELECT dc.*, u.username, u.avatarUrl
+    SELECT dc.*, COALESCE(u.displayName, u.username) AS username, u.avatarUrl
     FROM diary_comments dc
     JOIN users u ON u.id = dc.userId
     WHERE dc.diaryId = ?
@@ -1329,7 +1329,7 @@ diary.post("/:id/comments", async (c) => {
   `).run(commentId, id, userId, content.trim());
 
   const newComment = db.prepare(`
-    SELECT dc.*, u.username, u.avatarUrl
+    SELECT dc.*, COALESCE(u.displayName, u.username) AS username, u.avatarUrl
     FROM diary_comments dc
     JOIN users u ON u.id = dc.userId
     WHERE dc.id = ?

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Project, ProjectStage, ProjectTask, Tag, UserPublicInfo } from "@/types";
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import {
   Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus,
-  Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles
+  Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles,
+  Eye, FileVideo, Image as ImageIcon, Paperclip, Upload
 } from "lucide-react";
 import GenericTagInput from "@/components/GenericTagInput";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,9 @@ import { toast } from "@/lib/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 export const TASK_COLOR_MAP: Record<string, { font: string; borderLight: string; borderDark: string; bgLight: string; bgDark: string }> = {
   red: { font: "#ef4444", borderLight: "#fca5a5", borderDark: "#7f1d1d", bgLight: "#fef2f2", bgDark: "#450a0a" },
@@ -60,6 +64,9 @@ export default function ProjectKanban({
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
+  const [descriptionMode, setDescriptionMode] = useState<"edit" | "preview">("edit");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const handleCloseModal = () => {
     setActiveTask(null);
@@ -994,19 +1001,185 @@ export default function ProjectKanban({
                 </div>
               </div>
 
-              {/* Description */}
+              {/* Description with Edit/Preview tabs */}
               <div className="space-y-1.5">
-                <h5 className="text-xs font-bold text-tx-primary tracking-wide">
-                  {t("projects.description") || "任务描述"}
-                </h5>
-                <Textarea
-                  value={activeTask.description}
-                  onChange={(e) =>
-                    setActiveTask((prev) => (prev ? { ...prev, description: e.target.value } : null))
-                  }
-                  className="text-xs leading-relaxed min-h-[80px] bg-app-sidebar/20 border-app-border rounded-xl"
-                  placeholder={t("projects.taskDescPlaceholder") || "添加更详细的任务描述…"}
-                />
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold text-tx-primary tracking-wide">
+                    {t("projects.description") || "任务描述"}
+                  </h5>
+                  <div className="flex items-center gap-0.5 bg-app-hover/60 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setDescriptionMode("edit")}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors",
+                        descriptionMode === "edit"
+                          ? "bg-app-elevated text-tx-primary shadow-sm"
+                          : "text-tx-tertiary hover:text-tx-secondary"
+                      )}
+                    >
+                      <Edit2 size={10} />
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDescriptionMode("preview")}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors",
+                        descriptionMode === "preview"
+                          ? "bg-app-elevated text-tx-primary shadow-sm"
+                          : "text-tx-tertiary hover:text-tx-secondary"
+                      )}
+                    >
+                      <Eye size={10} />
+                      预览
+                    </button>
+                  </div>
+                </div>
+                {descriptionMode === "edit" ? (
+                  <Textarea
+                    value={activeTask.description || ""}
+                    onChange={(e) =>
+                      setActiveTask((prev) => (prev ? { ...prev, description: e.target.value } : null))
+                    }
+                    className="text-xs leading-relaxed min-h-[120px] font-mono bg-app-sidebar/20 border-app-border rounded-xl"
+                    placeholder={t("projects.taskDescPlaceholder") || "支持 Markdown 和 HTML/CSS 格式…"}
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "min-h-[80px] p-3 rounded-xl border border-app-border bg-app-sidebar/20 text-xs leading-relaxed text-tx-secondary",
+                      "prose prose-sm max-w-none prose-headings:text-tx-primary prose-p:text-tx-secondary",
+                      "prose-code:text-accent-primary prose-pre:bg-app-hover prose-a:text-accent-primary"
+                    )}
+                  >
+                    {activeTask.description ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                        {activeTask.description}
+                      </ReactMarkdown>
+                    ) : (
+                      <span className="text-tx-tertiary italic text-[11px]">{t("projects.taskDescPlaceholder") || "暂无描述"}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Attachments */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold text-tx-primary tracking-wide flex items-center gap-1.5">
+                    <Paperclip size={13} className="text-accent-primary" />
+                    附件
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={uploadingAttachment}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-app-hover hover:bg-app-active text-tx-secondary text-[10px] font-semibold border border-app-border transition-colors disabled:opacity-50"
+                  >
+                    <Upload size={10} />
+                    {uploadingAttachment ? "上传中…" : "上传文件"}
+                  </button>
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !activeTask) return;
+                      e.target.value = "";
+                      setUploadingAttachment(true);
+                      try {
+                        const result = await api.taskAttachments.upload(file, activeTask.id);
+                        setActiveTask((prev) => {
+                          if (!prev) return null;
+                          const existing = prev.attachments || [];
+                          return {
+                            ...prev,
+                            attachments: [
+                              ...existing,
+                              { id: result.id, filename: result.filename, mimeType: result.mimeType, size: result.size },
+                            ],
+                          };
+                        });
+                        toast.success("附件上传成功");
+                      } catch (err: any) {
+                        toast.error(err?.message || "附件上传失败");
+                      } finally {
+                        setUploadingAttachment(false);
+                      }
+                    }}
+                  />
+                </div>
+
+                {(!activeTask.attachments || activeTask.attachments.length === 0) ? (
+                  <div className="text-[11px] text-tx-tertiary italic py-2 px-3 rounded-xl border border-dashed border-app-border/60">
+                    暂无附件，支持图片和视频格式
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {activeTask.attachments.map((att) => {
+                      const url = api.taskAttachments.urlFor(att.id);
+                      const isVideo = att.mimeType?.startsWith("video/");
+                      return (
+                        <div key={att.id} className="relative group/att rounded-lg overflow-hidden border border-app-border bg-app-sidebar/30 aspect-square">
+                          {isVideo ? (
+                            <video
+                              src={`${url}?inline=1`}
+                              className="w-full h-full object-cover"
+                              controls={false}
+                              muted
+                            />
+                          ) : (
+                            <img
+                              src={url}
+                              alt={att.filename}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                          {/* overlay on hover */}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/att:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full text-white"
+                              title="查看原图"
+                            >
+                              <Eye size={12} />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm("确定要删除该附件吗？")) return;
+                                try {
+                                  await api.taskAttachments.remove(att.id);
+                                  setActiveTask((prev) => {
+                                    if (!prev) return null;
+                                    return { ...prev, attachments: (prev.attachments || []).filter((a) => a.id !== att.id) };
+                                  });
+                                  toast.success("附件已删除");
+                                } catch (err: any) {
+                                  toast.error(err?.message || "删除失败");
+                                }
+                              }}
+                              className="p-1.5 bg-red-500/60 hover:bg-red-500/80 rounded-full text-white"
+                              title="删除附件"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                          {/* type badge */}
+                          <div className="absolute bottom-1 left-1 flex items-center gap-0.5 px-1 py-0.5 rounded bg-black/50 text-white text-[9px]">
+                            {isVideo ? <FileVideo size={8} /> : <ImageIcon size={8} />}
+                            <span className="max-w-[60px] truncate">{att.filename}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Checklist / Subtasks */}

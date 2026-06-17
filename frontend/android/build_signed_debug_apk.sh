@@ -104,8 +104,8 @@ done
 
 mkdir -p "$OUT_DIR"
 
-# 1. Package browser extensions (nowen-clipper)
-CLIPPER_DIR="$SCRIPT_DIR/../../packages/nowen-clipper"
+# 1. Package browser extensions (supernote-clipper)
+CLIPPER_DIR="$SCRIPT_DIR/../../packages/supernote-clipper"
 FRONTEND_DIR="$SCRIPT_DIR/.."
 if [ -d "$CLIPPER_DIR" ]; then
   echo "==== Building and packaging browser extensions ===="
@@ -240,7 +240,7 @@ mkdir -p "$FRONTEND_DIR/dist/downloads"
 
 # Copy browser extensions if they exist
 VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "0.0.0")
-CLIPPER_DIR="$SCRIPT_DIR/../../packages/nowen-clipper"
+CLIPPER_DIR="$SCRIPT_DIR/../../packages/supernote-clipper"
 if [ -d "$CLIPPER_DIR" ]; then
   CLIPPER_VERSION=$(node -e "try { console.log(require('$CLIPPER_DIR/package.json').version) } catch(e) { console.log('$VERSION') }" 2>/dev/null || echo "0.0.0")
   if [ -f "$CLIPPER_DIR/releases/super-clipper-${CLIPPER_VERSION}.zip" ]; then

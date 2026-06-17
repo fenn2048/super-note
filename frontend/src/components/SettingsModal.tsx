@@ -1311,7 +1311,7 @@ function AppearancePanel() {
 }
 
 const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
-  function SettingsModal({ onClose, defaultTab = "appearance" }, ref) {
+  function SettingsModal({ onClose, defaultTab = "security" }, ref) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
   const [currentMobilePage, setCurrentMobilePage] = useState<"menu" | TabId>(() => {
@@ -1342,11 +1342,11 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
   const isMobile = window.innerWidth < 768;
 
   const SETTING_TABS = [
+    { id: "security" as const, label: t('settings.security'), icon: Shield },
     { id: "appearance" as const, label: t('settings.appearance'), icon: Palette },
     { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
     { id: "manual" as const, label: t('settings.userManual'), icon: BookOpen },
     { id: "ai" as const, label: t('settings.ai'), icon: Bot },
-    { id: "security" as const, label: t('settings.security'), icon: Shield },
     // 【个人访问令牌】家庭场景用不到，仅管理员可见
     ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
@@ -1544,8 +1544,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                       onClick={() => setActiveTab(tab.id)}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isActive
-                          ? "bg-zinc-200/70 dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400"
-                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-200"
+                          ? "bg-accent-primary/10 text-accent-primary dark:bg-accent-primary/20 dark:text-indigo-400 font-bold"
+                          : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
                       }`}
                     >
                       <Icon className="w-4 h-4" />

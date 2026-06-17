@@ -488,7 +488,7 @@ export default function UserManagement({ currentUserId }: { currentUserId: strin
                       {/* 主信息 */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 truncate">
+                          <span className="text-sm font-medium text-tx-primary truncate">
                             {u.displayName || u.username}
                           </span>
                           {isSelf && (

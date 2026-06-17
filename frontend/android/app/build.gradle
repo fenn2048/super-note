@@ -14,8 +14,8 @@ android {
         applicationId "com.super.note"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10113
-        versionName "1.1.13"
+        versionCode 10116
+        versionName "1.1.16"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -42,6 +42,13 @@ android {
             }
         }
     }
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def name = "super-note-${variant.buildType.name}"
+            def version = variant.versionName.replace(".", "")
+            outputFileName = "${name}-${version}.apk"
+        }
+    }
 }
 
 repositories {
@@ -60,6 +67,7 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    implementation 'me.leolin:ShortcutBadger:1.1.22@aar'
 }
 
 configurations.all {
