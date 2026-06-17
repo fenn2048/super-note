@@ -1338,7 +1338,7 @@ export default function ProjectCenter() {
             )}
 
             {/* Stats Cards Row */}
-            <div className="grid grid-cols-4 gap-1.5 md:gap-4 shrink-0 sticky top-0 z-30 bg-app-bg/95 backdrop-blur-xs py-2 -my-2">
+            <div className="grid grid-cols-4 gap-1.5 md:gap-4 shrink-0 sticky top-0 z-30 bg-app-bg py-2 -my-2">
               {/* Card 1: 今日到期 */}
               <div
                 onClick={() => setStatusFilter("today")}
