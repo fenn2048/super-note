@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import {
   Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus,
-  Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles,
+  Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles, MoveRight,
   Eye, FileVideo, Image as ImageIcon, Paperclip, Upload
 } from "lucide-react";
 import GenericTagInput from "@/components/GenericTagInput";
@@ -66,6 +66,10 @@ export default function ProjectKanban({
   const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
   const [descriptionMode, setDescriptionMode] = useState<"edit" | "preview">("edit");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  // Move Task State
+  const [showMoveDropdown, setShowMoveDropdown] = useState(false);
+  const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const handleCloseModal = () => {
@@ -144,14 +148,25 @@ export default function ProjectKanban({
 
   const handleAddTask = async (stageId: string) => {
     if (!newTaskTitle.trim()) return;
+    const rawInput = newTaskTitle.trim();
     try {
-      await api.createProjectTask(project.id, {
+      const task = await api.createProjectTask(project.id, {
         stageId,
-        title: newTaskTitle.trim(),
+        title: rawInput,
+        description: rawInput,
       });
       setNewTaskTitle("");
       setAddingTaskToStage(null);
       onRefresh();
+
+      // Asynchronously call AI to summarize title
+      api.aiChat("title", rawInput.slice(0, 2000)).then(async (rawTitle) => {
+        const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+        if (cleanedTitle) {
+          await api.updateProjectTask(task.id, { title: cleanedTitle });
+          onRefresh();
+        }
+      }).catch(console.error);
     } catch (err: any) {
       toast.error(err?.message || "创建任务失败");
     }
@@ -180,6 +195,32 @@ export default function ProjectKanban({
       handleCloseModal();
     } catch (err: any) {
       toast.error(err?.message || "更新任务失败");
+    }
+  };
+
+  const loadAvailableProjects = async () => {
+    try {
+      const projs = await api.getProjects();
+      setAvailableProjects(projs.filter(p => p.id !== project.id));
+    } catch (err: any) {
+      toast.error(err?.message || "加载项目失败");
+    }
+  };
+
+  const handleMoveTask = async (targetProjectId: string) => {
+    if (!activeTask) return;
+    try {
+      const stages = await api.getProjectStages(targetProjectId);
+      if (!stages || stages.length === 0) {
+        toast.error("目标项目没有阶段，无法移动");
+        return;
+      }
+      await api.updateProjectTask(activeTask.id, { projectId: targetProjectId, stageId: stages[0].id });
+      toast.success("移动成功");
+      handleCloseModal();
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "移动任务失败");
     }
   };
 
@@ -681,6 +722,35 @@ export default function ProjectKanban({
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      if (!showMoveDropdown) loadAvailableProjects();
+                      setShowMoveDropdown(!showMoveDropdown);
+                    }}
+                    className="p-1.5 hover:bg-app-hover rounded-lg text-tx-tertiary hover:text-tx-primary transition-colors"
+                    title="移动到其他项目"
+                  >
+                    <MoveRight size={16} />
+                  </button>
+                  {showMoveDropdown && (
+                    <div className="absolute top-full right-0 mt-1 w-48 bg-app-elevated border border-app-border rounded-xl shadow-lg z-50 py-1 max-h-64 overflow-y-auto">
+                      {availableProjects.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-tx-tertiary text-center">无其他可用项目</div>
+                      ) : (
+                        availableProjects.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => { setShowMoveDropdown(false); handleMoveTask(p.id); }}
+                            className="w-full text-left px-3 py-2 text-xs text-tx-secondary hover:bg-app-hover hover:text-tx-primary truncate"
+                          >
+                            {p.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => handleDeleteTask(activeTask.id)}
                   className="p-1.5 hover:bg-accent-danger/10 text-tx-tertiary hover:text-accent-danger rounded-lg transition-colors"
