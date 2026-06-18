@@ -9,6 +9,7 @@ import {
   hasPermission,
   getUserWorkspaceRole,
   hasRole,
+  buildVisibilityFilter,
 } from "../middleware/acl";
 import { broadcastNoteUpdated, broadcastNoteDeleted, broadcastYjsUpdate, broadcastToUser } from "../services/realtime";
 import { yFlush, yDestroyDoc, yReplaceContentAsUpdate } from "../services/yjs";
@@ -83,6 +84,11 @@ app.get("/", (c) => {
     query += " AND notes.userId = ? AND notes.workspaceId IS NULL";
     params.push(userId);
   }
+
+  // 可见性过滤：工作区下只显示 WORKSPACE 或自己的 PRIVATE 笔记
+  const { clause: visClause, params: visParams } = buildVisibilityFilter(userId, "notes", workspaceId && workspaceId !== "personal" ? workspaceId : null);
+  query += ` ${visClause}`;
+  params.push(...visParams);
 
   if (search) {
     const ftsResults = db.prepare(`
@@ -357,11 +363,12 @@ app.post("/", async (c) => {
   }
   try {
     db.prepare(`
-      INSERT INTO notes (id, userId, workspaceId, notebookId, title, content, contentText)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO notes (id, userId, workspaceId, notebookId, title, content, contentText, visibility)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, userId, inheritedWorkspaceId, body.notebookId,
       body.title || "无标题笔记", body.content || "{}", body.contentText || "",
+      body.visibility || "PRIVATE",
     );
   } catch (e: any) {
     if (String(e?.code || "").startsWith("SQLITE_CONSTRAINT")) {
@@ -433,7 +440,7 @@ app.put("/:id", async (c) => {
 
   // 根据变更字段决定所需权限
   const writeFields = ["title", "content", "contentText", "notebookId", "isPinned", "isFavorite",
-                       "isArchived", "isTrashed", "sortOrder"];
+                       "isArchived", "isTrashed", "sortOrder", "visibility"];
   const manageFields = ["isLocked"]; // 锁定需要 manage 权限
   const needsManage = manageFields.some((f) => body[f] !== undefined);
   const needsWrite = writeFields.some((f) => body[f] !== undefined);
