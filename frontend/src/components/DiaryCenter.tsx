@@ -29,7 +29,7 @@ import {
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { Diary, DiaryStats, Tag, DiaryComment, User } from "@/types";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
-import { cn } from "@/lib/utils";
+import { cn, detectSuMention } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
 import { registerPlugin } from "@capacitor/core";
@@ -97,6 +97,8 @@ const MOODS = [
   { value: "laugh", emoji: "🤣" },
   { value: "shock", emoji: "😱" },
 ];
+
+export const AI_ASSISTANT_ID = "00000000-0000-0000-0000-000000000001";
 
 function getMoodEmoji(mood: string): string {
   return MOODS.find((m) => m.value === mood)?.emoji || "";
@@ -566,6 +568,37 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
 
   const handlePost = async () => {
     if (!canSubmit) return;
+
+    // === AI @su 检测 ===
+    const su = detectSuMention(text.trim());
+    if (su.hasSu) {
+      setPosting(true);
+      try {
+        await api.diaryAiAsk({ mode: "post", question: su.cleanText });
+        haptic.success();
+        // 重置输入框
+        for (const item of pendingImagesRef.current) {
+          try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
+        }
+        setText("");
+        setMood("");
+        setShowMoods(false);
+        setPendingImages([]);
+        setVisibility(getCurrentWorkspace() !== "personal" ? "PUBLIC" : "PRIVATE");
+        setPendingVoice(null);
+        setComposeTags([]);
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        onPost();
+        toast.success("AI 助手正在生成回答...");
+      } catch (err: any) {
+        console.error("AI ask failed:", err);
+        toast.error(err?.message || "AI 助手请求失败");
+      } finally {
+        setPosting(false);
+      }
+      return;
+    }
+    // === 普通发布逻辑 ===
     setPosting(true);
     try {
       await api.postDiary({
@@ -577,13 +610,8 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
         tagIds: composeTags.map((t) => t.id),
       });
       haptic.success();
-      // 重置：先 revoke 所有 blob URL（已发布图片由后端持久化，前端不再需要 blob）
       for (const item of pendingImagesRef.current) {
-        try {
-          URL.revokeObjectURL(item.previewUrl);
-        } catch {
-          /* ignore */
-        }
+        try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
       }
       setText("");
       setMood("");
@@ -1490,6 +1518,8 @@ function DiaryCard({
   const [newCommentText, setNewCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const mountRef = useRef(true);
+  useEffect(() => { return () => { mountRef.current = false; }; }, []);
 
   useEffect(() => {
     if (!showActionMenu) return;
@@ -1525,12 +1555,33 @@ function DiaryCard({
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim() || submittingComment) return;
+
+    // === AI @su 检测 ===
+    const su = detectSuMention(newCommentText.trim());
+    if (su.hasSu) {
+      setSubmittingComment(true);
+      try {
+        const result = await api.diaryAiAsk({ mode: "comment", diaryId: item.id, question: su.cleanText });
+        if (result.mode === "comment") {
+          setComments((prev) => [...prev, result.comment]);
+          setNewCommentText("");
+          onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
+          toast.success("AI 助手已回复");
+        }
+      } catch (err: any) {
+        console.error("AI comment failed:", err);
+        toast.error(err?.message || "AI 助手请求失败");
+      } finally {
+        setSubmittingComment(false);
+      }
+      return;
+    }
+    // === 普通评论逻辑 ===
     setSubmittingComment(true);
     try {
       const newComment = await api.postDiaryComment(item.id, newCommentText.trim());
       setComments((prev) => [...prev, newComment]);
       setNewCommentText("");
-      // Update parent component's item commentCount
       onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
       toast.success("发表评论成功");
     } catch (err: any) {
@@ -1715,6 +1766,13 @@ function DiaryCard({
                 )}
               </div>
 
+              {/* AI 说说标注：由谁调起 */}
+              {item.triggerUserId && item.userId === AI_ASSISTANT_ID && (
+                <div className="text-[10px] text-tx-tertiary mt-1">
+                  由用户调起 AI 助手生成
+                </div>
+              )}
+
               {/* 操作按钮菜单：微信风格 */}
               <div className="relative shrink-0 flex items-center">
                 <button
@@ -1789,18 +1847,21 @@ function DiaryCard({
                             <Edit2 size={12} />
                             <span>{t("diary.edit")}</span>
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowActionMenu(false);
-                              void handleDelete();
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap shrink-0"
-                          >
-                            <Trash2 size={12} />
-                            <span>{t("diary.delete")}</span>
-                          </button>
                         </>
+                      )}
+                      {/* 删除：作者 / AI 触发者 均可 */}
+                      {currentUser && (item.userId === currentUser.id || item.triggerUserId === currentUser.id) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowActionMenu(false);
+                            void handleDelete();
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap shrink-0"
+                        >
+                          <Trash2 size={12} />
+                          <span>{t("diary.delete")}</span>
+                        </button>
                       )}
                     </motion.div>
                   )}
@@ -1823,7 +1884,11 @@ function DiaryCard({
                     {comments.map((comment) => (
                       <div key={comment.id} className="flex items-start gap-2 text-xs">
                         {/* 头像 */}
-                        {comment.avatarUrl ? (
+                        {comment.userId === AI_ASSISTANT_ID ? (
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xs mt-0.5 shrink-0">
+                            🤖
+                          </div>
+                        ) : comment.avatarUrl ? (
                           <img
                             src={comment.avatarUrl}
                             alt={comment.username}
@@ -1837,13 +1902,15 @@ function DiaryCard({
                         {/* 评论内容 */}
                         <div className="flex-1 min-w-0 bg-app-subtle/50 px-2.5 py-1.5 rounded-lg">
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold text-tx-primary">{comment.username}</span>
+                            <span className={cn("font-semibold", comment.userId === AI_ASSISTANT_ID ? "text-violet-500" : "text-tx-primary")}>
+                              {comment.userId === AI_ASSISTANT_ID ? "AI 助手" : comment.username}
+                            </span>
                             <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
                           </div>
                           <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
                         </div>
-                        {/* 删除评论 */}
-                        {(comment.userId === currentUser?.id || item.userId === currentUser?.id) && (
+                        {/* 删除评论：评论作者 / 说说主人 / AI 触发者 */}
+                        {(comment.userId === currentUser?.id || item.userId === currentUser?.id || comment.trigger_user_id === currentUser?.id) && (
                           <button
                             onClick={() => handleDeleteComment(comment.id)}
                             className="text-[10px] text-tx-tertiary hover:text-red-500 p-1 rounded hover:bg-app-hover self-start mt-1 transition-colors"
