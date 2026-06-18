@@ -117,6 +117,7 @@ interface DiaryRow {
   creatorName?: string | null;
   tagsJson?: string | null;
   commentCount?: number;
+  trigger_user_id?: string | null;
 }
 
 function rowToDiary(row: DiaryRow) {
@@ -172,6 +173,7 @@ function rowToDiary(row: DiaryRow) {
     creatorName: row.creatorName ?? null,
     tags,
     commentCount: row.commentCount ?? 0,
+    triggerUserId: row.trigger_user_id ?? null,
   };
 }
 
@@ -769,11 +771,13 @@ diary.delete("/:id", (c) => {
   const id = c.req.param("id");
 
   const row = db
-    .prepare("SELECT id, userId, workspaceId FROM diaries WHERE id = ?")
-    .get(id) as { id: string; userId: string; workspaceId: string | null } | undefined;
+    .prepare("SELECT id, userId, workspaceId, trigger_user_id FROM diaries WHERE id = ?")
+    .get(id) as { id: string; userId: string; workspaceId: string | null; trigger_user_id: string | null } | undefined;
   if (!row) return c.json({ error: "Not found" }, 404);
 
-  if (!canManageResource(row.userId, row.workspaceId, userId)) {
+  // 可删条件：作者本人 / AI 触发者 / 工作区管理员
+  const canDelete = row.userId === userId || row.trigger_user_id === userId || canManageResource(row.userId, row.workspaceId, userId);
+  if (!canDelete) {
     return c.json({ error: "无权删除该说说", code: "FORBIDDEN" }, 403);
   }
 
@@ -1345,21 +1349,191 @@ diary.delete("/comments/:commentId", (c) => {
   const commentId = c.req.param("commentId");
 
   const comment = db
-    .prepare("SELECT dc.userId, d.userId AS diaryOwnerId, d.workspaceId FROM diary_comments dc JOIN diaries d ON d.id = dc.diaryId WHERE dc.id = ?")
-    .get(commentId) as { userId: string; diaryOwnerId: string; workspaceId: string | null } | undefined;
+    .prepare("SELECT dc.userId, dc.trigger_user_id, d.userId AS diaryOwnerId, d.workspaceId FROM diary_comments dc JOIN diaries d ON d.id = dc.diaryId WHERE dc.id = ?")
+    .get(commentId) as { userId: string; trigger_user_id: string | null; diaryOwnerId: string; workspaceId: string | null } | undefined;
   if (!comment) return c.json({ error: "评论不存在" }, 404);
 
-  // 允许删除的条件：评论作者自己，说说所有者，或者工作区管理人员(canManageResource)
+  // 允许删除的条件：评论作者自己，说说所有者，AI 触发者，或者工作区管理人员
   const isCommentOwner = comment.userId === userId;
   const isDiaryOwner = comment.diaryOwnerId === userId;
+  const isTriggerUser = comment.trigger_user_id === userId;
   const isWorkspaceManager = comment.workspaceId ? canManageResource(comment.diaryOwnerId, comment.workspaceId, userId) : false;
 
-  if (!isCommentOwner && !isDiaryOwner && !isWorkspaceManager) {
+  if (!isCommentOwner && !isDiaryOwner && !isTriggerUser && !isWorkspaceManager) {
     return c.json({ error: "无权删除该评论", code: "FORBIDDEN" }, 403);
   }
 
   db.prepare("DELETE FROM diary_comments WHERE id = ?").run(commentId);
   return c.json({ success: true });
 });
+
+// ===== 说说 AI 助手 =====
+import { extractKeywords, callLLM } from "./ai";
+import { AI_ASSISTANT_USER_ID } from "../db/seed";
+
+diary.post("/ai-ask", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const body = await c.req.json() as { mode: "post" | "comment"; diaryId?: string; question: string };
+  const { mode, diaryId, question } = body;
+
+  if (!question?.trim()) {
+    return c.json({ error: "请输入问题" }, 400);
+  }
+  if (mode === "comment" && !diaryId) {
+    return c.json({ error: "缺少 diaryId" }, 400);
+  }
+
+  // 1. 收集上下文
+  let context = "";
+  if (mode === "post") {
+    // 发布框模式：RAG 检索笔记、说说、项目
+    const keywords = extractKeywords(question);
+    let notes: { id: string; title: string; snippet: string }[] = [];
+
+    if (keywords.length > 0) {
+      const likeClauses = keywords.slice(0, 5).map(() => "(contentText LIKE ? OR title LIKE ?)").join(" OR ");
+      const likeParams = keywords.slice(0, 5).flatMap(k => [`%${k}%`, `%${k}%`]);
+      try {
+        notes = db.prepare(`
+          SELECT id, title, substr(contentText, 1, 500) AS snippet FROM notes
+          WHERE userId = ? AND isTrashed = 0 AND (${likeClauses})
+          ORDER BY updatedAt DESC LIMIT 5
+        `).all(userId, ...likeParams) as any[];
+      } catch {}
+    }
+
+    let diaries: { contentText: string }[] = [];
+    if (keywords.length > 0) {
+      const dLikeClauses = keywords.slice(0, 5).map(() => "(contentText LIKE ?)").join(" OR ");
+      const dLikeParams = keywords.slice(0, 5).flatMap(k => [`%${k}%`]);
+      try {
+        diaries = db.prepare(`
+          SELECT contentText FROM diaries
+          WHERE userId = ? AND (${dLikeClauses})
+          ORDER BY createdAt DESC LIMIT 5
+        `).all(userId, ...dLikeParams) as any[];
+      } catch {}
+    }
+
+    let projects: { name: string; description: string }[] = [];
+    try {
+      projects = db.prepare(`
+        SELECT p.name, p.description FROM projects p
+        LEFT JOIN project_members pm ON pm.projectId = p.id
+        WHERE (p.ownerId = ? OR pm.userId = ?) AND p.isArchived = 0
+        ORDER BY p.updatedAt DESC LIMIT 10
+      `).all(userId, userId) as any[];
+    } catch {}
+
+    const parts: string[] = [];
+    if (notes.length > 0) {
+      parts.push("【相关笔记】\n" + notes.map(n => `- ${n.title}: ${n.snippet}`).join("\n"));
+    }
+    if (diaries.length > 0) {
+      parts.push("【相关说说】\n" + diaries.map(d => `- ${d.contentText.slice(0, 200)}`).join("\n"));
+    }
+    if (projects.length > 0) {
+      parts.push("【项目列表】\n" + projects.map(p => `- ${p.name}: ${(p.description || "无描述").slice(0, 200)}`).join("\n"));
+    }
+    context = parts.join("\n\n");
+  } else {
+    // 评论区模式：仅取当前说说 + 已有评论
+    const diaryRow = db.prepare("SELECT contentText FROM diaries WHERE id = ?").get(diaryId) as { contentText: string } | undefined;
+    if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
+
+    const comments = db.prepare(`
+      SELECT dc.content, COALESCE(u.displayName, u.username) AS username
+      FROM diary_comments dc
+      JOIN users u ON u.id = dc.userId
+      WHERE dc.diaryId = ? ORDER BY dc.createdAt ASC LIMIT 20
+    `).all(diaryId) as { content: string; username: string }[];
+
+    const commentText = comments.map(c => `@${c.username}: ${c.content}`).join("\n");
+    context = `【说说原文】\n${diaryRow.contentText}\n\n【已有评论】\n${commentText || "暂无评论"}`;
+  }
+
+  // 2. 调用 LLM
+  const systemPrompt = mode === "post"
+    ? `你是一位知识渊博的专家助手，基于用户的笔记、说说和项目信息回答问题。请给出简明扼要、专业的回答，不要超过 500 字。直接回答用户问题，不要添加无关信息。`
+    : `你是一位专业分析助手，基于当前说说及其评论内容回答问题。请给出简明扼要、有洞察力的分析。不要超过 500 字。`;
+
+  let answer: string;
+  try {
+    answer = await callLLM(systemPrompt, question, context);
+  } catch (err: any) {
+    return c.json({ error: err.message || "AI 请求失败" }, 502);
+  }
+
+  // 3. 根据 mode 创建内容
+  if (mode === "post") {
+    const newDiaryId = crypto.randomUUID();
+    const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+    db.prepare(`
+      INSERT INTO diaries (id, userId, contentText, mood, images, visibility, voice, createdAt, trigger_user_id)
+      VALUES (?, ?, ?, '', '[]', 'PUBLIC', NULL, ?, ?)
+    `).run(newDiaryId, AI_ASSISTANT_USER_ID, answer, now, userId);
+
+    const created = db.prepare(`
+      SELECT d.*, COALESCE(u.displayName, u.username) AS creatorName
+      FROM diaries d
+      JOIN users u ON u.id = d.userId
+      WHERE d.id = ?
+    `).get(newDiaryId) as any;
+
+    sendAiNotification(db, userId, newDiaryId, answer, "post");
+
+    return c.json({ mode: "post", diary: rowToDiary(created) });
+  } else {
+    const commentId = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO diary_comments (id, diaryId, userId, content, createdAt, updatedAt, trigger_user_id)
+      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+    `).run(commentId, diaryId!, AI_ASSISTANT_USER_ID, answer.trim(), userId);
+
+    const newComment = db.prepare(`
+      SELECT dc.*, COALESCE(u.displayName, u.username) AS username, u.avatarUrl
+      FROM diary_comments dc
+      JOIN users u ON u.id = dc.userId
+      WHERE dc.id = ?
+    `).get(commentId);
+
+    sendAiNotification(db, userId, diaryId!, answer, "comment");
+
+    return c.json({ mode: "comment", comment: newComment }, 201);
+  }
+});
+
+function sendAiNotification(
+  db: any,
+  targetUserId: string,
+  diaryId: string,
+  answer: string,
+  _mode: "post" | "comment",
+) {
+  try {
+    const diaryRow = db.prepare("SELECT contentText FROM diaries WHERE id = ?").get(diaryId) as { contentText: string } | undefined;
+    const sourceTitle = diaryRow ? diaryRow.contentText.slice(0, 50) : "";
+
+    const notifId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, actorName, createdAt)
+       VALUES (?, ?, 'ai_diary_reply', 'diary', ?, ?, ?, 'AI 助手', datetime('now'))`
+    ).run(notifId, targetUserId, diaryId, sourceTitle, AI_ASSISTANT_USER_ID);
+
+    try {
+      const { broadcastToUser } = require("../services/realtime");
+      broadcastToUser(targetUserId, {
+        type: "diary:ai-reply",
+        mode: _mode,
+        diaryId,
+        snippet: answer.slice(0, 80),
+      });
+    } catch {}
+  } catch (e) {
+    console.warn("[diary] sendAiNotification failed:", e);
+  }
+}
 
 export default diary;
