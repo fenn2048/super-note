@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/lib/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
-import { cn } from "@/lib/utils";
+import { cn, detectSuMention } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -151,6 +151,11 @@ export default function ProjectKanban({
     if (!newTaskTitle.trim()) return;
     const rawInput = newTaskTitle.trim();
     try {
+      // 检测 @su 标记 — AI 提炼标题 + 剩余内容作为任务描述
+      const su = detectSuMention(rawInput);
+      const taskTitle = su.hasSu ? su.cleanText.slice(0, 50) : rawInput;
+      const taskDesc = su.hasSu ? su.cleanText : rawInput;
+
       // 如果勾选了"待办"，找到"待规划"阶段并以此创建任务
       let targetStageId = stageId;
       if (addAsTodo) {
@@ -173,22 +178,33 @@ export default function ProjectKanban({
 
       const task = await api.createProjectTask(project.id, {
         stageId: targetStageId,
-        title: rawInput,
-        description: rawInput,
+        title: taskTitle,
+        description: taskDesc,
         participants,
       });
       setNewTaskTitle("");
       setAddingTaskToStage(null);
       onRefresh();
 
-      // Asynchronously call AI to summarize title
-      api.aiChat("title", rawInput.slice(0, 2000)).then(async (rawTitle) => {
-        const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
-        if (cleanedTitle) {
-          await api.updateProjectTask(task.id, { title: cleanedTitle });
-          onRefresh();
-        }
-      }).catch(console.error);
+      // 含 @su 时用 AI 提炼简短标题
+      if (su.hasSu) {
+        api.aiChat("title", su.cleanText.slice(0, 2000)).then(async (rawTitle) => {
+          const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+          if (cleanedTitle) {
+            await api.updateProjectTask(task.id, { title: cleanedTitle });
+            onRefresh();
+          }
+        }).catch(console.error);
+      } else {
+        // 原有 AI 标题总结
+        api.aiChat("title", rawInput.slice(0, 2000)).then(async (rawTitle) => {
+          const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+          if (cleanedTitle) {
+            await api.updateProjectTask(task.id, { title: cleanedTitle });
+            onRefresh();
+          }
+        }).catch(console.error);
+      }
     } catch (err: any) {
       toast.error(err?.message || "创建任务失败");
     }
@@ -196,6 +212,7 @@ export default function ProjectKanban({
 
   const handleSaveTaskDetail = async () => {
     if (!activeTask) return;
+    const prevDescription = activeTask.description || "";
     try {
       const updated = await api.updateProjectTask(activeTask.id, {
         title: activeTask.title,
@@ -212,9 +229,22 @@ export default function ProjectKanban({
       });
       toast.success("保存成功");
       onRefresh();
-      // Re-fetch stage details to get formatted names for the assignee, etc.
-      // For now, we can just update local copy or let refresh trigger it.
       handleCloseModal();
+
+      // 异步 AI 总结：若新描述包含 @su 且内容有变化，触发 AI 提炼标题
+      const newDesc = activeTask.description || "";
+      if (newDesc.includes("@su") && newDesc !== prevDescription) {
+        const cleanDesc = newDesc.replace(/@su\s*/g, "").trim();
+        if (cleanDesc) {
+          api.aiChat("title", cleanDesc.slice(0, 2000)).then(async (rawTitle) => {
+            const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+            if (cleanedTitle) {
+              await api.updateProjectTask(activeTask.id, { title: cleanedTitle }).catch(() => {});
+              onRefresh();
+            }
+          }).catch(() => {});
+        }
+      }
     } catch (err: any) {
       toast.error(err?.message || "更新任务失败");
     }

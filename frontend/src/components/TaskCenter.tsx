@@ -11,7 +11,7 @@ import { zhCN, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { Task, TaskFilter, TaskPriority, TaskStats, Workspace, Tag } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, detectSuMention } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useApp, useAppActions } from "@/store/AppContext";
 import TagColorPopover from "@/components/TagColorPopover";
@@ -1213,9 +1213,18 @@ export default function TaskCenter() {
 
   const handleCreate = async (workspaceId?: string, addAsTodo?: boolean) => {
     if (!newTitle.trim()) return;
-    const titleToCreate = newTitle.trim();
+    let titleToCreate = newTitle.trim();
+    let descToCreate = "";
     const orphanIds = pendingOrphansRef.current;
     pendingOrphansRef.current = [];
+
+    // 检测 @su 标记
+    const su = detectSuMention(titleToCreate);
+    if (su.hasSu) {
+      descToCreate = su.cleanText;
+      titleToCreate = su.cleanText.slice(0, 50);
+    }
+
     try {
       if (addAsTodo) {
         // 待办 → 创建为项目任务，放入"待规划"阶段
@@ -1229,8 +1238,17 @@ export default function TaskCenter() {
             const task = await api.createProjectTask(todoProject.id, {
               stageId: todoStage.id,
               title: titleToCreate,
-              description: titleToCreate,
+              description: descToCreate || titleToCreate,
             });
+
+            // 含 @su 时异步 AI 提炼标题
+            if (su.hasSu && descToCreate) {
+              api.aiChat("title", descToCreate.slice(0, 2000)).then(async (rawTitle) => {
+                const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+                if (cleaned) await api.updateProjectTask(task.id, { title: cleaned }).catch(() => {});
+              }).catch(() => {});
+            }
+
             // 刷新项目看板数据
             window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
             setNewTitle("");
@@ -1252,6 +1270,17 @@ export default function TaskCenter() {
         title: titleToCreate,
         workspaceId: workspaceId || undefined,
       });
+
+      // 含 @su 时异步 AI 提炼标题并更新
+      if (su.hasSu && descToCreate) {
+        api.aiChat("title", descToCreate.slice(0, 2000)).then(async (rawTitle) => {
+          const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+          if (cleaned) {
+            await api.updateTask(task.id, { title: cleaned }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+
       setTasks((prev) => [task, ...prev]);
       setNewTitle("");
       inputRef.current?.focus();

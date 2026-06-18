@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, detectSuMention } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/store/AppContext";
 import {
@@ -883,9 +883,17 @@ export default function ProjectCenter() {
       }
 
       const defaultRemindAt = quickAddDueDate ? calculateDefaultReminderDate(quickAddDueDate) : null;
+
+      // 检测 @su
+      const rawTitle = quickAddTitle.trim();
+      const suQuick = detectSuMention(rawTitle);
+      const finalTitle = suQuick.hasSu ? suQuick.cleanText.slice(0, 50) : rawTitle;
+      const finalDesc = suQuick.hasSu ? suQuick.cleanText : "";
+
       const payload = {
         stageId,
-        title: quickAddTitle.trim(),
+        title: finalTitle,
+        description: finalDesc,
         assigneeId: quickAddAssigneeId || null,
         endDate: quickAddDueDate ? new Date(quickAddDueDate).toISOString() : null,
         priority: 2,
@@ -893,6 +901,15 @@ export default function ProjectCenter() {
       };
 
       const newTask = await api.createProjectTask(targetProjectId, payload);
+
+      // 含 @su 时异步 AI 提炼标题
+      if (suQuick.hasSu) {
+        api.aiChat("title", suQuick.cleanText.slice(0, 2000)).then(async (rawTitle) => {
+          const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+          if (cleaned) await api.updateProjectTask(newTask.id, { title: cleaned }).catch(() => {});
+        }).catch(() => {});
+      }
+
       toast.success(t("projects.createTaskSuccess") || "创建任务成功");
       setQuickAddTitle("");
       fetchMyTasks();
@@ -933,10 +950,24 @@ export default function ProjectCenter() {
         stageId = stages[0].id;
       }
 
+      // 检测 @su 标记（标题或描述中包含 @su 均触发）
+      const combined = taskTitle.trim() + " " + taskDescription.trim();
+      const su = detectSuMention(combined);
+      let finalTitle = taskTitle.trim();
+      let finalDesc = taskDescription.trim();
+      let cleanCombined = combined;
+
+      if (su.hasSu) {
+        // 从标题 + 描述中去掉 @su 作为描述
+        cleanCombined = combined.replace(/@su\s*/g, "").trim();
+        finalDesc = cleanCombined;
+        finalTitle = cleanCombined.slice(0, 50);
+      }
+
       const payload = {
         stageId,
-        title: taskTitle.trim(),
-        description: taskDescription.trim(),
+        title: finalTitle,
+        description: finalDesc,
         assigneeId: taskAssigneeId || null,
         endDate: taskDueDate ? new Date(taskDueDate).toISOString() : null,
         priority: taskPriority,
@@ -949,6 +980,16 @@ export default function ProjectCenter() {
 
       if (newTask.remindAt) {
         syncTaskNotification(newTask as any);
+      }
+
+      // 含 @su 时异步 AI 提炼标题
+      if (su.hasSu) {
+        api.aiChat("title", cleanCombined.slice(0, 2000)).then(async (rawTitle) => {
+          const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
+          if (cleaned) {
+            await api.updateProjectTask(newTask.id, { title: cleaned }).catch(() => {});
+          }
+        }).catch(() => {});
       }
 
       if (createAnother) {
