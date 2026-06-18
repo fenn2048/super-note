@@ -22,11 +22,11 @@ const WORKSPACE_KEY = "super-current-workspace";
 
 /**
  * 获取当前激活的工作区 ID
- *   'personal' → 个人空间（默认）
+ *   '' (空字符串) → 个人空间（无工作区）
  *   <workspaceId> → 指定工作区
  */
 export function getCurrentWorkspace(): string {
-  return localStorage.getItem(WORKSPACE_KEY) || "personal";
+  return localStorage.getItem(WORKSPACE_KEY) || "";
 }
 
 export function setCurrentWorkspace(workspaceId: string) {
@@ -882,7 +882,7 @@ export const api = {
     // 自动带上当前工作区（除非数据里显式带了 workspaceId 或为个人空间）
     const currentWs = getCurrentWorkspace();
     const payload: any = { ...data };
-    if (payload.workspaceId === undefined && currentWs && currentWs !== "personal") {
+    if (payload.workspaceId === undefined && currentWs && currentWs !== "") {
       payload.workspaceId = currentWs;
     }
     return request<Notebook>("/notebooks", { method: "POST", body: JSON.stringify(payload) });
@@ -908,7 +908,7 @@ export const api = {
     const offlineFilter = (n: any): boolean => {
       const wsMatch = ("workspaceId" in finalParams)
         ? (n.workspaceId === finalParams.workspaceId
-          || (finalParams.workspaceId === "personal" && !n.workspaceId))
+          || (!finalParams.workspaceId && !n.workspaceId))  // 空字符串匹配个人空间
         : true;
       if (!wsMatch) return false;
       if (finalParams.notebookId && n.notebookId !== finalParams.notebookId) return false;
@@ -992,7 +992,7 @@ export const api = {
   // Tags
   // -----------------------------------------------------------------
   // 与 notebooks / notes 一致的工作区隔离：
-  //   - getTags 自动带当前 workspaceId（'personal' | <uuid>）
+  //   - getTags 自动带当前 workspaceId（'' | <uuid>）
   //   - createTag 自动落到当前空间（除非调用方显式覆盖）
   //   - update / delete / attach 由后端按 tag.id 反查空间做 ACL，前端无需传
   getTags: (workspaceId?: string) => {
@@ -1005,8 +1005,8 @@ export const api = {
     const payload: any = { ...data };
     if (payload.workspaceId === undefined) {
       const currentWs = getCurrentWorkspace();
-      // 'personal' 不显式传，让后端按缺省走 NULL（个人空间）
-      if (currentWs && currentWs !== "personal") {
+      // '' 不显式传，让后端按缺省走 NULL（个人空间）
+      if (currentWs && currentWs !== "") {
         payload.workspaceId = currentWs;
       }
     }
@@ -1029,7 +1029,7 @@ export const api = {
   search: (q: string) => request<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
 
   // Tasks
-  // Y3: 自动注入当前工作区——personal 不带，workspace 带 ?workspaceId=<uuid>。
+  // Y3: 自动注入当前工作区——空字符串不带，workspace 带 ?workspaceId=<uuid>。
   //   - getTasks / getTaskStats / createTask 三个"集合"接口注入 workspaceId；
   //   - getTask / updateTask / toggleTask / deleteTask 按 id 操作，后端按行自带的
   //     workspaceId 做 ACL，不需注入。
@@ -1040,7 +1040,7 @@ export const api = {
     if (search) params.set("search", search);
     if (tagId) params.set("tagId", tagId);
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     const qs = params.toString() ? `?${params.toString()}` : "";
     return request<Task[]>(`/tasks${qs}`);
   },
@@ -1048,7 +1048,7 @@ export const api = {
   createTask: (data: Partial<Task>) => {
     const { workspaceId, ...rest } = data;
     const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<Task>(`/tasks${qs}`, { method: "POST", body: JSON.stringify(rest) });
   },
   updateTask: (id: string, data: Partial<Task> & { tagIds?: string[] }) => request<Task>(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -1056,13 +1056,13 @@ export const api = {
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: "DELETE" }),
   getTaskStats: () => {
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<TaskStats>(`/tasks/stats/summary${qs}`);
   },
   getTaskCalendar: (year: number, month: number) => {
     const params = new URLSearchParams({ year: String(year), month: String(month) });
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     return request<{ dates: Array<{ date: string; total: number; pending: number }>; year: number; month: number }>(
       `/tasks/calendar?${params.toString()}`,
     );
@@ -1072,7 +1072,7 @@ export const api = {
   getProjects: (workspaceId?: string, filter?: string, groupId?: string) => {
     const params = new URLSearchParams();
     const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     if (filter) params.set("filter", filter);
     if (groupId) params.set("groupId", groupId);
     const qs = params.toString() ? `?${params.toString()}` : "";
@@ -1082,7 +1082,7 @@ export const api = {
   createProject: (data: Partial<Project>) => {
     const ws = getCurrentWorkspace();
     const payload = {
-      workspaceId: ws && ws !== "personal" ? ws : null,
+      workspaceId: ws && ws !== "" ? ws : null,
       ...data
     };
     return request<Project>("/projects", { method: "POST", body: JSON.stringify(payload) });
@@ -1093,14 +1093,14 @@ export const api = {
   getProjectGroups: (workspaceId?: string) => {
     const params = new URLSearchParams();
     const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     const qs = params.toString() ? `?${params.toString()}` : "";
     return request<ProjectGroup[]>(`/projects/groups${qs}`);
   },
   createProjectGroup: (data: { name: string; workspaceId?: string | null }) => {
     const ws = getCurrentWorkspace();
     const payload = {
-      workspaceId: data.workspaceId !== undefined ? data.workspaceId : (ws && ws !== "personal" ? ws : null),
+      workspaceId: data.workspaceId !== undefined ? data.workspaceId : (ws && ws !== "" ? ws : null),
       ...data
     };
     return request<ProjectGroup>("/projects/groups", { method: "POST", body: JSON.stringify(payload) });
@@ -1116,7 +1116,7 @@ export const api = {
   getMyTasks: (workspaceId?: string, filter?: string) => {
     const params = new URLSearchParams();
     const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     if (filter) params.set("filter", filter);
     const qs = params.toString() ? `?${params.toString()}` : "";
     return request<ProjectTask[]>(`/projects/my-tasks${qs}`);
@@ -1269,12 +1269,12 @@ export const api = {
 
   // Export / Import
   // 与其它集合接口（notes / notebooks / tasks 等）保持一致：
-  //   - personal 不带 workspaceId（后端按 NULL 落盘 / 过滤）
+  //   - 空字符串不带 workspaceId（后端按 NULL 落盘 / 过滤）
   //   - workspace 带 ?workspaceId=<uuid>
   // 调用方也可以显式传 workspaceId 覆盖（DataManager 拆"个人空间 / 工作区" Tab 后会用到）。
   getExportNotes: (workspaceId?: string) => {
     const ws = workspaceId ?? getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<any[]>(`/export/notes${qs}`);
   },
   importNotes: (
@@ -1284,7 +1284,7 @@ export const api = {
     workspaceId?: string,
   ) => {
     const ws = workspaceId ?? getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<{ success: boolean; count: number; notebookId: string; notebookIds?: string[]; notes: any[]; workspaceId?: string | null }>(`/export/import${qs}`, {
       method: "POST",
       body: JSON.stringify({ notes, notebookId, notebookName }),
@@ -1292,12 +1292,12 @@ export const api = {
   },
   getExportAllData: (workspaceId?: string) => {
     const ws = workspaceId ?? getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<any>(`/export/all${qs}`);
   },
   importAllData: (data: any, workspaceId?: string) => {
     const ws = workspaceId ?? getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<{ success: boolean; count: number }>(`/export/import/all${qs}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -1305,7 +1305,7 @@ export const api = {
   },
   importAttachment: (formData: FormData, workspaceId?: string) => {
     const ws = workspaceId ?? getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<{ success: boolean }>(`/export/import/attachment${qs}`, {
       method: "POST",
       body: formData,
@@ -1470,7 +1470,7 @@ export const api = {
       // Y3: 孤儿态（未指定 taskId）时附件的 workspaceId 来自 query；
       //     若指定了 taskId，后端从 task 行继承 workspaceId，query 被忽略。
       const ws = getCurrentWorkspace();
-      const qs = !taskId && ws && ws !== "personal"
+      const qs = !taskId && ws && ws !== ""
         ? `?workspaceId=${encodeURIComponent(ws)}`
         : "";
       const res = await fetch(`${getBaseUrl()}/task-attachments${qs}`, {
@@ -1536,7 +1536,7 @@ export const api = {
   //   - 后端会顺手把文章里的图片下载到 attachments 目录，url 改写为 /api/attachments/<id>
   urlImport: (url: string, notebookId?: string) => {
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<{
       success: boolean;
       noteId: string;
@@ -1552,17 +1552,17 @@ export const api = {
   },
 
   // Mind Maps
-  // Y4: 与 tasks/diary 一致——"集合"接口自动带当前 workspaceId（personal 不带），
+  // Y4: 与 tasks/diary 一致——"集合"接口自动带当前 workspaceId（空字符串不带），
   //   "按 id"接口（get/update/delete）不带，后端按行自带的 workspaceId 做 ACL。
   getMindMaps: () => {
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<MindMapListItem[]>(`/mindmaps${qs}`);
   },
   getMindMap: (id: string) => request<MindMap>(`/mindmaps/${id}`),
   createMindMap: (data: { title?: string; data?: string }) => {
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<MindMap>(`/mindmaps${qs}`, { method: "POST", body: JSON.stringify(data) });
   },
   updateMindMap: (id: string, data: { title?: string; data?: string }) =>
@@ -1571,7 +1571,7 @@ export const api = {
 
   // Diary (说说/动态)
   // Y2: 自动注入当前工作区。后端按 workspaceId 隔离数据：
-  //   - 'personal' 或省略 → 个人空间（diaries.workspaceId IS NULL）
+  //   - '' 或省略 → 个人空间（diaries.workspaceId IS NULL）
   //   - <uuid>            → 指定工作区（要求成员身份 + diaries 功能开关未关闭）
   // 在工作区中：发布权限按"是否成员 + 功能开关"，删除权限按 canManageResource
   //   （创建者本人 / admin / owner）。
@@ -1580,7 +1580,7 @@ export const api = {
     workspaceId?: string,
   ) => {
     const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<Diary>(`/diary${qs}`, { method: "POST", body: JSON.stringify(data) });
   },
   getDiaryTimeline: (
@@ -1601,7 +1601,7 @@ export const api = {
     if (tagId) params.set("tagId", tagId);
     if (search) params.set("search", search);
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     const qs = params.toString();
     return request<DiaryTimeline>(`/diary/timeline${qs ? `?${qs}` : ""}`);
   },
@@ -1638,14 +1638,14 @@ export const api = {
     if (range?.from) params.set("from", range.from);
     if (range?.to) params.set("to", range.to);
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     const qs = params.toString();
     return request<DiaryStats>(`/diary/stats${qs ? `?${qs}` : ""}`);
   },
   getDiaryCalendar: (year: number, month: number, tagId?: string, search?: string) => {
     const params = new URLSearchParams({ year: String(year), month: String(month) });
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "personal") params.set("workspaceId", ws);
+    if (ws && ws !== "") params.set("workspaceId", ws);
     if (tagId) params.set("tagId", tagId);
     if (search) params.set("search", search);
     return request<{ dates: string[]; year: number; month: number }>(
@@ -1674,7 +1674,7 @@ export const api = {
       form.append("file", file);
       // Y2: 上传时即记录目标工作区，发布时再 attach 一致。
       const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-      const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
       const res = await fetch(`${getBaseUrl()}/diary/attachments${qs}`, {
         method: "POST",
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -1705,11 +1705,11 @@ export const api = {
   //
   files: {
     /** 分类聚合统计。侧栏/顶栏展示"X 张图片 / Y 个文件"用。
-     *  Y4: 自动注入当前工作区 scope；personal 不带、workspace 带 ?workspaceId=。
+     *  Y4: 自动注入当前工作区 scope；空字符串不带、workspace 带 ?workspaceId=。
      */
     stats: () => {
       const ws = getCurrentWorkspace();
-      const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
       return request<FileStats>(`/files/stats${qs}`);
     },
 
@@ -1755,7 +1755,7 @@ export const api = {
       if (typeof params.pageSize === "number") qs.set("pageSize", String(params.pageSize));
       // Y4: workspace scope
       const ws = getCurrentWorkspace();
-      if (ws && ws !== "personal") qs.set("workspaceId", ws);
+      if (ws && ws !== "") qs.set("workspaceId", ws);
       const s = qs.toString();
       return request<FileListResponse>(`/files${s ? `?${s}` : ""}`);
     },
@@ -1810,7 +1810,7 @@ export const api = {
       if (opts.noteId) form.append("noteId", opts.noteId);
       if (opts.notebookId) form.append("notebookId", opts.notebookId);
       const ws = getCurrentWorkspace();
-      const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
       const res = await fetch(`${getBaseUrl()}/files/upload${qs}`, {
         method: "POST",
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -2043,10 +2043,10 @@ export const api = {
   ): Promise<string> => {
     const token = getToken();
     // v7 RAG 隔离：把当前 scope 透传给后端
-    //   personal → 不带 ?workspaceId（后端按 workspaceId IS NULL 走个人空间）
+    //   空字符串 → 不带 ?workspaceId（后端按 workspaceId IS NULL 走个人空间）
     //   <uuid>   → 带 ?workspaceId=<uuid>（后端校验成员身份后按工作区检索）
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     const res = await fetch(`${getBaseUrl()}/ai/ask${qs}`, {
       method: "POST",
       headers: {
@@ -2121,7 +2121,7 @@ export const api = {
     const token = getToken();
     // v7：按当前 scope 拉统计；个人空间不带 workspaceId
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     const res = await fetch(`${getBaseUrl()}/ai/knowledge-stats${qs}`, {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -2308,7 +2308,7 @@ export const api = {
   // workspaceId 自动从当前 scope 注入（个人空间不带，沿用其他 AI 端点约定）。
   aiClassify: (params: { noteId?: string; title?: string; content?: string }) => {
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<{
       suggestions: {
         notebookId: string;
@@ -2393,7 +2393,7 @@ export const api = {
     // 个人空间不带 workspaceId，工作区把当前 workspaceId 透传给后端，
     // 后端会把笔记/笔记本写到对应 scope，避免落到个人空间。
     const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     const res = await fetch(`${getBaseUrl()}/ai/import-to-knowledge${qs}`, {
       method: "POST",
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
