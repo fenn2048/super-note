@@ -891,6 +891,25 @@ function ProjectSidebar() {
     selectFilter({ type: "detail", projectId: todoProj.id });
   };
 
+  const handleFamilyTodoClick = async () => {
+    let todoProj = projects.find(p => p.name === "家庭TODO");
+    if (!todoProj) {
+      try {
+        todoProj = await api.createProject({
+          name: "家庭TODO",
+          visibility: "PRIVATE"
+        });
+        await fetchGroupsAndProjects();
+        window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
+      } catch (err) {
+        console.error("Failed to create 家庭TODO project:", err);
+        toast.error("创建家庭TODO项目失败");
+        return;
+      }
+    }
+    selectFilter({ type: "detail", projectId: todoProj.id });
+  };
+
   const selectTagFilter = (tagId: string | null) => {
     setSelectedProjectTagId(tagId);
     try {
@@ -996,6 +1015,18 @@ function ProjectSidebar() {
         >
           <ListTodo size={16} />
           <span>{t("projects.myTasks") || "我的任务"}</span>
+        </div>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "家庭TODO"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={handleFamilyTodoClick}
+        >
+          <CheckSquare size={16} />
+          <span>{t("projects.familyTodo") || "家庭TODO"}</span>
         </div>
         <div
           className={cn(
