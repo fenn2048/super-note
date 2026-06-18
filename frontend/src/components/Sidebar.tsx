@@ -1718,6 +1718,9 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   //   - 个人空间下：受 per-user 开关 personalExportAllowed（来自当前登录用户的
   //     users.personalExportEnabled，v6 起从 /api/me 下发）控制；管理员
   //     （isAdmin）始终可见，确保管理员保留数据救援能力。
+  // 右键菜单（桌面）/ 长按菜单（移动端共用同一份 state）
+  const { menu, menuRef, openMenu, openMenuAt, closeMenu } = useContextMenu();
+
   const notebookMenuItems: ContextMenuItem[] = useMemo(() => {
     const ws = getCurrentWorkspace();
     const isPersonal = !ws || ws === "personal";
@@ -1748,9 +1751,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     items.push({ id: "delete", label: t('sidebar.deleteNotebook'), icon: <Trash2 size={14} />, danger: true });
     return items;
   }, [t, isAdmin, personalExportAllowed, state.notebooks, menu.targetId]);
-
-  // 右键菜单（桌面）/ 长按菜单（移动端共用同一份 state）
-  const { menu, menuRef, openMenu, openMenuAt, closeMenu } = useContextMenu();
 
   // 重命名状态
   const [editingId, setEditingId] = useState<string | null>(null);
