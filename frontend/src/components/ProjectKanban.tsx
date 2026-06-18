@@ -150,10 +150,23 @@ export default function ProjectKanban({
     if (!newTaskTitle.trim()) return;
     const rawInput = newTaskTitle.trim();
     try {
+      // 家庭TODO项目：自动将工作区所有成员设为参与人
+      const isFamilyTodo = project.name === "家庭TODO";
+      let participants: string[] | undefined;
+      if (isFamilyTodo && project.workspaceId) {
+        try {
+          const members = await api.getWorkspaceMembers(project.workspaceId);
+          participants = members.map((m) => m.userId);
+        } catch {
+          // 获取成员失败时不阻塞任务创建
+        }
+      }
+
       const task = await api.createProjectTask(project.id, {
         stageId,
         title: rawInput,
         description: rawInput,
+        participants,
       });
       setNewTaskTitle("");
       setAddingTaskToStage(null);
