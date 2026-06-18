@@ -10,6 +10,7 @@ import { api, getCurrentWorkspace } from "@/lib/api";
 import { MindMap, MindMapListItem, MindMapNode, MindMapData } from "@/types";
 import { cn } from "@/lib/utils";
 import { downloadBlob } from "@/lib/downloadFile";
+import VisibilityToggle from "@/components/common/VisibilityToggle";
 
 /* ===== 布局算法：计算树节点的 x,y 位置 ===== */
 interface LayoutNode {
@@ -637,6 +638,20 @@ export default function MindMapCenter() {
     }
   }, [activeMap]);
 
+  // 切换可见性
+  const handleVisibilityChange = useCallback(async (visibility: "PRIVATE" | "WORKSPACE") => {
+    if (!activeMap) return;
+    try {
+      const updated = await api.updateMindMap(activeMap.id, { visibility } as any);
+      setActiveMap(updated);
+      setMaps((prev) =>
+        prev.map((m) => (m.id === updated.id ? { ...m, visibility: updated.visibility } : m))
+      );
+    } catch (err) {
+      console.error("Failed to toggle mindmap visibility:", err);
+    }
+  }, [activeMap]);
+
   // 缩放
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.15, 2.5));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.15, 0.3));
@@ -1149,7 +1164,13 @@ export default function MindMapCenter() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
+                <VisibilityToggle
+                  value={activeMap.visibility || "PRIVATE"}
+                  onChange={handleVisibilityChange}
+                  size="sm"
+                />
+                <div className="w-px h-4 bg-app-border mx-0.5" />
                 <button
                   onClick={handleZoomOut}
                   className="p-1.5 rounded-md hover:bg-app-hover text-tx-secondary transition-colors"

@@ -102,6 +102,7 @@
         "hidden": "Switch to: hide nav rail"
       }
     },
+    "toggleVisibility": "Toggle Visibility",
     "exportNotebookAsMarkdown": "Export as Markdown",
     "deleteNotebook": "Delete Notebook",
     "moveNotebook": "Move to...",

@@ -102,6 +102,7 @@
         "hidden": "切换为：隐藏导航栏"
       }
     },
+    "toggleVisibility": "切换可见性",
     "exportNotebookAsMarkdown": "导出为 Markdown",
     "deleteNotebook": "删除笔记本",
     "moveNotebook": "移动至...",

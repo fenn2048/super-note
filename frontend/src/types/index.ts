@@ -133,6 +133,7 @@ export interface Notebook {
   updatedAt: string;
   noteCount?: number;
   children?: Notebook[];
+  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface Note {
@@ -155,6 +156,7 @@ export interface Note {
   updatedAt: string;
   tags?: Tag[];
   permission?: WorkspacePermission; // Phase 1 新增
+  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface NoteListItem {
@@ -178,6 +180,7 @@ export interface NoteListItem {
    * null/undefined 表示用户已被删除或后端老版本未带该字段。
    */
   creatorName?: string | null;
+  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface Tag {
@@ -408,6 +411,7 @@ export interface MindMap {
   data: string; // JSON string of MindMapData
   createdAt: string;
   updatedAt: string;
+  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface MindMapListItem {
@@ -420,6 +424,7 @@ export interface MindMapListItem {
   updatedAt: string;
   /** 创建者用户名；仅 list 接口返回。 */
   creatorName?: string | null;
+  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface Diary {

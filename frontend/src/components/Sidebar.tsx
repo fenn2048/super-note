@@ -7,7 +7,7 @@ import {
   Sparkles, NotebookPen, Smile, GripVertical,
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2,
-  Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2,
+  Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1727,6 +1727,8 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       items.push({ id: "sep_export", label: "", separator: true });
       items.push({ id: "export_md", label: t('sidebar.exportNotebookAsMarkdown'), icon: <Download size={14} /> });
     }
+    items.push({ id: "sep_vis", label: "", separator: true });
+    items.push({ id: "toggle_visibility", label: t('sidebar.toggleVisibility'), icon: <Eye size={14} /> });
     items.push({ id: "sep2", label: "", separator: true });
     items.push({ id: "delete", label: t('sidebar.deleteNotebook'), icon: <Trash2 size={14} />, danger: true });
     return items;
@@ -2193,6 +2195,21 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         } catch (err: any) {
           toast.dismiss(toastId);
           toast.error(err?.message || t('export.exportFailed', { error: String(err) }));
+        }
+        break;
+      }
+      case "toggle_visibility": {
+        if (targetNb) {
+          const newVisibility = targetNb.visibility === "WORKSPACE" ? "PRIVATE" : "WORKSPACE";
+          try {
+            await api.updateNotebook(targetId, { visibility: newVisibility });
+            actions.setNotebooks(
+              state.notebooks.map((nb) => nb.id === targetId ? { ...nb, visibility: newVisibility } : nb)
+            );
+          } catch (e: any) {
+            console.error("Toggle notebook visibility failed:", e);
+            toast.error("可见性切换失败");
+          }
         }
         break;
       }

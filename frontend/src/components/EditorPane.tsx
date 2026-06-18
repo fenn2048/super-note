@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
 import { toast } from "@/lib/toast";
 import ShareModal from "@/components/ShareModal";
+import VisibilityToggle from "@/components/common/VisibilityToggle";
 import VersionHistoryPanel from "@/components/VersionHistoryPanel";
 import CommentPanel from "@/components/CommentPanel";
 import NoteAttachmentsPanel from "@/components/NoteAttachmentsPanel";
@@ -1378,6 +1379,19 @@ export default function EditorPane() {
       .catch(console.error);
   }, [activeNote, actions]);
 
+  const handleVisibilityChange = useCallback(async (visibility: "PRIVATE" | "WORKSPACE") => {
+    if (!activeNote) return;
+    haptic.light();
+    try {
+      const updated = await api.updateNote(activeNote.id, { visibility } as any);
+      actions.setActiveNote(updated);
+      actions.updateNoteInList({ id: updated.id, visibility: updated.visibility });
+    } catch (e: any) {
+      console.error("Visibility change failed:", e);
+      toast.error("可见性切换失败");
+    }
+  }, [activeNote, actions]);
+
   const handleTagsChange = useCallback((tags: Tag[]) => {
     if (!activeNote) return;
     actions.setActiveNote({ ...activeNote, tags });
@@ -1840,6 +1854,15 @@ export default function EditorPane() {
                     <span>{t('editor.showOutline')}</span>
                   </button>
                   <div className="h-px bg-app-border mx-2 my-0.5" />
+                  {/* 可见性切换（移动端菜单内） */}
+                  <div className="px-3 py-2">
+                    <VisibilityToggle
+                      value={activeNote.visibility || "PRIVATE"}
+                      onChange={(v) => { handleVisibilityChange(v); setShowMobileMenu(false); }}
+                      size="sm"
+                    />
+                  </div>
+                  <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* AI 生成标题 */}
                   <button
                     onClick={() => {
@@ -2207,6 +2230,13 @@ export default function EditorPane() {
               <Trash2 size={14} className={cn(effectiveLocked && "opacity-30")} />
             </Button>
           </div>
+
+          {/* 可见性切换 */}
+          <VisibilityToggle
+            value={activeNote.visibility || "PRIVATE"}
+            onChange={handleVisibilityChange}
+            size="sm"
+          />
 
           {/* 大纲 */}
           <Button
