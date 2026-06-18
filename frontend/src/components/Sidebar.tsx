@@ -1019,30 +1019,6 @@ function ProjectSidebar() {
         <div
           className={cn(
             "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
-            activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "家庭TODO"
-              ? "bg-app-active text-tx-primary font-medium"
-              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-          )}
-          onClick={handleFamilyTodoClick}
-        >
-          <CheckSquare size={16} />
-          <span>{t("projects.familyTodo") || "家庭TODO"}</span>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
-            activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "个人TODO"
-              ? "bg-app-active text-tx-primary font-medium"
-              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-          )}
-          onClick={handlePersonalTodoClick}
-        >
-          <CheckSquare size={16} />
-          <span>{t("projects.personalTodo") || "个人TODO"}</span>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
             activeFilter.type === "calendar"
               ? "bg-app-active text-tx-primary font-medium"
               : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
@@ -1051,6 +1027,39 @@ function ProjectSidebar() {
         >
           <Calendar size={16} />
           <span>{t("projects.calendar") || "日历"}</span>
+        </div>
+      </div>
+
+      {/* 快捷项目入口 */}
+      <div className="px-3 pb-1">
+        <div className="text-[10px] font-semibold text-tx-tertiary uppercase tracking-wider mb-1">
+          {t("projects.quickAccess") || "快捷项目"}
+        </div>
+        <div className="space-y-0.5">
+          <div
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
+              activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "家庭TODO"
+                ? "bg-app-active text-tx-primary font-medium"
+                : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+            )}
+            onClick={handleFamilyTodoClick}
+          >
+            <CheckSquare size={13} />
+            <span>{t("projects.familyTodo") || "家庭TODO"}</span>
+          </div>
+          <div
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
+              activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "个人TODO"
+                ? "bg-app-active text-tx-primary font-medium"
+                : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
+            )}
+            onClick={handlePersonalTodoClick}
+          >
+            <CheckSquare size={13} />
+            <span>{t("projects.personalTodo") || "个人TODO"}</span>
+          </div>
         </div>
       </div>
 
