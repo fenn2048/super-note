@@ -446,6 +446,8 @@ export interface Diary {
   creatorName?: string | null;
   tags?: Tag[];
   commentCount?: number;
+  /** AI 助手发布的说说时，记录谁调起的 AI */
+  triggerUserId?: string | null;
 }
 
 export interface DiaryTimeline {
@@ -468,6 +470,7 @@ export interface DiaryComment {
   updatedAt: string;
   username: string;
   avatarUrl: string | null;
+  trigger_user_id?: string | null;
 }
 
 // 分享

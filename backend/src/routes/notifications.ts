@@ -29,6 +29,7 @@ const NOTIFICATION_LABELS: Record<string, { label: string; icon: string }> = {
   task_completed: { label: "完成了任务", icon: "task" },
   diary_posted: { label: "发布了新说说", icon: "diary" },
   note_updated: { label: "更新了笔记", icon: "note" },
+  ai_diary_reply: { label: "AI 助手回复了你的说说", icon: "sparkles" },
 };
 
 // ---------------------------------------------------------------------------
@@ -120,6 +121,24 @@ notifications.put("/read-all", (c: Context) => {
     "UPDATE mentions SET readAt = datetime('now') WHERE mentionedUserId = ? AND readAt IS NULL",
   ).run(userId);
   return c.json({ success: true });
+});
+
+// ---------------------------------------------------------------------------
+// 创建通知（用于 AI 回复等异步场景）
+// ---------------------------------------------------------------------------
+// POST /api/notifications
+notifications.post("/", async (c: Context) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const { targetUserId, type, sourceType, sourceId, sourceTitle, actorId, actorName } = await c.req.json();
+  if (!targetUserId || !type) return c.json({ error: "缺少必要参数" }, 400);
+
+  const id = crypto.randomUUID ? crypto.randomUUID() : require("uuid").v4();
+  db.prepare(
+    "INSERT INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, actorName, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
+  ).run(id, targetUserId, type, sourceType, sourceId, sourceTitle || "", actorId || userId, actorName || "");
+
+  return c.json({ success: true, id });
 });
 
 export default notifications;

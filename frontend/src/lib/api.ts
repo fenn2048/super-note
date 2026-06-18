@@ -1,4 +1,4 @@
-import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion } from "@/types";
+import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion } from "@/types";
 import {
   shouldEnqueue as _shouldEnqueue,
   enqueue as _enqueue,
@@ -1661,6 +1661,12 @@ export const api = {
   deleteDiaryComment: (commentId: string) =>
     request(`/diary/comments/${commentId}`, { method: "DELETE" }),
 
+  // AI 助手：说说 @su 提问
+  diaryAiAsk: (params: { mode: "post" | "comment"; diaryId?: string; question: string }) =>
+    request<{ mode: "post"; diary: Diary } | { mode: "comment"; comment: DiaryComment }>(
+      "/diary/ai-ask", { method: "POST", body: JSON.stringify(params) }
+    ),
+
   // 说说图片：上传 / 删除悬空 / 拼 URL。
   // 上传时机：用户选好图就立即上传（不是发布时再传），体验上能即时看到缩略图、
   // 失败也能立即提示。返回的 id 在用户点"发布"时一并提交给 postDiary({ images })。
@@ -3164,6 +3170,8 @@ export const api = {
     markRead: (id: string) =>
       request<{ success: boolean }>(`/notifications/${encodeURIComponent(id)}/read`, { method: "PUT" }),
     markAllRead: () => request<{ success: boolean }>("/notifications/read-all", { method: "PUT" }),
+    create: (data: { targetUserId: string; type: string; sourceType?: string; sourceId?: string; sourceTitle?: string; actorId?: string; actorName?: string }) =>
+      request<{ success: boolean; id: string }>("/notifications", { method: "POST", body: JSON.stringify(data) }),
   },
 };
 
