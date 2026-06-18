@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Project, ProjectDiscussion, ProjectTask, NoteListItem } from "@/types";
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
-import { useApp, useAppActions } from "@/store/AppContext";
+import { useAppActions } from "@/store/AppContext";
 import {
   Send, Smile, Image as ImageIcon, Link2, X, MessageSquare,
-  Bookmark, Briefcase, FileText, CheckCircle2, Circle, Loader2
+  Bookmark, Briefcase, FileText, CheckCircle2, Circle, Loader2, Check, AlertTriangle,
+  Sparkles, ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,14 +20,29 @@ interface ProjectDiscussionProps {
   tasks: ProjectTask[];
 }
 
+/* ===== AI 操作类型 ===== */
+interface AICreateOp { op: "create_task"; stageName: string; title: string; description?: string; }
+interface AIUpdateOp { op: "update_task"; taskId: string; title?: string; description?: string; }
+interface AIMoveOp   { op: "move_task"; taskId: string; toStage: string; }
+interface AIDeleteOp { op: "delete_task"; taskId: string; }
+type AIOp = AICreateOp | AIUpdateOp | AIMoveOp | AIDeleteOp;
+
+interface AISuggestion {
+  explanation: string;
+  operations: AIOp[];
+}
+
 export default function ProjectDiscussionView({ project, tasks }: ProjectDiscussionProps) {
   const { t } = useTranslation();
-  const { state } = useApp();
   const actions = useAppActions();
   const [posts, setPosts] = useState<ProjectDiscussion[]>([]);
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+
+  // AI 建议审批状态
+  const [pendingSuggestion, setPendingSuggestion] = useState<AISuggestion | null>(null);
+  const [executingOps, setExecutingOps] = useState(false);
 
   // Autocomplete @mention states
   const [composerCursorPos, setComposerCursorPos] = useState(0);
@@ -64,13 +80,11 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   }, [project.id]);
 
   useEffect(() => {
-    // Scroll to bottom on load or new post
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [posts]);
 
-  // Fetch notes list when notes tab is active in the picker
   useEffect(() => {
     if (showLinkPicker && linkType === "note") {
       setLoadingNotes(true);
@@ -81,11 +95,104 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     }
   }, [showLinkPicker, linkType]);
 
+  /** 从 AI 回复文本中提取 JSON 操作块 */
+  function parseAIOperations(aiText: string): AIOp[] {
+    try {
+      const jsonMatch = aiText.match(/```json\s*(\[[\s\S]*?\])\s*```/);
+      if (!jsonMatch) return [];
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(op =>
+        ["create_task", "update_task", "move_task", "delete_task"].includes(op.op)
+      ) as AIOp[];
+    } catch {
+      return [];
+    }
+  }
+
+  /** 执行一条 AI 操作 */
+  async function executeOperation(op: AIOp): Promise<string> {
+    switch (op.op) {
+      case "create_task": {
+        const stages = await api.getProjectStages(project.id);
+        let stage = stages.find(s => s.name === op.stageName);
+        if (!stage) {
+          stage = stages[0];
+        }
+        if (!stage) throw new Error("项目没有阶段");
+        const created = await api.createProjectTask(project.id, {
+          stageId: stage.id,
+          title: op.title,
+          description: op.description || "",
+        });
+        return `✅ 创建任务「${created.title}」[${op.stageName}]`;
+      }
+      case "update_task": {
+        const changes: Record<string, any> = {};
+        if (op.title !== undefined) changes.title = op.title;
+        if (op.description !== undefined) changes.description = op.description;
+        if (Object.keys(changes).length > 0) {
+          await api.updateProjectTask(op.taskId, changes);
+        }
+        return `✅ 已更新任务 ${op.title ? `「${op.title}」` : op.taskId}`;
+      }
+      case "move_task": {
+        const stages = await api.getProjectStages(project.id);
+        const targetStage = stages.find(s => s.name === op.toStage);
+        if (!targetStage) throw new Error(`找不到阶段「${op.toStage}」`);
+        await api.updateProjectTask(op.taskId, { stageId: targetStage.id });
+        return `✅ 任务已移至「${op.toStage}」`;
+      }
+      case "delete_task": {
+        await api.deleteProjectTask(op.taskId);
+        return `✅ 已删除任务`;
+      }
+    }
+  }
+
+  /** 执行所有已批准的操作 */
+  const handleApproveSuggestion = async () => {
+    if (!pendingSuggestion) return;
+    setExecutingOps(true);
+    const results: string[] = [];
+    let hasError = false;
+    for (const op of pendingSuggestion.operations) {
+      try {
+        const result = await executeOperation(op);
+        results.push(result);
+      } catch (err: any) {
+        results.push(`❌ 操作失败: ${err.message || err}`);
+        hasError = true;
+      }
+    }
+    // 发布执行结果到讨论区
+    const resultContent = `**AI 助手** 🤖\n\n${pendingSuggestion.explanation}\n\n---\n**执行结果**\n${results.join("\n")}`;
+    try {
+      await api.createProjectDiscussion(project.id, {
+        content: resultContent,
+        linkedCards: [],
+        images: [],
+        attachments: [],
+      });
+      await fetchDiscussions();
+    } catch { /* ignore */ }
+    setPendingSuggestion(null);
+    setExecutingOps(false);
+    if (!hasError) toast.success("所有操作已执行完成");
+    else toast.error("部分操作执行失败，请检查详情");
+  };
+
+  /** 拒绝 AI 建议 */
+  const handleRejectSuggestion = () => {
+    setPendingSuggestion(null);
+    toast.info("已拒绝 AI 建议");
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() && linkedCards.length === 0) return;
 
-    // 检测 @su → 调用 AI 助手针对当前项目聊天
+    // 检测 @su → 调用 AI 助手
     const su = detectSuMention(content);
     if (su.hasSu) {
       setSending(true);
@@ -96,6 +203,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           const stages = await api.getProjectStages(project.id);
           if (stages.length > 0) {
             const taskItems = stages.flatMap(s => (s.tasks || []).map(t => ({
+              id: t.id,
               stage: s.name,
               title: t.title,
               assignee: (t as any).assigneeName || "未分配",
@@ -106,11 +214,11 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
             })));
             if (taskItems.length > 0) {
               tasksContext = "\n## 项目任务列表\n" + taskItems.map(t =>
-                `- [${t.isCompleted ? "已完成" : "进行中"}] ${t.title} | 阶段:${t.stage} | 负责人:${t.assignee} | 优先级:${t.priority} | 截止:${t.endDate} | 进度:${t.progress}%`
+                `- id:${t.id} [${t.isCompleted ? "已完成" : "进行中"}] ${t.title} | 阶段:${t.stage} | 负责人:${t.assignee} | 优先级:${t.priority} | 截止:${t.endDate} | 进度:${t.progress}%`
               ).join("\n");
             }
           }
-        } catch { /* 获取任务失败不影响主流程 */ }
+        } catch { /* ignore */ }
 
         const fullContext =
           `项目名称：${project.name}\n` +
@@ -121,21 +229,38 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           `${fullContext}\n\n` +
           `请根据以上项目信息，回答用户的问题。你可以：\n` +
           `1. 分析、总结项目中的单条或多条任务\n` +
-          `2. 对任务进行合并或拆解提出具体的操作建议（如"建议将任务A合并到任务B，因为…"）\n` +
+          `2. 对任务进行合并或拆解提出具体的操作建议\n` +
           `3. 分析任务之间的依赖关系，建议调整优先级或排序\n` +
           `4. 建议创建新任务、删除冗余任务、修改任务描述或负责人\n` +
           `5. 对项目进度、资源分配给出专家建议\n` +
           `6. 回答用户关于项目管理方面的任何问题\n\n` +
-          `对于每项操作建议，请给出明确的理由和预期效果，方便用户review后决定是否执行。\n` +
-          `回答要简洁、专业、有洞察力，可以直接引用具体的任务名称和数据。`;
+          `如果需要执行操作，请先给出文字分析，然后在回复末尾加上 JSON 代码块：\`\`\`json\n` +
+          `包含操作数组，每项格式为 {\"op\":\"create_task|update_task|move_task|delete_task\", ...}\n` +
+          `- create_task: {op:"create_task", stageName:"阶段名称", title:"任务标题", description:"描述"}\n` +
+          `- update_task: {op:"update_task", taskId:"任务的id", title:"新标题", description:"新描述"}\n` +
+          `- move_task: {op:"move_task", taskId:"任务的id", toStage:"目标阶段名称"}\n` +
+          `- delete_task: {op:"delete_task", taskId:"任务的id"}\n` +
+          `\`\`\`\n\n` +
+          `用户 review 后可以选择执行或拒绝这些操作。\n\n` +
+          `注意：任务 id 已在任务列表中给出，请直接引用正确的 id。`;
+
         const aiReply = await api.aiChat("custom", su.cleanText, fullContext, undefined, customPrompt);
-        const aiPost = await api.createProjectDiscussion(project.id, {
-          content: `**AI 助手** 🤖\n\n${aiReply}`,
-          linkedCards: [],
-          images: [],
-          attachments: [],
-        });
-        setPosts((prev) => [...prev, aiPost]);
+        const ops = parseAIOperations(aiReply);
+
+        if (ops.length > 0) {
+          // 有可执行操作 → 显示审批卡片
+          const explanation = aiReply.replace(/```json[\s\S]*```/, "").trim();
+          setPendingSuggestion({ explanation, operations: ops });
+        } else {
+          // 纯文字回复 → 直接发布
+          const aiPost = await api.createProjectDiscussion(project.id, {
+            content: `**AI 助手** 🤖\n\n${aiReply}`,
+            linkedCards: [],
+            images: [],
+            attachments: [],
+          });
+          setPosts((prev) => [...prev, aiPost]);
+        }
       } catch (err: any) {
         toast.error(err?.message || "AI 回复失败");
       } finally {
@@ -183,7 +308,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     setLinkedCards((prev) => prev.filter((c) => !(c.id === id && c.type === type)));
   };
 
-  // Filter items in the picker
   const filteredTasks = tasks.filter((t) =>
     t.title.toLowerCase().includes(linkSearchQuery.toLowerCase())
   );
@@ -194,16 +318,28 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
 
   const handleCardClick = (card: { type: "task" | "note"; id: string; title: string }) => {
     if (card.type === "note") {
-      // Navigate to note
       actions.setSelectedNotebook(null);
       actions.setViewMode("all");
-      // Give a tiny timeout for viewmode setup before opening note
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent("super:open-note", { detail: card.id }));
       }, 50);
     } else {
-      // It's a task. Trigger event to let parent page open the task detail editor
       window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: card.id }));
+    }
+  };
+
+  // ===== 操作描述文本 =====
+  const opLabel = (op: AIOp): string => {
+    switch (op.op) {
+      case "create_task": return `创建任务「${op.title}」到 ${op.stageName}`;
+      case "update_task": {
+        const changes: string[] = [];
+        if (op.title) changes.push(`标题→${op.title}`);
+        if (op.description) changes.push(`描述→${op.description?.slice(0, 20)}…`);
+        return `修改任务 ${changes.join(", ")}`;
+      }
+      case "move_task": return `移动任务到「${op.toStage}」`;
+      case "delete_task": return `删除任务`;
     }
   };
 
@@ -215,67 +351,122 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           <div className="flex items-center justify-center py-12">
             <Loader2 size={24} className="animate-spin text-accent-primary" />
           </div>
-        ) : posts.length === 0 ? (
+        ) : posts.length === 0 && !pendingSuggestion ? (
           <div className="flex flex-col items-center justify-center p-12 text-center text-tx-tertiary h-full">
             <MessageSquare size={48} className="stroke-1 mb-2 opacity-50" />
             <p className="text-sm font-semibold">{t("projects.noDiscussions") || "暂无讨论内容"}</p>
             <p className="text-xs max-w-xs">{t("projects.noDiscussionsDesc") || "在下方输入框中发布讨论、@成员或关联卡片"}</p>
           </div>
         ) : (
-          posts.map((post) => (
-            <div key={post.id} className="flex items-start gap-3 group/post animate-in fade-in duration-300">
-              {/* User Avatar */}
-              {post.avatarUrl ? (
-                <img
-                  src={post.avatarUrl}
-                  alt={post.displayName || post.username}
-                  className="w-9 h-9 rounded-full border border-app-border shrink-0 object-cover"
-                />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-accent-primary/10 border border-app-border shrink-0 flex items-center justify-center text-xs font-bold text-accent-primary uppercase select-none">
-                  {(post.displayName || post.username || "?").slice(0, 1)}
+          <>
+            {posts.map((post) => (
+              <div key={post.id} className="flex items-start gap-3 group/post animate-in fade-in duration-300">
+                {post.avatarUrl ? (
+                  <img
+                    src={post.avatarUrl}
+                    alt={post.displayName || post.username}
+                    className="w-9 h-9 rounded-full border border-app-border shrink-0 object-cover"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-accent-primary/10 border border-app-border shrink-0 flex items-center justify-center text-xs font-bold text-accent-primary uppercase select-none">
+                    {(post.displayName || post.username || "?").slice(0, 1)}
+                  </div>
+                )}
+                <div className="flex-1 space-y-1.5 max-w-[85%]">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs font-bold text-tx-primary">
+                      {post.displayName || post.username}
+                    </span>
+                    <span className="text-[10px] text-tx-tertiary font-mono">
+                      {new Date(post.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="bg-app-sidebar border border-app-border rounded-2xl px-4 py-2.5 text-xs text-tx-secondary shadow-sm leading-relaxed whitespace-pre-wrap">
+                    {post.content}
+                    {post.linkedCards && post.linkedCards.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-app-border/40 flex flex-wrap gap-2">
+                        {post.linkedCards.map((card) => (
+                          <div
+                            key={card.id}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-app-hover border border-app-border hover:bg-app-active/50 transition-colors cursor-pointer select-none"
+                            onClick={() => handleCardClick(card)}
+                          >
+                            {card.type === "note" ? (
+                              <FileText size={12} className="text-accent-primary shrink-0" />
+                            ) : (
+                              <Briefcase size={12} className="text-amber-500 shrink-0" />
+                            )}
+                            <span className="text-[10px] font-semibold text-tx-secondary truncate max-w-[150px]">
+                              {card.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
+            ))}
 
-              {/* Post Content */}
-              <div className="flex-1 space-y-1.5 max-w-[85%]">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-bold text-tx-primary">
-                    {post.displayName || post.username}
-                  </span>
-                  <span className="text-[10px] text-tx-tertiary font-mono">
-                    {new Date(post.createdAt).toLocaleString()}
-                  </span>
+            {/* AI 建议审批卡片 */}
+            {pendingSuggestion && (
+              <div className="flex items-start gap-3 animate-in slide-in-from-bottom-4 duration-300">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 shrink-0 flex items-center justify-center text-sm">
+                  🤖
                 </div>
+                <div className="flex-1 max-w-[85%] space-y-2">
+                  <div className="bg-app-sidebar border border-violet-500/30 rounded-2xl px-4 py-3 shadow-sm">
+                    <div className="text-[11px] font-bold text-violet-600 dark:text-violet-400 mb-1.5 flex items-center gap-1.5">
+                      <Sparkles size={13} />
+                      AI 建议
+                    </div>
+                    <div className="text-xs text-tx-secondary leading-relaxed whitespace-pre-wrap mb-3">
+                      {pendingSuggestion.explanation}
+                    </div>
 
-                <div className="bg-app-sidebar border border-app-border rounded-2xl px-4 py-2.5 text-xs text-tx-secondary shadow-sm leading-relaxed whitespace-pre-wrap">
-                  {post.content}
-
-                  {/* Render Linked Cards */}
-                  {post.linkedCards && post.linkedCards.length > 0 && (
-                    <div className="mt-3 pt-2 border-t border-app-border/40 flex flex-wrap gap-2">
-                      {post.linkedCards.map((card) => (
-                        <div
-                          key={card.id}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-app-hover border border-app-border hover:bg-app-active/50 transition-colors cursor-pointer select-none"
-                          onClick={() => handleCardClick(card)}
-                        >
-                          {card.type === "note" ? (
-                            <FileText size={12} className="text-accent-primary shrink-0" />
-                          ) : (
-                            <Briefcase size={12} className="text-amber-500 shrink-0" />
-                          )}
-                          <span className="text-[10px] font-semibold text-tx-secondary truncate max-w-[150px]">
-                            {card.title}
-                          </span>
+                    {/* 操作列表 */}
+                    <div className="space-y-1 mb-3">
+                      {pendingSuggestion.operations.map((op, i) => (
+                        <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-app-bg border border-app-border/60 text-[11px] text-tx-secondary">
+                          {op.op === "create_task" && <FileText size={12} className="text-green-500 shrink-0" />}
+                          {op.op === "update_task" && <Briefcase size={12} className="text-amber-500 shrink-0" />}
+                          {op.op === "move_task" && <ArrowRight size={12} className="text-blue-500 shrink-0" />}
+                          {op.op === "delete_task" && <AlertTriangle size={12} className="text-red-500 shrink-0" />}
+                          <span className="truncate">{opLabel(op)}</span>
                         </div>
                       ))}
                     </div>
-                  )}
+
+                    {/* 审批按钮 */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleApproveSuggestion}
+                        disabled={executingOps}
+                        className="h-7 text-xs px-3 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {executingOps ? (
+                          <Loader2 size={12} className="animate-spin mr-1" />
+                        ) : (
+                          <Check size={12} className="mr-1" />
+                        )}
+                        批准执行
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleRejectSuggestion}
+                        disabled={executingOps}
+                        className="h-7 text-xs px-3"
+                      >
+                        拒绝
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            )}
+          </>
         )}
       </div>
 
@@ -398,7 +589,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
             onClick={() => setShowLinkPicker(false)}
           />
           <div className="relative bg-app-elevated w-full max-w-md p-5 rounded-2xl border border-app-border shadow-2xl flex flex-col max-h-[70vh] animate-in scale-in duration-200">
-            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-app-border shrink-0">
               <h3 className="text-sm font-bold text-tx-primary">
                 {t("projects.linkCardTitle") || "关联项目卡片或笔记"}
@@ -411,8 +601,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                 <X size={16} />
               </button>
             </div>
-
-            {/* Type tabs switcher */}
             <div className="flex bg-app-sidebar p-1 rounded-lg border border-app-border/40 mt-3 shrink-0">
               <button
                 type="button"
@@ -435,8 +623,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                 <span>{t("projects.workspaceNote") || "空间笔记"}</span>
               </button>
             </div>
-
-            {/* Search Input */}
             <div className="mt-3 shrink-0 relative">
               <Input
                 placeholder={t("projects.searchLinkPlaceholder") || "搜索标题…"}
@@ -445,8 +631,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                 className="h-8 text-xs pl-3 border-app-border"
               />
             </div>
-
-            {/* List */}
             <ScrollArea className="flex-1 min-h-0 mt-3 border border-app-border/40 rounded-xl bg-app-sidebar/20">
               <div className="p-1.5 space-y-1">
                 {linkType === "task" ? (
