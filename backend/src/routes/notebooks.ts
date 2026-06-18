@@ -70,12 +70,12 @@ app.get("/", (c) => {
       .prepare(
         `
         WITH RECURSIVE nb_tree(ancestorId, descendantId) AS (
-          SELECT id, id FROM notebooks WHERE workspaceId = ? AND isDeleted = 0
+          SELECT id, id FROM notebooks WHERE workspaceId = ? AND isDeleted = 0 AND (visibility = 'WORKSPACE' OR (visibility = 'PRIVATE' AND userId = ?))
           UNION ALL
           SELECT t.ancestorId, n.id
           FROM nb_tree t
           INNER JOIN notebooks n ON n.parentId = t.descendantId
-          WHERE n.workspaceId = ? AND n.isDeleted = 0
+          WHERE n.workspaceId = ? AND n.isDeleted = 0 AND (n.visibility = 'WORKSPACE' OR (n.visibility = 'PRIVATE' AND n.userId = ?))
         )
         SELECT nb.*, COALESCE(nc.noteCount, 0) AS noteCount
         FROM notebooks nb
@@ -86,11 +86,11 @@ app.get("/", (c) => {
           WHERE notes.isTrashed = 0 AND notes.workspaceId = ?
           GROUP BY t.ancestorId
         ) nc ON nb.id = nc.notebookId
-        WHERE nb.workspaceId = ? AND nb.isDeleted = 0
+        WHERE nb.workspaceId = ? AND nb.isDeleted = 0 AND (nb.visibility = 'WORKSPACE' OR (nb.visibility = 'PRIVATE' AND nb.userId = ?))
         ORDER BY nb.sortOrder ASC
       `,
       )
-      .all(workspaceId, workspaceId, workspaceId, workspaceId);
+      .all(workspaceId, userId, workspaceId, userId, workspaceId, workspaceId, userId);
   } else {
     // 兼容模式：个人空间
     rows = db
@@ -297,7 +297,7 @@ app.put("/:id", async (c) => {
     UPDATE notebooks SET name = COALESCE(?, name), icon = COALESCE(?, icon),
     color = COALESCE(?, color), parentId = COALESCE(?, parentId),
     sortOrder = COALESCE(?, sortOrder), isExpanded = COALESCE(?, isExpanded),
-    updatedAt = datetime('now')
+    visibility = COALESCE(?, visibility), updatedAt = datetime('now')
     WHERE id = ?
   `,
   ).run(
@@ -307,6 +307,7 @@ app.put("/:id", async (c) => {
     body.parentId,
     body.sortOrder,
     body.isExpanded,
+    body.visibility,
     id,
   );
   const notebook = db.prepare("SELECT * FROM notebooks WHERE id = ?").get(id);
