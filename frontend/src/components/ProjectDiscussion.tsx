@@ -121,11 +121,12 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           `${fullContext}\n\n` +
           `请根据以上项目信息，回答用户的问题。你可以：\n` +
           `1. 分析、总结项目中的单条或多条任务\n` +
-          `2. 对任务进行合并或拆解提出建议\n` +
-          `3. 分析任务之间的依赖关系和优先级\n` +
-          `4. 对项目进度、资源分配给出专家建议\n` +
-          `5. 回答用户关于项目管理方面的任何问题\n\n` +
-          `注意：你只能给出分析和建议，不能实际执行任务操作（如创建/删除/修改任务）。\n` +
+          `2. 对任务进行合并或拆解提出具体的操作建议（如"建议将任务A合并到任务B，因为…"）\n` +
+          `3. 分析任务之间的依赖关系，建议调整优先级或排序\n` +
+          `4. 建议创建新任务、删除冗余任务、修改任务描述或负责人\n` +
+          `5. 对项目进度、资源分配给出专家建议\n` +
+          `6. 回答用户关于项目管理方面的任何问题\n\n` +
+          `对于每项操作建议，请给出明确的理由和预期效果，方便用户review后决定是否执行。\n` +
           `回答要简洁、专业、有洞察力，可以直接引用具体的任务名称和数据。`;
         const aiReply = await api.aiChat("custom", su.cleanText, fullContext, undefined, customPrompt);
         const aiPost = await api.createProjectDiscussion(project.id, {
