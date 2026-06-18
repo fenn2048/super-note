@@ -30,6 +30,7 @@ const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 import MobileCameraModal from "@/components/MobileCameraModal";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
+import FirstRunWizard from "@/components/FirstRunWizard";
 import { AppProvider, useApp, useAppActions, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from "@/store/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SiteSettingsProvider, useSiteSettings } from "@/hooks/useSiteSettings";
@@ -863,6 +864,36 @@ function AppLayout() {
   const showMobileTabBar = isRootPageOfTabBar && state.viewMode !== "trash";
   const showMobileFAB = showMobileTabBar && state.viewMode !== "more" && state.viewMode !== "trash";
 
+  // 工作区检测：新用户若无工作区则显示引导页
+  const [hasFamilySpace, setHasFamilySpace] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getWorkspaces().then(list => {
+      if (cancelled) return;
+      const has = list.length > 0;
+      setHasFamilySpace(has);
+      if (!has) {
+        localStorage.removeItem("super-current-workspace");
+      }
+    }).catch(() => {
+      if (cancelled) return;
+      setHasFamilySpace(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // 工作区检测门控
+  if (hasFamilySpace === false) {
+    return <FirstRunWizard onComplete={() => setHasFamilySpace(true)} />;
+  }
+  if (hasFamilySpace === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-app-bg">
+        <Loader2 size={32} className="animate-spin text-tx-tertiary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
