@@ -418,7 +418,7 @@ const STOP_WORDS = new Set([
   "can", "could", "should", "would", "will", "please", "tell", "me", "my", "i",
 ]);
 
-function extractKeywords(question: string): string[] {
+export function extractKeywords(question: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
 
@@ -2449,3 +2449,51 @@ ai.post("/classify", async (c) => {
 });
 
 export default ai;
+
+// ===== 通用 LLM 调用工具（供其他模块复用） =====
+
+const NO_KEY_PROVIDERS_LIST = ["ollama"];
+
+export async function callLLM(
+  systemPrompt: string,
+  userMessage: string,
+  context?: string,
+): Promise<string> {
+  const settings = getAISettings();
+  if (!settings.ai_api_url) throw new Error("未配置 AI 服务");
+  if (!NO_KEY_PROVIDERS_LIST.includes(settings.ai_provider) && !settings.ai_api_key) {
+    throw new Error("未配置 API Key");
+  }
+
+  const messages: { role: string; content: string }[] = [
+    { role: "system", content: systemPrompt },
+  ];
+  if (context) {
+    messages.push({ role: "system", content: `参考上下文：\n${context.slice(0, 4000)}` });
+  }
+  messages.push({ role: "user", content: userMessage });
+
+  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (settings.ai_api_key) headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: settings.ai_model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 2000,
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`AI 服务错误: ${res.status} ${err.slice(0, 200)}`);
+  }
+
+  const data = await res.json() as any;
+  return data.choices?.[0]?.message?.content || "";
+}

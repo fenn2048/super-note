@@ -16,6 +16,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 import type { UserPublicInfo } from "@/types";
 
+// AI 助手的 userId，在 @mention 结果中隐藏
+const AI_ASSISTANT_ID = "00000000-0000-0000-0000-000000000001";
+
 // ---------------------------------------------------------------------------
 // 公共工具函数
 // ---------------------------------------------------------------------------
@@ -96,7 +99,9 @@ export default function MentionPicker({
         ? Promise.resolve([{ id: "ai_su", username: "su", displayName: "AI 助手", avatarUrl: null }])
         : Promise.resolve([] as UserPublicInfo[]),
     ]).then(([users, aiOptions]) => {
-      setResults([...aiOptions, ...users]);
+      // 排除 AI 助手账号（仅保留 @su 虚拟选项）
+      const filteredUsers = users.filter(u => u.id !== AI_ASSISTANT_ID);
+      setResults([...aiOptions, ...filteredUsers]);
       setHighlighted(0);
     }).catch(() => setResults([]))
       .finally(() => setLoading(false));

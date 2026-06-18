@@ -572,30 +572,28 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     // === AI @su 检测 ===
     const su = detectSuMention(text.trim());
     if (su.hasSu) {
-      setPosting(true);
-      try {
-        await api.diaryAiAsk({ mode: "post", question: su.cleanText });
-        haptic.success();
-        // 重置输入框
-        for (const item of pendingImagesRef.current) {
-          try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
-        }
-        setText("");
-        setMood("");
-        setShowMoods(false);
-        setPendingImages([]);
-        setVisibility(getCurrentWorkspace() !== "personal" ? "PUBLIC" : "PRIVATE");
-        setPendingVoice(null);
-        setComposeTags([]);
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
-        onPost();
-        toast.success("AI 助手正在生成回答...");
-      } catch (err: any) {
-        console.error("AI ask failed:", err);
-        toast.error(err?.message || "AI 助手请求失败");
-      } finally {
-        setPosting(false);
+      // 立即 toast + 清空输入框，不阻塞 UI
+      toast.success("AI 助手正在处理，请稍后查看");
+      haptic.success();
+      for (const item of pendingImagesRef.current) {
+        try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
       }
+      setText("");
+      setMood("");
+      setShowMoods(false);
+      setPendingImages([]);
+      setVisibility(getCurrentWorkspace() !== "personal" ? "PUBLIC" : "PRIVATE");
+      setPendingVoice(null);
+      setComposeTags([]);
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+
+      // 后台异步执行，不阻塞发布按钮
+      api.diaryAiAsk({ mode: "post", question: su.cleanText })
+        .then(() => onPost())
+        .catch((err) => {
+          console.error("AI ask failed:", err);
+          toast.error(err?.message || "AI 助手请求失败");
+        });
       return;
     }
     // === 普通发布逻辑 ===
