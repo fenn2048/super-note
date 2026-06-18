@@ -54,6 +54,7 @@ export default function ProjectKanban({
   // Task creation state
   const [addingTaskToStage, setAddingTaskToStage] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [addAsTodo, setAddAsTodo] = useState(false);
 
   // Editing stage state
   const [editingStageId, setEditingStageId] = useState<string | null>(null);
@@ -150,6 +151,14 @@ export default function ProjectKanban({
     if (!newTaskTitle.trim()) return;
     const rawInput = newTaskTitle.trim();
     try {
+      // 如果勾选了"待办"，找到"待规划"阶段并以此创建任务
+      let targetStageId = stageId;
+      if (addAsTodo) {
+        const todoStage = stages.find(s => s.name === "待规划");
+        if (todoStage) targetStageId = todoStage.id;
+        setAddAsTodo(false);
+      }
+
       // 家庭TODO项目：自动将工作区所有成员设为参与人
       const isFamilyTodo = project.name === "家庭TODO";
       let participants: string[] | undefined;
@@ -163,7 +172,7 @@ export default function ProjectKanban({
       }
 
       const task = await api.createProjectTask(project.id, {
-        stageId,
+        stageId: targetStageId,
         title: rawInput,
         description: rawInput,
         participants,
@@ -627,6 +636,15 @@ export default function ProjectKanban({
                     autoFocus
                   />
                   <div className="flex items-center gap-1.5 justify-end">
+                    <label className="flex items-center gap-1 text-[11px] text-tx-tertiary cursor-pointer mr-auto">
+                      <input
+                        type="checkbox"
+                        checked={addAsTodo}
+                        onChange={(e) => setAddAsTodo(e.target.checked)}
+                        className="w-3 h-3 rounded border-app-border accent-accent-primary"
+                      />
+                      {t("projects.addAsTodo") || "待办"}
+                    </label>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -649,6 +667,7 @@ export default function ProjectKanban({
                   onClick={() => {
                     setAddingTaskToStage(stage.id);
                     setNewTaskTitle("");
+                    setAddAsTodo(false);
                   }}
                   className="w-full flex items-center justify-center gap-1 py-1.5 border border-dashed border-app-border/60 rounded-xl hover:border-app-border text-tx-tertiary hover:text-tx-secondary text-[11px] font-semibold transition-all"
                 >

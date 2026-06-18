@@ -403,6 +403,10 @@ projectsRouter.post("/", async (c) => {
   // Add owner to members list
   db.prepare("INSERT INTO project_members (projectId, userId, role) VALUES (?, ?, 'owner')").run(projectId, userId);
 
+  // Create default "待规划" stage
+  const defaultStageId = uuid();
+  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(defaultStageId, projectId, "待规划", 0);
+
   const newProject = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId);
   return c.json(newProject);
 });
