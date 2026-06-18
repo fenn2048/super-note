@@ -85,6 +85,13 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
+  // 监听项目刷新事件
+  useEffect(() => {
+    const handler = () => { fetchDiscussions(); };
+    window.addEventListener("super:projects-refreshed", handler);
+    return () => window.removeEventListener("super:projects-refreshed", handler);
+  }, []);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -92,12 +99,16 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   }, [posts, aiThinking]);
 
   useEffect(() => {
-    if (showLinkPicker && linkType === "note") {
+    if (!showLinkPicker) return;
+    if (linkType === "note") {
       setLoadingNotes(true);
       api.getNotes()
         .then((data) => setNotesList(data))
         .catch(console.error)
         .finally(() => setLoadingNotes(false));
+    } else {
+      // 打开任务列表时也刷新项目数据
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     }
   }, [showLinkPicker, linkType]);
 
@@ -174,6 +185,8 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         hasError = true;
       }
     }
+    // 刷新项目数据
+    window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     const resultContent = `**AI 助手** 🤖\n\n${pendingSuggestion.explanation}\n\n---\n**执行结果**\n${results.join("\n")}`;
     try {
       await api.createProjectDiscussion(project.id, {

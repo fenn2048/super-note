@@ -7,7 +7,7 @@ import {
   Sparkles, NotebookPen, Smile, GripVertical,
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2,
-  Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Eye,
+  Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Globe, Lock, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1737,11 +1737,17 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       items.push({ id: "export_md", label: t('sidebar.exportNotebookAsMarkdown'), icon: <Download size={14} /> });
     }
     items.push({ id: "sep_vis", label: "", separator: true });
-    items.push({ id: "toggle_visibility", label: t('sidebar.toggleVisibility'), icon: <Eye size={14} /> });
+    const visTarget = state.notebooks.find(nb => nb.id === menu.targetId);
+    const isCurrentlyPublic = visTarget?.visibility === "WORKSPACE";
+    items.push({
+      id: "toggle_visibility",
+      label: isCurrentlyPublic ? t('"'"'sidebar.makePrivate'"'"', '"'"'设为仅自己可见'"'"') : t('"'"'sidebar.makePublic'"'"', '"'"'设为所有人可见'"'"'),
+      icon: isCurrentlyPublic ? <Lock size={14} /> : <Globe size={14} />,
+    });
     items.push({ id: "sep2", label: "", separator: true });
     items.push({ id: "delete", label: t('sidebar.deleteNotebook'), icon: <Trash2 size={14} />, danger: true });
     return items;
-  }, [t, isAdmin, personalExportAllowed]);
+  }, [t, isAdmin, personalExportAllowed, state.notebooks, menu.targetId]);
 
   // 右键菜单（桌面）/ 长按菜单（移动端共用同一份 state）
   const { menu, menuRef, openMenu, openMenuAt, closeMenu } = useContextMenu();
@@ -2215,6 +2221,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             actions.setNotebooks(
               state.notebooks.map((nb) => nb.id === targetId ? { ...nb, visibility: newVisibility } : nb)
             );
+            toast.success(newVisibility === "WORKSPACE" ? "已设为所有人可见" : "已设为仅自己可见");
           } catch (e: any) {
             console.error("Toggle notebook visibility failed:", e);
             toast.error("可见性切换失败");
