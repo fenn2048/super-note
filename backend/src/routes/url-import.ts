@@ -343,15 +343,18 @@ app.post("/", async (c) => {
   // 确定目标笔记本：未指定 → "剪藏笔记本"
   let targetNotebookId = notebookId;
   if (!targetNotebookId) {
+    if (!workspaceId) {
+      return c.json({ error: "URL导入需要工作区上下文" }, 400);
+    }
     const exist = db
-      .prepare("SELECT id FROM notebooks WHERE userId = ? AND name = ?")
-      .get(userId, "剪藏笔记本") as { id: string } | undefined;
+      .prepare("SELECT id FROM notebooks WHERE workspaceId = ? AND name = ? AND isDeleted = 0")
+      .get(workspaceId, "剪藏笔记本") as { id: string } | undefined;
     if (exist) {
       targetNotebookId = exist.id;
     } else {
       targetNotebookId = uuid();
-      db.prepare("INSERT INTO notebooks (id, userId, name, icon) VALUES (?, ?, ?, ?)")
-        .run(targetNotebookId, userId, "剪藏笔记本", "📓");
+      db.prepare("INSERT INTO notebooks (id, userId, workspaceId, name, icon, visibility) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(targetNotebookId, userId, workspaceId, "剪藏笔记本", "📓", "PRIVATE");
     }
   }
 
@@ -362,9 +365,9 @@ app.post("/", async (c) => {
   // content 先用空串占位，下面下载图片完成后再 UPDATE 回真正内容。
   try {
     db.prepare(
-      `INSERT INTO notes (id, userId, notebookId, title, content, contentText, createdAt, updatedAt, workspaceId)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(noteId, userId, targetNotebookId, title, "", "", now, now, workspaceId);
+      `INSERT INTO notes (id, userId, notebookId, title, content, contentText, createdAt, updatedAt, workspaceId, visibility)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(noteId, userId, targetNotebookId, title, "", "", now, now, workspaceId, "PRIVATE");
   } catch (err: any) {
     return c.json({ error: `写入笔记失败: ${err?.message || err}` }, 500);
   }

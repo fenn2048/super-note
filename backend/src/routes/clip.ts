@@ -290,9 +290,9 @@ clip.post("/save", async (c) => {
         // 创建名为 "剪藏笔记本" 的笔记本
         targetNotebookId = uuid();
         db.prepare(
-          `INSERT INTO notebooks (id, userId, workspaceId, parentId, name, icon, sortOrder)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ).run(targetNotebookId, userId, workspaceId, null, "剪藏笔记本", "📓", 0);
+          `INSERT INTO notebooks (id, userId, workspaceId, parentId, name, icon, sortOrder, visibility)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(targetNotebookId, userId, workspaceId, null, "剪藏笔记本", "📓", 0, "PRIVATE");
       }
     } else {
       // 校验笔记本所有权/写权限
@@ -315,8 +315,8 @@ clip.post("/save", async (c) => {
     const tx = db.transaction(() => {
       // 1. 插入笔记
       db.prepare(
-        `INSERT INTO notes (id, userId, workspaceId, notebookId, title, content, contentText)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO notes (id, userId, workspaceId, notebookId, title, content, contentText, visibility)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         noteId,
         userId,
@@ -325,6 +325,7 @@ clip.post("/save", async (c) => {
         title || "无标题笔记",
         finalContent,
         finalContentText,
+        "PRIVATE",
       );
 
       // 2. 处理图片迁移
