@@ -71,7 +71,7 @@ COPY frontend ./frontend
 
 # Step 1: 安装依赖 + 构建前端（无论如何都执行）
 RUN cd frontend \
-    && npm ci --no-audit --no-fund --legacy-peer-deps; \
+    && npm install --no-audit --no-fund --legacy-peer-deps; \
     \
     if [ -n "${TARGETARCH}" ]; then \
       ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}"); \
