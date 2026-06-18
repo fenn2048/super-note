@@ -90,9 +90,44 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     if (su.hasSu) {
       setSending(true);
       try {
-        const context = `项目名称：${project.name}\n项目描述：${project.description || "无"}\n`;
-        const customPrompt = `你是一个项目助手。用户正在讨论以下项目：\n${context}\n请根据以上项目信息，回答用户的问题。回答要简洁、有帮助，可以引用项目中的具体信息。`;
-        const aiReply = await api.aiChat("custom", su.cleanText, context, undefined, customPrompt);
+        // 获取项目任务列表作为上下文
+        let tasksContext = "";
+        try {
+          const stages = await api.getProjectStages(project.id);
+          if (stages.length > 0) {
+            const taskItems = stages.flatMap(s => (s.tasks || []).map(t => ({
+              stage: s.name,
+              title: t.title,
+              assignee: (t as any).assigneeName || "未分配",
+              priority: t.priority,
+              endDate: t.endDate || "无截止日期",
+              isCompleted: t.isCompleted,
+              progress: t.progress || 0,
+            })));
+            if (taskItems.length > 0) {
+              tasksContext = "\n## 项目任务列表\n" + taskItems.map(t =>
+                `- [${t.isCompleted ? "已完成" : "进行中"}] ${t.title} | 阶段:${t.stage} | 负责人:${t.assignee} | 优先级:${t.priority} | 截止:${t.endDate} | 进度:${t.progress}%`
+              ).join("\n");
+            }
+          }
+        } catch { /* 获取任务失败不影响主流程 */ }
+
+        const fullContext =
+          `项目名称：${project.name}\n` +
+          `项目描述：${project.description || "无"}\n` +
+          tasksContext;
+        const customPrompt =
+          `你是一位资深项目管理专家，正在参与以下项目的讨论。\n\n` +
+          `${fullContext}\n\n` +
+          `请根据以上项目信息，回答用户的问题。你可以：\n` +
+          `1. 分析、总结项目中的单条或多条任务\n` +
+          `2. 对任务进行合并或拆解提出建议\n` +
+          `3. 分析任务之间的依赖关系和优先级\n` +
+          `4. 对项目进度、资源分配给出专家建议\n` +
+          `5. 回答用户关于项目管理方面的任何问题\n\n` +
+          `注意：你只能给出分析和建议，不能实际执行任务操作（如创建/删除/修改任务）。\n` +
+          `回答要简洁、专业、有洞察力，可以直接引用具体的任务名称和数据。`;
+        const aiReply = await api.aiChat("custom", su.cleanText, fullContext, undefined, customPrompt);
         const aiPost = await api.createProjectDiscussion(project.id, {
           content: `**AI 助手** 🤖\n\n${aiReply}`,
           linkedCards: [],
