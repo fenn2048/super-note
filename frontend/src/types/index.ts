@@ -181,7 +181,6 @@ export interface NoteListItem {
    */
   creatorName?: string | null;
   visibility?: "PRIVATE" | "WORKSPACE";
-  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface Tag {
