@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
-import { detectSuMention } from "@/lib/utils";
+import { cn, detectSuMention } from "@/lib/utils";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 
 interface ProjectDiscussionProps {
@@ -32,6 +32,9 @@ interface AISuggestion {
   operations: AIOp[];
 }
 
+const AI_AVATAR = "🤖";
+const AI_NAME = "AI 助手";
+
 export default function ProjectDiscussionView({ project, tasks }: ProjectDiscussionProps) {
   const { t } = useTranslation();
   const actions = useAppActions();
@@ -43,6 +46,9 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   // AI 建议审批状态
   const [pendingSuggestion, setPendingSuggestion] = useState<AISuggestion | null>(null);
   const [executingOps, setExecutingOps] = useState(false);
+  // AI 思考中状态
+  const [aiThinking, setAiThinking] = useState(false);
+  const [userQueryText, setUserQueryText] = useState("");
 
   // Autocomplete @mention states
   const [composerCursorPos, setComposerCursorPos] = useState(0);
@@ -83,7 +89,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [posts]);
+  }, [posts, aiThinking]);
 
   useEffect(() => {
     if (showLinkPicker && linkType === "note") {
@@ -94,6 +100,11 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         .finally(() => setLoadingNotes(false));
     }
   }, [showLinkPicker, linkType]);
+
+  /** 判断是否为 AI 消息 */
+  function isAIPost(post: ProjectDiscussion): boolean {
+    return post.content?.startsWith("**AI 助手**") || post.content?.startsWith(AI_AVATAR);
+  }
 
   /** 从 AI 回复文本中提取 JSON 操作块 */
   function parseAIOperations(aiText: string): AIOp[] {
@@ -116,9 +127,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
       case "create_task": {
         const stages = await api.getProjectStages(project.id);
         let stage = stages.find(s => s.name === op.stageName);
-        if (!stage) {
-          stage = stages[0];
-        }
+        if (!stage) stage = stages[0];
         if (!stage) throw new Error("项目没有阶段");
         const created = await api.createProjectTask(project.id, {
           stageId: stage.id,
@@ -165,7 +174,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         hasError = true;
       }
     }
-    // 发布执行结果到讨论区
     const resultContent = `**AI 助手** 🤖\n\n${pendingSuggestion.explanation}\n\n---\n**执行结果**\n${results.join("\n")}`;
     try {
       await api.createProjectDiscussion(project.id, {
@@ -182,7 +190,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     else toast.error("部分操作执行失败，请检查详情");
   };
 
-  /** 拒绝 AI 建议 */
   const handleRejectSuggestion = () => {
     setPendingSuggestion(null);
     toast.info("已拒绝 AI 建议");
@@ -192,67 +199,85 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     e.preventDefault();
     if (!content.trim() && linkedCards.length === 0) return;
 
-    // 检测 @su → 调用 AI 助手
-    const su = detectSuMention(content);
+    const rawContent = content.trim();
+    const su = detectSuMention(rawContent);
+
     if (su.hasSu) {
-      setSending(true);
+      // 1) 立即显示用户消息
+      const userMsg: ProjectDiscussion = {
+        id: `user-${Date.now()}`,
+        projectId: project.id,
+        userId: "me",
+        username: "我",
+        displayName: "我",
+        content: su.cleanText,
+        linkedCards: [],
+        images: [],
+        attachments: [],
+        createdAt: new Date().toISOString(),
+      } as any;
+      setPosts((prev) => [...prev, userMsg]);
+      setUserQueryText(su.cleanText);
+      setAiThinking(true);
+      setContent("");
+
+      // 2) 异步调用 AI
+      let tasksContext = "";
       try {
-        // 获取项目任务列表作为上下文
-        let tasksContext = "";
-        try {
-          const stages = await api.getProjectStages(project.id);
-          if (stages.length > 0) {
-            const taskItems = stages.flatMap(s => (s.tasks || []).map(t => ({
-              id: t.id,
-              stage: s.name,
-              title: t.title,
-              assignee: (t as any).assigneeName || "未分配",
-              priority: t.priority,
-              endDate: t.endDate || "无截止日期",
-              isCompleted: t.isCompleted,
-              progress: t.progress || 0,
-            })));
-            if (taskItems.length > 0) {
-              tasksContext = "\n## 项目任务列表\n" + taskItems.map(t =>
-                `- id:${t.id} [${t.isCompleted ? "已完成" : "进行中"}] ${t.title} | 阶段:${t.stage} | 负责人:${t.assignee} | 优先级:${t.priority} | 截止:${t.endDate} | 进度:${t.progress}%`
-              ).join("\n");
-            }
+        const stages = await api.getProjectStages(project.id);
+        if (stages.length > 0) {
+          const taskItems = stages.flatMap(s => (s.tasks || []).map(t => ({
+            id: t.id,
+            stage: s.name,
+            title: t.title,
+            assignee: (t as any).assigneeName || "未分配",
+            priority: t.priority,
+            endDate: t.endDate || "无截止日期",
+            isCompleted: t.isCompleted,
+            progress: t.progress || 0,
+          })));
+          if (taskItems.length > 0) {
+            tasksContext = "\n## 项目任务列表\n" + taskItems.map(t =>
+              `- id:${t.id} [${t.isCompleted ? "已完成" : "进行中"}] ${t.title} | 阶段:${t.stage} | 负责人:${t.assignee} | 优先级:${t.priority} | 截止:${t.endDate} | 进度:${t.progress}%`
+            ).join("\n");
           }
-        } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
 
-        const fullContext =
-          `项目名称：${project.name}\n` +
-          `项目描述：${project.description || "无"}\n` +
-          tasksContext;
-        const customPrompt =
-          `你是一位资深项目管理专家，正在参与以下项目的讨论。\n\n` +
-          `${fullContext}\n\n` +
-          `请根据以上项目信息，回答用户的问题。你可以：\n` +
-          `1. 分析、总结项目中的单条或多条任务\n` +
-          `2. 对任务进行合并或拆解提出具体的操作建议\n` +
-          `3. 分析任务之间的依赖关系，建议调整优先级或排序\n` +
-          `4. 建议创建新任务、删除冗余任务、修改任务描述或负责人\n` +
-          `5. 对项目进度、资源分配给出专家建议\n` +
-          `6. 回答用户关于项目管理方面的任何问题\n\n` +
-          `如果需要执行操作，请先给出文字分析，然后在回复末尾加上 JSON 代码块：\`\`\`json\n` +
-          `包含操作数组，每项格式为 {\"op\":\"create_task|update_task|move_task|delete_task\", ...}\n` +
-          `- create_task: {op:"create_task", stageName:"阶段名称", title:"任务标题", description:"描述"}\n` +
-          `- update_task: {op:"update_task", taskId:"任务的id", title:"新标题", description:"新描述"}\n` +
-          `- move_task: {op:"move_task", taskId:"任务的id", toStage:"目标阶段名称"}\n` +
-          `- delete_task: {op:"delete_task", taskId:"任务的id"}\n` +
-          `\`\`\`\n\n` +
-          `用户 review 后可以选择执行或拒绝这些操作。\n\n` +
-          `注意：任务 id 已在任务列表中给出，请直接引用正确的 id。`;
+      const fullContext =
+        `项目名称：${project.name}\n` +
+        `项目描述：${project.description || "无"}\n` +
+        tasksContext;
+      const customPrompt =
+        `你是一位资深项目管理专家，正在参与以下项目的讨论。\n\n` +
+        `${fullContext}\n\n` +
+        `请根据以上项目信息，回答用户的问题。你可以：\n` +
+        `1. 分析、总结项目中的单条或多条任务\n` +
+        `2. 对任务进行合并或拆解提出具体的操作建议\n` +
+        `3. 分析任务之间的依赖关系，建议调整优先级或排序\n` +
+        `4. 建议创建新任务、删除冗余任务、修改任务描述或负责人\n` +
+        `5. 对项目进度、资源分配给出专家建议\n` +
+        `6. 回答用户关于项目管理方面的任何问题\n\n` +
+        `如果需要执行操作，请先给出文字分析，然后在回复末尾加上 JSON 代码块：\`\`\`json\n` +
+        `包含操作数组，每项格式为 {\"op\":\"create_task|update_task|move_task|delete_task\", ...}\n` +
+        `- create_task: {op:"create_task", stageName:"阶段名称", title:"任务标题", description:"描述"}\n` +
+        `- update_task: {op:"update_task", taskId:"任务的id", title:"新标题", description:"新描述"}\n` +
+        `- move_task: {op:"move_task", taskId:"任务的id", toStage:"目标阶段名称"}\n` +
+        `- delete_task: {op:"delete_task", taskId:"任务的id"}\n` +
+        `\`\`\`\n\n` +
+        `用户 review 后可以选择执行或拒绝这些操作。\n\n` +
+        `注意：任务 id 已在任务列表中给出，请直接引用正确的 id。`;
 
+      try {
         const aiReply = await api.aiChat("custom", su.cleanText, fullContext, undefined, customPrompt);
         const ops = parseAIOperations(aiReply);
 
+        setAiThinking(false);
+
         if (ops.length > 0) {
-          // 有可执行操作 → 显示审批卡片
           const explanation = aiReply.replace(/```json[\s\S]*```/, "").trim();
           setPendingSuggestion({ explanation, operations: ops });
         } else {
-          // 纯文字回复 → 直接发布
           const aiPost = await api.createProjectDiscussion(project.id, {
             content: `**AI 助手** 🤖\n\n${aiReply}`,
             linkedCards: [],
@@ -262,10 +287,21 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           setPosts((prev) => [...prev, aiPost]);
         }
       } catch (err: any) {
-        toast.error(err?.message || "AI 回复失败");
-      } finally {
-        setSending(false);
-        setContent("");
+        setAiThinking(false);
+        // 显示错误消息
+        const errorPost: ProjectDiscussion = {
+          id: `ai-error-${Date.now()}`,
+          projectId: project.id,
+          userId: "ai",
+          username: AI_NAME,
+          displayName: AI_NAME,
+          content: `**AI 助手** 🤖\n\n抱歉，AI 回复失败：${err?.message || "未知错误"}`,
+          linkedCards: [],
+          images: [],
+          attachments: [],
+          createdAt: new Date().toISOString(),
+        } as any;
+        setPosts((prev) => [...prev, errorPost]);
       }
       return;
     }
@@ -273,7 +309,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     setSending(true);
     try {
       const newPost = await api.createProjectDiscussion(project.id, {
-        content: content.trim(),
+        content: rawContent,
         linkedCards,
         images: [],
         attachments: [],
@@ -328,7 +364,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     }
   };
 
-  // ===== 操作描述文本 =====
   const opLabel = (op: AIOp): string => {
     switch (op.op) {
       case "create_task": return `创建任务「${op.title}」到 ${op.stageName}`;
@@ -343,6 +378,54 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
     }
   };
 
+  /** 渲染消息头像 */
+  function renderAvatar(post: ProjectDiscussion) {
+    if (isAIPost(post)) {
+      return (
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 shrink-0 flex items-center justify-center text-sm">
+          {AI_AVATAR}
+        </div>
+      );
+    }
+    if (post.avatarUrl) {
+      return (
+        <img
+          src={post.avatarUrl}
+          alt={post.displayName || post.username}
+          className="w-9 h-9 rounded-full border border-app-border shrink-0 object-cover"
+        />
+      );
+    }
+    return (
+      <div className="w-9 h-9 rounded-full bg-accent-primary/10 border border-app-border shrink-0 flex items-center justify-center text-xs font-bold text-accent-primary uppercase select-none">
+        {(post.displayName || post.username || "?").slice(0, 1)}
+      </div>
+    );
+  }
+
+  /** 渲染消息发送者名称 */
+  function renderAuthor(post: ProjectDiscussion) {
+    if (isAIPost(post)) {
+      return (
+        <span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+          {AI_NAME}
+        </span>
+      );
+    }
+    if (post.userId === "me") {
+      return (
+        <span className="text-xs font-bold text-tx-primary">
+          我
+        </span>
+      );
+    }
+    return (
+      <span className="text-xs font-bold text-tx-primary">
+        {post.displayName || post.username}
+      </span>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-app-bg pb-20 relative">
       {/* Scrollable Feed */}
@@ -351,7 +434,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           <div className="flex items-center justify-center py-12">
             <Loader2 size={24} className="animate-spin text-accent-primary" />
           </div>
-        ) : posts.length === 0 && !pendingSuggestion ? (
+        ) : posts.length === 0 && !pendingSuggestion && !aiThinking ? (
           <div className="flex flex-col items-center justify-center p-12 text-center text-tx-tertiary h-full">
             <MessageSquare size={48} className="stroke-1 mb-2 opacity-50" />
             <p className="text-sm font-semibold">{t("projects.noDiscussions") || "暂无讨论内容"}</p>
@@ -361,27 +444,20 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           <>
             {posts.map((post) => (
               <div key={post.id} className="flex items-start gap-3 group/post animate-in fade-in duration-300">
-                {post.avatarUrl ? (
-                  <img
-                    src={post.avatarUrl}
-                    alt={post.displayName || post.username}
-                    className="w-9 h-9 rounded-full border border-app-border shrink-0 object-cover"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-accent-primary/10 border border-app-border shrink-0 flex items-center justify-center text-xs font-bold text-accent-primary uppercase select-none">
-                    {(post.displayName || post.username || "?").slice(0, 1)}
-                  </div>
-                )}
+                {renderAvatar(post)}
                 <div className="flex-1 space-y-1.5 max-w-[85%]">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-bold text-tx-primary">
-                      {post.displayName || post.username}
-                    </span>
+                    {renderAuthor(post)}
                     <span className="text-[10px] text-tx-tertiary font-mono">
                       {new Date(post.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <div className="bg-app-sidebar border border-app-border rounded-2xl px-4 py-2.5 text-xs text-tx-secondary shadow-sm leading-relaxed whitespace-pre-wrap">
+                  <div className={cn(
+                    "border rounded-2xl px-4 py-2.5 text-xs shadow-sm leading-relaxed whitespace-pre-wrap",
+                    isAIPost(post)
+                      ? "bg-gradient-to-br from-violet-50 to-pink-50 dark:from-violet-500/5 dark:to-pink-500/5 border-violet-200/50 dark:border-violet-500/20 text-tx-secondary"
+                      : "bg-app-sidebar border-app-border text-tx-secondary"
+                  )}>
                     {post.content}
                     {post.linkedCards && post.linkedCards.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-app-border/40 flex flex-wrap gap-2">
@@ -408,11 +484,35 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
               </div>
             ))}
 
+            {/* AI 思考中 loading */}
+            {aiThinking && (
+              <div className="flex items-start gap-3 animate-in fade-in duration-200">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 shrink-0 flex items-center justify-center text-sm">
+                  {AI_AVATAR}
+                </div>
+                <div className="flex-1 max-w-[85%]">
+                  <div className="flex items-baseline gap-2 mb-1.5">
+                    <span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+                      {AI_NAME}
+                    </span>
+                  </div>
+                  <div className="bg-gradient-to-br from-violet-50 to-pink-50 dark:from-violet-500/5 dark:to-pink-500/5 border border-violet-200/50 dark:border-violet-500/20 rounded-2xl px-4 py-3 text-xs shadow-sm flex items-center gap-2.5">
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                    <span className="text-violet-500/70 text-[11px] font-medium">AI 正在思考...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* AI 建议审批卡片 */}
             {pendingSuggestion && (
               <div className="flex items-start gap-3 animate-in slide-in-from-bottom-4 duration-300">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 shrink-0 flex items-center justify-center text-sm">
-                  🤖
+                  {AI_AVATAR}
                 </div>
                 <div className="flex-1 max-w-[85%] space-y-2">
                   <div className="bg-app-sidebar border border-violet-500/30 rounded-2xl px-4 py-3 shadow-sm">
@@ -423,8 +523,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                     <div className="text-xs text-tx-secondary leading-relaxed whitespace-pre-wrap mb-3">
                       {pendingSuggestion.explanation}
                     </div>
-
-                    {/* 操作列表 */}
                     <div className="space-y-1 mb-3">
                       {pendingSuggestion.operations.map((op, i) => (
                         <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-app-bg border border-app-border/60 text-[11px] text-tx-secondary">
@@ -436,8 +534,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                         </div>
                       ))}
                     </div>
-
-                    {/* 审批按钮 */}
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
@@ -470,7 +566,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         )}
       </div>
 
-      {/* Linked Cards preview in composer */}
+      {/* Linked Cards preview */}
       {linkedCards.length > 0 && (
         <div className="px-4 py-2 bg-app-sidebar border-t border-app-border flex flex-wrap gap-2 shrink-0 select-none">
           {linkedCards.map((card) => (
@@ -546,7 +642,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
             }}
             placeholder={t("projects.typeMessage") || "输入讨论内容…"}
             className="flex-1 border-none bg-transparent h-7 text-xs focus-visible:ring-0 p-0 placeholder:text-tx-tertiary"
-            disabled={sending}
+            disabled={sending || aiThinking}
           />
           <div className="flex items-center gap-1.5 shrink-0 pl-2 text-tx-tertiary">
             <button
@@ -571,7 +667,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           type="submit"
           size="icon"
           className="h-8 w-8 rounded-xl shrink-0 bg-accent-primary hover:bg-accent-primary/90 text-white"
-          disabled={sending || (!content.trim() && linkedCards.length === 0)}
+          disabled={sending || aiThinking || (!content.trim() && linkedCards.length === 0)}
         >
           {sending ? (
             <Loader2 size={14} className="animate-spin" />
