@@ -183,6 +183,30 @@ export function buildVisibilityWhere(
 }
 
 /**
+ * 为列表查询构建可见性过滤条件（PRIVATE / WORKSPACE 模型）。
+ * 用户只能看到：
+ *   1. visibility = 'WORKSPACE' 的记录（全部可见）
+ *   2. visibility = 'PRIVATE' 且自己为创建者的记录
+ * 适用于 notes / notebooks / mindmaps 表的工作区场景。
+ * 个人空间（workspaceId IS NULL）不应用此过滤。
+ */
+export function buildVisibilityFilter(
+  userId: string,
+  tableAlias: string = "",
+  workspaceId: string | null,
+): { clause: string; params: any[] } {
+  const p = tableAlias ? `${tableAlias}.` : "";
+  // 个人空间不应用可见性过滤
+  if (!workspaceId) {
+    return { clause: "", params: [] };
+  }
+  return {
+    clause: `AND (${p}visibility = 'WORKSPACE' OR (${p}visibility = 'PRIVATE' AND ${p}userId = ?))`,
+    params: [userId],
+  };
+}
+
+/**
  * 中间件工厂：要求对某笔记拥有指定权限
  * 用法：app.put('/:id', requireNotePermission('write'), handler)
  */
