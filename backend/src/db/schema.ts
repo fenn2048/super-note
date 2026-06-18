@@ -1191,4 +1191,8 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_diary_comments_diary ON diary_comments(diaryId);
   `);
+
+  // v?? 说说 AI 助手：trigger_user_id 记录谁调起了 AI（用于删除权限判断）
+  try { db.exec("ALTER TABLE diary_comments ADD COLUMN trigger_user_id TEXT"); } catch {}
+  try { db.exec("ALTER TABLE diaries ADD COLUMN trigger_user_id TEXT"); } catch {}
 }

@@ -207,3 +207,34 @@ export function seedDatabase() {
 
   console.log("✅ Database seeded successfully");
 }
+
+// ===== AI 助手账号 =====
+
+export const AI_ASSISTANT_USER_ID = "00000000-0000-0000-0000-000000000001";
+
+/**
+ * 在 users 表中创建 AI 助手账号（幂等）。
+ * 该账号用于 AI 在说说模块中以独立身份发布内容。
+ * 密码为随机哈希，不可登录。
+ */
+export function initAiAssistantUser() {
+  const db = getDb();
+  const existing = db.prepare("SELECT id FROM users WHERE id = ?").get(AI_ASSISTANT_USER_ID);
+  if (existing) return;
+
+  const randomHash = crypto.createHash("sha256").update(crypto.randomUUID()).digest("hex");
+  db.prepare(`
+    INSERT INTO users (id, username, email, passwordHash, role, displayName, avatarUrl, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(
+    AI_ASSISTANT_USER_ID,
+    "ai-assistant",
+    null,
+    randomHash,
+    "ai",
+    "AI 助手",
+    null,
+  );
+
+  console.log("✅ AI assistant user created");
+}
