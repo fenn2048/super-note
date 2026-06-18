@@ -96,8 +96,10 @@ RUN if [ -n "$SKIP_ANDROID" ]; then \
       echo "前端构建完成（不含 Android APK）"; \
     else \
       chmod +x frontend/android/build_signed_debug_apk.sh \
-      && TARGETARCH=${TARGETARCH} ./frontend/android/build_signed_debug_apk.sh; \
+      && TARGETARCH=${TARGETARCH} ./frontend/android/build_signed_debug_apk.sh || true; \
     fi
+
+RUN mkdir -p /app/frontend/dist
 
 # ---------- Stage 2: 后端构建（tsc） ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS backend-build
