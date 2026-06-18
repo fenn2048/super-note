@@ -1,8 +1,8 @@
 /**
- * WorkspaceSwitcher - 工作区切换器（Phase 1 多用户协作）
+ * WorkspaceSwitcher - 工作区切换器
  *
  * 功能：
- *   - 下拉列出当前用户的所有工作区（含个人空间）
+ *   - 下拉列出当前用户的所有工作区
  *   - 切换后触发全局数据重载
  *   - 快捷入口：创建工作区、加入工作区（输入邀请码）
  *   - 管理成员入口
@@ -104,8 +104,8 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
   };
 
   const currentWs = workspaces.find((w) => w.id === current);
-  const displayName = current === "personal" ? t("workspace.personal") : currentWs?.name || t("workspace.personal");
-  const displayIcon = current === "personal" ? "🏠" : currentWs?.icon || "🏢";
+  const displayName = currentWs?.name || "";
+  const displayIcon = currentWs?.icon || "🏢";
 
   const getRoleLabel = (role?: string) => {
     const roles: Record<string, string> = {
@@ -119,9 +119,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
   };
 
   // 在入口按钮（展开/收起态）上右键当前工作区时，直接弹出对应右键菜单。
-  // 个人空间没有可管理选项，不弹菜单（避免空菜单）。
   const handleEntryContextMenu = (e: React.MouseEvent) => {
-    if (current === "personal") return;
     const target = workspaces.find((w) => w.id === current);
     if (!target) return;
     const canManage = target.role === "owner" || target.role === "admin" || isAdmin;
@@ -226,20 +224,31 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
           <DeleteWorkspaceDialog
             workspace={deleting}
             onClose={() => setDeleting(null)}
-            onDeleted={() => {
+            onDeleted={async () => {
               const removedId = deleting.id;
               setDeleting(null);
+              const remaining = await api.getWorkspaces();
               if (current === removedId) {
-                setCurrent("personal");
-                setCurrentWorkspace("personal");
-                onWorkspaceChange?.("personal");
-                window.dispatchEvent(
-                  new CustomEvent("super:workspace-changed", {
-                    detail: { workspaceId: "personal" },
-                  }),
-                );
+                if (remaining.length > 0) {
+                  const next = remaining[0];
+                  setCurrent(next.id);
+                  setCurrentWorkspace(next.id);
+                  onWorkspaceChange?.(next.id);
+                  window.dispatchEvent(
+                    new CustomEvent("super:workspace-changed", {
+                      detail: { workspaceId: next.id },
+                    }),
+                  );
+                } else {
+                  localStorage.removeItem("super-current-workspace");
+                  window.dispatchEvent(
+                    new CustomEvent("super:workspace-changed", {
+                      detail: { workspaceId: "" },
+                    }),
+                  );
+                }
               }
-              loadWorkspaces();
+              setWorkspaces(remaining);
             }}
           />
         )}
@@ -280,16 +289,10 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
               className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden"
             >
               <div className="max-h-[320px] overflow-auto py-1">
-                {/* 个人空间 */}
-                <WorkspaceItem
-                  icon="🏠"
-                  name={t("workspace.personal")}
-                  subtitle={t("workspace.personalSubtitle")}
-                  active={current === "personal"}
-                  onClick={() => switchTo("personal")}
-                />
-                {workspaces.length > 0 && (
-                  <div className="mx-2 my-1 border-t border-border" />
+                {workspaces.length === 0 && (
+                  <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                    {t("workspace.noWorkspaces") || "暂无工作区"}
+                  </div>
                 )}
                 {workspaces.map((w) => (
                   <WorkspaceItem

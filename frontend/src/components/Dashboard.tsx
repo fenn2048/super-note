@@ -349,9 +349,7 @@ export default function Dashboard() {
   const [showSpaceDropdown, setShowSpaceDropdown] = useState(false);
 
   const currentWorkspaceId = getCurrentWorkspace();
-  const currentWorkspace = currentWorkspaceId === "personal"
-    ? { id: "personal", name: "个人空间", icon: "🏠" }
-    : workspaces.find(w => w.id === currentWorkspaceId) || { id: "personal", name: "个人空间", icon: "🏠" };
+  const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId) || (workspaces.length > 0 ? workspaces[0] : null);
 
   const hasWorkspaces = workspaces.length > 0;
   const hasFamilyGroup = workspaces.some(w => w.name === "我的家庭" || w.icon === "🏠" || w.name.includes("家庭"));
@@ -607,7 +605,7 @@ export default function Dashboard() {
             onClick={() => setShowSpaceDropdown(!showSpaceDropdown)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-app-border bg-app-surface hover:bg-app-hover active:scale-95 transition-all text-xs font-semibold text-tx-primary"
           >
-            <span>{currentWorkspace.icon} {currentWorkspace.name}</span>
+            <span>{currentWorkspace?.icon} {currentWorkspace?.name || "选择工作区"}</span>
             <ChevronDown size={14} className={cn("transition-transform duration-200", showSpaceDropdown && "rotate-180")} />
           </button>
           
@@ -621,16 +619,6 @@ export default function Dashboard() {
                   exit={{ opacity: 0, y: -5 }}
                   className="absolute right-0 mt-1 bg-app-elevated border border-app-border rounded-xl shadow-lg z-50 overflow-hidden w-[160px] py-1"
                 >
-                  <button
-                    onClick={() => handleSwitchSpace("personal")}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-app-hover transition-colors",
-                      currentWorkspaceId === "personal" && "text-accent-primary font-bold bg-accent-primary/5"
-                    )}
-                  >
-                    <span>🏠</span>
-                    <span>个人空间</span>
-                  </button>
                   {workspaces.map((w) => (
                     <button
                       key={w.id}

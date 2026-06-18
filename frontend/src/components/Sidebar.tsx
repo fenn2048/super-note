@@ -928,7 +928,7 @@ function ProjectSidebar() {
     });
     if (!name) return;
     try {
-      await api.createProjectGroup({ name, workspaceId: workspaceId === "personal" ? null : workspaceId });
+      await api.createProjectGroup({ name, workspaceId: workspaceId || null });
       fetchGroupsAndProjects();
       window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
     } catch (e) {
