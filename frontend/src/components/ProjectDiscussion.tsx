@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
+import { detectSuMention } from "@/lib/utils";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 
 interface ProjectDiscussionProps {
@@ -83,6 +84,29 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() && linkedCards.length === 0) return;
+
+    // 检测 @su → 调用 AI 助手针对当前项目聊天
+    const su = detectSuMention(content);
+    if (su.hasSu) {
+      setSending(true);
+      try {
+        const context = `项目名称：${project.name}\n项目描述：${project.description || "无"}\n`;
+        const aiReply = await api.aiChat("chat", su.cleanText, context);
+        const aiPost = await api.createProjectDiscussion(project.id, {
+          content: `**AI 助手** 🤖\n\n${aiReply}`,
+          linkedCards: [],
+          images: [],
+          attachments: [],
+        });
+        setPosts((prev) => [...prev, aiPost]);
+      } catch (err: any) {
+        toast.error(err?.message || "AI 回复失败");
+      } finally {
+        setSending(false);
+        setContent("");
+      }
+      return;
+    }
 
     setSending(true);
     try {

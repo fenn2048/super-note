@@ -186,18 +186,9 @@ export default function ProjectKanban({
       setAddingTaskToStage(null);
       onRefresh();
 
-      // 含 @su 时用 AI 提炼简短标题
+      // 仅含 @su 时用 AI 提炼简短标题，不含则不总结
       if (su.hasSu) {
         api.aiChat("title", su.cleanText.slice(0, 2000)).then(async (rawTitle) => {
-          const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
-          if (cleanedTitle) {
-            await api.updateProjectTask(task.id, { title: cleanedTitle });
-            onRefresh();
-          }
-        }).catch(console.error);
-      } else {
-        // 原有 AI 标题总结
-        api.aiChat("title", rawInput.slice(0, 2000)).then(async (rawTitle) => {
           const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
           if (cleanedTitle) {
             await api.updateProjectTask(task.id, { title: cleanedTitle });
