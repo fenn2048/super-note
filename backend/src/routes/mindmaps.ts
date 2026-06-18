@@ -54,6 +54,7 @@ interface MindmapRow {
   workspaceId: string | null;
   title: string;
   data: string;
+  visibility: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,10 +75,12 @@ function resolveMindmapScope(
   return { scope: "workspace", workspaceId };
 }
 
-/** 读权限：本人个人空间 OR 工作区成员。 */
+/** 读权限：本人个人空间 OR 工作区成员（需可见性校验）。 */
 function canReadMindmap(row: MindmapRow, userId: string): boolean {
   if (!row.workspaceId) return row.userId === userId;
-  return getUserWorkspaceRole(row.workspaceId, userId) !== null;
+  // 工作区：WORKSPACE 或自己的 PRIVATE
+  return getUserWorkspaceRole(row.workspaceId, userId) !== null &&
+    (row.visibility === "WORKSPACE" || row.userId === userId);
 }
 
 // ---------- 列表 ----------
@@ -91,16 +94,18 @@ app.get("/", requireWorkspaceFeature("mindmaps"), (c) => {
   // 工作区下导图列表用来展示"谁建的"。LEFT JOIN 兜底用户被删除的极端窗口期。
   const sql =
     scope.scope === "workspace"
-      ? `SELECT m.id, m.userId, m.workspaceId, m.title, m.createdAt, m.updatedAt,
+      ? `SELECT m.id, m.userId, m.workspaceId, m.title, m.visibility, m.createdAt, m.updatedAt,
                 u.username AS creatorName
          FROM mindmaps m LEFT JOIN users u ON u.id = m.userId
-         WHERE m.workspaceId = ? ORDER BY m.updatedAt DESC`
-      : `SELECT m.id, m.userId, m.workspaceId, m.title, m.createdAt, m.updatedAt,
+         WHERE m.workspaceId = ? AND (m.visibility = 'WORKSPACE' OR (m.visibility = 'PRIVATE' AND m.userId = ?)) ORDER BY m.updatedAt DESC`
+      : `SELECT m.id, m.userId, m.workspaceId, m.title, m.visibility, m.createdAt, m.updatedAt,
                 u.username AS creatorName
          FROM mindmaps m LEFT JOIN users u ON u.id = m.userId
          WHERE m.userId = ? AND m.workspaceId IS NULL ORDER BY m.updatedAt DESC`;
-  const param = scope.scope === "workspace" ? scope.workspaceId : userId;
-  const rows = db.prepare(sql).all(param);
+  const params = scope.scope === "workspace"
+    ? [scope.workspaceId, userId]
+    : [userId];
+  const rows = db.prepare(sql).all(...params);
   return c.json(rows);
 });
 
@@ -142,13 +147,14 @@ app.post("/", requireWorkspaceFeature("mindmaps"), async (c) => {
   const data = body.data || defaultData;
 
   db.prepare(
-    "INSERT INTO mindmaps (id, userId, workspaceId, title, data) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO mindmaps (id, userId, workspaceId, title, data, visibility) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(
     id,
     userId,
     scope.workspaceId,
     title,
     typeof data === "string" ? data : JSON.stringify(data),
+    body.visibility || "PRIVATE",
   );
 
   const row = db.prepare("SELECT * FROM mindmaps WHERE id = ?").get(id);
@@ -171,6 +177,11 @@ app.put("/:id", async (c) => {
     return c.json({ error: "无权修改此导图", code: "FORBIDDEN" }, 403);
   }
 
+  // visibility 仅创建者可修改
+  if (body.visibility !== undefined && existing.userId !== userId) {
+    return c.json({ error: "仅创建者可修改可见性" }, 403);
+  }
+
   const updates: string[] = [];
   const values: any[] = [];
 
@@ -181,6 +192,14 @@ app.put("/:id", async (c) => {
   if (body.data !== undefined) {
     updates.push("data = ?");
     values.push(typeof body.data === "string" ? body.data : JSON.stringify(body.data));
+  }
+  if (body.visibility !== undefined) {
+    // 只有 PRIVATE 或 WORKSPACE 是合法值
+    if (body.visibility !== "PRIVATE" && body.visibility !== "WORKSPACE") {
+      return c.json({ error: "可见性仅支持 PRIVATE 或 WORKSPACE" }, 400);
+    }
+    updates.push("visibility = ?");
+    values.push(body.visibility);
   }
   // 显式忽略 body.workspaceId：不允许跨空间迁移
 
