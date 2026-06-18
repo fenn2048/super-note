@@ -1741,7 +1741,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     const isCurrentlyPublic = visTarget?.visibility === "WORKSPACE";
     items.push({
       id: "toggle_visibility",
-      label: isCurrentlyPublic ? t('"'"'sidebar.makePrivate'"'"', '"'"'设为仅自己可见'"'"') : t('"'"'sidebar.makePublic'"'"', '"'"'设为所有人可见'"'"'),
+      label: isCurrentlyPublic ? t('sidebar.makePrivate', '设为仅自己可见') : t('sidebar.makePublic', '设为所有人可见'),
       icon: isCurrentlyPublic ? <Lock size={14} /> : <Globe size={14} />,
     });
     items.push({ id: "sep2", label: "", separator: true });
