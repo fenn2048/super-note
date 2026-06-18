@@ -708,7 +708,7 @@ function QuickAdd({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSubmit: (workspaceId?: string) => void;
+  onSubmit: (workspaceId?: string, addAsTodo?: boolean) => void;
   onUploaded: (orphanIds: string[]) => void;
   inputRef: React.RefObject<HTMLInputElement>;
   workspaces: Workspace[];
@@ -776,6 +776,7 @@ function QuickAdd({
 
   const [isPersonal, setIsPersonal] = useState(true);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [addAsTodo, setAddAsTodo] = useState(false);
   const [showWsSelector, setShowWsSelector] = useState(false);
   const wsSelectorRef = useRef<HTMLDivElement>(null);
 
@@ -796,7 +797,8 @@ function QuickAdd({
       toast.error(t('tasks.emptyProjectWarning'));
       return;
     }
-    onSubmit(isPersonal ? "personal" : (selectedWorkspaceId || undefined));
+    onSubmit(isPersonal ? "personal" : (selectedWorkspaceId || undefined), addAsTodo);
+    setAddAsTodo(false);
     // 把孤儿列表交给父组件处理 bind，本地清掉
     onUploaded(orphans.map((o) => o.id));
     setOrphans([]);
@@ -998,6 +1000,19 @@ function QuickAdd({
         />
       </div>
 
+      {/* 待办勾选框 */}
+      <div className="flex items-center gap-1.5 px-1 pt-1.5">
+        <label className="flex items-center gap-1.5 text-xs text-tx-tertiary cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={addAsTodo}
+            onChange={(e) => setAddAsTodo(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-app-border accent-accent-primary"
+          />
+          {t('tasks.addAsTodo') || '待办'}
+        </label>
+      </div>
+
       {/* @提及选择器 */}
       {mentionTrigger && (
         <div className="relative z-50">
@@ -1196,12 +1211,43 @@ export default function TaskCenter() {
     }
   };
 
-  const handleCreate = async (workspaceId?: string) => {
+  const handleCreate = async (workspaceId?: string, addAsTodo?: boolean) => {
     if (!newTitle.trim()) return;
     const titleToCreate = newTitle.trim();
     const orphanIds = pendingOrphansRef.current;
     pendingOrphansRef.current = [];
     try {
+      if (addAsTodo) {
+        // 待办 → 创建为项目任务，放入"待规划"阶段
+        // 找当前用户的个人TODO或家庭TODO项目
+        const projects = await api.getProjects(workspaceId, "active");
+        const todoProject = projects.find(p => p.name === "家庭TODO" || p.name === "个人TODO");
+        if (todoProject) {
+          const stages = await api.getProjectStages(todoProject.id);
+          const todoStage = stages.find(s => s.name === "待规划");
+          if (todoStage) {
+            const task = await api.createProjectTask(todoProject.id, {
+              stageId: todoStage.id,
+              title: titleToCreate,
+              description: titleToCreate,
+            });
+            // 刷新项目看板数据
+            window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
+            setNewTitle("");
+            inputRef.current?.focus();
+            if (orphanIds.length) {
+              await Promise.all(
+                orphanIds.map((id) =>
+                  api.taskAttachments.bind(id, task.id).catch(() => null)
+                )
+              );
+            }
+            return;
+          }
+        }
+        // 找不到项目/阶段时降级为普通任务
+      }
+
       const task = await api.createTask({
         title: titleToCreate,
         workspaceId: workspaceId || undefined,
