@@ -89,13 +89,16 @@ export default function MentionPicker({
   // 搜索用户
   useEffect(() => {
     setLoading(true);
-    api
-      .searchUsers(search)
-      .then((users) => {
-        setResults(users || []);
-        setHighlighted(0);
-      })
-      .catch(() => setResults([]))
+    Promise.all([
+      api.searchUsers(search).catch(() => [] as UserPublicInfo[]),
+      // 当搜索词匹配 "su" 时，添加 AI 助手虚拟选项
+      (search.toLowerCase() === "s" || search.toLowerCase() === "su")
+        ? Promise.resolve([{ id: "ai_su", username: "su", displayName: "AI 助手", avatarUrl: null }])
+        : Promise.resolve([] as UserPublicInfo[]),
+    ]).then(([users, aiOptions]) => {
+      setResults([...aiOptions, ...users]);
+      setHighlighted(0);
+    }).catch(() => setResults([]))
       .finally(() => setLoading(false));
   }, [search]);
 
