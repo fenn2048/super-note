@@ -975,10 +975,15 @@ const NoteCard = React.memo(function NoteCard({
             // 和 CJK/英文/空格混排都稳定，并自带省略号。
             // break-all：兜底——遇到极长不可断词（连续超长英文/无空格 URL）也强制裁断，
             // 不让一行的"内容宽度"超过容器，导致 flex 容器再被撑变形。
-            "text-sm font-medium line-clamp-1 break-all flex-1 min-w-0",
+            "text-sm font-medium line-clamp-1 break-all flex-1 min-w-0 flex items-center gap-1",
             isActive ? "text-tx-primary" : "text-tx-secondary group-hover:text-tx-primary"
           )}>
-            {note.title || t('common.untitledNote')}
+            {note.visibility && note.workspaceId && (
+              <span className="text-[10px] shrink-0" title={note.visibility === "WORKSPACE" ? "所有人可见" : "仅自己可见"}>
+                {note.visibility === "WORKSPACE" ? "🌐" : "🔒"}
+              </span>
+            )}
+            <span className="truncate">{note.title || t('common.untitledNote')}</span>
           </h3>
           <div className="flex items-center gap-1 shrink-0">
             {isShared && <Share2 size={11} className="text-emerald-500" />}

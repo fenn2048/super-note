@@ -562,6 +562,11 @@ const NotebookItem = React.memo(function NotebookItemInner({
         ) : (
           <>
             <span className="flex-1 min-w-0 truncate">{notebook.name}</span>
+            {notebook.visibility && notebook.workspaceId && (
+              <span className="text-[10px] shrink-0 mr-1" title={notebook.visibility === "WORKSPACE" ? "所有人可见" : "仅自己可见"}>
+                {notebook.visibility === "WORKSPACE" ? "🌐" : "🔒"}
+              </span>
+            )}
             {notebook.noteCount !== undefined && notebook.noteCount > 0 && (
               <span className="text-[10px] text-tx-tertiary tabular-nums shrink-0">{notebook.noteCount}</span>
             )}
