@@ -98,7 +98,7 @@ const MOODS = [
   { value: "shock", emoji: "😱" },
 ];
 
-export const AI_ASSISTANT_ID = "00000000-0000-0000-0000-000000000001";
+export const SU_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function getMoodEmoji(mood: string): string {
   return MOODS.find((m) => m.value === mood)?.emoji || "";
@@ -1765,7 +1765,7 @@ function DiaryCard({
               </div>
 
               {/* AI 说说标注：由谁调起 */}
-              {item.triggerUserId && item.userId === AI_ASSISTANT_ID && (
+              {item.triggerUserId && item.userId === SU_USER_ID && (
                 <div className="text-[10px] text-tx-tertiary mt-1">
                   由用户调起 AI 助手生成
                 </div>
@@ -1882,7 +1882,7 @@ function DiaryCard({
                     {comments.map((comment) => (
                       <div key={comment.id} className="flex items-start gap-2 text-xs">
                         {/* 头像 */}
-                        {comment.userId === AI_ASSISTANT_ID ? (
+                        {comment.userId === SU_USER_ID ? (
                           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xs mt-0.5 shrink-0">
                             🤖
                           </div>
@@ -1900,8 +1900,8 @@ function DiaryCard({
                         {/* 评论内容 */}
                         <div className="flex-1 min-w-0 bg-app-subtle/50 px-2.5 py-1.5 rounded-lg">
                           <div className="flex items-center justify-between">
-                            <span className={cn("font-semibold", comment.userId === AI_ASSISTANT_ID ? "text-violet-500" : "text-tx-primary")}>
-                              {comment.userId === AI_ASSISTANT_ID ? "AI 助手" : comment.username}
+                            <span className={cn("font-semibold", comment.userId === SU_USER_ID ? "text-violet-500" : "text-tx-primary")}>
+                              {comment.userId === SU_USER_ID ? "AI 助手" : comment.username}
                             </span>
                             <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
                           </div>

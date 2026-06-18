@@ -43,7 +43,7 @@ import tokensRouter from "./routes/tokens";
 import userMigrationRouter from "./routes/user-migration";
 import versionRouter, { resolveAppVersion } from "./routes/version";
 import releasesRouter from "./routes/releases";
-import { seedDatabase, initAiAssistantUser } from "./db/seed";
+import { seedDatabase } from "./db/seed";
 import { initApiTokensTable, looksLikeApiToken, resolveApiToken } from "./lib/api-tokens";
 import { getDb, closeDb } from "./db/schema";
 import { generateOpenAPISpec } from "./services/openapi";
@@ -86,7 +86,6 @@ app.use("/api/*", compress());
 // 初始化数据库
 getDb();
 seedDatabase();
-initAiAssistantUser();
 
 // 提前创建 webhooks / audit_logs 表。
 // 这两张表原本是"路由被访问时懒初始化"，但 notes/notebooks/tasks 等路由会在写操作中

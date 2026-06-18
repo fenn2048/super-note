@@ -1369,11 +1369,23 @@ diary.delete("/comments/:commentId", (c) => {
 
 // ===== 说说 AI 助手 =====
 import { extractKeywords, callLLM } from "./ai";
-import { AI_ASSISTANT_USER_ID } from "../db/seed";
+
+const SU_USER_ID = "00000000-0000-0000-0000-000000000001";
+
+function ensureSuUser(db: any) {
+  const exists = db.prepare("SELECT id FROM users WHERE id = ?").get(SU_USER_ID);
+  if (exists) return;
+  const hash = crypto.createHash("sha256").update(crypto.randomUUID()).digest("hex");
+  db.prepare(`
+    INSERT INTO users (id, username, email, passwordHash, role, displayName, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(SU_USER_ID, "su", null, hash, "ai", "AI 助手");
+}
 
 diary.post("/ai-ask", async (c) => {
   const db = getDb();
   const userId = c.req.header("X-User-Id")!;
+  ensureSuUser(db);
   const body = await c.req.json() as { mode: "post" | "comment"; diaryId?: string; question: string };
   const { mode, diaryId, question } = body;
 
@@ -1473,7 +1485,7 @@ diary.post("/ai-ask", async (c) => {
     db.prepare(`
       INSERT INTO diaries (id, userId, contentText, mood, images, visibility, voice, createdAt, trigger_user_id)
       VALUES (?, ?, ?, '', '[]', 'PUBLIC', NULL, ?, ?)
-    `).run(newDiaryId, AI_ASSISTANT_USER_ID, answer, now, userId);
+    `).run(newDiaryId, SU_USER_ID, answer, now, userId);
 
     const created = db.prepare(`
       SELECT d.*, COALESCE(u.displayName, u.username) AS creatorName
@@ -1490,7 +1502,7 @@ diary.post("/ai-ask", async (c) => {
     db.prepare(`
       INSERT INTO diary_comments (id, diaryId, userId, content, createdAt, updatedAt, trigger_user_id)
       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), ?)
-    `).run(commentId, diaryId!, AI_ASSISTANT_USER_ID, answer.trim(), userId);
+    `).run(commentId, diaryId!, SU_USER_ID, answer.trim(), userId);
 
     const newComment = db.prepare(`
       SELECT dc.*, COALESCE(u.displayName, u.username) AS username, u.avatarUrl
@@ -1520,7 +1532,7 @@ function sendAiNotification(
     db.prepare(
       `INSERT INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, actorName, createdAt)
        VALUES (?, ?, 'ai_diary_reply', 'diary', ?, ?, ?, 'AI 助手', datetime('now'))`
-    ).run(notifId, targetUserId, diaryId, sourceTitle, AI_ASSISTANT_USER_ID);
+    ).run(notifId, targetUserId, diaryId, sourceTitle, SU_USER_ID);
 
     try {
       const { broadcastToUser } = require("../services/realtime");
