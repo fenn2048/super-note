@@ -39,11 +39,15 @@ ARG TARGETARCH=
 ARG APK_MIRROR=""
 ARG NPM_REGISTRY=""
 
+# 通过 --build-arg SKIP_ANDROID=1 跳过 Android APK 打包（加快构建速度）
+ARG SKIP_ANDROID=""
+
 # ---------- Stage 1: 前端构建 ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS frontend-build
 ARG TARGETARCH
 ARG APK_MIRROR
 ARG NPM_REGISTRY
+ARG SKIP_ANDROID
 WORKDIR /app
 
 # 安装 bash（脚本依赖）
@@ -66,8 +70,34 @@ COPY packages/supernote-clipper ./packages/supernote-clipper
 COPY frontend ./frontend
 
 # 运行整合了打包插件、编译前端、可跳过安卓打包的自签名编译脚本
-RUN chmod +x frontend/android/build_signed_debug_apk.sh \
-    && TARGETARCH=${TARGETARCH} ./frontend/android/build_signed_debug_apk.sh
+# Android 打包：默认打 APK；传入 --build-arg SKIP_ANDROID=1 时只构建前端，跳过 Android 部分
+RUN if [ -n "$SKIP_ANDROID" ]; then \
+      echo "SKIP_ANDROID=1，仅构建前端，跳过 Android APK 打包"; \
+      \
+      cd frontend \
+      && npm ci --no-audit --no-fund --legacy-peer-deps; \
+      \
+      if [ -n "${TARGETARCH}" ]; then \
+        ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}"); \
+        [ -z "$ROLLUP_VER" ] && ROLLUP_VER="4.59.0"; \
+        case "$TARGETARCH" in \
+          amd64) ROLLUP_PKG="@rollup/rollup-linux-x64-musl@${ROLLUP_VER}" ;; \
+          arm64) ROLLUP_PKG="@rollup/rollup-linux-arm64-musl@${ROLLUP_VER}" ;; \
+          *)     ROLLUP_PKG="" ;; \
+        esac; \
+        if [ -n "$ROLLUP_PKG" ]; then \
+          echo "Installing rollup target arch pkg: $ROLLUP_PKG"; \
+          npm install "$ROLLUP_PKG" --save-optional --no-audit --no-fund 2>/dev/null || true; \
+        fi; \
+      fi; \
+      \
+      npm run build; \
+      \
+      echo "前端构建完成（不含 Android APK）"; \
+    else \
+      chmod +x frontend/android/build_signed_debug_apk.sh \
+      && TARGETARCH=${TARGETARCH} ./frontend/android/build_signed_debug_apk.sh; \
+    fi
 
 # ---------- Stage 2: 后端构建（tsc） ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS backend-build
