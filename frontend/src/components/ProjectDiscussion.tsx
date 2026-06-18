@@ -91,7 +91,8 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
       setSending(true);
       try {
         const context = `项目名称：${project.name}\n项目描述：${project.description || "无"}\n`;
-        const aiReply = await api.aiChat("chat", su.cleanText, context);
+        const customPrompt = `你是一个项目助手。用户正在讨论以下项目：\n${context}\n请根据以上项目信息，回答用户的问题。回答要简洁、有帮助，可以引用项目中的具体信息。`;
+        const aiReply = await api.aiChat("custom", su.cleanText, context, undefined, customPrompt);
         const aiPost = await api.createProjectDiscussion(project.id, {
           content: `**AI 助手** 🤖\n\n${aiReply}`,
           linkedCards: [],
