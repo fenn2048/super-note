@@ -1641,6 +1641,42 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+
+  // ==========================================================================
+  // v25：notes/notebooks/mindmaps 加 visibility 列 + 索引
+  // --------------------------------------------------------------------------
+  // 为三张核心内容表增加 visibility 字段（PRIVATE / WORKSPACE / PUBLIC），
+  // 支持"工作区笔记可以设为工作区可见 / 公开可见"的分享语义。
+  //
+  // 默认值 PRIVATE：存量数据升级后全部视为私有，行为与之前完全一致。
+  // 索引 (workspaceId, visibility, userId)：覆盖最常见的按空间 + 可见性 + 用户
+  // 过滤查询，例如"工作区里所有 PUBLIC 的笔记"。
+  //
+  // 幂等性：PRAGMA table_info 探测已存在列时跳过；CREATE INDEX IF NOT EXISTS。
+  {
+    version: 25,
+    name: "add-visibility-to-notes-notebooks-mindmaps",
+    up: (db) => {
+      // notes 表
+      const noteCols = db.prepare("PRAGMA table_info(notes)").all() as { name: string }[];
+      if (!noteCols.some((c) => c.name === "visibility")) {
+        db.exec("ALTER TABLE notes ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PRIVATE'");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_notes_visibility ON notes(workspaceId, visibility, userId)");
+      }
+      // notebooks 表
+      const nbCols = db.prepare("PRAGMA table_info(notebooks)").all() as { name: string }[];
+      if (!nbCols.some((c) => c.name === "visibility")) {
+        db.exec("ALTER TABLE notebooks ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PRIVATE'");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_notebooks_visibility ON notebooks(workspaceId, visibility, userId)");
+      }
+      // mindmaps 表（表可能尚不存在——老库没有导图模块则跳过）
+      const mmCols = db.prepare("PRAGMA table_info(mindmaps)").all() as { name: string }[];
+      if (mmCols.length > 0 && !mmCols.some((c) => c.name === "visibility")) {
+        db.exec("ALTER TABLE mindmaps ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PRIVATE'");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_mindmaps_visibility ON mindmaps(workspaceId, visibility, userId)");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */
