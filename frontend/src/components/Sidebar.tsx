@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import TagColorPopover from "@/components/TagColorPopover";
-import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -1140,180 +1139,7 @@ function ProjectSidebar() {
         )}
       </div>
 
-      {/* Favorites */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between px-3 py-1">
-          <button
-            onClick={() => setFavsExpanded(!favsExpanded)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-tx-tertiary hover:text-tx-secondary transition-colors uppercase tracking-wider"
-          >
-            <ChevronDown
-              size={12}
-              className={cn("transition-transform duration-200", !favsExpanded && "-rotate-90")}
-            />
-            <span>{t("projects.favorites") || "我的收藏"}</span>
-          </button>
-        </div>
-        {favsExpanded && (
-          <div className="space-y-0.5 pl-1.5 animate-in fade-in duration-200">
-            {favoriteProjects.length === 0 ? (
-              <p className="text-[11px] text-tx-tertiary px-3 py-1">{t("projects.noFavorites") || "暂无收藏"}</p>
-            ) : (
-              favoriteProjects.map((p) => {
-                const isActive = activeFilter.type === "detail" && activeFilter.projectId === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors cursor-pointer truncate",
-                      isActive
-                        ? "bg-app-active text-tx-primary font-medium"
-                        : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-                    )}
-                    onClick={() => selectFilter({ type: "detail", projectId: p.id })}
-                  >
-                    <Bookmark size={14} className="text-accent-primary shrink-0" />
-                    <span className="truncate">{p.name}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-      </div>
 
-      {/* Project Tag Filter */}
-      <div className="border-t border-app-border/50 shrink-0">
-        <button
-          onClick={() => setProjectTagsExpanded(!projectTagsExpanded)}
-          className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
-        >
-          <span className="text-xs font-semibold text-tx-primary uppercase tracking-wider">
-            {t("sidebar.tags") || "标签"}
-          </span>
-          <ChevronDown
-            size={14}
-            className={cn(
-              "text-tx-tertiary transition-transform duration-200",
-              !projectTagsExpanded && "-rotate-90"
-            )}
-          />
-        </button>
-        <AnimatePresence initial={false}>
-          {projectTagsExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, overflow: "hidden" }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-              transition={{ duration: 0.2 }}
-              style={{ overflow: "hidden" }}
-            >
-              <div
-                className="px-2 pb-2 space-y-0.5 overflow-y-auto"
-                style={{ maxHeight: "min(35vh, 260px)" }}
-              >
-                <div
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer",
-                    !selectedProjectTagId
-                      ? "bg-app-active text-tx-primary font-medium"
-                      : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-                  )}
-                  onClick={() => selectTagFilter(null)}
-                >
-                  <span
-                    className="shrink-0 inline-block rounded-full bg-tx-tertiary"
-                    style={{ width: 6, height: 6 }}
-                  />
-                  <span className="flex-1 truncate text-left">{t("projects.allTags") || "全部"}</span>
-                </div>
-                {projectTags.length === 0 ? (
-                  <p className="text-[10px] text-tx-tertiary px-2 py-1">{t("projects.noTags") || "暂无标签"}</p>
-                ) : (
-                  projectTags.map((tag) => {
-                    const isActive = selectedProjectTagId === tag.id;
-                    return (
-                      <div
-                        key={tag.id}
-                        className={cn(
-                          "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer",
-                          isActive
-                            ? "bg-app-active text-tx-primary font-medium"
-                            : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-                        )}
-                        onClick={() => {
-                          if (projTagLongPressFired.current) {
-                            projTagLongPressFired.current = false;
-                            return;
-                          }
-                          selectTagFilter(tag.id);
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setTagColorPopover({
-                            tagId: tag.id,
-                            tagName: tag.name,
-                            color: tag.color,
-                            x: e.clientX,
-                            y: e.clientY,
-                          });
-                        }}
-                        onTouchStart={(e) => {
-                          const touch = e.touches[0];
-                          if (!touch) return;
-                          const startX = touch.clientX;
-                          const startY = touch.clientY;
-                          projTagLongPressFired.current = false;
-                          if (projTagLongPressTimer.current) clearTimeout(projTagLongPressTimer.current);
-                          projTagLongPressTimer.current = setTimeout(() => {
-                            projTagLongPressFired.current = true;
-                            setTagColorPopover({
-                              tagId: tag.id,
-                              tagName: tag.name,
-                              color: tag.color,
-                              x: startX,
-                              y: startY,
-                            });
-                          }, 500);
-                        }}
-                        onTouchMove={(e) => {
-                          if (projTagLongPressTimer.current) {
-                            clearTimeout(projTagLongPressTimer.current);
-                            projTagLongPressTimer.current = null;
-                          }
-                        }}
-                        onTouchEnd={() => {
-                          if (projTagLongPressTimer.current) {
-                            clearTimeout(projTagLongPressTimer.current);
-                            projTagLongPressTimer.current = null;
-                          }
-                        }}
-                        onTouchCancel={() => {
-                          if (projTagLongPressTimer.current) {
-                            clearTimeout(projTagLongPressTimer.current);
-                            projTagLongPressTimer.current = null;
-                          }
-                        }}
-                      >
-                        <span
-                          className="shrink-0 inline-block rounded-full"
-                          style={{
-                            width: 6,
-                            height: 6,
-                            backgroundColor: tag.color || "#8b5cf6",
-                          }}
-                        />
-                        <span className="flex-1 truncate text-left">{tag.name}</span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
     </ScrollArea>
 
     {/* 项目标签颜色选择浮层：右键 / 长按触发 */}
@@ -2488,39 +2314,24 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         </div>
       </div>
 
-      {/* Workspace Switcher + Search（v15：合并垂直 padding，
-          原来 pt-2 + py-2 共占 ~16px 间隙，现在压到 ~8px） */}
-      <div className="px-3 pt-2 pb-1">
-        <WorkspaceSwitcher />
-      </div>
 
       {/* Search */}
-      <div className="px-3 pb-1.5">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
-          <Input
-            placeholder={state.viewMode === "projects" ? (t('projects.searchTasksPlaceholder') || "搜索任务...") : t('sidebar.searchPlaceholder')}
-            className="pl-8 h-8 text-xs bg-app-bg border-app-border"
-            value={searchInput}
-            /* data-sidebar-search：Electron 原生"搜索"菜单 / Dock Quick Action 的
-             * 聚焦目标。见 App.tsx 的 onOpenSearch。本应用没有全局搜索弹窗，
-             * "搜索"语义就是聚焦此输入框。 */
-            data-sidebar-search=""
-            onChange={(e) => {
-              const query = e.target.value;
-              setSearchInput(query);
-              
-              if (state.viewMode === "projects") {
-                // 项目管理视图：更新任务搜索状态
-                setProjectSearchQuery(query);
-                try {
-                  sessionStorage.setItem("super-project-search-query", JSON.stringify(query));
-                } catch {}
-                // 广播搜索状态变化，让 ProjectCenter 同步
-                window.dispatchEvent(
-                  new CustomEvent("super:project-search-changed", { detail: { query } })
-                );
-              } else {
+      {state.viewMode !== "projects" && (
+        <div className="px-3 pb-1.5">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
+            <Input
+              placeholder={t('sidebar.searchPlaceholder')}
+              className="pl-8 h-8 text-xs bg-app-bg border-app-border"
+              value={searchInput}
+              /* data-sidebar-search：Electron 原生"搜索"菜单 / Dock Quick Action 的
+               * 聚焦目标。见 App.tsx 的 onOpenSearch。本应用没有全局搜索弹窗，
+               * "搜索"语义就是聚焦此输入框。 */
+              data-sidebar-search=""
+              onChange={(e) => {
+                const query = e.target.value;
+                setSearchInput(query);
+                
                 // 其他视图：笔记搜索逻辑
                 if (query.trim()) {
                   actions.setViewMode("search");
@@ -2529,11 +2340,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                   actions.setViewMode("all");
                   actions.setSearchQuery("");
                 }
-              }
-            }}
-          />
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ===== Navigation =====
           v16 P3 后续：移动端也已下沉到 NavRail variant="mobile"，主区不再渲染。

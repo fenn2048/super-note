@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from "@/types";
 import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -346,7 +347,6 @@ export default function Dashboard() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [creating, setCreating] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [showSpaceDropdown, setShowSpaceDropdown] = useState(false);
 
   const currentWorkspaceId = getCurrentWorkspace();
   const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId) || (workspaces.length > 0 ? workspaces[0] : null);
@@ -460,11 +460,6 @@ export default function Dashboard() {
     return () => window.removeEventListener("super:workspace-changed", handleWorkspaceChanged);
   }, [loadDashboard]);
 
-  const handleSwitchSpace = (id: string) => {
-    setCurrentWorkspace(id);
-    setShowSpaceDropdown(false);
-    window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: id } }));
-  };
 
   // Combine simple tasks and project tasks for upcoming display
   const upcomingTasks = (() => {
@@ -600,43 +595,7 @@ export default function Dashboard() {
       {/* 首页顶栏 */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/20 shrink-0 select-none" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
         <span className="text-sm font-bold text-tx-primary">首页</span>
-        <div className="relative">
-          <button
-            onClick={() => setShowSpaceDropdown(!showSpaceDropdown)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-app-border bg-app-surface hover:bg-app-hover active:scale-95 transition-all text-xs font-semibold text-tx-primary"
-          >
-            <span>{currentWorkspace?.icon} {currentWorkspace?.name || "选择工作区"}</span>
-            <ChevronDown size={14} className={cn("transition-transform duration-200", showSpaceDropdown && "rotate-180")} />
-          </button>
-          
-          <AnimatePresence>
-            {showSpaceDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowSpaceDropdown(false)} />
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  className="absolute right-0 mt-1 bg-app-elevated border border-app-border rounded-xl shadow-lg z-50 overflow-hidden w-[160px] py-1"
-                >
-                  {workspaces.map((w) => (
-                    <button
-                      key={w.id}
-                      onClick={() => handleSwitchSpace(w.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-app-hover transition-colors",
-                        currentWorkspaceId === w.id && "text-accent-primary font-bold bg-accent-primary/5"
-                      )}
-                    >
-                      <span>{w.icon || "🏢"}</span>
-                      <span className="truncate">{w.name}</span>
-                    </button>
-                  ))}
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+        <WorkspaceSwitcher variant="header" />
       </header>
 
       <div className="flex-1 overflow-y-auto">

@@ -443,6 +443,7 @@ export interface Diary {
   createdAt: string;
   /** 创建者用户名；后端 LEFT JOIN users 返回，工作区视图下用于展示"谁发的"。 */
   creatorName?: string | null;
+  creatorAvatarUrl?: string | null;
   tags?: Tag[];
   commentCount?: number;
   /** AI 助手发布的说说时，记录谁调起的 AI */

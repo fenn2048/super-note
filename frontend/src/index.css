@@ -41,6 +41,28 @@
   font-size-adjust: from-font;
   line-height: 1.6;
 
+  /* Unified Spacing System */
+  --space-xs: 0.25rem;  /* 4px */
+  --space-sm: 0.5rem;   /* 8px */
+  --space-md: 0.75rem;  /* 12px */
+  --space-lg: 1rem;     /* 16px */
+  --space-xl: 1.5rem;   /* 24px */
+  --space-xxl: 2rem;    /* 32px */
+
+  /* Unified Font Size System */
+  --font-size-display-lg: 2rem;       /* 32px */
+  --font-size-display-md: 1.75rem;    /* 28px */
+  --font-size-display-sm: 1.5rem;     /* 24px */
+  --font-size-title-lg: 1.25rem;      /* 20px */
+  --font-size-title-md: 1.125rem;     /* 18px */
+  --font-size-title-sm: 1rem;         /* 16px */
+  --font-size-body-lg: 1rem;          /* 16px */
+  --font-size-body-md: 0.875rem;      /* 14px */
+  --font-size-body-sm: 0.75rem;       /* 12px */
+  --font-size-label-lg: 0.875rem;     /* 14px */
+  --font-size-label-md: 0.75rem;      /* 12px */
+  --font-size-label-sm: 0.6875rem;    /* 11px */
+
   --color-bg: #ffffff;
   --color-surface: #ffffff;
   --color-sidebar: #f5f5f5;
@@ -83,6 +105,23 @@
   :root {
     line-height: 1.65;
   }
+}
+
+/* Global LXGW WenKai Activation */
+html.font-lxgw,
+html.font-lxgw body,
+html.font-lxgw input,
+html.font-lxgw textarea,
+html.font-lxgw select,
+html.font-lxgw button {
+  font-family: "LXGW WenKai Screen", 'Inter', 'system-ui', '-apple-system', sans-serif !important;
+}
+html.font-lxgw,
+html.font-lxgw * {
+  font-size-adjust: none !important;
+}
+html.font-lxgw {
+  --editor-font-family: "LXGW WenKai Screen", sans-serif !important;
 }
 
 /* ===== Dark Theme (默认：Obsidian Dark - 优化为高档深蓝灰) ===== */

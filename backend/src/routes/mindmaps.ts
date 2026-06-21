@@ -35,6 +35,7 @@ function ensureTable() {
       workspaceId TEXT,
       title TEXT NOT NULL DEFAULT '无标题导图',
       data TEXT NOT NULL DEFAULT '{}',
+      visibility TEXT NOT NULL DEFAULT 'PRIVATE',
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
@@ -43,6 +44,13 @@ function ensureTable() {
     CREATE INDEX IF NOT EXISTS idx_mindmaps_updated ON mindmaps(updatedAt DESC);
     CREATE INDEX IF NOT EXISTS idx_mindmaps_workspace ON mindmaps(workspaceId);
   `);
+
+  // 兜底：如果 mindmaps 表之前被旧的 ensureTable 创建且缺 visibility 列，这里补上
+  const columns = db.prepare("PRAGMA table_info(mindmaps)").all() as { name: string }[];
+  if (!columns.some(col => col.name === 'visibility')) {
+    db.exec("ALTER TABLE mindmaps ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PRIVATE'");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_mindmaps_visibility ON mindmaps(workspaceId, visibility, userId)");
+  }
 }
 
 // 初始化表

@@ -168,8 +168,8 @@ export default function MentionPicker({
   return (
     <div
       ref={containerRef}
-      className={`fixed z-[1000] w-56 max-h-44 overflow-y-auto bg-app-elevated border border-app-border rounded-lg shadow-xl ${
-        !anchorRect ? "relative" : ""
+      className={`z-[1000] w-56 max-h-44 overflow-y-auto bg-app-elevated border border-app-border rounded-lg shadow-xl ${
+        anchorRect ? "fixed" : "absolute"
       }`}
       style={!anchorRect ? {} : style}
     >

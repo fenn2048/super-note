@@ -528,6 +528,8 @@
     "deleteFont": "Delete Font",
     "importFont": "Import Font",
     "importFontHint": "Supports OTF / OTC / TTC / TTF / WOFF2 · Batch selection",
+    "lxgwWenkaiFont": "Use LXGW WenKai Font Globally",
+    "lxgwWenkaiFontDesc": "When enabled, the entire application UI and editor will use the LXGW WenKai Screen webfont",
     "fontPreviewEn": "The quick brown fox jumps over the lazy dog.",
     "fontPreviewZh": "ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789",
     "sidebarWidth": "Sidebar Width",

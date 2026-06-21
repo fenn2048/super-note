@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 interface DailyDiaryStat {
@@ -11,29 +11,30 @@ interface DiaryHeatMapProps {
   onDateSelect?: (date: string) => void;
 }
 
-const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
 
 /**
- * DiaryHeatMap - 说说热力图（仿 GitHub contribution graph）
- * 显示最近若干周的说发布统计，支持点击跳转到对应日期。
+ * DiaryHeatMap - 说说热力图（仿 Memos 风格）
+ * 显示最近若干周的说发布统计，支持点击过滤。
  */
 export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps) {
   const [hoveredCell, setHoveredCell] = useState<{ date: string; count: number } | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // ---- 构建日期网格（行=周一~周日，列=周） ----
+  // ---- 构建日期网格（列=周，行=周日~周六，即 Sunday-start） ----
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayStr = formatDate(today);
 
-  // 以今天所在周的周日为网格最后一列
+  // 最后一列以今天所在周的周六为结尾
   const dayOfWeek = today.getDay();
-  const sundayOffset = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const satOffset = dayOfWeek === 6 ? 0 : 6 - dayOfWeek;
   const gridEnd = new Date(today);
-  gridEnd.setDate(gridEnd.getDate() + sundayOffset);
+  gridEnd.setDate(gridEnd.getDate() + satOffset);
 
   const TOTAL_WEEKS = 12;
   const gridStart = new Date(gridEnd);
+  // 从周六往前推 (TOTAL_WEEKS * 7 - 1) 天，第一天必然是周日
   gridStart.setDate(gridStart.getDate() - (TOTAL_WEEKS * 7 - 1));
 
   // 按 列=周, 行=周几 填充
@@ -55,57 +56,41 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
     statMap.set(s.date, s.count);
   }
 
-  // ---- 颜色等级（更温润的渐变色阶，使用动态主题色） ----
+  // ---- 绿色渐变色阶 ----
   const getColorClass = (count: number): string => {
-    if (count === 0) return "bg-app-hover/30";
-    if (count === 1) return "bg-accent-primary/20";
-    if (count === 2) return "bg-accent-primary/45";
-    if (count === 3) return "bg-accent-primary/70";
-    return "bg-accent-primary";
+    if (count === 0) return "bg-neutral-200/50 dark:bg-neutral-800/50 hover:bg-neutral-200/70 dark:hover:bg-neutral-800/70";
+    if (count === 1) return "bg-emerald-400/50 dark:bg-emerald-500/40";
+    if (count === 2) return "bg-emerald-400/75 dark:bg-emerald-500/65";
+    if (count === 3) return "bg-emerald-500 dark:bg-emerald-400";
+    return "bg-emerald-600 dark:bg-emerald-300";
   };
 
   // ---- 统计 ----
-  const totalCount = stats.reduce((sum, s) => sum + s.count, 0);
-  const activeDays = stats.filter((s) => s.count > 0).length;
+  const totalCount = useMemo(() => {
+    return stats.reduce((sum, s) => sum + s.count, 0);
+  }, [stats]);
+
+  // 计算第一次发布到现在的天数（如果没数据，默认 1 天）
+  const daysCount = useMemo(() => {
+    if (stats.length === 0) return 1;
+    const dates = stats.map((s) => new Date(s.date).getTime());
+    const minDate = Math.min(...dates);
+    const diffMs = Date.now() - minDate;
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays);
+  }, [stats]);
 
   return (
-    <div className="flex flex-col gap-2.5 select-none">
-      {/* 标题行：说说动态 + 总数 */}
-      <div className="flex items-center justify-between px-0.5">
-        <span className="text-[11px] font-semibold text-tx-secondary uppercase tracking-wide">
-          说说动态
-        </span>
-        <span className="text-[10px] text-tx-tertiary tabular-nums">
-          {totalCount} 条 · {activeDays} 天
-        </span>
-      </div>
-
-      {/* 热力图主体 */}
-      <div className="flex gap-0.5">
-        {/* 左侧：周几标签 */}
-        <div className="flex flex-col gap-0.5 mr-0.5">
-          {WEEKDAY_LABELS.map((label, i) => (
-            <div
-              key={label}
-              className={cn(
-                "w-[18px] h-[14px] flex items-center justify-center text-[9px]",
-                i % 2 === 0 ? "text-tx-tertiary/60" : "text-transparent",
-              )}
-            >
-              {i % 2 === 0 ? label : ""}
-            </div>
-          ))}
-        </div>
-
-        {/* 右侧：网格 */}
+    <div className="flex flex-col gap-1.5 select-none relative">
+      <div className="flex items-center gap-1.5">
+        {/* 左侧：网格 */}
         <div className="flex-1 min-w-0">
-          {/* 格子 */}
           <div className="flex gap-0.5">
             {grid.map((week, colIdx) => (
               <div key={colIdx} className="flex flex-col gap-0.5">
                 {week.map((date, rowIdx) => {
                   if (!date) {
-                    return <div key={rowIdx} className="w-[14px] h-[14px] rounded-[2px]" />;
+                    return <div key={rowIdx} className="w-[14px] h-[14px]" />;
                   }
                   const dateStr = formatDate(date);
                   const count = statMap.get(dateStr) || 0;
@@ -115,6 +100,7 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
                   return (
                     <button
                       key={rowIdx}
+                      type="button"
                       onClick={() => {
                         if (count > 0) {
                           setSelectedDate(dateStr);
@@ -124,13 +110,13 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
                       onMouseEnter={() => count > 0 && setHoveredCell({ date: dateStr, count })}
                       onMouseLeave={() => setHoveredCell(null)}
                       className={cn(
-                        "w-[14px] h-[14px] rounded-[2px] transition-all duration-150",
+                        "w-[14px] h-[14px] rounded-[4px] transition-all duration-150 relative",
                         count === 0
-                          ? "bg-app-hover/20 border border-app-border/20 hover:border-app-border/40"
+                          ? "bg-neutral-100/40 dark:bg-neutral-900/40 border border-neutral-300 dark:border-neutral-700/70"
                           : cn(
                               "cursor-pointer hover:ring-1 hover:ring-tx-primary/30 hover:scale-125 hover:shadow-sm",
                               getColorClass(count),
-                              isToday && "ring-1 ring-tx-primary/50 shadow-sm",
+                              isToday && "ring-1.5 ring-neutral-900/60 dark:ring-neutral-200/60 shadow-sm",
                               isSelected && "ring-1.5 ring-tx-primary scale-125 shadow-md",
                             ),
                       )}
@@ -142,24 +128,33 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
             ))}
           </div>
         </div>
+
+        {/* 右侧：周几标签 */}
+        <div className="flex flex-col gap-0.5 ml-1.5 select-none shrink-0">
+          {WEEKDAY_LABELS.map((label, i) => (
+            <div
+              key={label}
+              className={cn(
+                "h-[14px] w-[20px] flex items-center text-[9px] font-medium leading-none shrink-0",
+                (i === 0 || i === 2 || i === 4 || i === 6)
+                  ? "text-tx-tertiary/60"
+                  : "text-transparent",
+              )}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* 底部：颜色图例 + tooltip */}
-      <div className="flex items-center justify-between px-1 pt-1 border-t border-app-border/30">
-        {/* 图例 */}
-        <div className="flex items-center gap-0.5">
-          <span className="text-[8px] text-tx-tertiary/50 mr-0.5">少</span>
-          <div className="w-3 h-3 rounded-[2px] bg-app-hover/20 border border-app-border/20" />
-          <div className="w-3 h-3 rounded-[2px] bg-accent-primary/20" />
-          <div className="w-3 h-3 rounded-[2px] bg-accent-primary/45" />
-          <div className="w-3 h-3 rounded-[2px] bg-accent-primary/70" />
-          <div className="w-3 h-3 rounded-[2px] bg-accent-primary" />
-          <span className="text-[8px] text-tx-tertiary/50 ml-0.5">多</span>
-        </div>
+      {/* 底部：总数说明与 Tooltip 提示 */}
+      <div className="flex items-center justify-between text-[10px] text-tx-tertiary/60 font-normal pl-0.5 mt-0.5 h-3">
+        <span>
+          {daysCount} 天内 {totalCount} 条说说
+        </span>
 
-        {/* hover 提示 */}
         {hoveredCell && (
-          <span className="text-[9px] text-tx-tertiary tabular-nums">
+          <span className="text-[9px] text-tx-tertiary font-medium animate-in fade-in duration-100">
             {hoveredCell.date} · {hoveredCell.count} 条
           </span>
         )}

@@ -850,12 +850,13 @@ users.post("/avatar", async (c) => {
     fs.writeFileSync(savePath, buffer);
 
     const db = getDb();
-    const avatarUrl = `/api/users/avatar/${userId}`;
+    const timestamp = Date.now();
+    const avatarUrl = `/api/users/avatar/${userId}?t=${timestamp}`;
     db.prepare("UPDATE users SET avatarUrl = ?, updatedAt = datetime('now') WHERE id = ?").run(avatarUrl, userId);
 
     invalidateUserAuthCache(userId);
 
-    return c.json({ success: true, avatarUrl: `${avatarUrl}?t=${Date.now()}` });
+    return c.json({ success: true, avatarUrl });
   } catch (err: any) {
     return c.json({ error: `保存头像失败: ${err?.message || err}` }, 500);
   }

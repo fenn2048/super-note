@@ -9,6 +9,7 @@ export interface SiteSettings {
   site_title: string;
   site_favicon: string;
   editor_font_family: string;
+  editor_lxgw_wenkai_enabled: string;
   /**
    * @deprecated v6 起弃用——个人空间导出开关已下沉为 users.personalExportEnabled，
    * 由管理员在「用户管理 → 编辑用户」里逐个切换。
@@ -40,6 +41,7 @@ const DEFAULTS: SiteSettings = {
   site_title: "ark-notes",
   site_favicon: "",
   editor_font_family: "",
+  editor_lxgw_wenkai_enabled: "false",
   // 仅作为"旧前端拿到的透传兜底值"存在；新前端忽略。
   feature_personal_export_enabled: "true",
   feature_personal_import_enabled: "true",
@@ -118,6 +120,14 @@ settings.put("/", async (c) => {
     }
     if (body.editor_font_family !== undefined) {
       upsert.run("editor_font_family", body.editor_font_family);
+    }
+    if (body.editor_lxgw_wenkai_enabled !== undefined) {
+      const raw = body.editor_lxgw_wenkai_enabled as unknown;
+      const normalized =
+        raw === true || raw === "true" || raw === 1 || raw === "1"
+          ? "true"
+          : "false";
+      upsert.run("editor_lxgw_wenkai_enabled", normalized);
     }
     if (body.debug_files_query !== undefined) {
       // 归一化成 "true" / "false"——前端可能传 boolean，也可能传字符串

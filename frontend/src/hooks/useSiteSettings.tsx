@@ -6,6 +6,7 @@ export interface SiteConfig {
   title: string;
   favicon: string;
   editorFontFamily: string; // 空串=默认(Inter), 自定义字体 id, 或内置字体名
+  lxgwWenkaiEnabled: boolean;
   // 注：v6 起，"个人空间导出/导入"不再是站点级全站开关；它已下沉为 users 表
   // 的 personalExportEnabled / personalImportEnabled 两列，由管理员在
   // 「用户管理 → 编辑用户」里为每个用户独立控制。消费方（Sidebar、DataManager）
@@ -16,6 +17,7 @@ const DEFAULT_CONFIG: SiteConfig = {
   title: "super-note",
   favicon: "",
   editorFontFamily: "",
+  lxgwWenkaiEnabled: false,
 };
 
 // 内置字体选项（不需要上传）
@@ -35,6 +37,7 @@ interface SiteSettingsContextValue {
   siteConfig: SiteConfig;
   updateSiteConfig: (title: string, favicon: string) => Promise<void>;
   updateEditorFont: (fontId: string) => Promise<void>;
+  updateLxgwWenkaiEnabled: (enabled: boolean) => Promise<void>;
   isLoaded: boolean;
 }
 
@@ -42,6 +45,7 @@ const SiteSettingsContext = createContext<SiteSettingsContextValue>({
   siteConfig: DEFAULT_CONFIG,
   updateSiteConfig: async () => {},
   updateEditorFont: async () => {},
+  updateLxgwWenkaiEnabled: async () => {},
   isLoaded: false,
 });
 
@@ -125,6 +129,27 @@ function applyEditorFont(fontId: string, customFontName?: string) {
   );
 }
 
+function applyWenkaiFont(enabled: boolean) {
+  const linkId = "lxgw-wenkai-font-style";
+  let link = document.getElementById(linkId) as HTMLLinkElement | null;
+  
+  if (enabled) {
+    if (!link) {
+      link = document.createElement("link");
+      link.id = linkId;
+      link.rel = "stylesheet";
+      link.href = "https://cdn.staticfile.org/lxgw-wenkai-screen-webfont/1.6.0/lxgwwenkaiscreen.css";
+      document.head.appendChild(link);
+    }
+    document.documentElement.classList.add("font-lxgw");
+  } else {
+    if (link) {
+      link.parentNode?.removeChild(link);
+    }
+    document.documentElement.classList.remove("font-lxgw");
+  }
+}
+
 export function SiteSettingsProvider({ children }: { children: React.ReactNode }) {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_CONFIG);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -135,9 +160,11 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
         title: data.site_title || "super-note",
         favicon: data.site_favicon || "",
         editorFontFamily: data.editor_font_family || "",
+        lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true",
       };
       setSiteConfig(config);
       applyToDOM(config.title, config.favicon);
+      applyWenkaiFont(config.lxgwWenkaiEnabled);
 
       // 加载自定义字体名
       if (config.editorFontFamily && !BUILTIN_FONTS.find(f => f.id === config.editorFontFamily)) {
@@ -156,6 +183,7 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     }).catch(() => {
       applyToDOM(DEFAULT_CONFIG.title, DEFAULT_CONFIG.favicon);
       applyEditorFont("");
+      applyWenkaiFont(false);
       setIsLoaded(true);
     });
   }, []);
@@ -169,10 +197,11 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
       title: data.site_title || "super-note",
       favicon: data.site_favicon || "",
       editorFontFamily: data.editor_font_family || siteConfig.editorFontFamily,
+      lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true" || siteConfig.lxgwWenkaiEnabled,
     };
     setSiteConfig(config);
     applyToDOM(config.title, config.favicon);
-  }, [siteConfig.editorFontFamily]);
+  }, [siteConfig.editorFontFamily, siteConfig.lxgwWenkaiEnabled]);
 
   const updateEditorFont = useCallback(async (fontId: string) => {
     const data = await api.updateSiteSettings({ editor_font_family: fontId });
@@ -196,8 +225,18 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     }
   }, [siteConfig]);
 
+  const updateLxgwWenkaiEnabled = useCallback(async (enabled: boolean) => {
+    const data = await api.updateSiteSettings({ editor_lxgw_wenkai_enabled: enabled ? "true" : "false" });
+    const config: SiteConfig = {
+      ...siteConfig,
+      lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true",
+    };
+    setSiteConfig(config);
+    applyWenkaiFont(config.lxgwWenkaiEnabled);
+  }, [siteConfig]);
+
   return (
-    <SiteSettingsContext.Provider value={{ siteConfig, updateSiteConfig, updateEditorFont, isLoaded }}>
+    <SiteSettingsContext.Provider value={{ siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled, isLoaded }}>
       {children}
     </SiteSettingsContext.Provider>
   );

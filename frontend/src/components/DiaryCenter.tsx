@@ -8,6 +8,7 @@ import {
   Smile,
   MessageCircle,
   ImagePlus,
+  Image,
   X,
   Calendar,
   User as UserIcon,
@@ -25,8 +26,11 @@ import {
   Star,
   Pin,
   MoreHorizontal,
+  Heart,
+  Video,
 } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
+import { realtime } from "@/lib/realtime";
 import { Diary, DiaryStats, Tag, DiaryComment, User } from "@/types";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { cn, detectSuMention } from "@/lib/utils";
@@ -44,7 +48,7 @@ import TagColorPopover from "@/components/TagColorPopover";
 import GenericTagInput from "@/components/GenericTagInput";
 import DiaryCalendar from "@/components/DiaryCalendar";
 import DiaryHeatMap from "@/components/DiaryHeatMap";
-import MentionPicker, { parseMentionTrigger, replaceMentionText } from "@/components/MentionPicker";
+import MentionPicker, { parseMentionTrigger, replaceMentionText, useMentionState } from "@/components/MentionPicker";
 import RecordingPanel from "@/components/RecordingPanel";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
@@ -160,6 +164,7 @@ interface PendingImage {
   previewUrl: string;
   status: "uploading" | "ready" | "error";
   errorMessage?: string;
+  type?: "image" | "video";
 }
 
 // ============================================================
@@ -185,6 +190,8 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     const ws = getCurrentWorkspace();
     return (ws && ws !== "personal") ? "PUBLIC" : "PRIVATE";
   });
+  const [showVisibilityMenu, setShowVisibilityMenu] = useState(false);
+  const visibilityRef = useRef<HTMLDivElement>(null);
   const [pendingVoice, setPendingVoice] = useState<{ id: string; duration: number } | null>(null);
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [composeTags, setComposeTags] = useState<Tag[]>([]);
@@ -342,6 +349,88 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const moodRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const addVideoFiles = useCallback(
+    async (files: File[]) => {
+      if (!files.length) return;
+      const current = pendingImagesRef.current;
+      const remaining = MAX_IMAGES_PER_DIARY - current.length;
+      if (remaining <= 0) return;
+
+      const accepted: File[] = [];
+      const rejected: { name: string; reason: string }[] = [];
+      for (const f of files) {
+        if (accepted.length >= remaining) break;
+        const mime = (f.type || "").toLowerCase();
+        const isVideo = mime.startsWith("video/");
+        if (!isVideo) {
+          rejected.push({ name: f.name || "video", reason: "type" });
+          continue;
+        }
+        if (f.size > MAX_DIARY_IMAGE_SIZE) {
+          rejected.push({ name: f.name || "video", reason: "size" });
+          continue;
+        }
+        accepted.push(f);
+      }
+      if (rejected.length) {
+        const lines = rejected.map((r) =>
+          r.reason === "size"
+            ? `视频文件太大 (不超过 10MB): ${r.name}`
+            : `不支持的视频类型: ${r.name}`,
+        );
+        for (const line of lines) toast.error(line);
+      }
+      if (!accepted.length) return;
+
+      const newItems: PendingImage[] = accepted.map((f) => ({
+        localKey: crypto.randomUUID(),
+        id: null,
+        previewUrl: URL.createObjectURL(f),
+        status: "uploading",
+        type: "video" as const,
+      }));
+      setPendingImages((prev) => [...prev, ...newItems]);
+
+      newItems.forEach((item, idx) => {
+        const file = accepted[idx];
+        api.diaryImages
+          .upload(file)
+          .then((res) => {
+            setPendingImages((prev) =>
+              prev.map((p) =>
+                p.localKey === item.localKey
+                  ? { ...p, id: res.id, status: "ready" as const }
+                  : p,
+              ),
+            );
+          })
+          .catch((err) => {
+            console.error("Diary video upload failed:", err);
+            setPendingImages((prev) =>
+              prev.map((p) =>
+                p.localKey === item.localKey
+                  ? {
+                      ...p,
+                      status: "error" as const,
+                      errorMessage: err?.message || "upload failed",
+                    }
+                  : p,
+              ),
+            );
+          });
+      });
+    },
+    [],
+  );
+
+  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    void addVideoFiles(files);
+    e.target.value = "";
+  };
+
   // dragOver/Leave 计数：浏览器会在子元素切换时狂抛 enter/leave 事件，
   // 直接 setState 会闪烁。用计数器保证只有真正离开容器才隐藏高亮。
   const dragCounterRef = useRef(0);
@@ -360,6 +449,17 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     const handler = (e: MouseEvent) => {
       if (moodRef.current && !moodRef.current.contains(e.target as Node)) {
         setShowMoods(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // 点击外部关闭可见性选择菜单
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (visibilityRef.current && !visibilityRef.current.contains(e.target as Node)) {
+        setShowVisibilityMenu(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -641,7 +741,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   return (
     <div
       className={cn(
-        "bg-app-surface/60 backdrop-blur-sm rounded-lg border border-app-border shadow-sm transition-all",
+        "bg-app-surface border border-app-border/40 rounded-xl p-4 shadow-sm transition-all",
         isDragging && "ring-2 ring-accent-primary/50 border-accent-primary/40",
       )}
       onDragEnter={handleDragEnter}
@@ -650,169 +750,174 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       onDrop={handleDrop}
     >
       {/* 输入区域 */}
-      <div className="p-4 pb-2">
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              setCursorPos(e.target.selectionStart);
-              autoResize();
-            }}
-            onSelect={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
-            onClick={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
-            onKeyUp={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
-            onKeyDown={(e) => {
-              if (mentionTrigger) {
-                if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
-                  e.preventDefault();
-                }
+      <div className="relative border border-app-border/80 bg-app-bg rounded-lg p-2.5 transition-all mb-3 focus-within:border-accent-primary/40 focus-within:ring-1 focus-within:ring-accent-primary/10">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setCursorPos(e.target.selectionStart);
+            autoResize();
+          }}
+          onSelect={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
+          onClick={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
+          onKeyUp={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
+          onKeyDown={(e) => {
+            if (mentionTrigger) {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
+                e.preventDefault();
               }
-              handleKeyDown(e);
+            }
+            handleKeyDown(e);
+          }}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+          onPaste={handlePaste}
+          placeholder="分享新鲜事..."
+          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-xs leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none no-focus-ring transition-all duration-300 min-h-[64px]"
+        />
+      </div>
+
+      {/* @提及选择器 */}
+      {mentionTrigger && (
+        <div className="relative z-50">
+          <MentionPicker
+            search={mentionTrigger.search}
+            onSelect={(user) => {
+              const newText = replaceMentionText(text, cursorPos, mentionTrigger.startIndex, user.username);
+              setText(newText);
+              setCursorPos(mentionTrigger.startIndex + user.username.length + 2);
+              mentionTrigger.clear();
+              textareaRef.current?.focus();
             }}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            onPaste={handlePaste}
-            placeholder={t("diary.placeholder")}
-            className={cn(
-              "w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none no-focus-ring transition-all duration-300",
-              (isFocused || text.length > 0) ? "min-h-[120px]" : "min-h-[44px] h-[44px]"
-            )}
+            onClose={mentionTrigger.clear}
           />
         </div>
+      )}
 
-        {/* @提及选择器 */}
-        {mentionTrigger && (
-          <div className="relative z-50">
-            <MentionPicker
-              search={mentionTrigger.search}
-              onSelect={(user) => {
-                const newText = replaceMentionText(text, cursorPos, mentionTrigger.startIndex, user.username);
-                setText(newText);
-                setCursorPos(mentionTrigger.startIndex + user.username.length + 2);
-                mentionTrigger.clear();
-                textareaRef.current?.focus();
-              }}
-              onClose={mentionTrigger.clear}
-            />
-          </div>
-        )}
-
-        {/* 待发布图片缩略图区 */}
-        {pendingImages.length > 0 && (
-          <div className="mt-2 grid grid-cols-4 sm:grid-cols-5 gap-2">
-            {pendingImages.map((img) => (
-              <div
-                key={img.localKey}
-                className="relative aspect-square rounded-lg overflow-hidden border border-app-border bg-app-hover/40 group/img"
-              >
+      {/* 待发布媒体缩略图区 */}
+      {pendingImages.length > 0 && (
+        <div className="mt-2 grid grid-cols-4 sm:grid-cols-5 gap-2">
+          {pendingImages.map((img) => (
+            <div
+              key={img.localKey}
+              className="relative aspect-square rounded-lg overflow-hidden border border-app-border bg-app-hover/40 group/img"
+            >
+              {img.type === "video" ? (
+                <video
+                  src={img.previewUrl}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                />
+              ) : (
                 <img
                   src={img.previewUrl}
                   alt=""
                   className="w-full h-full object-cover"
                   draggable={false}
                 />
-                {/* 上传中遮罩 */}
-                {img.status === "uploading" && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <Loader2 size={18} className="animate-spin text-white" />
-                  </div>
-                )}
-                {/* 上传失败遮罩 */}
-                {img.status === "error" && (
-                  <div
-                    className="absolute inset-0 bg-red-500/60 flex items-center justify-center text-[10px] text-white text-center px-1"
-                    title={img.errorMessage}
-                  >
-                    {t("diary.uploadFailed")}
-                  </div>
-                )}
-                {/* 删除按钮 */}
-                <button
-                  onClick={() => removeImage(img.localKey)}
-                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                  aria-label={t("diary.removeImage")}
+              )}
+              {/* 上传中遮罩 */}
+              {img.status === "uploading" && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 size={18} className="animate-spin text-white" />
+                </div>
+              )}
+              {/* 上传失败遮罩 */}
+              {img.status === "error" && (
+                <div
+                  className="absolute inset-0 bg-red-500/60 flex items-center justify-center text-[10px] text-white text-center px-1"
+                  title={img.errorMessage}
                 >
-                  <X size={12} />
-                </button>
-              </div>
+                  {t("diary.uploadFailed")}
+                </div>
+              )}
+              {/* 删除按钮 */}
+              <button
+                type="button"
+                onClick={() => removeImage(img.localKey)}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                aria-label={t("diary.removeImage")}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 语音上传中 */}
+      {voiceUploading && (
+        <div className="mt-2.5 p-3 rounded-xl bg-app-hover/40 border border-app-border flex items-center gap-2">
+          <Loader2 size={16} className="animate-spin text-accent-primary" />
+          <span className="text-xs text-tx-tertiary">语音上传中...</span>
+        </div>
+      )}
+
+      {/* 已录制语音预览 */}
+      {pendingVoice && (
+        <div className="mt-2.5 p-3 rounded-xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-accent-primary/10 flex items-center justify-center text-accent-primary">
+              <Mic size={16} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-tx-primary">已录制语音</span>
+              <span className="text-[10px] text-tx-tertiary block mt-0.5 tabular-nums">
+                {Math.floor(pendingVoice.duration / 60)}分{pendingVoice.duration % 60}秒
+              </span>
+            </div>
+          </div>
+          
+          <button
+            onClick={() => setPendingVoice(null)}
+            className="w-6 h-6 rounded-full bg-black/5 hover:bg-black/10 text-tx-secondary flex items-center justify-center transition-all"
+            aria-label="删除录音"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* 常用标签与标签选择器 - 在聚焦或有内容时展开 */}
+      {(isFocused || text.length > 0 || pendingImages.length > 0 || pendingVoice !== null) && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2 }}
+          className="overflow-hidden mt-3 space-y-3"
+        >
+          {/* 常用标签推荐 */}
+          <div className="flex flex-wrap items-center gap-1.5 px-1">
+            <span className="text-[11px] text-tx-tertiary mr-1 font-medium">推荐标签:</span>
+            {((state.tags && state.tags.length > 0) ? state.tags.slice(0, 5) : [
+              { id: "1", name: "日记" },
+              { id: "2", name: "想法" },
+              { id: "3", name: "工作" },
+              { id: "4", name: "学习" },
+              { id: "5", name: "生活" }
+            ]).map((tag: any) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => handleAddTag(tag.name)}
+                className="text-[11px] px-2 py-0.5 rounded-full bg-app-hover hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary transition-all"
+              >
+                #{tag.name}
+              </button>
             ))}
           </div>
-        )}
 
-        {/* 语音上传中 */}
-        {voiceUploading && (
-          <div className="mt-2.5 p-3 rounded-xl bg-app-hover/40 border border-app-border flex items-center gap-2">
-            <Loader2 size={16} className="animate-spin text-accent-primary" />
-            <span className="text-xs text-tx-tertiary">语音上传中...</span>
-          </div>
-        )}
-
-        {/* 已录制语音预览 */}
-        {pendingVoice && (
-          <div className="mt-2.5 p-3 rounded-xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-accent-primary/10 flex items-center justify-center text-accent-primary">
-                <Mic size={16} />
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-tx-primary">已录制语音</span>
-                <span className="text-[10px] text-tx-tertiary block mt-0.5 tabular-nums">
-                  {Math.floor(pendingVoice.duration / 60)}分{pendingVoice.duration % 60}秒
-                </span>
-              </div>
-            </div>
-            
-            <button
-              onClick={() => setPendingVoice(null)}
-              className="w-6 h-6 rounded-full bg-black/5 hover:bg-black/10 text-tx-secondary flex items-center justify-center transition-all"
-              aria-label="删除录音"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* 常用标签与标签选择器 - 在聚焦或有内容时展开 */}
-        {(isFocused || text.length > 0 || pendingImages.length > 0 || pendingVoice !== null) && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden mt-3 space-y-3"
-          >
-            {/* 常用标签推荐 */}
-            <div className="flex flex-wrap items-center gap-1.5 px-1">
-              <span className="text-[11px] text-tx-tertiary mr-1 font-medium">推荐标签:</span>
-              {((state.tags && state.tags.length > 0) ? state.tags.slice(0, 5) : [
-                { id: "1", name: "日记" },
-                { id: "2", name: "想法" },
-                { id: "3", name: "工作" },
-                { id: "4", name: "学习" },
-                { id: "5", name: "生活" }
-              ]).map((tag: any) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => handleAddTag(tag.name)}
-                  className="text-[11px] px-2 py-0.5 rounded-full bg-app-hover hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary transition-all"
-                >
-                  #{tag.name}
-                </button>
-              ))}
-            </div>
-
-            {/* 标签选择 */}
-            <GenericTagInput
-              selectedTags={composeTags}
-              onTagsChange={setComposeTags}
-              placeholder={t('tags.addTagPlaceholder')}
-            />
-          </motion.div>
-        )}
-      </div>
+          {/* 标签选择 */}
+          <GenericTagInput
+            selectedTags={composeTags}
+            onTagsChange={setComposeTags}
+            placeholder={t('tags.addTagPlaceholder')}
+          />
+        </motion.div>
+      )}
 
       {/* 录音面板 - 覆盖底部操作栏 */}
       <AnimatePresence>
@@ -845,21 +950,23 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
 
       {/* 底部操作栏 - 录音时隐藏 */}
       {!recording && (
-        <div className="flex items-center justify-between px-4 pb-3 pt-1 gap-3 flex-wrap">
-          {/* 左侧：心情 + 图片 + 语音 */}
+        <div className="flex items-center justify-between pt-1 gap-3 flex-wrap">
+          {/* 左侧：心情 + 图片 + 视频 + 语音 */}
           <div className="flex items-center gap-1.5">
             {/* 心情选择 */}
             <div className="relative" ref={moodRef}>
               <button
+                type="button"
                 onClick={() => setShowMoods(!showMoods)}
-                className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-tx-secondary hover:bg-app-hover hover:text-tx-primary transition-all"
-                title={t("diary.selectMood")}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-all"
+                title={t("diary.selectMood") || "选择表情"}
               >
                 {selectedMoodEmoji ? (
-                  <span className="text-lg">{selectedMoodEmoji}</span>
+                  <span className="text-xs">{selectedMoodEmoji}</span>
                 ) : (
-                  <Smile size={18} />
+                  <Smile size={14} className="text-tx-secondary" />
                 )}
+                <span>表情</span>
               </button>
               <AnimatePresence>
                 {showMoods && (
@@ -872,6 +979,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                     {MOODS.map(({ value, emoji }) => (
                       <button
                         key={value}
+                        type="button"
                         onClick={() => {
                           setMood(value);
                           setShowMoods(false);
@@ -893,13 +1001,14 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
 
             {/* 图片按钮 */}
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={remainingSlots <= 0}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all",
                 remainingSlots <= 0
                   ? "text-tx-tertiary/50 cursor-not-allowed"
-                  : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
+                  : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
               )}
               title={
                 remainingSlots <= 0
@@ -907,29 +1016,52 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                   : t("diary.addImage")
               }
             >
-              <ImagePlus size={16} />
-              <span className="hidden sm:inline">{t("diary.image")}</span>
-              {pendingImages.length > 0 && (
-                <span className="text-[10px] text-tx-tertiary tabular-nums">
-                  {pendingImages.length}/{MAX_IMAGES_PER_DIARY}
+              <Image size={14} className="text-tx-secondary" />
+              <span>图片</span>
+              {pendingImages.filter(img => img.type !== "video").length > 0 && (
+                <span className="text-[10px] text-tx-tertiary font-medium tabular-nums ml-0.5">
+                  ({pendingImages.filter(img => img.type !== "video").length})
+                </span>
+              )}
+            </button>
+
+            {/* 视频按钮 */}
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              disabled={remainingSlots <= 0}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all",
+                remainingSlots <= 0
+                  ? "text-tx-tertiary/50 cursor-not-allowed"
+                  : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
+              )}
+              title="选择视频"
+            >
+              <Video size={14} className="text-tx-secondary" />
+              <span>视频</span>
+              {pendingImages.filter(img => img.type === "video").length > 0 && (
+                <span className="text-[10px] text-tx-tertiary font-medium tabular-nums ml-0.5">
+                  ({pendingImages.filter(img => img.type === "video").length})
                 </span>
               )}
             </button>
 
             {/* 语音按钮 */}
             <button
+              type="button"
               onClick={startRecording}
               disabled={recording || pendingVoice !== null}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-all",
+                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all",
                 (recording || pendingVoice !== null)
                   ? "text-tx-tertiary/50 cursor-not-allowed"
-                  : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
+                  : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
               )}
               title={pendingVoice !== null ? "每条说说只能录制一段语音" : "录制语音"}
             >
-              <Mic size={16} />
-              <span className="hidden sm:inline">语音</span>
+              <Mic size={14} className="text-tx-secondary" />
+              <span>语音</span>
             </button>
 
             <input
@@ -940,40 +1072,106 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               className="hidden"
               onChange={handleFileChange}
             />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/mp4,video/webm,video/quicktime,video/ogg"
+              multiple
+              className="hidden"
+              onChange={handleVideoFileChange}
+            />
           </div>
 
           {/* 右侧：可见性 + 字数 + 发布 */}
           <div className="flex items-center gap-2">
             {/* 可见性范围选择 - 个人空间无需选择 */}
             {getCurrentWorkspace() !== "personal" && (
-              <select
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value)}
-                className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2.5 py-1 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium"
-              >
-                <option value="PRIVATE">🔒 自己可见</option>
-                <option value="PUBLIC">🌐 公开</option>
-              </select>
+              <div className="relative" ref={visibilityRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-[#eaebec]/60 dark:bg-white/5 hover:bg-[#eaebec] dark:hover:bg-white/10 text-tx-secondary transition-all"
+                >
+                  {visibility === "PUBLIC" ? (
+                    <>
+                      <Globe size={11} className="opacity-70" />
+                      <span>公开</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={11} className="opacity-70" />
+                      <span>仅自己可见</span>
+                    </>
+                  )}
+                  <ChevronDown size={11} className="opacity-60" />
+                </button>
+                <AnimatePresence>
+                  {showVisibilityMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 5 }}
+                      className="absolute bottom-full mb-1 right-0 bg-app-surface border border-app-border shadow-lg rounded-lg py-1 z-50 w-32"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVisibility("PUBLIC");
+                          setShowVisibilityMenu(false);
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2 transition-colors",
+                          visibility === "PUBLIC"
+                            ? "bg-accent-primary/10 text-accent-primary font-medium"
+                            : "text-tx-secondary hover:bg-app-hover"
+                        )}
+                      >
+                        <Globe size={11} />
+                        <span>公开</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVisibility("PRIVATE");
+                          setShowVisibilityMenu(false);
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2 transition-colors",
+                          visibility === "PRIVATE"
+                            ? "bg-accent-primary/10 text-accent-primary font-medium"
+                            : "text-tx-secondary hover:bg-app-hover"
+                        )}
+                      >
+                        <Lock size={11} />
+                        <span>仅自己可见</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
+
             {/* 字数计数 */}
-            <span
-              className={cn(
-                "text-[11px] tabular-nums transition-colors",
-                text.length > 500 ? "text-red-400" : "text-tx-tertiary",
-              )}
-            >
-              {text.length > 0 && text.length}
-            </span>
+            {text.length > 0 && (
+              <span
+                className={cn(
+                  "text-[10px] tabular-nums transition-colors",
+                  text.length > 500 ? "text-red-400" : "text-tx-tertiary",
+                )}
+              >
+                {text.length}
+              </span>
+            )}
 
             {/* 发布按钮 */}
             <button
               onClick={handlePost}
               disabled={!canSubmit}
               className={cn(
-                "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-all",
+                "flex items-center justify-center px-4 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95",
                 canSubmit
-                  ? "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/20 active:scale-95"
-                  : "bg-app-hover text-tx-tertiary cursor-not-allowed",
+                  ? "bg-[#5b51da] hover:bg-[#483ec7] text-white shadow-sm"
+                  : "bg-app-hover text-tx-tertiary cursor-not-allowed opacity-50",
               )}
               title={
                 hasPendingUploads
@@ -984,11 +1182,10 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               }
             >
               {posting ? (
-                <Loader2 size={13} className="animate-spin" />
+                <Loader2 size={12} className="animate-spin text-white" />
               ) : (
-                <Send size={13} />
+                <span>发布</span>
               )}
-              <span>{t("diary.post")}</span>
             </button>
           </div>
         </div>
@@ -1018,7 +1215,7 @@ function ImageGrid({
 }) {
   if (!ids.length) return null;
   const count = ids.length;
-  const cols = count === 1 ? 1 : count <= 4 ? 2 : 3;
+  const cols = count === 1 ? 1 : (count === 2 || count === 4) ? 2 : 3;
   return (
     <div
       className={cn(
@@ -1493,6 +1690,64 @@ function VoicePlayer({
 }
 
 // ============================================================
+// 辅助：评论与点赞处理
+// ============================================================
+interface ProcessedComment extends DiaryComment {
+  replies: ProcessedComment[];
+  replyToUsername?: string;
+  parentCommentId?: string;
+}
+
+function processComments(comments: DiaryComment[]): ProcessedComment[] {
+  const sorted = [...comments].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+
+  const rootComments: ProcessedComment[] = [];
+  const commentToRootMap = new Map<string, ProcessedComment>();
+  const userLatestCommentMap = new Map<string, ProcessedComment>();
+
+  for (const c of sorted) {
+    const processed: ProcessedComment = { ...c, replies: [] };
+    const match = c.content.match(/^@([^\s:]+)(?:\s+|:)(.*)$/);
+    let rootComment: ProcessedComment | undefined;
+    let replyToUser: string | undefined;
+
+    if (match) {
+      const targetUsername = match[1];
+      const remainingContent = match[2];
+      
+      const targetComment = userLatestCommentMap.get(targetUsername);
+      if (targetComment) {
+        replyToUser = targetUsername;
+        processed.content = remainingContent;
+        rootComment = commentToRootMap.get(targetComment.id) || targetComment;
+      }
+    }
+
+    if (rootComment) {
+      processed.replyToUsername = replyToUser;
+      processed.parentCommentId = rootComment.id;
+      rootComment.replies.push(processed);
+      commentToRootMap.set(processed.id, rootComment);
+    } else {
+      rootComments.push(processed);
+      commentToRootMap.set(processed.id, processed);
+    }
+
+    userLatestCommentMap.set(c.username, processed);
+  }
+
+  return rootComments.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+function getStableLikeCount(diaryId: string, isLiked: boolean): number {
+  return isLiked ? 1 : 0;
+}
+
+// ============================================================
 // 单条说说卡片
 // ============================================================
 function DiaryCard({
@@ -1515,6 +1770,9 @@ function DiaryCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentCursorPos, setCommentCursorPos] = useState(0);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+  const commentMentionTrigger = useMentionState(newCommentText, commentCursorPos);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const mountRef = useRef(true);
   useEffect(() => { return () => { mountRef.current = false; }; }, []);
@@ -1531,9 +1789,14 @@ function DiaryCard({
   }, [showActionMenu]);
 
   useEffect(() => {
-    api.getMe().then((meData) => {
-      if (meData) setCurrentUser(meData);
-    }).catch(console.error);
+    const fetchMe = () => {
+      api.getMe().then((meData) => {
+        if (meData) setCurrentUser(meData);
+      }).catch(console.error);
+    };
+    fetchMe();
+    window.addEventListener("super:profile-updated", fetchMe);
+    return () => window.removeEventListener("super:profile-updated", fetchMe);
   }, []);
 
   useEffect(() => {
@@ -1550,6 +1813,28 @@ function DiaryCard({
       .finally(() => setLoadingComments(false));
   }, [showComments, item.id]);
 
+  useEffect(() => {
+    const handleAiComment = (e: Event) => {
+      const customEvent = e as CustomEvent<{ diaryId: string }>;
+      if (customEvent.detail.diaryId === item.id) {
+        if (showComments) {
+          setLoadingComments(true);
+          api.getDiaryComments(item.id)
+            .then((commentsData) => {
+              setComments(commentsData);
+              onUpdate({ ...item, commentCount: commentsData.length });
+            })
+            .catch(console.error)
+            .finally(() => setLoadingComments(false));
+        } else {
+          onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
+        }
+      }
+    };
+    window.addEventListener("super:diary-ai-comment", handleAiComment);
+    return () => window.removeEventListener("super:diary-ai-comment", handleAiComment);
+  }, [item.id, item, showComments, onUpdate]);
+
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim() || submittingComment) return;
@@ -1557,21 +1842,26 @@ function DiaryCard({
     // === AI @su 检测 ===
     const su = detectSuMention(newCommentText.trim());
     if (su.hasSu) {
-      setSubmittingComment(true);
-      try {
-        const result = await api.diaryAiAsk({ mode: "comment", diaryId: item.id, question: su.cleanText });
-        if (result.mode === "comment") {
-          setComments((prev) => [...prev, result.comment]);
-          setNewCommentText("");
-          onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
-          toast.success("AI 助手已回复");
-        }
-      } catch (err: any) {
-        console.error("AI comment failed:", err);
-        toast.error(err?.message || "AI 助手请求失败");
-      } finally {
-        setSubmittingComment(false);
-      }
+      const currentText = newCommentText;
+      setNewCommentText("");
+      toast.success("AI 助手正在处理，请稍后查看");
+      haptic.light();
+      
+      api.diaryAiAsk({ mode: "comment", diaryId: item.id, question: su.cleanText })
+        .then((result) => {
+          if (mountRef.current && result.mode === "comment") {
+            setComments((prev) => [...prev, result.comment]);
+            onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
+            toast.success("AI 助手已回复");
+          }
+        })
+        .catch((err) => {
+          console.error("AI comment failed:", err);
+          toast.error(err?.message || "AI 助手请求失败");
+          if (mountRef.current) {
+            setNewCommentText(currentText);
+          }
+        });
       return;
     }
     // === 普通评论逻辑 ===
@@ -1608,38 +1898,39 @@ function DiaryCard({
       toast.error(err?.message || "删除评论失败");
     }
   };
-  const [isFavorited, setIsFavorited] = useState(() => {
+  const [isLiked, setIsLiked] = useState(() => {
     try {
-      const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
-      return favs.some((f: any) => f.id === item.id);
+      const likedIds = JSON.parse(localStorage.getItem("super-liked-diaries") || "[]");
+      return likedIds.includes(item.id);
     } catch {
       return false;
     }
   });
 
   useEffect(() => {
-    const handleFavChange = () => {
+    const handleLikeChange = () => {
       try {
-        const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
-        setIsFavorited(favs.some((f: any) => f.id === item.id));
+        const likedIds = JSON.parse(localStorage.getItem("super-liked-diaries") || "[]");
+        setIsLiked(likedIds.includes(item.id));
       } catch {}
     };
-    window.addEventListener("super:diary-favorite-changed", handleFavChange);
-    return () => window.removeEventListener("super:diary-favorite-changed", handleFavChange);
+    window.addEventListener("super:diary-like-changed", handleLikeChange);
+    return () => window.removeEventListener("super:diary-like-changed", handleLikeChange);
   }, [item.id]);
 
-  const handleToggleFavorite = () => {
+  const handleToggleLike = () => {
     try {
-      const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
-      const exists = favs.some((f: any) => f.id === item.id);
-      let newFavs;
+      const likedIds = JSON.parse(localStorage.getItem("super-liked-diaries") || "[]");
+      const exists = likedIds.includes(item.id);
+      let newLikedIds;
       if (exists) {
-        newFavs = favs.filter((f: any) => f.id !== item.id);
+        newLikedIds = likedIds.filter((id: string) => id !== item.id);
       } else {
-        newFavs = [...favs, { id: item.id, text: item.contentText || "", createdAt: item.createdAt }];
+        newLikedIds = [...likedIds, item.id];
       }
-      localStorage.setItem("super-fav-diaries", JSON.stringify(newFavs));
-      window.dispatchEvent(new CustomEvent("super:diary-favorite-changed"));
+      localStorage.setItem("super-liked-diaries", JSON.stringify(newLikedIds));
+      window.dispatchEvent(new CustomEvent("super:diary-like-changed"));
+      haptic.light();
     } catch (e) {
       console.error(e);
     }
@@ -1687,10 +1978,60 @@ function DiaryCard({
         className="group scroll-mt-20"
       >
         <div className={cn(
-          "bg-app-surface/40 backdrop-blur-sm rounded-lg border border-app-border hover:border-app-border/80 transition-all duration-300 hover:shadow-sm",
+          "bg-app-surface border border-app-border/40 shadow-sm rounded-xl transition-all duration-300 hover:shadow-md",
           isHighlighted ? "ring-2 ring-accent-primary border-accent-primary shadow-lg shadow-accent-primary/20 scale-[1.01]" : ""
         )}>
           <div className="p-4">
+            {/* 顶部头部区域：头像、作者、时间、可见性 */}
+            <div className="flex items-start justify-between mb-3.5 select-none">
+              <div className="flex items-center gap-2.5">
+                {/* 头像 */}
+                {item.userId === SU_USER_ID ? (
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-base shrink-0 shadow-sm">
+                    🤖
+                  </div>
+                ) : item.creatorAvatarUrl ? (
+                  <img
+                    src={item.creatorAvatarUrl}
+                    alt={item.creatorName || "avatar"}
+                    className="w-9 h-9 rounded-full object-cover shrink-0 border border-app-border/45 shadow-sm"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs shrink-0 border border-app-border/45 shadow-sm">
+                    {(item.creatorName || (currentUser && item.userId === currentUser.id ? currentUser.username : "User")).slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+
+                {/* 作者与时间 */}
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-tx-primary leading-tight">
+                    {item.creatorName || (currentUser && item.userId === currentUser.id ? currentUser.username : "匿名用户")}
+                  </span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5 leading-none flex items-center gap-1.5">
+                    <span>{timeAgo(item.createdAt, t)}</span>
+                    {moodEmoji && <span>{moodEmoji}</span>}
+                  </span>
+                </div>
+              </div>
+
+              {/* 右侧：可见性状态 */}
+              {getCurrentWorkspace() !== "personal" && (
+                <div className="flex items-center gap-1 text-[10px] text-tx-tertiary">
+                  {item.visibility === "PUBLIC" ? (
+                    <>
+                      <Globe size={11} className="opacity-60" />
+                      <span>公开</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={11} className="opacity-60" />
+                      <span>仅自己可见</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* 内容（支持 HTML & Markdown 渲染） */}
             {item.contentText && (
               <div
@@ -1728,60 +2069,64 @@ function DiaryCard({
               </div>
             )}
 
-            {/* 底部元信息 */}
-            <div className="flex items-center justify-between mt-3 pt-2 border-t border-app-border/40">
-              <div className="flex items-center gap-2 text-[11px] text-tx-tertiary min-w-0">
-                {moodEmoji && <span className="text-sm">{moodEmoji}</span>}
-                {currentUser && item.userId !== currentUser.id && item.creatorName && (
-                  <span className="font-semibold text-tx-primary shrink-0 mr-1">
-                    {item.creatorName}
-                  </span>
-                )}
-                <span className="shrink-0">{timeAgo(item.createdAt, t)}</span>
-                {/* 空间可见性标识 */}
-                {getCurrentWorkspace() !== "personal" && (
-                  <>
-                    <span className="text-tx-tertiary/60 shrink-0">·</span>
-                    <span className={cn(
-                      "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
-                      item.visibility === "PUBLIC"
-                        ? "bg-blue-500/5 text-blue-500 border border-blue-500/10 dark:bg-blue-500/10 dark:border-blue-500/20"
-                        : "bg-zinc-500/5 text-zinc-500 border border-zinc-500/10 dark:bg-zinc-500/10 dark:border-zinc-500/20"
-                    )} title={item.visibility === "PUBLIC" ? "公开的说说" : "仅自己可见的说说"}>
-                      {item.visibility === "PUBLIC" ? (
-                        <>
-                          <Globe size={10} />
-                          <span>公开</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lock size={10} />
-                          <span>仅自己可见</span>
-                        </>
-                      )}
-                    </span>
-                  </>
-                )}
+            {/* 分割线 */}
+            <div className="border-t border-app-border/40 my-3" />
+
+            {/* 底部操作区 */}
+            <div className="flex items-center justify-between text-xs text-tx-tertiary select-none">
+              <div className="flex items-center gap-4">
+                {/* 点赞按钮 */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleLike();
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 hover:text-rose-500 transition-colors font-medium py-1",
+                    isLiked && "text-rose-500 hover:text-rose-600"
+                  )}
+                >
+                  <Heart size={14} className={cn(isLiked && "fill-rose-500")} />
+                  <span>赞</span>
+                  {getStableLikeCount(item.id, isLiked) > 0 && (
+                    <span className="tabular-nums">({getStableLikeCount(item.id, isLiked)})</span>
+                  )}
+                </button>
+
+                {/* 评论按钮 */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowComments(!showComments);
+                  }}
+                  className="flex items-center gap-1 hover:text-accent-primary transition-colors font-medium py-1"
+                >
+                  <MessageCircle size={14} />
+                  <span>评论</span>
+                  {item.commentCount && item.commentCount > 0 && (
+                    <span className="tabular-nums">({item.commentCount})</span>
+                  )}
+                </button>
               </div>
 
-              {/* AI 说说标注：由谁调起 */}
-              {item.triggerUserId && item.userId === SU_USER_ID && (
-                <div className="text-[10px] text-tx-tertiary mt-1">
-                  由用户调起 AI 助手生成
-                </div>
-              )}
-
-              {/* 操作按钮菜单：微信风格 */}
-              <div className="relative shrink-0 flex items-center">
+              {/* 右侧：••• 操作菜单 */}
+              <div className="relative flex items-center">
+                {item.triggerUserId && item.userId === SU_USER_ID && (
+                  <span className="text-[10px] text-tx-tertiary mr-2 opacity-80">
+                    AI 助手生成
+                  </span>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowActionMenu(!showActionMenu);
                   }}
-                  className="p-1 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-all"
+                  className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-all"
                   title="操作菜单"
                 >
-                  <MoreHorizontal size={18} />
+                  <MoreHorizontal size={16} />
                 </button>
 
                 <AnimatePresence>
@@ -1793,28 +2138,6 @@ function DiaryCard({
                       transition={{ duration: 0.15, ease: "easeOut" }}
                       className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
                     >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowActionMenu(false);
-                          handleToggleFavorite();
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
-                      >
-                        <Star size={12} className={cn(isFavorited && "fill-yellow-400 text-yellow-400")} />
-                        <span>{isFavorited ? "取消收藏" : "收藏"}</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowActionMenu(false);
-                          setShowComments(!showComments);
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
-                      >
-                        <MessageCircle size={12} />
-                        <span>{showComments ? "收起评论" : (item.commentCount && item.commentCount > 0 ? `评论(${item.commentCount})` : "评论")}</span>
-                      </button>
                       <button
                         onClick={async (e) => {
                           e.stopPropagation();
@@ -1832,22 +2155,21 @@ function DiaryCard({
                         <Pin size={12} className={cn(item.isPinned && "fill-white")} />
                         <span>{item.isPinned ? "取消置顶" : "置顶"}</span>
                       </button>
+
                       {currentUser && item.userId === currentUser.id && (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowActionMenu(false);
-                              setIsEditing(true);
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
-                          >
-                            <Edit2 size={12} />
-                            <span>{t("diary.edit")}</span>
-                          </button>
-                        </>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowActionMenu(false);
+                            setIsEditing(true);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
+                        >
+                          <Edit2 size={12} />
+                          <span>{t("diary.edit")}</span>
+                        </button>
                       )}
-                      {/* 删除：作者 / AI 触发者 均可 */}
+
                       {currentUser && (item.userId === currentUser.id || item.triggerUserId === currentUser.id) && (
                         <button
                           onClick={(e) => {
@@ -1878,44 +2200,141 @@ function DiaryCard({
                 ) : comments.length === 0 ? (
                   <div className="text-center text-xs text-tx-tertiary py-2">暂无评论</div>
                 ) : (
-                  <div className="space-y-2.5">
-                    {comments.map((comment) => (
-                      <div key={comment.id} className="flex items-start gap-2 text-xs">
-                        {/* 头像 */}
-                        {comment.userId === SU_USER_ID ? (
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xs mt-0.5 shrink-0">
-                            🤖
+                  <div className="space-y-4">
+                    {processComments(comments).map((comment) => (
+                      <div key={comment.id} className="space-y-2">
+                        {/* Root Comment */}
+                        <div className="flex items-start gap-2.5 text-xs">
+                          {/* Avatar */}
+                          {comment.userId === SU_USER_ID ? (
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xs mt-0.5 shrink-0 z-10">
+                              🤖
+                            </div>
+                          ) : comment.avatarUrl ? (
+                            <img
+                              src={comment.avatarUrl}
+                              alt={comment.username}
+                              className="w-7 h-7 rounded-full object-cover mt-0.5 shrink-0 z-10"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs mt-0.5 shrink-0 z-10">
+                              {comment.username.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                          
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 bg-app-subtle/50 px-3 py-2 rounded-xl">
+                            <div className="flex items-center justify-between">
+                              <span className={cn("font-semibold", comment.userId === SU_USER_ID ? "text-violet-500" : "text-tx-primary")}>
+                                {comment.userId === SU_USER_ID ? "AI 助手" : comment.username}
+                              </span>
+                              <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
+                            </div>
+                            <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
+                            
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-3 mt-1.5 text-[10px] text-tx-tertiary">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewCommentText(`@${comment.username} `);
+                                  commentInputRef.current?.focus();
+                                }}
+                                className="hover:text-accent-primary transition-colors font-medium"
+                              >
+                                回复
+                              </button>
+                              
+                              {(comment.userId === currentUser?.id || item.userId === currentUser?.id || comment.trigger_user_id === currentUser?.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="hover:text-red-500 transition-colors font-medium"
+                                >
+                                  删除
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        ) : comment.avatarUrl ? (
-                          <img
-                            src={comment.avatarUrl}
-                            alt={comment.username}
-                            className="w-6 h-6 rounded-full object-cover mt-0.5"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-[10px] mt-0.5">
-                            {comment.username.slice(0, 1).toUpperCase()}
-                          </div>
-                        )}
-                        {/* 评论内容 */}
-                        <div className="flex-1 min-w-0 bg-app-subtle/50 px-2.5 py-1.5 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <span className={cn("font-semibold", comment.userId === SU_USER_ID ? "text-violet-500" : "text-tx-primary")}>
-                              {comment.userId === SU_USER_ID ? "AI 助手" : comment.username}
-                            </span>
-                            <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
-                          </div>
-                          <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
                         </div>
-                        {/* 删除评论：评论作者 / 说说主人 / AI 触发者 */}
-                        {(comment.userId === currentUser?.id || item.userId === currentUser?.id || comment.trigger_user_id === currentUser?.id) && (
-                          <button
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="text-[10px] text-tx-tertiary hover:text-red-500 p-1 rounded hover:bg-app-hover self-start mt-1 transition-colors"
-                            title="删除评论"
-                          >
-                            <Trash2 size={10} />
-                          </button>
+
+                        {/* Nested Replies */}
+                        {comment.replies.length > 0 && (
+                          <div className="ml-9 p-2 rounded-xl bg-app-subtle/20 border border-app-border/20 space-y-1">
+                            {comment.replies.map((reply, replyIdx) => {
+                              const isLastReply = replyIdx === comment.replies.length - 1;
+                              return (
+                                <div key={reply.id} className="relative flex items-start gap-2 text-xs pl-6 py-1.5">
+                                  {/* Connector Line */}
+                                  <div className={cn(
+                                    "absolute left-[11px] w-px bg-app-border/40",
+                                    isLastReply ? "top-0 h-[18px]" : "top-0 bottom-0"
+                                  )} />
+                                  <div className="absolute left-[11px] top-[18px] w-3 h-px bg-app-border/40" />
+
+                                  {/* Avatar */}
+                                  {reply.userId === SU_USER_ID ? (
+                                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-[10px] shrink-0 z-10">
+                                      🤖
+                                    </div>
+                                  ) : reply.avatarUrl ? (
+                                    <img
+                                      src={reply.avatarUrl}
+                                      alt={reply.username}
+                                      className="w-5 h-5 rounded-full object-cover shrink-0 z-10"
+                                    />
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-[9px] shrink-0 z-10">
+                                      {reply.username.slice(0, 1).toUpperCase()}
+                                    </div>
+                                  )}
+
+                                  {/* Reply content */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={cn("font-semibold", reply.userId === SU_USER_ID ? "text-violet-500" : "text-tx-primary")}>
+                                        {reply.userId === SU_USER_ID ? "AI 助手" : reply.username}
+                                      </span>
+                                      {reply.replyToUsername && (
+                                        <>
+                                          <span className="text-tx-tertiary text-[10px]">回复</span>
+                                          <span className="font-semibold text-tx-primary">
+                                            {reply.replyToUsername === "AI 助手" || reply.replyToUsername === "su" ? "AI 助手" : reply.replyToUsername}
+                                          </span>
+                                        </>
+                                      )}
+                                      <span className="text-[10px] text-tx-tertiary ml-auto shrink-0">{timeAgo(reply.createdAt, t)}</span>
+                                    </div>
+                                    <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{reply.content}</p>
+                                    
+                                    {/* Actions */}
+                                    <div className="flex items-center gap-3 mt-1.5 text-[10px] text-tx-tertiary">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setNewCommentText(`@${reply.username} `);
+                                          commentInputRef.current?.focus();
+                                        }}
+                                        className="hover:text-accent-primary transition-colors font-medium"
+                                      >
+                                        回复
+                                      </button>
+                                      
+                                      {(reply.userId === currentUser?.id || item.userId === currentUser?.id || reply.trigger_user_id === currentUser?.id) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteComment(reply.id)}
+                                          className="hover:text-red-500 transition-colors font-medium"
+                                        >
+                                          删除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     ))}
@@ -1923,18 +2342,77 @@ function DiaryCard({
                 )}
                 
                 {/* 发表评论输入框 */}
-                <form onSubmit={handleAddComment} className="flex gap-2 items-center pt-2">
-                  <input
-                    type="text"
-                    placeholder="写下你的评论..."
-                    value={newCommentText}
-                    onChange={(e) => setNewCommentText(e.target.value)}
-                    className="flex-1 min-w-0 bg-app-subtle border border-app-border/60 rounded-lg px-3 py-1.5 text-xs text-tx-primary focus:outline-none focus:border-accent-primary placeholder:text-tx-tertiary"
-                  />
+                <form onSubmit={handleAddComment} className="flex gap-2.5 items-center pt-2 w-full">
+                  {currentUser && (
+                    currentUser.avatarUrl ? (
+                      <img
+                        src={currentUser.avatarUrl}
+                        alt={currentUser.username}
+                        className="w-7 h-7 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs shrink-0">
+                        {currentUser.username.slice(0, 1).toUpperCase()}
+                      </div>
+                    )
+                  )}
+
+                  <div className="relative flex-1 min-w-0 bg-app-subtle border border-app-border/60 rounded-full px-3.5 py-1.5 flex items-center gap-2 focus-within:border-accent-primary transition-all">
+                    <input
+                      ref={commentInputRef}
+                      type="text"
+                      placeholder="写下你的评论..."
+                      value={newCommentText}
+                      onChange={(e) => {
+                        setNewCommentText(e.target.value);
+                        setCommentCursorPos(e.target.selectionStart || 0);
+                      }}
+                      onSelect={(e) => setCommentCursorPos((e.target as HTMLInputElement).selectionStart || 0)}
+                      onClick={(e) => setCommentCursorPos((e.target as HTMLInputElement).selectionStart || 0)}
+                      onKeyUp={(e) => setCommentCursorPos((e.target as HTMLInputElement).selectionStart || 0)}
+                      onKeyDown={(e) => {
+                        if (commentMentionTrigger) {
+                          if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
+                            e.preventDefault();
+                          }
+                        }
+                      }}
+                      className="w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0"
+                    />
+
+                    {/* Smile Icon */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewCommentText(prev => prev + "😊");
+                        commentInputRef.current?.focus();
+                      }}
+                      className="text-tx-tertiary hover:text-tx-secondary shrink-0 transition-colors"
+                    >
+                      <Smile size={16} />
+                    </button>
+
+                    {/* @提及选择器 */}
+                    {commentMentionTrigger && (
+                      <div className="absolute left-0 bottom-full mb-1 z-50">
+                        <MentionPicker
+                          search={commentMentionTrigger.search}
+                          onSelect={(user) => {
+                            const newText = replaceMentionText(newCommentText, commentCursorPos, commentMentionTrigger.startIndex, user.username);
+                            setNewCommentText(newText);
+                            setCommentCursorPos(commentMentionTrigger.startIndex + user.username.length + 2);
+                            commentMentionTrigger.clear();
+                            commentInputRef.current?.focus();
+                          }}
+                          onClose={commentMentionTrigger.clear}
+                        />
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     disabled={!newCommentText.trim() || submittingComment}
-                    className="px-3 py-1.5 bg-accent-primary text-white disabled:opacity-40 rounded-lg text-xs font-semibold hover:bg-accent-primary/90 transition-colors flex items-center gap-1 shrink-0"
+                    className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-app-hover text-white disabled:text-tx-tertiary/50 disabled:opacity-50 rounded-full text-xs font-semibold transition-all flex items-center gap-1 shrink-0 active:scale-95"
                   >
                     {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                     <span>发送</span>
@@ -2624,8 +3102,7 @@ export default function DiaryCenter() {
   const [stats, setStats] = useState<DiaryStats | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [visibilityFilter, setVisibilityFilter] = useState<string>("all");
-  const [selectedTagId, setSelectedTagId] = useState<string>("all");
+  const [filterMode, setFilterMode] = useState<"all" | "public" | "private" | "liked" | string>("all");
 
   const [preset, setPreset] = useState<RangePreset>("all");
   const [customRange, setCustomRange] = useState<DateRange>({});
@@ -2652,46 +3129,6 @@ export default function DiaryCenter() {
     return () => clearTimeout(timer);
   }, [diarySearchQuery]);
 
-  const [favoriteDiaries, setFavoriteDiaries] = useState<{ id: string; text: string; createdAt: string }[]>([]);
-  const [favsExpanded, setFavsExpanded] = useState(true);
-
-  const loadFavoriteDiaries = useCallback(() => {
-    try {
-      const favs = JSON.parse(localStorage.getItem("super-fav-diaries") || "[]");
-      favs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setFavoriteDiaries(favs);
-    } catch {
-      setFavoriteDiaries([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadFavoriteDiaries();
-    window.addEventListener("super:diary-favorite-changed", loadFavoriteDiaries);
-    return () => window.removeEventListener("super:diary-favorite-changed", loadFavoriteDiaries);
-  }, [loadFavoriteDiaries]);
-
-  const handleSelectFavoriteDiary = (id: string) => {
-    const element = document.getElementById(`diary-card-${id}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightedId(id);
-      setTimeout(() => setHighlightedId(null), 3000);
-    } else {
-      const fav = favoriteDiaries.find(f => f.id === id);
-      if (fav) {
-        const queryText = fav.text.replace(/<[^>]*>/g, '').slice(0, 30).trim();
-        if (queryText) {
-          setDiarySearchQuery(queryText);
-          sessionStorage.setItem("super-diary-search-query", JSON.stringify(queryText));
-          window.dispatchEvent(new CustomEvent("super:diary-search-changed", { detail: { query: queryText } }));
-          setHighlightedId(id);
-          setTimeout(() => setHighlightedId(null), 5000);
-        }
-      }
-    }
-  };
-
   // 处理搜索输入变化
   const handleDiarySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -2705,6 +3142,17 @@ export default function DiaryCenter() {
     [preset, customRange],
   );
 
+  const activeFilterLabel = useMemo(() => {
+    if (filterMode === "all") return null;
+    if (filterMode === "public") return { name: "公开", icon: <Globe size={11} className="opacity-70" /> };
+    if (filterMode === "private") return { name: "仅自己可见", icon: <Lock size={11} className="opacity-70" /> };
+    if (filterMode === "liked") return { name: "我赞过的", icon: <span className="text-[10px]">❤️</span> };
+    
+    const tag = state.tags.find((t) => t.id === filterMode);
+    if (tag) return { name: tag.name, icon: null };
+    return null;
+  }, [filterMode, state.tags]);
+
   const loadTimeline = useCallback(
     async (reset = false) => {
       if (reset) setLoading(true);
@@ -2712,12 +3160,23 @@ export default function DiaryCenter() {
 
       try {
         const cursor = reset ? undefined : nextCursor || undefined;
+        let vis = "all";
+        let tagId = "all";
+        
+        if (filterMode === "public") {
+          vis = "public";
+        } else if (filterMode === "private") {
+          vis = "private";
+        } else if (filterMode !== "all" && filterMode !== "liked") {
+          tagId = filterMode;
+        }
+
         const data = await api.getDiaryTimeline(
           cursor,
           20,
           activeRange || undefined,
-          visibilityFilter,
-          selectedTagId === "all" ? undefined : selectedTagId,
+          vis,
+          tagId === "all" ? undefined : tagId,
           debouncedSearch || undefined,
         );
         if (reset) {
@@ -2734,7 +3193,7 @@ export default function DiaryCenter() {
         setLoadingMore(false);
       }
     },
-    [nextCursor, activeRange, visibilityFilter, selectedTagId, debouncedSearch],
+    [nextCursor, activeRange, filterMode, debouncedSearch],
   );
 
   const loadStats = useCallback(async () => {
@@ -2746,6 +3205,87 @@ export default function DiaryCenter() {
     }
   }, [activeRange]);
 
+  const isFirstRender = useRef(true);
+  const [likedVersion, setLikedVersion] = useState(0);
+
+  useEffect(() => {
+    const handleLikeChange = () => {
+      setLikedVersion((v) => v + 1);
+    };
+    window.addEventListener("super:diary-like-changed", handleLikeChange);
+    return () => window.removeEventListener("super:diary-like-changed", handleLikeChange);
+  }, []);
+
+  const displayedItems = useMemo(() => {
+    if (filterMode === "liked") {
+      try {
+        const likedIds = JSON.parse(localStorage.getItem("super-liked-diaries") || "[]");
+        return items.filter((item) => likedIds.includes(item.id));
+      } catch {
+        return [];
+      }
+    }
+    return items;
+  }, [items, filterMode, likedVersion]);
+
+  const isFiltering = preset !== "all" || filterMode !== "all" || debouncedSearch !== "";
+
+  // Split items into pinned and unpinned
+  const pinnedItems = useMemo(() => displayedItems.filter((item) => item.isPinned === 1), [displayedItems]);
+  const unpinnedItems = useMemo(() => displayedItems.filter((item) => item.isPinned !== 1), [displayedItems]);
+
+  const groupedItems = useMemo(() => groupByDate(unpinnedItems, t), [unpinnedItems, t]);
+
+  const handlePost = useCallback(() => {
+    setNextCursor(null);
+    loadTimeline(true);
+    loadStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await api.deleteDiary(id);
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      loadStats();
+    } catch (e) {
+      console.error("Delete failed:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleUpdate = useCallback((updated: Diary) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === updated.id ? updated : item)),
+    );
+  }, []);
+
+  const handleFilterChange = useCallback(
+    (next: RangePreset, range: DateRange) => {
+      setPreset(next);
+      setCustomRange(range);
+    },
+    [],
+  );
+
+  const handleCalendarDateSelect = useCallback((dateStr: string) => {
+    setViewMode("list");
+    // 设置筛选范围为选中当天
+    setPreset("custom");
+    setCustomRange({ from: dateStr, to: dateStr });
+  }, []);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setNextCursor(null);
+    loadTimeline(true);
+    loadStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRange, filterMode, debouncedSearch]);
+
   useEffect(() => {
     loadTimeline(true);
     loadStats();
@@ -2753,6 +3293,34 @@ export default function DiaryCenter() {
     api.prewarmDiaryVoice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      loadTimeline(true);
+      loadStats();
+    };
+    window.addEventListener("super:profile-updated", handleProfileUpdated);
+    return () => window.removeEventListener("super:profile-updated", handleProfileUpdated);
+  }, [loadTimeline, loadStats]);
+
+  useEffect(() => {
+    const handleAiReply = (payload: { mode: "post" | "comment"; diaryId: string; answer: string }) => {
+      if (payload.mode === "post") {
+        setNextCursor(null);
+        loadTimeline(true);
+        loadStats();
+        toast.success("AI 助手已发表说说");
+      } else if (payload.mode === "comment") {
+        window.dispatchEvent(new CustomEvent("super:diary-ai-comment", { detail: { diaryId: payload.diaryId } }));
+        toast.success("AI 助手已发表评论回复");
+      }
+    };
+    realtime.connect();
+    const unsub = realtime.on("diary:ai-reply", handleAiReply);
+    return () => {
+      unsub();
+    };
+  }, [loadTimeline, loadStats]);
 
   // 监听的说说快捷跳转事件，自动滚动并高亮目标说说
   useEffect(() => {
@@ -2821,269 +3389,11 @@ export default function DiaryCenter() {
     return () => window.removeEventListener("super:workspace-changed", onWs);
   }, [loadTimeline, loadStats]);
 
-  useEffect(() => {
-    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') || scrollRef.current;
-    if (!viewport) return;
-    
-    let lastScrollTop = 0;
-    const handleScroll = () => {
-      const scrollTop = viewport.scrollTop;
-      if (scrollTop <= 0) {
-        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
-      } else if (scrollTop > lastScrollTop + 10) {
-        window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
-      } else if (scrollTop < lastScrollTop - 10) {
-        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
-      }
-      lastScrollTop = scrollTop;
-    };
-    
-    viewport.addEventListener("scroll", handleScroll);
-    return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [items]);
-
-  const rangeKey = useMemo(() => JSON.stringify(activeRange), [activeRange]);
-  const isFirstRender = useRef(true);
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    setNextCursor(null);
-    loadTimeline(true);
-    loadStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeKey, visibilityFilter, selectedTagId, debouncedSearch]);
-
-  const handlePost = useCallback(() => {
-    setNextCursor(null);
-    loadTimeline(true);
-    loadStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      await api.deleteDiary(id);
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      loadStats();
-    } catch (e) {
-      console.error("Delete failed:", e);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleUpdate = useCallback((updated: Diary) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === updated.id ? updated : item)),
-    );
-  }, []);
-
-  const handleFilterChange = useCallback(
-    (next: RangePreset, range: DateRange) => {
-      setPreset(next);
-      setCustomRange(range);
-    },
-    [],
-  );
-
-  const handleCalendarDateSelect = useCallback((dateStr: string) => {
-    setViewMode("list");
-    // 设置筛选范围为选中当天
-    setPreset("custom");
-    setCustomRange({ from: dateStr, to: dateStr });
-  }, []);
-
-  const isFiltering = preset !== "all" || visibilityFilter !== "all" || selectedTagId !== "all";
-
-  // Split items into pinned and unpinned
-  const pinnedItems = useMemo(() => items.filter((item) => item.isPinned === 1), [items]);
-  const unpinnedItems = useMemo(() => items.filter((item) => item.isPinned !== 1), [items]);
-
-  const groupedItems = useMemo(() => groupByDate(unpinnedItems, t), [unpinnedItems, t]);
-
   return (
-    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-app-bg">
-      {/* 左侧边栏：空间切换 + 搜索框 + 热力图 + 标签筛选 */}
-      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col border-r border-app-border bg-app-sidebar overflow-hidden">
-        {/* 顶部区域：空间切换 + 搜索框 */}
-        <div className="flex-shrink-0 border-b border-app-border/40 p-3 space-y-2">
-          {/* 空间切换组件 */}
-          <WorkspaceSwitcher />
-
-          {/* 搜索框 */}
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
-            <Input
-              placeholder={t('diary.searchPlaceholder') || "搜索说说..."}
-              className="pl-8 h-8 text-xs bg-app-bg border-app-border no-focus-ring"
-              value={diarySearchQuery}
-              onChange={handleDiarySearchChange}
-            />
-          </div>
-        </div>
-
-        {/* 说说热力图 */}
-        <div className="flex-shrink-0 border-b border-app-border/40 p-3 bg-app-bg/30">
-          <DiaryHeatMap
-            stats={useMemo(() => {
-              // 从所有加载的 items 计算每日统计
-              const counts: Record<string, number> = {};
-              for (const item of items) {
-                const dateStr = item.createdAt.split(" ")[0]; // YYYY-MM-DD
-                counts[dateStr] = (counts[dateStr] || 0) + 1;
-              }
-              return Object.entries(counts).map(([date, count]) => ({ date, count }));
-            }, [items])}
-            onDateSelect={handleCalendarDateSelect}
-          />
-        </div>
-
-        {/* 说说收藏与标签筛选 */}
-        <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-4">
-          {/* 我的收藏 */}
-          <div className="space-y-2 pb-2 border-b border-app-border/40">
-            <button
-              onClick={() => setFavsExpanded(!favsExpanded)}
-              className="w-full flex items-center justify-between px-1 text-xs font-semibold uppercase tracking-wider text-tx-tertiary hover:text-tx-secondary transition-colors"
-            >
-              <span>{t('diary.favorites') || "我的收藏"}</span>
-              <ChevronDown
-                size={12}
-                className={cn(
-                  "text-tx-tertiary transition-transform duration-200",
-                  !favsExpanded && "-rotate-90"
-                )}
-              />
-            </button>
-            <AnimatePresence initial={false}>
-              {favsExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0, overflow: "hidden" }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="space-y-1 mt-1 max-h-[160px] overflow-y-auto pr-1">
-                    {favoriteDiaries.length === 0 ? (
-                      <p className="text-[10px] text-tx-tertiary px-3 py-1">{t('diary.noFavorites') || "暂无收藏说说"}</p>
-                    ) : (
-                      favoriteDiaries.map((fav) => (
-                        <button
-                          key={fav.id}
-                          onClick={() => handleSelectFavoriteDiary(fav.id)}
-                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-app-hover transition-colors flex flex-col gap-0.5 group"
-                        >
-                          <span className="text-[11px] text-tx-secondary font-medium truncate w-full group-hover:text-accent-primary">
-                            {fav.text.replace(/<[^>]*>/g, '').trim() || "语音说说"}
-                          </span>
-                          <span className="text-[9px] text-tx-tertiary shrink-0">
-                            {fav.createdAt.split(' ')[0]}
-                          </span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* 标签筛选区域 */}
-          <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-tx-primary px-1 mb-2">
-              {t('sidebar.tags') || "标签"}
-            </div>
-            <div className="space-y-1">
-              {/* "全部"按钮 */}
-              <button
-                onClick={() => setSelectedTagId("all")}
-                className={cn(
-                  "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
-                  selectedTagId === "all" || !selectedTagId
-                    ? "bg-accent-primary/10 text-accent-primary font-medium"
-                    : "text-tx-secondary hover:bg-app-hover"
-                )}
-              >
-                <span className="w-2 h-2 rounded-full bg-accent-primary shrink-0" />
-                <span>{t('diary.allTags') || "全部标签"}</span>
-              </button>
-              {/* 标签列表 */}
-              {state.tags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => {
-                    if (tagLongPressFired.current) {
-                      tagLongPressFired.current = false;
-                      return;
-                    }
-                    setSelectedTagId(selectedTagId === tag.id ? "all" : tag.id);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setTagColorPopover({
-                      tagId: tag.id,
-                      tagName: tag.name,
-                      color: tag.color,
-                      x: e.clientX,
-                      y: e.clientY,
-                    });
-                  }}
-                  onTouchStart={(e) => {
-                    const touch = e.touches[0];
-                    if (!touch) return;
-                    const startX = touch.clientX;
-                    const startY = touch.clientY;
-                    tagLongPressFired.current = false;
-                    if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
-                    tagLongPressTimer.current = setTimeout(() => {
-                      tagLongPressFired.current = true;
-                      setTagColorPopover({
-                        tagId: tag.id,
-                        tagName: tag.name,
-                        color: tag.color,
-                        x: startX,
-                        y: startY,
-                      });
-                    }, 500);
-                  }}
-                  onTouchMove={(e) => {
-                    if (tagLongPressTimer.current) {
-                      clearTimeout(tagLongPressTimer.current);
-                      tagLongPressTimer.current = null;
-                    }
-                  }}
-                  onTouchEnd={() => {
-                    if (tagLongPressTimer.current) {
-                      clearTimeout(tagLongPressTimer.current);
-                      tagLongPressTimer.current = null;
-                    }
-                  }}
-                  onTouchCancel={() => {
-                    if (tagLongPressTimer.current) {
-                      clearTimeout(tagLongPressTimer.current);
-                      tagLongPressTimer.current = null;
-                    }
-                  }}
-                  className={cn(
-                    "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
-                    selectedTagId === tag.id
-                      ? "bg-accent-primary/10 text-accent-primary font-medium"
-                      : "text-tx-secondary hover:bg-app-hover"
-                  )}
-                >
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                  <span className="truncate">{tag.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-[#f2f3f5] dark:bg-[#121214] justify-center">
+      <div className="w-full max-w-5xl flex h-full min-h-0 overflow-hidden">
+        {/* 主内容区 */}
+        <div className="flex-1 flex flex-col overflow-hidden">
         {window.innerWidth < 768 && (
           <header
             className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0 z-40"
@@ -3175,173 +3485,290 @@ export default function DiaryCenter() {
                 </div>
               )}
 
-            {/* 筛选时间 + 可见性 */}
-            {window.innerWidth >= 768 && (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <FilterBar
-                  preset={preset}
-                  customRange={customRange}
-                  onChange={handleFilterChange}
-                />
+              {/* 发布框 — 列表模式下显示 */}
+              {viewMode === "list" && (
+                <ComposeBox onPost={handlePost} />
+              )}
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* 可见性筛选 */}
-                  {getCurrentWorkspace() !== "personal" && (
-                    <div className="flex items-center gap-1 bg-app-hover/40 p-0.5 rounded-full border border-app-border/40 select-none">
+              {/* 过滤状态指示器 */}
+              {activeFilterLabel && (
+                <div className="flex items-center gap-2 text-xs text-tx-secondary py-1 select-none animate-in fade-in duration-200">
+                  <span className="text-tx-tertiary">Filter:</span>
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium">
+                    {activeFilterLabel.icon}
+                    <span>{activeFilterLabel.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode("all")}
+                      className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
+                      title="清除过滤"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 日历视图 / 时间线 */}
+              {viewMode === "calendar" ? (
+                <div className="py-4">
+                  <DiaryCalendar
+                    onDateSelect={handleCalendarDateSelect}
+                    tagId={(filterMode !== "all" && filterMode !== "public" && filterMode !== "private" && filterMode !== "liked") ? filterMode : undefined}
+                    search={debouncedSearch || undefined}
+                  />
+                </div>
+              ) : loading ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 size={24} className="animate-spin text-accent-primary" />
+                </div>
+              ) : displayedItems.length === 0 ? (
+                <div className="flex flex-col items-center py-20 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-app-hover/60 flex items-center justify-center mb-4">
+                    <MessageCircle size={28} className="text-tx-tertiary" />
+                  </div>
+                  <p className="text-sm text-tx-secondary font-medium">
+                    {isFiltering ? t("diary.emptyFiltered") : t("diary.empty")}
+                  </p>
+                  <p className="text-xs text-tx-tertiary mt-1">
+                    {isFiltering ? t("diary.emptyFilteredHint") : t("diary.emptyHint")}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* 置顶动态区 */}
+                  {pinnedItems.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-full">
+                          <Pin size={11} className="fill-emerald-600 animate-in fade-in" />
+                          置顶动态
+                        </span>
+                        <div className="flex-1 h-px bg-emerald-500/20" />
+                      </div>
+                      <div className="space-y-3">
+                        <AnimatePresence mode="popLayout">
+                          {pinnedItems.map((item) => (
+                            <DiaryCard
+                              key={item.id}
+                              item={item}
+                              onDelete={handleDelete}
+                              onUpdate={handleUpdate}
+                              isHighlighted={highlightedId === item.id}
+                            />
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 时间线分割线 (若既有置顶又有普通) */}
+                  {pinnedItems.length > 0 && unpinnedItems.length > 0 && (
+                    <div className="my-5 border-t border-app-border/40" />
+                  )}
+
+                  {/* 普通动态区 */}
+                  {groupedItems.map(({ label, items: dayItems }) => (
+                    <div key={label}>
+                      {/* 日期分割 */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-[11px] font-medium text-tx-tertiary bg-app-hover/60 px-2.5 py-1 rounded-full">
+                          {label}
+                        </span>
+                        <div className="flex-1 h-px bg-app-border/50" />
+                      </div>
+
+                      {/* 当天动态 */}
+                      <div className="space-y-3">
+                        <AnimatePresence mode="popLayout">
+                          {dayItems.map((item) => (
+                            <DiaryCard
+                              key={item.id}
+                              item={item}
+                              onDelete={handleDelete}
+                              onUpdate={handleUpdate}
+                              isHighlighted={highlightedId === item.id}
+                            />
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* 加载更多 */}
+                  {hasMore && (
+                    <div className="flex justify-center pt-2 pb-4">
                       <button
-                        onClick={() => setVisibilityFilter("all")}
-                        className={cn(
-                          "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
-                          visibilityFilter === "all"
-                            ? "bg-accent-primary text-white shadow-sm"
-                            : "text-tx-tertiary hover:text-tx-secondary"
-                        )}
+                        onClick={() => loadTimeline(false)}
+                        disabled={loadingMore}
+                        className="flex items-center gap-1.5 px-5 py-2 rounded-full text-xs font-medium text-tx-secondary bg-app-hover/60 hover:bg-app-hover transition-colors"
                       >
-                        全部
-                      </button>
-                      <button
-                        onClick={() => setVisibilityFilter("private")}
-                        className={cn(
-                          "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
-                          visibilityFilter === "private"
-                            ? "bg-accent-primary text-white shadow-sm"
-                            : "text-tx-tertiary hover:text-tx-secondary"
+                        {loadingMore ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <ChevronDown size={13} />
                         )}
-                      >
-                        <Lock size={10} />
-                        自己可见
-                      </button>
-                      <button
-                        onClick={() => setVisibilityFilter("public")}
-                        className={cn(
-                          "px-3 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1",
-                          visibilityFilter === "public"
-                            ? "bg-accent-primary text-white shadow-sm"
-                            : "text-tx-tertiary hover:text-tx-secondary"
-                        )}
-                      >
-                        <Globe size={10} />
-                        公开
+                        <span>{loadingMore ? t("diary.loadingMore") : t("diary.loadMore")}</span>
                       </button>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </ScrollContainer>
+        </PullToRefresh>
+      </div>
 
-            {/* 发布框 — 列表模式下显示 (仅在桌面端或宽度大时渲染，避免 mobile DOM 占据 space-y 空间) */}
-            {viewMode === "list" && window.innerWidth >= 768 && (
-              <ComposeBox onPost={handlePost} />
-            )}
+      {/* 右侧边栏：搜索框 + 热力图 + 标签筛选 */}
+      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-transparent overflow-y-auto pl-6 pr-4 py-4 gap-5">
 
-            {/* 日历视图 / 时间线 */}
-            {viewMode === "calendar" ? (
-              <div className="py-4">
-                <DiaryCalendar
-                  onDateSelect={handleCalendarDateSelect}
-                  tagId={selectedTagId !== "all" ? selectedTagId : undefined}
-                  search={debouncedSearch || undefined}
-                />
-              </div>
-            ) : loading ? (
-              <div className="flex justify-center py-16">
-                <Loader2 size={24} className="animate-spin text-accent-primary" />
-              </div>
-            ) : items.length === 0 ? (
-              <div className="flex flex-col items-center py-20 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-app-hover/60 flex items-center justify-center mb-4">
-                  <MessageCircle size={28} className="text-tx-tertiary" />
-                </div>
-                <p className="text-sm text-tx-secondary font-medium">
-                  {isFiltering ? t("diary.emptyFiltered") : t("diary.empty")}
-                </p>
-                <p className="text-xs text-tx-tertiary mt-1">
-                  {isFiltering ? t("diary.emptyFilteredHint") : t("diary.emptyHint")}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {/* 置顶动态区 */}
-                {pinnedItems.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-full">
-                        <Pin size={11} className="fill-emerald-600 animate-in fade-in" />
-                        置顶动态
-                      </span>
-                      <div className="flex-1 h-px bg-emerald-500/20" />
-                    </div>
-                    <div className="space-y-3">
-                      <AnimatePresence mode="popLayout">
-                        {pinnedItems.map((item) => (
-                          <DiaryCard
-                            key={item.id}
-                            item={item}
-                            onDelete={handleDelete}
-                            onUpdate={handleUpdate}
-                            isHighlighted={highlightedId === item.id}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                )}
+        {/* 搜索框 */}
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+          <Input
+            placeholder={t('diary.searchPlaceholder') || "搜索说说..."}
+            className="pl-8 h-8 text-xs bg-app-bg border-app-border no-focus-ring"
+            value={diarySearchQuery}
+            onChange={handleDiarySearchChange}
+          />
+        </div>
 
-                {/* 时间线分割线 (若既有置顶又有普通) */}
-                {pinnedItems.length > 0 && unpinnedItems.length > 0 && (
-                  <div className="my-5 border-t border-app-border/40" />
-                )}
+        {/* 说说动态 (热力图) */}
+        <div className="px-0.5">
+          <DiaryHeatMap
+            stats={useMemo(() => {
+              const counts: Record<string, number> = {};
+              for (const item of items) {
+                const dateStr = item.createdAt.split(" ")[0]; // YYYY-MM-DD
+                counts[dateStr] = (counts[dateStr] || 0) + 1;
+              }
+              return Object.entries(counts).map(([date, count]) => ({ date, count }));
+            }, [items])}
+            onDateSelect={handleCalendarDateSelect}
+          />
+        </div>
 
-                {/* 普通动态区 */}
-                {groupedItems.map(({ label, items: dayItems }) => (
-                  <div key={label}>
-                    {/* 日期分割 */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-[11px] font-medium text-tx-tertiary bg-app-hover/60 px-2.5 py-1 rounded-full">
-                        {label}
-                      </span>
-                      <div className="flex-1 h-px bg-app-border/50" />
-                    </div>
-
-                    {/* 当天动态 */}
-                    <div className="space-y-3">
-                      <AnimatePresence mode="popLayout">
-                        {dayItems.map((item) => (
-                          <DiaryCard
-                            key={item.id}
-                            item={item}
-                            onDelete={handleDelete}
-                            onUpdate={handleUpdate}
-                            isHighlighted={highlightedId === item.id}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                ))}
-
-                {/* 加载更多 */}
-                {hasMore && (
-                  <div className="flex justify-center pt-2 pb-4">
-                    <button
-                      onClick={() => loadTimeline(false)}
-                      disabled={loadingMore}
-                      className="flex items-center gap-1.5 px-5 py-2 rounded-full text-xs font-medium text-tx-secondary bg-app-hover/60 hover:bg-app-hover transition-colors"
-                    >
-                      {loadingMore ? (
-                        <Loader2 size={13} className="animate-spin" />
-                      ) : (
-                        <ChevronDown size={13} />
-                      )}
-                      <span>{loadingMore ? t("diary.loadingMore") : t("diary.loadMore")}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+        {/* 标签与分类筛选 */}
+        <div className="space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-tx-primary px-1">
+            分类与标签
           </div>
-        </ScrollContainer>
-      </PullToRefresh>
+          <div className="space-y-1">
+
+            {/* 公开 */}
+            <button
+              onClick={() => setFilterMode("public")}
+              className={cn(
+                "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                filterMode === "public"
+                  ? "bg-accent-primary/10 text-accent-primary font-medium"
+                  : "text-tx-secondary hover:bg-app-hover"
+              )}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+              <span>🌐 公开</span>
+            </button>
+
+            {/* 仅自己可见 */}
+            <button
+              onClick={() => setFilterMode("private")}
+              className={cn(
+                "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                filterMode === "private"
+                  ? "bg-accent-primary/10 text-accent-primary font-medium"
+                  : "text-tx-secondary hover:bg-app-hover"
+              )}
+            >
+              <span className="w-2 h-2 rounded-full bg-zinc-500 shrink-0" />
+              <span>🔒 仅自己可见</span>
+            </button>
+
+            {/* 我赞过的 */}
+            <button
+              onClick={() => setFilterMode("liked")}
+              className={cn(
+                "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                filterMode === "liked"
+                  ? "bg-accent-primary/10 text-accent-primary font-medium"
+                  : "text-tx-secondary hover:bg-app-hover"
+              )}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+              <span>❤️ 我赞过的</span>
+            </button>
+
+            {/* 标签分割线 */}
+            {state.tags.length > 0 && (
+              <div className="h-px bg-app-border/40 my-2" />
+            )}
+
+            {/* 自定义标签 */}
+            {state.tags.map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => {
+                  if (tagLongPressFired.current) {
+                    tagLongPressFired.current = false;
+                    return;
+                  }
+                  setFilterMode(filterMode === tag.id ? "all" : tag.id);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setTagColorPopover({
+                    tagId: tag.id,
+                    tagName: tag.name,
+                    color: tag.color,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }}
+                onTouchStart={(e) => {
+                  const touch = e.touches[0];
+                  if (!touch) return;
+                  const startX = touch.clientX;
+                  const startY = touch.clientY;
+                  tagLongPressFired.current = false;
+                  if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
+                  tagLongPressTimer.current = setTimeout(() => {
+                    tagLongPressFired.current = true;
+                    setTagColorPopover({
+                      tagId: tag.id,
+                      tagName: tag.name,
+                      color: tag.color,
+                      x: startX,
+                      y: startY,
+                    });
+                  }, 500);
+                }}
+                onTouchMove={() => {
+                  if (tagLongPressTimer.current) {
+                    clearTimeout(tagLongPressTimer.current);
+                    tagLongPressTimer.current = null;
+                  }
+                }}
+                onTouchEnd={() => {
+                  if (tagLongPressTimer.current) {
+                    clearTimeout(tagLongPressTimer.current);
+                    tagLongPressTimer.current = null;
+                  }
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2",
+                  filterMode === tag.id
+                    ? "bg-accent-primary/10 text-accent-primary font-medium"
+                    : "text-tx-secondary hover:bg-app-hover"
+                )}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                <span className="truncate">#{tag.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {tagColorPopover && (
         <TagColorPopover
           x={tagColorPopover.x}
@@ -3377,8 +3804,8 @@ export default function DiaryCenter() {
             if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
             try {
               await api.deleteTag(tagColorPopover.tagId);
-              if (selectedTagId === tagColorPopover.tagId) {
-                setSelectedTagId("all");
+              if (filterMode === tagColorPopover.tagId) {
+                setFilterMode("all");
               }
               if (state.selectedTagId === tagColorPopover.tagId) {
                 actions.setSelectedTag(null);
@@ -3393,10 +3820,11 @@ export default function DiaryCenter() {
           onClose={() => setTagColorPopover(null)}
         />
       )}
-    </div>
+      </div>
     </div>
   );
 }
+
 
 // ============================================================
 // 辅助：按日期分组

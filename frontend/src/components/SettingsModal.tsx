@@ -846,7 +846,7 @@ function SwitchesPanel() {
 
 function AppearancePanel() {
   const { t, i18n } = useTranslation();
-  const { siteConfig, updateSiteConfig, updateEditorFont } = useSiteSettings();
+  const { siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled } = useSiteSettings();
   const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
   const [title, setTitle] = useState(siteConfig.title);
   const [previewIcon, setPreviewIcon] = useState(siteConfig.favicon);
@@ -1089,38 +1089,38 @@ function AppearancePanel() {
 
       {/* 外观与主题 */}
       <div>
-        <h3 className="text-lg font-bold text-tx-primary mb-1">{t('settings.appearanceTheme')}</h3>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">{t('settings.appearanceThemeDesc')}</p>
+        <h3 className="text-sys-title-lg font-bold text-tx-primary mb-sys-xs">{t('settings.appearanceTheme')}</h3>
+        <p className="text-sys-body-md text-zinc-500 dark:text-zinc-400 mb-sys-xl">{t('settings.appearanceThemeDesc')}</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-sys-lg">
         {/* 外观风格（Skin）：默认 / macOS —— 与下方明暗模式正交 */}
-        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+        <div className="p-sys-lg rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-sys-md">
           <div>
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-sys-body-md font-medium text-zinc-700 dark:text-zinc-300">
               {t('appearance.skinTitle', { defaultValue: '外观风格' })}
             </span>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <p className="text-sys-body-sm text-zinc-500 dark:text-zinc-400 mt-sys-xs">
               {t('appearance.skinDesc', { defaultValue: '选择整体视觉语言。macOS 风格在 Apple 设备上体验最佳。' })}
             </p>
           </div>
           <SkinSwitcher />
         </div>
 
-        <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+        <div className="flex items-center justify-between p-sys-lg rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
           <div>
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('settings.themeMode')}</span>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{t('settings.themeModeDesc')}</p>
+            <span className="text-sys-body-md font-medium text-zinc-700 dark:text-zinc-300">{t('settings.themeMode')}</span>
+            <p className="text-sys-body-sm text-zinc-500 dark:text-zinc-400 mt-sys-xs">{t('settings.themeModeDesc')}</p>
           </div>
           <ThemeToggle />
         </div>
 
         {/* 编辑器字体 - 可交互 */}
-        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-4">
+        <div className="p-sys-lg rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-sys-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('settings.editorFont')}</span>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{t('settings.editorFontDesc')}</p>
+              <span className="text-sys-body-md font-medium text-zinc-700 dark:text-zinc-300">{t('settings.editorFont')}</span>
+              <p className="text-sys-body-sm text-zinc-500 dark:text-zinc-400 mt-sys-xs">{t('settings.editorFontDesc')}</p>
             </div>
             {isSwitchingFont && <Loader2 size={14} className="animate-spin text-accent-primary" />}
           </div>
@@ -1239,7 +1239,24 @@ function AppearancePanel() {
           </div>
         </div>
 
-        {/* 语言切换 */}
+        {/* 霞鹜文楷字体开关 */}
+        <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+          <div className="flex items-center gap-2">
+            <Type size={16} className="text-zinc-500 dark:text-zinc-400" />
+            <div>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('settings.lxgwWenkaiFont')}</span>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{t('settings.lxgwWenkaiFontDesc')}</p>
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={siteConfig.lxgwWenkaiEnabled}
+            onChange={(e) => updateLxgwWenkaiEnabled(e.target.checked)}
+            className="w-4 h-4 accent-indigo-600 cursor-pointer"
+          />
+        </div>
+
+          {/* 语言切换 */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
           <div className="flex items-center gap-2">
             <Globe size={16} className="text-zinc-500 dark:text-zinc-400" />

@@ -16,6 +16,8 @@ import {
   Monitor,
   Lock,
   Camera,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
@@ -55,9 +57,203 @@ function QRCodeCanvas({ text }: { text: string }): JSX.Element {
   );
 }
 
+function AvatarCropModal({
+  file,
+  onClose,
+  onCrop,
+}: {
+  file: File;
+  onClose: () => void;
+  onCrop: (blob: Blob) => void;
+}) {
+  const { t } = useTranslation();
+  const [imageSrc, setImageSrc] = useState<string>("");
+  const [zoom, setZoom] = useState(1);
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, [file]);
+
+  const handleStart = (clientX: number, clientY: number) => {
+    setIsDragging(true);
+    setDragStart({ x: clientX - offsetX, y: clientY - offsetY });
+  };
+
+  const handleMove = (clientX: number, clientY: number) => {
+    if (!isDragging) return;
+    setOffsetX(clientX - dragStart.x);
+    setOffsetY(clientY - dragStart.y);
+  };
+
+  const handleEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleConfirm = () => {
+    if (!imageSrc) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 256, 256);
+
+    const img = new Image();
+    img.onload = () => {
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+      const ratio = Math.min(280 / imgWidth, 280 / imgHeight);
+      const fitWidth = imgWidth * ratio;
+      const fitHeight = imgHeight * ratio;
+      const drawWidth = fitWidth * zoom;
+      const drawHeight = fitHeight * zoom;
+
+      const centerX = 140 + offsetX;
+      const centerY = 140 + offsetY;
+      const xInContainer = centerX - drawWidth / 2;
+      const yInContainer = centerY - drawHeight / 2;
+
+      const xInCrop = xInContainer - 60; // 60 is (280 - 160) / 2
+      const yInCrop = yInContainer - 60;
+
+      const scaleFactor = 256 / 160;
+      const canvasX = xInCrop * scaleFactor;
+      const canvasY = yInCrop * scaleFactor;
+      const canvasWidth = drawWidth * scaleFactor;
+      const canvasHeight = drawHeight * scaleFactor;
+
+      ctx.drawImage(img, canvasX, canvasY, canvasWidth, canvasHeight);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            onCrop(blob);
+          }
+        },
+        "image/jpeg",
+        0.9
+      );
+    };
+    img.src = imageSrc;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
+      <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden p-5 space-y-4">
+        <h3 className="font-bold text-tx-primary text-center">
+          {t("securitySettings.cropTitle", { defaultValue: "编辑头像" })}
+        </h3>
+
+        {/* Cropper viewport container */}
+        <div
+          className="w-[280px] h-[280px] mx-auto bg-neutral-100 dark:bg-neutral-900 border border-border rounded-xl relative overflow-hidden select-none cursor-move touch-none"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            handleStart(e.clientX, e.clientY);
+          }}
+          onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
+          onMouseUp={handleEnd}
+          onMouseLeave={handleEnd}
+          onTouchStart={(e) => {
+            const touch = e.touches[0];
+            if (touch) handleStart(touch.clientX, touch.clientY);
+          }}
+          onTouchMove={(e) => {
+            const touch = e.touches[0];
+            if (touch) handleMove(touch.clientX, touch.clientY);
+          }}
+          onTouchEnd={handleEnd}
+        >
+          {imageSrc && (
+            <img
+              src={imageSrc}
+              alt=""
+              className="absolute pointer-events-none select-none max-w-none origin-center"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
+              }}
+            />
+          )}
+          {/* Circular mask overlay */}
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="w-[160px] h-[160px] rounded-full ring-[999px] ring-black/55 border-2 border-white/80 shadow-[0_0_8px_rgba(0,0,0,0.3)]" />
+          </div>
+        </div>
+
+        {/* Zoom Controls */}
+        <div className="space-y-1.5 px-2">
+          <div className="flex items-center justify-between text-xs text-tx-secondary font-medium">
+            <span>{t("securitySettings.zoom", { defaultValue: "缩放" })}</span>
+            <span>{Math.round(zoom * 100)}%</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
+              className="p-1.5 rounded-lg border border-border bg-background hover:bg-accent text-tx-secondary active:scale-95 transition-all"
+              type="button"
+            >
+              <Minus size={14} />
+            </button>
+            <input
+              type="range"
+              min={0.5}
+              max={3}
+              step={0.05}
+              value={zoom}
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              className="flex-1 accent-indigo-600 h-1 bg-neutral-200 dark:bg-neutral-700 rounded-lg cursor-pointer"
+            />
+            <button
+              onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
+              className="p-1.5 rounded-lg border border-border bg-background hover:bg-accent text-tx-secondary active:scale-95 transition-all"
+              type="button"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+
+        <p className="text-center text-[11px] text-tx-tertiary">
+          {t("securitySettings.cropTip", { defaultValue: "可通过拖拽图片或使用缩放条调整头像" })}
+        </p>
+
+        {/* Footer actions */}
+        <div className="flex justify-end gap-2.5 pt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-tx-secondary rounded-xl text-xs font-medium transition-colors"
+            type="button"
+          >
+            {t("common.cancel", { defaultValue: "取消" })}
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium transition-colors shadow-sm"
+            type="button"
+          >
+            {t("common.confirm", { defaultValue: "确认" })}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void }) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,15 +261,20 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSelectedFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
+  const uploadFile = async (fileToUpload: File) => {
+    setSelectedFile(null);
     setError("");
     setIsUploading(true);
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", fileToUpload);
 
     try {
       const res = await api.uploadAvatar(formData);
@@ -88,7 +289,6 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
       setError(err?.message || t("securitySettings.uploadFailed", { defaultValue: "上传头像失败" }));
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -175,6 +375,17 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
         accept="image/*"
         className="hidden"
       />
+
+      {selectedFile && (
+        <AvatarCropModal
+          file={selectedFile}
+          onClose={() => setSelectedFile(null)}
+          onCrop={(blob) => {
+            const croppedFile = new File([blob], selectedFile.name, { type: "image/jpeg" });
+            uploadFile(croppedFile);
+          }}
+        />
+      )}
     </section>
   );
 }

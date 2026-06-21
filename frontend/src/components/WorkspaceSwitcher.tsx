@@ -35,9 +35,10 @@ interface WorkspaceSwitcherProps {
   /** 切换后父组件触发的回调，通常是 reload 数据 */
   onWorkspaceChange?: (workspaceId: string) => void;
   collapsed?: boolean;
+  variant?: "sidebar" | "header";
 }
 
-export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: WorkspaceSwitcherProps) {
+export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, variant = "sidebar" }: WorkspaceSwitcherProps) {
   const { t } = useTranslation();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [current, setCurrent] = useState<string>(getCurrentWorkspace());
@@ -259,25 +260,36 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
   return (
     <>
       <div ref={ref} className="relative">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          onContextMenu={handleEntryContextMenu}
-          className={cn(
-            "w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border",
-            "bg-background hover:bg-accent transition-colors text-sm",
-          )}
-        >
-          <span className="text-lg">{displayIcon}</span>
-          <div className="flex-1 text-left truncate">
-            <div className="font-medium truncate">{displayName}</div>
-            {currentWs && (
-              <div className="text-xs text-muted-foreground">
-                {getRoleLabel(currentWs.role)} · {t("workspaceManagement.members", { count: currentWs.memberCount })}
-              </div>
+        {variant === "header" ? (
+          <button
+            onClick={() => setOpen((v) => !v)}
+            onContextMenu={handleEntryContextMenu}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-app-border bg-app-surface hover:bg-app-hover active:scale-95 transition-all text-xs font-semibold text-tx-primary shrink-0"
+          >
+            <span>{displayIcon} {displayName || "选择工作区"}</span>
+            <ChevronDown size={14} className={cn("transition-transform duration-200", open && "rotate-180")} />
+          </button>
+        ) : (
+          <button
+            onClick={() => setOpen((v) => !v)}
+            onContextMenu={handleEntryContextMenu}
+            className={cn(
+              "w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border",
+              "bg-background hover:bg-accent transition-colors text-sm",
             )}
-          </div>
-          <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
-        </button>
+          >
+            <span className="text-lg">{displayIcon}</span>
+            <div className="flex-1 text-left truncate">
+              <div className="font-medium truncate">{displayName}</div>
+              {currentWs && (
+                <div className="text-xs text-muted-foreground">
+                  {getRoleLabel(currentWs.role)} · {t("workspaceManagement.members", { count: currentWs.memberCount })}
+                </div>
+              )}
+            </div>
+            <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+          </button>
+        )}
 
         <AnimatePresence>
           {open && (
@@ -286,7 +298,10 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed }: Work
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.15 }}
-              className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden"
+              className={cn(
+                "absolute top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden",
+                variant === "header" ? "right-0 w-[180px]" : "left-0 right-0"
+              )}
             >
               <div className="max-h-[320px] overflow-auto py-1">
                 {workspaces.length === 0 && (

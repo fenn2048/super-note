@@ -115,6 +115,7 @@ interface DiaryRow {
   isPinned?: number;
   createdAt: string;
   creatorName?: string | null;
+  creatorAvatarUrl?: string | null;
   tagsJson?: string | null;
   commentCount?: number;
   trigger_user_id?: string | null;
@@ -171,6 +172,7 @@ function rowToDiary(row: DiaryRow) {
     isPinned: row.isPinned ?? 0,
     createdAt: row.createdAt,
     creatorName: row.creatorName ?? null,
+    creatorAvatarUrl: row.creatorAvatarUrl ?? null,
     tags,
     commentCount: row.commentCount ?? 0,
     triggerUserId: row.trigger_user_id ?? null,
@@ -479,7 +481,7 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
     finalArgs.push(cursor);
   }
 
-  const selectFields = `diaries.*, COALESCE(users.displayName, users.username) AS creatorName,
+  const selectFields = `diaries.*, COALESCE(users.displayName, users.username) AS creatorName, users.avatarUrl AS creatorAvatarUrl,
     (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
      FROM tags t
      JOIN diary_tags dt ON t.id = dt.tagId
@@ -748,7 +750,7 @@ diary.put("/:id", (c) => {
     // 返回更新后的整条记录（顺手 LEFT JOIN 取 creatorName 保持契约一致）
     const updated = db
       .prepare(
-        `SELECT diaries.*, COALESCE(users.displayName, users.username) AS creatorName,
+        `SELECT diaries.*, COALESCE(users.displayName, users.username) AS creatorName, users.avatarUrl AS creatorAvatarUrl,
                 (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
                  FROM tags t
                  JOIN diary_tags dt ON t.id = dt.tagId
@@ -1386,7 +1388,7 @@ diary.post("/ai-ask", async (c) => {
   const db = getDb();
   const userId = c.req.header("X-User-Id")!;
   ensureSuUser(db);
-  const body = await c.req.json() as { mode: "post" | "comment"; diaryId?: string; question: string };
+  const body = await c.req.json() as { mode: "post" | "comment"; diaryId?: string; question: string; workspaceId?: string };
   const { mode, diaryId, question } = body;
 
   if (!question?.trim()) {
@@ -1394,6 +1396,18 @@ diary.post("/ai-ask", async (c) => {
   }
   if (mode === "comment" && !diaryId) {
     return c.json({ error: "缺少 diaryId" }, 400);
+  }
+
+  // 获取并校验 workspaceId
+  let workspaceId = body.workspaceId || c.req.query("workspaceId") || null;
+  if (workspaceId === "personal") {
+    workspaceId = null;
+  }
+  if (workspaceId) {
+    const role = getUserWorkspaceRole(workspaceId, userId);
+    if (!role) {
+      return c.json({ error: "无权访问该工作区", code: "FORBIDDEN" }, 403);
+    }
   }
 
   // 1. 收集上下文
@@ -1451,8 +1465,16 @@ diary.post("/ai-ask", async (c) => {
     context = parts.join("\n\n");
   } else {
     // 评论区模式：仅取当前说说 + 已有评论
-    const diaryRow = db.prepare("SELECT contentText FROM diaries WHERE id = ?").get(diaryId) as { contentText: string } | undefined;
+    const diaryRow = db.prepare("SELECT userId, workspaceId, visibility, contentText FROM diaries WHERE id = ?").get(diaryId) as { userId: string; workspaceId: string | null; visibility: string; contentText: string } | undefined;
     if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
+
+    // 检查说说读权限
+    const hasAccess = diaryRow.workspaceId 
+      ? !!getUserWorkspaceRole(diaryRow.workspaceId, userId)
+      : (diaryRow.userId === userId || diaryRow.visibility === "PUBLIC");
+    if (!hasAccess) {
+      return c.json({ error: "无权评论该说说", code: "FORBIDDEN" }, 403);
+    }
 
     const comments = db.prepare(`
       SELECT dc.content, COALESCE(u.displayName, u.username) AS username
@@ -1483,12 +1505,12 @@ diary.post("/ai-ask", async (c) => {
     const now = new Date().toISOString().replace("T", " ").slice(0, 19);
 
     db.prepare(`
-      INSERT INTO diaries (id, userId, contentText, mood, images, visibility, voice, createdAt, trigger_user_id)
-      VALUES (?, ?, ?, '', '[]', 'PUBLIC', NULL, ?, ?)
-    `).run(newDiaryId, SU_USER_ID, answer, now, userId);
+      INSERT INTO diaries (id, userId, workspaceId, contentText, mood, images, visibility, voice, createdAt, trigger_user_id)
+      VALUES (?, ?, ?, ?, '', '[]', 'PUBLIC', NULL, ?, ?)
+    `).run(newDiaryId, SU_USER_ID, workspaceId, answer, now, userId);
 
     const created = db.prepare(`
-      SELECT d.*, COALESCE(u.displayName, u.username) AS creatorName
+      SELECT d.*, COALESCE(u.displayName, u.username) AS creatorName, u.avatarUrl AS creatorAvatarUrl
       FROM diaries d
       JOIN users u ON u.id = d.userId
       WHERE d.id = ?

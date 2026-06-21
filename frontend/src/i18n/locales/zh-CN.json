@@ -537,6 +537,8 @@
     "deleteFont": "删除字体",
     "importFont": "导入字体包",
     "importFontHint": "支持 OTF / OTC / TTC / TTF / WOFF2 · 可批量选择",
+    "lxgwWenkaiFont": "全局使用霞鹜文楷字体",
+    "lxgwWenkaiFontDesc": "开启后，全局界面和编辑器均将使用漂亮的霞鹜文楷字体",
     "fontPreviewEn": "The quick brown fox jumps over the lazy dog.",
     "fontPreviewZh": "我能吞下玻璃而不伤身体。0123456789",
     "sidebarWidth": "侧边栏宽度",

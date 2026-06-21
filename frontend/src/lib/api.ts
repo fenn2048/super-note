@@ -697,6 +697,7 @@ export const api = {
     site_title: string;
     site_favicon: string;
     editor_font_family: string;
+    editor_lxgw_wenkai_enabled?: string;
     // 功能开关（字符串 "true"/"false"，未写过时 DEFAULTS 保证为 "true"）
     feature_personal_export_enabled?: string;
     feature_personal_import_enabled?: string;
@@ -707,6 +708,7 @@ export const api = {
         site_title: "super-note",
         site_favicon: "",
         editor_font_family: "",
+        editor_lxgw_wenkai_enabled: "false",
         feature_personal_export_enabled: "true",
         feature_personal_import_enabled: "true",
       };
@@ -1318,6 +1320,7 @@ export const api = {
       site_title: string;
       site_favicon: string;
       editor_font_family: string;
+      editor_lxgw_wenkai_enabled?: string;
       feature_personal_export_enabled?: string;
       feature_personal_import_enabled?: string;
       // 调试开关："true" / "false"。仅管理员可写，未写过时为 "false"。
@@ -1328,6 +1331,7 @@ export const api = {
     site_title?: string;
     site_favicon?: string;
     editor_font_family?: string;
+    editor_lxgw_wenkai_enabled?: boolean | string;
     // 布尔值或 "true"/"false" 字符串；后端做归一化
     feature_personal_export_enabled?: boolean | string;
     feature_personal_import_enabled?: boolean | string;
@@ -1339,6 +1343,7 @@ export const api = {
       site_title: string;
       site_favicon: string;
       editor_font_family: string;
+      editor_lxgw_wenkai_enabled?: string;
       feature_personal_export_enabled?: string;
       feature_personal_import_enabled?: string;
       debug_files_query?: string;
@@ -1662,10 +1667,17 @@ export const api = {
     request(`/diary/comments/${commentId}`, { method: "DELETE" }),
 
   // AI 助手：说说 @su 提问
-  diaryAiAsk: (params: { mode: "post" | "comment"; diaryId?: string; question: string }) =>
-    request<{ mode: "post"; diary: Diary } | { mode: "comment"; comment: DiaryComment }>(
-      "/diary/ai-ask", { method: "POST", body: JSON.stringify(params) }
-    ),
+  diaryAiAsk: (params: { mode: "post" | "comment"; diaryId?: string; question: string; workspaceId?: string }) => {
+    const ws = params.workspaceId !== undefined ? params.workspaceId : getCurrentWorkspace();
+    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    return request<{ mode: "post"; diary: Diary } | { mode: "comment"; comment: DiaryComment }>(
+      `/diary/ai-ask${qs}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ ...params, workspaceId: ws }),
+      }
+    );
+  },
 
   // 说说图片：上传 / 删除悬空 / 拼 URL。
   // 上传时机：用户选好图就立即上传（不是发布时再传），体验上能即时看到缩略图、

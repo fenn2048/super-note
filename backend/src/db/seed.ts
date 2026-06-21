@@ -115,7 +115,7 @@ export function seedDatabase() {
       );
 
       // Create checklist for task 1
-      db.prepare(`INSERT INTO project_task_checklists (id, taskId, title, isCompleted, sortOrder) VALUES (?, ?, ?, ?, ?)`).run(uuid(), t1Id, "任务分工确认", 0);
+      db.prepare(`INSERT INTO project_task_checklists (id, taskId, title, isCompleted, sortOrder) VALUES (?, ?, ?, ?, ?)`).run(uuid(), t1Id, "任务分工确认", 0, 0);
 
       const t2Id = uuid();
       db.prepare(`

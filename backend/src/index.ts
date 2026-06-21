@@ -182,7 +182,7 @@ app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
 app.get("/api/settings", (c) => {
   const db = getDb();
   const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled'").all() as { key: string; value: string }[];
-  const result: Record<string, string> = { site_title: "ark-notes", site_favicon: "", editor_font_family: "", debug_files_query: "false", web_ui_enabled: "true" };
+  const result: Record<string, string> = { site_title: "ark-notes", site_favicon: "", editor_font_family: "", editor_lxgw_wenkai_enabled: "false", debug_files_query: "false", web_ui_enabled: "true" };
   for (const row of rows) {
     result[row.key] = row.value;
   }

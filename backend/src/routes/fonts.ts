@@ -47,7 +47,7 @@ fonts.post("/upload", async (c) => {
   // 统一为数组处理
   const fileList = Array.isArray(files) ? files : [files];
   const ALLOWED_EXT = [".otf", ".otc", ".ttc", ".ttf", ".woff", ".woff2"];
-  const MAX_SIZE = 20 * 1024 * 1024; // 单个文件 20MB
+  const MAX_SIZE = 30 * 1024 * 1024; // 单个文件 30MB
 
   const db = getDb();
   const insert = db.prepare(
@@ -70,7 +70,7 @@ fonts.post("/upload", async (c) => {
     }
 
     if (file.size > MAX_SIZE) {
-      errors.push(`${file.name}: 文件过大 (最大 20MB)`);
+      errors.push(`${file.name}: 文件过大 (最大 30MB)`);
       continue;
     }
 
