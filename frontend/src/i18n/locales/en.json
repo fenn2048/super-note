@@ -1147,8 +1147,8 @@
     "skinNotionDesc": "Notion style, signature warm-grey sidebar, fine borders, and intellectual blue",
     "skinMemos": "Memos",
     "skinMemosDesc": "Memos style, comfortable grey canvas with separate cards, and fresh emerald green",
-    "skinFlomo": "flomo",
-    "skinFlomoDesc": "flomo style, warm-sand canvas and grass green accents for stress-free logging"
+    "skinEink": "E-Ink",
+    "skinEinkDesc": "E-Ink style, eye-care soft e-paper texture, monochrome high-contrast minimalism"
   },
   "export": {
     "fetchingData": "Fetching note data...",

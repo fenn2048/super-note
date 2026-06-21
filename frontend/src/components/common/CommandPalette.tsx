@@ -229,13 +229,13 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         },
       },
       {
-        id: "skin-flomo",
+        id: "skin-eink",
         type: "command",
-        title: "外观皮肤: flomo 风格",
-        subtitle: "切换为经典温润宣纸暖沙卡片流皮肤",
+        title: "外观皮肤: 墨水屏风格",
+        subtitle: "切换为护眼柔和纸质感墨水屏皮肤",
         icon: Palette,
         handler: () => {
-          setSkin("flomo");
+          setSkin("eink");
         },
       },
       {

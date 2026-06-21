@@ -38,7 +38,6 @@
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
   --editor-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
-  font-size-adjust: from-font;
   line-height: 1.6;
 
   /* Unified Spacing System */
@@ -99,12 +98,6 @@
   --pm-scrollbar-hover: #cccccc;
   --pm-selection: rgba(72, 54, 153, 0.15);
   --toast-top: 1rem;
-}
-
-@supports not (font-size-adjust: from-font) {
-  :root {
-    line-height: 1.65;
-  }
 }
 
 /* Global LXGW WenKai Activation */
@@ -2720,56 +2713,56 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
 
 /* ============================================================================
- * flomo 外观风格（Skin）
+ * E-Ink 外观风格（Skin）
  * ----------------------------------------------------------------------------
- * 设计来源：flomoapp.com（标志性暖沙绿水洗色、草绿强调色、无压力输入）。
+ * 设计理念：墨水屏电子纸风格（护眼柔和纸质感、碳灰色调无彩色、硬朗直角、极简高对比度）。
  * ========================================================================= */
 
-/* ---------- flomo Light ---------- */
-:root[data-skin="flomo"] {
-  --color-bg: #f7f6f1;
-  --color-surface: #ffffff;
-  --color-sidebar: #f7f6f1;
-  --color-sidebar-solid: #f7f6f1;
+/* ---------- E-Ink Light (墨水屏浅色 - 护眼柔和纸质感) ---------- */
+:root[data-skin="eink"] {
+  --color-bg: #f2efeb;
+  --color-surface: #f7f5f2;
+  --color-sidebar: #eae6e1;
+  --color-sidebar-solid: #eae6e1;
   --color-elevated: #ffffff;
   --color-elevated-solid: #ffffff;
-  --color-border: #e1e1db;
-  --color-hover: #eaeae5;
-  --color-active: rgba(50, 182, 122, 0.08);
+  --color-border: #b8b5af;
+  --color-hover: #e0dcd5;
+  --color-active: #d5d0c9;
 
-  --color-text-primary: #2c3e50;
-  --color-text-secondary: #415b76;
-  --color-text-tertiary: #6c7a89;
-  --color-text-quaternary: #909ea9;
+  --color-text-primary: #1c1c1c;
+  --color-text-secondary: #4a4a4a;
+  --color-text-tertiary: #757575;
+  --color-text-quaternary: #9e9e9e;
   --color-text-inverse: #ffffff;
 
-  --color-accent-primary: #32b67a;
-  --color-accent-secondary: #2e9d68;
-  --color-accent-warning: #f39c12;
-  --color-accent-danger: #e74c3c;
-  --color-accent-muted: #6c7a89;
+  --color-accent-primary: #1c1c1c;
+  --color-accent-secondary: #4a4a4a;
+  --color-accent-warning: #757575;
+  --color-accent-danger: #1c1c1c;
+  --color-accent-muted: #b8b5af;
 
-  --radius-window: 12px;
-  --radius-card: 10px;
-  --radius-button: 8px;
-  --radius-input: 8px;
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
 
   /* 编辑器样式 */
-  --pm-text: #2c3e50;
-  --pm-heading: #2c3e50;
-  --pm-code-bg: #f7f6f1;
-  --pm-code-text: #27ae60;
-  --pm-pre-bg: #fafaf8;
-  --pm-pre-border: #e1e1db;
-  --pm-pre-text: #2c3e50;
-  --pm-blockquote-border: #32b67a;
-  --pm-blockquote-text: #415b76;
-  --pm-hr: #e1e1db;
-  --pm-placeholder: #909ea9;
-  --pm-task-done: #909ea9;
-  --pm-scrollbar: #eaeae5;
-  --pm-scrollbar-hover: #d5d5cd;
-  --pm-selection: rgba(50, 182, 122, 0.15);
+  --pm-text: #1c1c1c;
+  --pm-heading: #1c1c1c;
+  --pm-code-bg: #eae6e1;
+  --pm-code-text: #1c1c1c;
+  --pm-pre-bg: #f7f5f2;
+  --pm-pre-border: #b8b5af;
+  --pm-pre-text: #1c1c1c;
+  --pm-blockquote-border: #1c1c1c;
+  --pm-blockquote-text: #4a4a4a;
+  --pm-hr: #b8b5af;
+  --pm-placeholder: #9e9e9e;
+  --pm-task-done: #9e9e9e;
+  --pm-scrollbar: #eae6e1;
+  --pm-scrollbar-hover: #d5d0c9;
+  --pm-selection: rgba(28, 28, 28, 0.15);
 }
 
 /* ============================================================================
@@ -2872,51 +2865,51 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-selection: rgba(226, 138, 109, 0.25);
 }
 
-/* ---------- flomo Dark ---------- */
-:root[data-skin="flomo"].dark {
-  --color-bg: #181816;
-  --color-surface: #252522;
-  --color-sidebar: #181816;
-  --color-sidebar-solid: #181816;
-  --color-elevated: #2b2b28;
-  --color-elevated-solid: #2b2b28;
-  --color-border: #363632;
-  --color-hover: rgba(255, 255, 255, 0.04);
-  --color-active: rgba(50, 182, 122, 0.15);
+/* ---------- E-Ink Dark (墨水屏深色 - 夜间护眼低亮) ---------- */
+:root[data-skin="eink"].dark {
+  --color-bg: #1c1c1c;
+  --color-surface: #262626;
+  --color-sidebar: #181818;
+  --color-sidebar-solid: #181818;
+  --color-elevated: #2e2e2e;
+  --color-elevated-solid: #2e2e2e;
+  --color-border: #444444;
+  --color-hover: #333333;
+  --color-active: #3a3a3a;
 
-  --color-text-primary: #e0e0d8;
-  --color-text-secondary: #b5b5ad;
-  --color-text-tertiary: #989893;
-  --color-text-quaternary: #62625f;
-  --color-text-inverse: #181816;
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #aaaaaa;
+  --color-text-tertiary: #777777;
+  --color-text-quaternary: #555555;
+  --color-text-inverse: #1c1c1c;
 
-  --color-accent-primary: #3cd08c;
-  --color-accent-secondary: #32b67a;
-  --color-accent-warning: #f39c12;
-  --color-accent-danger: #e74c3c;
-  --color-accent-muted: #989893;
+  --color-accent-primary: #e0e0e0;
+  --color-accent-secondary: #aaaaaa;
+  --color-accent-warning: #777777;
+  --color-accent-danger: #e0e0e0;
+  --color-accent-muted: #444444;
 
-  --radius-window: 12px;
-  --radius-card: 10px;
-  --radius-button: 8px;
-  --radius-input: 8px;
+  --radius-window: 4px;
+  --radius-card: 4px;
+  --radius-button: 4px;
+  --radius-input: 4px;
 
   /* 编辑器样式 */
-  --pm-text: #e0e0d8;
+  --pm-text: #e0e0e0;
   --pm-heading: #ffffff;
-  --pm-code-bg: #363632;
-  --pm-code-text: #3cd08c;
-  --pm-pre-bg: #252522;
-  --pm-pre-border: #363632;
-  --pm-pre-text: #e0e0d8;
-  --pm-blockquote-border: #3cd08c;
-  --pm-blockquote-text: #b5b5ad;
-  --pm-hr: #363632;
-  --pm-placeholder: #989893;
-  --pm-task-done: #989893;
-  --pm-scrollbar: #363632;
-  --pm-scrollbar-hover: #454542;
-  --pm-selection: rgba(60, 208, 140, 0.25);
+  --pm-code-bg: #262626;
+  --pm-code-text: #e0e0e0;
+  --pm-pre-bg: #181818;
+  --pm-pre-border: #444444;
+  --pm-pre-text: #e0e0e0;
+  --pm-blockquote-border: #e0e0e0;
+  --pm-blockquote-text: #aaaaaa;
+  --pm-hr: #444444;
+  --pm-placeholder: #777777;
+  --pm-task-done: #777777;
+  --pm-scrollbar: #262626;
+  --pm-scrollbar-hover: #333333;
+  --pm-selection: rgba(224, 224, 224, 0.15);
 }
 
 
@@ -2935,12 +2928,12 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   box-shadow: 0 0 8px rgba(0, 122, 255, 0.4) !important;
 }
 
-/* 弱化 flomo、notion 和 claude 皮肤下的卡片立体虚饰投影 */
-:root[data-skin="flomo"] .shadow-sm,
-:root[data-skin="flomo"] .shadow,
-:root[data-skin="flomo"] .shadow-md,
-:root[data-skin="flomo"] .shadow-lg,
-:root[data-skin="flomo"] .shadow-xl,
+/* 弱化 eink、notion 和 claude 皮肤下的卡片立体虚饰投影 */
+:root[data-skin="eink"] .shadow-sm,
+:root[data-skin="eink"] .shadow,
+:root[data-skin="eink"] .shadow-md,
+:root[data-skin="eink"] .shadow-lg,
+:root[data-skin="eink"] .shadow-xl,
 :root[data-skin="notion"] .shadow-sm,
 :root[data-skin="notion"] .shadow,
 :root[data-skin="notion"] .shadow-md,
@@ -2954,14 +2947,21 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   box-shadow: none !important;
 }
 
-/* 弱化 flomo、notion 和 claude 皮肤下卡片边框 */
-:root[data-skin="flomo"] .border-zinc-200,
-:root[data-skin="flomo"] .border-zinc-300,
+/* 弱化 eink、notion 和 claude 皮肤下卡片边框 */
+:root[data-skin="eink"] .border-zinc-200,
+:root[data-skin="eink"] .border-zinc-300,
 :root[data-skin="notion"] .border-zinc-200,
 :root[data-skin="notion"] .border-zinc-300,
 :root[data-skin="claude"] .border-zinc-200,
 :root[data-skin="claude"] .border-zinc-300 {
   border-color: var(--color-border) !important;
+}
+
+/* 墨水屏专有聚焦状态：无发光，纯实线轮廓 */
+:root[data-skin="eink"] *:focus-visible {
+  outline: 2px solid var(--color-accent-primary) !important;
+  outline-offset: 1px !important;
+  box-shadow: none !important;
 }
 
 /* Sleek custom select dropdown styles */

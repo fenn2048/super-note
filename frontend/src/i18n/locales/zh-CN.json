@@ -1163,8 +1163,8 @@
     "skinNotionDesc": "Notion 风格，标志性奶油灰侧栏与极细分隔线，经典知性蓝",
     "skinMemos": "Memos",
     "skinMemosDesc": "Memos 风格，舒适的灰底独立卡片布局，生机翡翠绿，清爽透气",
-    "skinFlomo": "flomo",
-    "skinFlomoDesc": "flomo 风格，暖沙水洗色与标志性绿，营造无压力的输入氛围"
+    "skinEink": "墨水屏",
+    "skinEinkDesc": "墨水屏风格，护眼柔和纸质感，无彩色高对比极简"
   },
   "export": {
     "fetchingData": "正在获取笔记数据...",
