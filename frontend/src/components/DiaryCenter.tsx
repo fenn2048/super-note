@@ -29,6 +29,7 @@ import {
   Heart,
   Video,
   Menu,
+  ScanText,
 } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
@@ -52,6 +53,7 @@ import DiaryHeatMap from "@/components/DiaryHeatMap";
 import MentionPicker, { parseMentionTrigger, replaceMentionText, useMentionState } from "@/components/MentionPicker";
 import RecordingPanel from "@/components/RecordingPanel";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import OCRModal from "@/components/OCRModal";
 
 
 marked.setOptions({
@@ -202,6 +204,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   const [pendingVoice, setPendingVoice] = useState<{ id: string; duration: number } | null>(null);
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [composeTags, setComposeTags] = useState<Tag[]>([]);
+  const [showOCRModal, setShowOCRModal] = useState(false);
 
   // @提及选择器状态
   const [cursorPos, setCursorPos] = useState(0);
@@ -1077,6 +1080,17 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               <span>语音</span>
             </button>
 
+            {/* OCR 按钮 */}
+            <button
+              type="button"
+              onClick={() => setShowOCRModal(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-all"
+              title="提取图片文字"
+            >
+              <ScanText size={14} className="text-tx-secondary" />
+              <span>OCR</span>
+            </button>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -1092,6 +1106,26 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               multiple
               className="hidden"
               onChange={handleVideoFileChange}
+            />
+
+            <OCRModal
+              isOpen={showOCRModal}
+              onClose={() => setShowOCRModal(false)}
+              onInsert={(recognizedText) => {
+                if (textareaRef.current) {
+                  const start = textareaRef.current.selectionStart;
+                  const end = textareaRef.current.selectionEnd;
+                  const newText = text.substring(0, start) + "\n" + recognizedText + "\n" + text.substring(end);
+                  setText(newText);
+                  setTimeout(() => {
+                    if (textareaRef.current) {
+                      textareaRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                  }, 50);
+                } else {
+                  setText(prev => prev + "\n" + recognizedText);
+                }
+              }}
             />
           </div>
 

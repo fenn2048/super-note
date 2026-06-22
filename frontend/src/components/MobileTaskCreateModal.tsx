@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Folder, User, Flag, Calendar, Loader2, ChevronDown, Check } from "lucide-react";
+import { X, Folder, User, Flag, Calendar, Loader2, ChevronDown, Check, ScanText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { Project, ProjectMember, Tag } from "@/types";
@@ -8,6 +8,7 @@ import SleekDatePicker from "@/components/common/SleekDatePicker";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Capacitor } from "@capacitor/core";
+import OCRModal from "@/components/OCRModal";
 
 interface MobileTaskCreateModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export default function MobileTaskCreateModal({
   const [remindAt, setRemindAt] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showOCRModal, setShowOCRModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
   const [isProjectDrawerOpen, setIsProjectDrawerOpen] = useState(false);
@@ -319,8 +321,21 @@ export default function MobileTaskCreateModal({
                   </div>
 
                   {/* Detailed Description */}
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-tx-secondary block">详细描述</label>
+                  
+                  <div className="space-y-1.5 relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-tx-secondary block">详细描述</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowOCRModal(true)}
+                        className="text-[11px] flex items-center gap-1 text-tx-secondary hover:text-accent-primary transition-colors"
+                        title="提取图片文字"
+                      >
+                        <ScanText size={12} />
+                        <span>OCR 提取文字</span>
+                      </button>
+                    </div>
+
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -510,6 +525,15 @@ export default function MobileTaskCreateModal({
           </motion.div>
         </div>
       )}
+    
+      {/* 提取图片文字弹窗 */}
+      <OCRModal
+        isOpen={showOCRModal}
+        onClose={() => setShowOCRModal(false)}
+        onInsert={(text) => {
+          setDescription(description + (description ? "\n" : "") + text);
+        }}
+      />
     </AnimatePresence>
   );
 }

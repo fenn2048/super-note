@@ -716,12 +716,12 @@ function initSchema(db: Database.Database) {
       id TEXT PRIMARY KEY,
       taskId TEXT,
       userId TEXT NOT NULL,
+      workspaceId TEXT,
       filename TEXT NOT NULL,
       mimeType TEXT NOT NULL,
       size INTEGER NOT NULL,
       path TEXT NOT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(taskId);
@@ -1190,9 +1190,25 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_diary_comments_diary ON diary_comments(diaryId);
+
+    -- 任务附件删除触发器（支持 tasks 和 project_tasks 两个表的级联删除）
+    CREATE TRIGGER IF NOT EXISTS delete_task_attachments_on_task_delete
+    AFTER DELETE ON tasks
+    FOR EACH ROW
+    BEGIN
+      DELETE FROM task_attachments WHERE taskId = OLD.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS delete_task_attachments_on_project_task_delete
+    AFTER DELETE ON project_tasks
+    FOR EACH ROW
+    BEGIN
+      DELETE FROM task_attachments WHERE taskId = OLD.id;
+    END;
   `);
 
   // v?? 说说 AI 助手：trigger_user_id 记录谁调起了 AI（用于删除权限判断）
   try { db.exec("ALTER TABLE diary_comments ADD COLUMN trigger_user_id TEXT"); } catch {}
   try { db.exec("ALTER TABLE diaries ADD COLUMN trigger_user_id TEXT"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_workspace ON task_attachments(workspaceId);"); } catch {}
 }

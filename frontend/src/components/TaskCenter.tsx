@@ -4,7 +4,7 @@ import {
   CheckCircle2, Circle, Flag, Calendar, Plus, ListTodo,
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
   Trash2, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
-  User as UserIcon, CheckSquare, Square, ChevronDown, Star
+  User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -18,6 +18,7 @@ import TagColorPopover from "@/components/TagColorPopover";
 import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 import TaskCalendar from "@/components/TaskCalendar";
+import OCRModal from "@/components/OCRModal";
 import { syncTaskNotification, syncAllTaskNotifications } from "@/hooks/useCapacitor";
 
 /* ===========================================================================
@@ -716,6 +717,7 @@ function QuickAdd({
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [showOCRModal, setShowOCRModal] = useState(false);
   // 拖拽态：把整条输入框做成 dropzone，与 onPaste 粘贴图片体验对齐。
   // 用 counter 处理 enter/leave 的子节点冒泡（缩略图、按钮等）抖动问题。
   const [dragOver, setDragOver] = useState(false);
@@ -986,6 +988,14 @@ function QuickAdd({
             ? <Loader2 size={16} className="animate-spin" />
             : <ImagePlus size={16} />}
         </button>
+        <button
+          type="button"
+          onClick={() => setShowOCRModal(true)}
+          title="提取图片文字"
+          className="flex-shrink-0 p-1 rounded hover:bg-app-hover text-tx-tertiary hover:text-accent-primary transition-colors"
+        >
+          <ScanText size={16} />
+        </button>
         <input
           ref={fileRef}
           type="file"
@@ -1000,7 +1010,18 @@ function QuickAdd({
         />
       </div>
 
+      
+      {/* 提取图片文字弹窗 */}
+      <OCRModal
+        isOpen={showOCRModal}
+        onClose={() => setShowOCRModal(false)}
+        onInsert={(recognizedText) => {
+          insertAtCaret(recognizedText);
+        }}
+      />
+      
       {/* 待办勾选框 */}
+
       <div className="flex items-center gap-1.5 px-1 pt-1.5">
         <label className="flex items-center gap-1.5 text-xs text-tx-tertiary cursor-pointer select-none">
           <input

@@ -1479,8 +1479,13 @@ export const MIGRATIONS: Migration[] = [
       }
 
       // 2. Recreate task_attachments to link with project_tasks
+      // Drop triggers and any leftover temp tables first to avoid errors during drop/rename
+      db.exec("DROP TRIGGER IF EXISTS delete_task_attachments_on_task_delete");
+      db.exec("DROP TRIGGER IF EXISTS delete_task_attachments_on_project_task_delete");
+      db.exec("DROP TABLE IF EXISTS task_attachments_new");
+
       db.exec(`
-        CREATE TABLE IF NOT EXISTS task_attachments_new (
+        CREATE TABLE task_attachments_new (
           id TEXT PRIMARY KEY,
           taskId TEXT,
           userId TEXT NOT NULL,
@@ -1675,6 +1680,77 @@ export const MIGRATIONS: Migration[] = [
         db.exec("ALTER TABLE mindmaps ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PRIVATE'");
         db.exec("CREATE INDEX IF NOT EXISTS idx_mindmaps_visibility ON mindmaps(workspaceId, visibility, userId)");
       }
+    },
+  },
+  {
+    version: 26,
+    name: "add-workspace-id-and-clean-fks-in-task-attachments",
+    up: (db) => {
+      // Drop triggers first to avoid validation errors when dropping the table
+      db.exec("DROP TRIGGER IF EXISTS delete_task_attachments_on_task_delete");
+      db.exec("DROP TRIGGER IF EXISTS delete_task_attachments_on_project_task_delete");
+
+      const cols = db.prepare("PRAGMA table_info(task_attachments)").all() as { name: string }[];
+      const hasWorkspaceId = cols.some((c) => c.name === "workspaceId");
+
+      const fks = db.prepare("PRAGMA foreign_key_list(task_attachments)").all() as { table: string, from: string }[];
+      const hasTaskIdFk = fks.some(fk => fk.from === "taskId" && (fk.table === "tasks" || fk.table === "project_tasks"));
+
+      if (!hasWorkspaceId || hasTaskIdFk) {
+        // Ensure clean state for the temp table
+        db.exec("DROP TABLE IF EXISTS task_attachments_new");
+
+        // Recreate task_attachments to:
+        // 1. Add workspaceId column if missing.
+        // 2. Drop the foreign key constraint on taskId to avoid violations on either tasks or project_tasks.
+        db.exec(`
+          CREATE TABLE task_attachments_new (
+            id TEXT PRIMARY KEY,
+            taskId TEXT,
+            userId TEXT NOT NULL,
+            workspaceId TEXT,
+            filename TEXT NOT NULL,
+            mimeType TEXT NOT NULL,
+            size INTEGER NOT NULL,
+            path TEXT NOT NULL,
+            createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+          );
+        `);
+
+        let selectSql = "";
+        if (hasWorkspaceId) {
+          selectSql = "SELECT id, taskId, userId, workspaceId, filename, mimeType, size, path, createdAt FROM task_attachments";
+        } else {
+          selectSql = "SELECT id, taskId, userId, NULL AS workspaceId, filename, mimeType, size, path, createdAt FROM task_attachments";
+        }
+
+        db.exec(`INSERT OR IGNORE INTO task_attachments_new (id, taskId, userId, workspaceId, filename, mimeType, size, path, createdAt) ${selectSql}`);
+        db.exec("DROP TABLE IF EXISTS task_attachments");
+        db.exec("ALTER TABLE task_attachments_new RENAME TO task_attachments");
+      }
+
+      // Ensure indexes and triggers are present
+      db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(taskId);");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_user_created ON task_attachments(userId, createdAt);");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_workspace ON task_attachments(workspaceId);");
+
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS delete_task_attachments_on_task_delete
+        AFTER DELETE ON tasks
+        FOR EACH ROW
+        BEGIN
+          DELETE FROM task_attachments WHERE taskId = OLD.id;
+        END;
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS delete_task_attachments_on_project_task_delete
+        AFTER DELETE ON project_tasks
+        FOR EACH ROW
+        BEGIN
+          DELETE FROM task_attachments WHERE taskId = OLD.id;
+        END;
+      `);
     },
   },
 ];

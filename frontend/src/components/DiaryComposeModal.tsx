@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video, AtSign, MoreHorizontal } from "lucide-react";
+import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video, AtSign, MoreHorizontal, ScanText } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -8,6 +8,7 @@ import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
 import ComposerCameraModal from "@/components/ComposerCameraModal";
 import MobileCameraModal from "@/components/MobileCameraModal";
+import OCRModal from "@/components/OCRModal";
 import { registerPlugin } from "@capacitor/core";
 import { haptic } from "@/hooks/useCapacitor";
 import { WorkspaceMember } from "@/types";
@@ -195,6 +196,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   const isMobile = window.innerWidth < 768;
   const [viewportHeight, setViewportHeight] = useState<number | string>("100%");
   const [showCamera, setShowCamera] = useState(false);
+  const [showOCRModal, setShowOCRModal] = useState(false);
   const [showPhotoCamera, setShowPhotoCamera] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [tempAudioBlob, setTempAudioBlob] = useState<Blob | null>(null);
@@ -572,7 +574,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     };
 
     recognition.onresult = (event: any) => {
-      let finalParts: string[] = [];
+      const finalParts: string[] = [];
       let interimTranscript = "";
       for (let i = 0; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
@@ -588,7 +590,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       let finalTranscript = "";
       if (finalParts.length > 0) {
         finalTranscript = finalParts.map((part, index) => {
-          let cleaned = part.trim();
+          const cleaned = part.trim();
           if (index < finalParts.length - 1) {
             if (!/[。？！，、；：]/.test(cleaned.slice(-1))) {
               return cleaned + "，";
@@ -1713,6 +1715,17 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             <AtSign size={18} />
           </button>
 
+          
+          {/* 提取文字 (OCR) */}
+          <button
+            type="button"
+            onClick={() => setShowOCRModal(true)}
+            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover"
+            title="提取图片文字"
+          >
+            <ScanText size={18} />
+          </button>
+
           {/* ... 更多功能 */}
           <button
             type="button"
@@ -1724,6 +1737,29 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           </button>
         </div>
       </div>
+
+      
+      {/* 提取图片文字弹窗 */}
+      <OCRModal
+        isOpen={showOCRModal}
+        onClose={() => setShowOCRModal(false)}
+        onInsert={(recognizedText) => {
+          if (textareaRef.current) {
+            const start = textareaRef.current.selectionStart;
+            const end = textareaRef.current.selectionEnd;
+            const newText = text.substring(0, start) + "\n" + recognizedText + "\n" + text.substring(end);
+            setText(newText);
+            // Move cursor to end of inserted text
+            setTimeout(() => {
+              textareaRef.current?.setSelectionRange(start + recognizedText.length + 2, start + recognizedText.length + 2);
+              textareaRef.current?.focus();
+            }, 10);
+          } else {
+            setText(text + (text ? "\n" : "") + recognizedText);
+          }
+          pushHistory(text);
+        }}
+      />
 
       {/* 拍照弹窗 */}
       <MobileCameraModal
