@@ -5,12 +5,12 @@ import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn, detectSuMention } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/store/AppContext";
+import { useApp, useAppActions } from "@/store/AppContext";
 import {
   Plus, Calendar, ListTodo, Briefcase, Star, Search, Filter, Loader2,
   ChevronRight, ChevronDown, ArrowLeft, MoreVertical, Edit2, Trash2, Eye, EyeOff, FolderOpen,
   CheckCircle2, Clock, Globe, Lock, Check, Grid, List as ListIcon, MessageSquare,
-  Bookmark, Award, Circle, Bell, X, User, Maximize2
+  Bookmark, Award, Circle, Bell, X, User, Maximize2, Menu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -299,6 +299,7 @@ ScrollContainer.displayName = "ScrollContainer";
 export default function ProjectCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
+  const actions = useAppActions();
 
   const [showMobileMyTasksSearch, setShowMobileMyTasksSearch] = useState(false);
   const [showMobileRoleSelector, setShowMobileRoleSelector] = useState(false);
@@ -1066,7 +1067,7 @@ export default function ProjectCenter() {
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* Top Nav Bar */}
           <div
-            className="px-4 py-3 border-b border-app-border bg-app-sidebar flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-2"
+            className="px-4 py-3 border-b border-app-border bg-app-bg flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-2"
             style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
           >
             <div className="flex items-center gap-3">
@@ -1251,8 +1252,14 @@ export default function ProjectCenter() {
                   ) : (
                     <>
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <h1 className="text-base font-bold text-tx-primary">项目管理</h1>
+                        <button
+                          onClick={() => actions.setMobileSidebar(true)}
+                          className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active shrink-0"
+                        >
+                          <Menu size={20} />
+                        </button>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h1 className="text-base font-bold text-tx-primary shrink-0">项目管理</h1>
                           <button
                             onClick={() => setShowMobileRoleSelector(true)}
                             className="flex items-center gap-0.5 text-xs font-semibold text-accent-primary py-1 px-1.5 rounded-lg hover:bg-accent-primary/5 active:scale-95 transition-all"
@@ -1788,7 +1795,7 @@ export default function ProjectCenter() {
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           <div
             className={cn(
-              "border-b border-app-border bg-app-sidebar shrink-0 space-y-3",
+              "border-b border-app-border bg-app-bg shrink-0 space-y-3",
               window.innerWidth < 768 ? "px-4 py-3" : "px-6 py-4"
             )}
             style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
@@ -1867,7 +1874,7 @@ export default function ProjectCenter() {
           {/* Top Toolbar */}
           <div
             className={cn(
-              "border-b border-app-border bg-app-sidebar shrink-0 flex items-center justify-between",
+              "border-b border-app-border bg-app-bg shrink-0 flex items-center justify-between",
               window.innerWidth < 768 ? "px-4 py-3 min-h-[56px] h-auto" : "px-6 py-4"
             )}
             style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
@@ -2152,10 +2159,10 @@ export default function ProjectCenter() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-text">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
           <div
-            className="relative bg-app-elevated w-full max-w-lg rounded-2xl border border-app-border shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in scale-in duration-200 text-sm text-tx-primary"
+            className="relative bg-app-elevated w-full max-w-xl rounded-2xl border border-app-border shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in scale-in duration-200 text-sm text-tx-primary"
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+            <div className="px-8 py-5 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
               <h3 className="text-sm font-bold text-tx-primary">
                 新建任务
               </h3>
@@ -2169,10 +2176,10 @@ export default function ProjectCenter() {
             </div>
 
             {/* Body */}
-            <ScrollArea className="flex-1 min-h-0 px-6 py-5 space-y-4">
+            <ScrollArea className="flex-1 min-h-0 px-8 py-6 space-y-6.5">
               {/* Title */}
-              <div className="space-y-1 relative">
-                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">任务标题</label>
+              <div className="space-y-2.5 relative">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">任务标题</label>
                 <Input
                   value={taskTitle}
                   onChange={(e) => {
@@ -2182,7 +2189,7 @@ export default function ProjectCenter() {
                   onKeyUp={(e) => setTitleCursorPos(e.currentTarget.selectionStart || 0)}
                   onClick={(e) => setTitleCursorPos(e.currentTarget.selectionStart || 0)}
                   placeholder="输入任务标题…"
-                  className="h-9 text-xs border-app-border w-full"
+                  className="h-10 text-xs border-app-border w-full rounded-xl"
                   required
                   autoFocus
                 />
@@ -2202,44 +2209,47 @@ export default function ProjectCenter() {
                 )}
               </div>
 
-              {/* Project Selection */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">所属项目</label>
-                <select
-                  value={taskProjId}
-                  onChange={(e) => setTaskProjId(e.target.value)}
-                  className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
-                  required
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Project & Assignee Row */}
+              <div className="grid grid-cols-2 gap-5">
+                {/* Project Selection */}
+                <div className="space-y-2.5">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">所属项目</label>
+                  <select
+                    value={taskProjId}
+                    onChange={(e) => setTaskProjId(e.target.value)}
+                    className="sleek-select w-full h-10 px-3 text-xs text-tx-secondary rounded-xl"
+                    required
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Assignee Selection */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">指派给</label>
-                <select
-                  value={taskAssigneeId}
-                  onChange={(e) => setTaskAssigneeId(e.target.value)}
-                  className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
-                >
-                  <option value={currentUserId}>我自己</option>
-                  {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.displayName || m.username}
-                    </option>
-                  ))}
-                </select>
+                {/* Assignee Selection */}
+                <div className="space-y-2.5">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">指派给</label>
+                  <select
+                    value={taskAssigneeId}
+                    onChange={(e) => setTaskAssigneeId(e.target.value)}
+                    className="sleek-select w-full h-10 px-3 text-xs text-tx-secondary rounded-xl"
+                  >
+                    <option value={currentUserId}>我自己</option>
+                    {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.displayName || m.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Priority Selection */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">优先级</label>
-                <div className="grid grid-cols-4 gap-2">
+              <div className="space-y-2.5">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">优先级</label>
+                <div className="grid grid-cols-4 gap-2.5">
                   {[
                     { level: 3, label: "高", color: "bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20" },
                     { level: 2, label: "中", color: "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20" },
@@ -2250,7 +2260,7 @@ export default function ProjectCenter() {
                       key={prio.level}
                       type="button"
                       onClick={() => setTaskPriority(prio.level)}
-                      className={`py-1.5 rounded-lg border text-xs font-semibold transition-all ${prio.color} ${
+                      className={`py-2 rounded-xl border text-xs font-semibold transition-all ${prio.color} ${
                         taskPriority === prio.level ? "ring-2 ring-accent-primary border-transparent" : "opacity-80"
                       }`}
                     >
@@ -2261,10 +2271,10 @@ export default function ProjectCenter() {
               </div>
 
               {/* Timeline & Reminder Date Row */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 {/* Due Date */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">截止日期</label>
+                <div className="space-y-2.5">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">截止日期</label>
                   <SleekDatePicker
                     value={taskDueDate}
                     onChange={(val) => {
@@ -2277,19 +2287,19 @@ export default function ProjectCenter() {
                         setTaskRemindAt("");
                       }
                     }}
-                    className="w-full"
+                    className="w-full h-10 rounded-xl"
                     placeholder="选择截止日期"
                     showTime={true}
                   />
                 </div>
 
                 {/* Reminder Date */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">提醒日期</label>
+                <div className="space-y-2.5">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">提醒日期</label>
                   <SleekDatePicker
                     value={taskRemindAt}
                     onChange={setTaskRemindAt}
-                    className="w-full"
+                    className="w-full h-10 rounded-xl"
                     placeholder="选择提醒日期"
                     showTime={true}
                   />
@@ -2297,8 +2307,8 @@ export default function ProjectCenter() {
               </div>
 
               {/* Description */}
-              <div className="space-y-1 relative">
-                <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">详细描述</label>
+              <div className="space-y-2.5 relative">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">详细描述</label>
                 <Textarea
                   value={taskDescription}
                   onChange={(e) => {
@@ -2308,7 +2318,7 @@ export default function ProjectCenter() {
                   onKeyUp={(e) => setDescCursorPos(e.currentTarget.selectionStart || 0)}
                   onClick={(e) => setDescCursorPos(e.currentTarget.selectionStart || 0)}
                   placeholder="输入任务描述信息（支持Markdown及@提及）…"
-                  className="text-xs leading-relaxed min-h-[100px] border-app-border rounded-xl w-full"
+                  className="text-xs leading-relaxed min-h-[120px] border-app-border rounded-xl w-full p-3"
                 />
                 {descMention && (
                   <div className="relative z-50">
@@ -2328,7 +2338,7 @@ export default function ProjectCenter() {
             </ScrollArea>
 
             {/* Footer */}
-            <div className="px-6 py-3 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0">
+            <div className="px-8 py-4 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0">
               <Button
                 type="button"
                 variant="ghost"

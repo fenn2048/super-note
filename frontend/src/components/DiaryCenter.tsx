@@ -28,6 +28,7 @@ import {
   MoreHorizontal,
   Heart,
   Video,
+  Menu,
 } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
@@ -100,6 +101,12 @@ const MOODS = [
   { value: "cool", emoji: "😎" },
   { value: "laugh", emoji: "🤣" },
   { value: "shock", emoji: "😱" },
+];
+
+const COMMENT_EMOJIS = [
+  "😊", "👍", "🙌", "👏", "🎉", "❤️", "🥰", "🥳", 
+  "🔥", "✨", "🤔", "😌", "🤣", "😮", "😢", "😤", 
+  "😎", "😴", "🤒", "😱", "👀", "🤝", "💪", "💡"
 ];
 
 export const SU_USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -1771,7 +1778,26 @@ function DiaryCard({
   const [newCommentText, setNewCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentCursorPos, setCommentCursorPos] = useState(0);
-  const commentInputRef = useRef<HTMLInputElement>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  const [showCommentEmojis, setShowCommentEmojis] = useState(false);
+  const commentEmojiRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (commentEmojiRef.current && !commentEmojiRef.current.contains(e.target as Node)) {
+        setShowCommentEmojis(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (commentInputRef.current) {
+      commentInputRef.current.style.height = "auto";
+      commentInputRef.current.style.height = `${commentInputRef.current.scrollHeight}px`;
+    }
+  }, [newCommentText]);
   const commentMentionTrigger = useMentionState(newCommentText, commentCursorPos);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const mountRef = useRef(true);
@@ -2136,7 +2162,7 @@ function DiaryCard({
                       animate={{ opacity: 1, scale: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.95, x: 10 }}
                       transition={{ duration: 0.15, ease: "easeOut" }}
-                      className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
+                      className="absolute right-full mr-2 top-1/2 -translate-y-[calc(50%+2px)] bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
                     >
                       <button
                         onClick={async (e) => {
@@ -2357,40 +2383,92 @@ function DiaryCard({
                     )
                   )}
 
-                  <div className="relative flex-1 min-w-0 bg-app-subtle border border-app-border/60 rounded-full px-3.5 py-1.5 flex items-center gap-2 focus-within:border-accent-primary transition-all">
-                    <input
+                  <div className="relative flex-1 min-w-0 bg-app-subtle border border-app-border/60 rounded-[18px] px-3.5 py-1.5 flex items-end gap-2 focus-within:border-accent-primary transition-all">
+                    <textarea
                       ref={commentInputRef}
-                      type="text"
+                      rows={1}
                       placeholder="写下你的评论..."
                       value={newCommentText}
                       onChange={(e) => {
                         setNewCommentText(e.target.value);
                         setCommentCursorPos(e.target.selectionStart || 0);
                       }}
-                      onSelect={(e) => setCommentCursorPos((e.target as HTMLInputElement).selectionStart || 0)}
-                      onClick={(e) => setCommentCursorPos((e.target as HTMLInputElement).selectionStart || 0)}
-                      onKeyUp={(e) => setCommentCursorPos((e.target as HTMLInputElement).selectionStart || 0)}
+                      onSelect={(e) => setCommentCursorPos((e.target as HTMLTextAreaElement).selectionStart || 0)}
+                      onClick={(e) => setCommentCursorPos((e.target as HTMLTextAreaElement).selectionStart || 0)}
+                      onKeyUp={(e) => setCommentCursorPos((e.target as HTMLTextAreaElement).selectionStart || 0)}
                       onKeyDown={(e) => {
                         if (commentMentionTrigger) {
                           if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
                             e.preventDefault();
+                            return;
+                          }
+                        }
+
+                        if (e.key === "Enter") {
+                          if (e.shiftKey) {
+                            // Let default newline happen
+                          } else {
+                            // Send comment
+                            e.preventDefault();
+                            void handleAddComment(e as any);
                           }
                         }
                       }}
-                      className="w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0"
+                      className="w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0 resize-none max-h-32 min-h-[18px] overflow-y-auto"
+                      style={{ height: "auto" }}
                     />
 
-                    {/* Smile Icon */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewCommentText(prev => prev + "😊");
-                        commentInputRef.current?.focus();
-                      }}
-                      className="text-tx-tertiary hover:text-tx-secondary shrink-0 transition-colors"
-                    >
-                      <Smile size={16} />
-                    </button>
+                     {/* Smile Icon with Emoji Picker */}
+                    <div ref={commentEmojiRef} className="relative flex items-center shrink-0 mb-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowCommentEmojis(!showCommentEmojis)}
+                        className="text-tx-tertiary hover:text-tx-secondary transition-colors"
+                        title="选择表情"
+                      >
+                        <Smile size={16} />
+                      </button>
+
+                      <AnimatePresence>
+                        {showCommentEmojis && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                            className="absolute bottom-full right-0 mb-2 p-2 bg-app-elevated border border-app-border shadow-lg rounded-xl z-50 w-48"
+                          >
+                            <div className="grid grid-cols-6 gap-1">
+                              {COMMENT_EMOJIS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => {
+                                    const text = newCommentText;
+                                    const before = text.substring(0, commentCursorPos);
+                                    const after = text.substring(commentCursorPos);
+                                    const updated = before + emoji + after;
+                                    setNewCommentText(updated);
+                                    const newPos = commentCursorPos + emoji.length;
+                                    setCommentCursorPos(newPos);
+                                    setShowCommentEmojis(false);
+                                    
+                                    setTimeout(() => {
+                                      if (commentInputRef.current) {
+                                        commentInputRef.current.focus();
+                                        commentInputRef.current.setSelectionRange(newPos, newPos);
+                                      }
+                                    }, 0);
+                                  }}
+                                  className="w-7 h-7 hover:bg-app-hover rounded flex items-center justify-center text-sm transition-colors"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
 
                     {/* @提及选择器 */}
                     {commentMentionTrigger && (
@@ -3401,7 +3479,14 @@ export default function DiaryCenter() {
           >
             {!showMobileSearch ? (
               <>
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <button
+                    onClick={() => actions.setMobileSidebar(true)}
+                    className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active shrink-0"
+                    title="菜单"
+                  >
+                    <Menu size={20} />
+                  </button>
                   <div className="w-8 h-8 rounded-lg bg-accent-primary flex items-center justify-center shrink-0">
                     <MessageCircle size={16} className="text-white" />
                   </div>

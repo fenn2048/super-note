@@ -72,6 +72,9 @@
     "emailOptional": "邮箱（可选）",
     "confirmPassword": "确认密码",
     "usernameRegisterPlaceholder": "3-32 位字母/数字",
+    "captcha": "图形验证码",
+    "captchaPlaceholder": "输入图形验证码",
+    "captchaRefresh": "点击刷新验证码",
     "twoFactor": {
       "prompt": "正在以 {{username}} 身份登录，请输入 Authenticator 中的 6 位动态码",
       "codeLabel": "动态验证码",
@@ -528,6 +531,8 @@
     "prefOutlineDefaultOpenHint": "开启后，每次打开笔记右侧大纲面板会自动展开；你仍可以随时手动关闭。",
     "prefLockOnOpen": "进入笔记默认锁定",
     "prefLockOnOpenHint": "开启后，每次切换到一篇笔记都会先以只读视图打开，需要点解锁按钮才能编辑。该锁仅在本设备生效，不会写入笔记本身、也不会影响其他人。",
+    "loginCaptchaLabel": "登录验证码",
+    "loginCaptchaHint": "开启后，登录界面需要输入图形验证码以防止暴力破解。",
     "readingDensity": "阅读密度",
     "readingDensityDesc": "调节正文段落和列表项的纵向间距，紧凑模式更省空间（仅本设备生效）。",
     "densityCozy": "宽松",
@@ -1155,14 +1160,8 @@
   "appearance": {
     "skinTitle": "外观风格",
     "skinDesc": "选择整体视觉语言。不同风格带来截然不同的工作心境与圆角质感。",
-    "skinMacos": "macOS",
-    "skinMacosDesc": "Apple 设计语言，精致半透明毛玻璃与系统强调色，优雅圆润",
     "skinObsidian": "Obsidian (默认)",
     "skinObsidianDesc": "Obsidian 安静深色模式与极简无干扰编辑，几何硬朗直角",
-    "skinNotion": "Notion",
-    "skinNotionDesc": "Notion 风格，标志性奶油灰侧栏与极细分隔线，经典知性蓝",
-    "skinMemos": "Memos",
-    "skinMemosDesc": "Memos 风格，舒适的灰底独立卡片布局，生机翡翠绿，清爽透气",
     "skinEink": "墨水屏",
     "skinEinkDesc": "墨水屏风格，护眼柔和纸质感，无彩色高对比极简"
   },

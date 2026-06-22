@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Link,
+  Menu,
 } from "lucide-react";
 import { api, setCurrentWorkspace, getServerUrl, getCurrentWorkspace } from "@/lib/api";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -594,7 +595,16 @@ export default function Dashboard() {
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
       {/* 首页顶栏 */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/20 shrink-0 select-none" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
-        <span className="text-sm font-bold text-tx-primary">首页</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => actions.setMobileSidebar(true)}
+            className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active md:hidden"
+            title="菜单"
+          >
+            <Menu size={20} />
+          </button>
+          <span className="text-sm font-bold text-tx-primary">首页</span>
+        </div>
         <WorkspaceSwitcher variant="header" />
       </header>
 

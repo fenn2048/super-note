@@ -35,6 +35,8 @@ export interface SiteSettings {
   debug_files_query: string;
   /** 是否允许服务端直接提供 Web UI 页面。关闭后 /api/* 保留，非 API 页面返回禁用提示。 */
   web_ui_enabled: string;
+  /** 是否开启登录图形验证码。 */
+  login_captcha_enabled: string;
 }
 
 const DEFAULTS: SiteSettings = {
@@ -47,6 +49,7 @@ const DEFAULTS: SiteSettings = {
   feature_personal_import_enabled: "true",
   debug_files_query: "false",
   web_ui_enabled: "true",
+  login_captcha_enabled: "false",
 };
 
 // 获取所有站点设置
@@ -57,7 +60,7 @@ settings.get("/", (c) => {
   // 在「设置 → 开发者」面板里看到当前状态；非管理员前端会自行忽略。
   const rows = db
     .prepare(
-      "SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'feature_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled'",
+      "SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'feature_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled' OR key = 'login_captcha_enabled'",
     )
     .all() as { key: string; value: string }[];
   const result: Record<string, string> = { ...DEFAULTS };
@@ -96,7 +99,8 @@ settings.put("/", async (c) => {
   // （日志量、页面可访问性、可能的性能开销），普通用户不能切——单独再做一次闸门。
   const wantsDebugFlag = body.debug_files_query !== undefined;
   const wantsWebUiFlag = body.web_ui_enabled !== undefined;
-  if ((wantsDebugFlag || wantsWebUiFlag) && !isSystemAdmin(userId)) {
+  const wantsCaptchaFlag = body.login_captcha_enabled !== undefined;
+  if ((wantsDebugFlag || wantsWebUiFlag || wantsCaptchaFlag) && !isSystemAdmin(userId)) {
     return c.json(
       { error: "仅管理员可修改系统开关", code: "FORBIDDEN" },
       403,
@@ -148,6 +152,14 @@ settings.put("/", async (c) => {
           : "false";
       upsert.run("web_ui_enabled", normalized);
     }
+    if (body.login_captcha_enabled !== undefined) {
+      const raw = body.login_captcha_enabled as unknown;
+      const normalized =
+        raw === true || raw === "true" || raw === 1 || raw === "1"
+          ? "true"
+          : "false";
+      upsert.run("login_captcha_enabled", normalized);
+    }
     // feature_personal_*_enabled 已废弃：即使传了也不再写库，避免跟 per-user
     // 字段互相遮蔽。要修改请调 PATCH /api/users/:id。
   });
@@ -156,7 +168,7 @@ settings.put("/", async (c) => {
   // 返回更新后的全部设置
   const rows = db
     .prepare(
-      "SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'feature_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled'",
+      "SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'feature_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled' OR key = 'login_captcha_enabled'",
     )
     .all() as { key: string; value: string }[];
   const result: Record<string, string> = { ...DEFAULTS };

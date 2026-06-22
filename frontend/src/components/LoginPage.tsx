@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { getServerUrl, setServerUrl, clearServerUrl, testServerConnection, fetchRegisterConfig, registerAccount } from "@/lib/api";
 import { buildServerUrl, parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
 import ServerAddressInput from "@/components/ServerAddressInput";
-import LanDiscoveryPanel from "@/components/LanDiscoveryPanel";
 import { useKeyboardLayout } from "@/hooks/useCapacitor";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import {
@@ -129,6 +128,10 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
   const [error, setError] = useState("");
   const [serverStatus, setServerStatus] = useState<"idle" | "checking" | "ok" | "fail">("idle");
   const [allowRegistration, setAllowRegistration] = useState<boolean>(true);
+  const [captchaEnabled, setCaptchaEnabled] = useState(false);
+  const [captchaId, setCaptchaId] = useState("");
+  const [captchaSvg, setCaptchaSvg] = useState("");
+  const [captchaText, setCaptchaText] = useState("");
   // Phase 6: 2FA 两阶段登录 state —— 第一步（密码）成功后若后端返回 requires2FA,
   // 就暂存 ticket + 当前 baseUrl，切到 2FA 面板让用户输入 6 位动态码或恢复码。
   const [twoFactor, setTwoFactor] = useState<{
@@ -171,13 +174,46 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
     }
   }, [isClientMode]);
 
-  // 拉取注册开关
+  const fetchNewCaptcha = async (apiBase?: string) => {
+    try {
+      const baseUrl = apiBase !== undefined ? apiBase : (isClientMode ? (getServerUrl() || "") : "");
+      const base = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api` : "/api";
+      const res = await fetch(`${base}/auth/captcha`);
+      if (res.ok) {
+        const data = await res.json();
+        setCaptchaId(data.captchaId);
+        setCaptchaSvg(data.svg);
+        setCaptchaText("");
+      }
+    } catch (err) {
+      console.error("Failed to fetch captcha:", err);
+    }
+  };
+
+  // 拉取注册开关和站点设置（含验证码是否开启）
   useEffect(() => {
     let cancelled = false;
     const baseUrl = isClientMode ? (getServerUrl() || "") : "";
     fetchRegisterConfig(baseUrl || undefined).then((cfg) => {
       if (!cancelled) setAllowRegistration(cfg.allowRegistration);
     });
+
+    const base = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/api` : "/api";
+    fetch(`${base}/settings`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) {
+          const enabled = data.login_captcha_enabled === "true";
+          setCaptchaEnabled(enabled);
+          if (enabled) {
+            fetchNewCaptcha(baseUrl || undefined);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch site settings:", err);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -243,6 +279,20 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
     if (result.ok) {
       // 刷新注册开关
       fetchRegisterConfig(url).then((cfg) => setAllowRegistration(cfg.allowRegistration));
+      // 刷新站点设置以确认是否开启验证码
+      const base = url ? `${url.replace(/\/+$/, "")}/api` : "/api";
+      fetch(`${base}/settings`)
+        .then((res) => res.json())
+        .then((data) => {
+          const enabled = data.login_captcha_enabled === "true";
+          setCaptchaEnabled(enabled);
+          if (enabled) {
+            fetchNewCaptcha(url);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch site settings:", err);
+        });
     }
   };
 
@@ -290,14 +340,23 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
     if (baseUrl === null) return;
 
     const loginUrl = baseUrl ? `${baseUrl}/api/auth/login` : "/api/auth/login";
+    const requestBody: Record<string, any> = { username, password };
+    if (captchaEnabled) {
+      requestBody.captchaId = captchaId;
+      requestBody.captchaText = captchaText;
+    }
+
     const res = await fetch(loginUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify(requestBody),
     });
     const data = await res.json();
     if (!res.ok) {
       setError(data.error || t("auth.loginFailed"));
+      if (captchaEnabled) {
+        fetchNewCaptcha(baseUrl || undefined);
+      }
       // 登录失败：关闭本轮自动登录；若之前配置了自动登录，把 autoLogin 关掉防止死循环
       // （但保留用户名用于下次预填）
       if (autoLogin) {
@@ -661,14 +720,6 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                   <p className="text-xs text-zinc-400 dark:text-zinc-500">
                     {t("auth.serverHint")}
                   </p>
-                  {/* 桌面端：局域网 mDNS 自动发现。非 Electron 环境组件会自动隐身。 */}
-                  <LanDiscoveryPanel
-                    currentHostIsEmpty={!serverParts.host.trim()}
-                    onSelect={(next) => {
-                      setServerParts(next);
-                      setServerStatus("idle");
-                    }}
-                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -816,6 +867,36 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* 图形验证码 */}
+            {captchaEnabled && !isRegister && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {t("auth.captcha", { defaultValue: "验证码" })}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={captchaText}
+                    onChange={(e) => setCaptchaText(e.target.value)}
+                    className="block w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
+                    placeholder={t("auth.captchaPlaceholder", { defaultValue: "输入图形验证码" })}
+                    required
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                  />
+                  <div
+                    onClick={() => fetchNewCaptcha()}
+                    className="flex-shrink-0 cursor-pointer select-none rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 flex items-center justify-center bg-white dark:bg-zinc-950 hover:opacity-80 transition-opacity"
+                    title={t("auth.captchaRefresh", { defaultValue: "点击刷新验证码" })}
+                    dangerouslySetInnerHTML={{ __html: captchaSvg }}
+                    style={{ width: "120px", height: "42px" }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* 记住密码 / 自动登录（仅登录模式 + 支持落盘加密的平台显示） */}
             {!isRegister && canSavePassword && (

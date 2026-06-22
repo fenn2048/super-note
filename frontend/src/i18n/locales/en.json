@@ -72,6 +72,9 @@
     "emailOptional": "Email (optional)",
     "confirmPassword": "Confirm Password",
     "usernameRegisterPlaceholder": "3-32 chars letters/digits",
+    "captcha": "Graphic CAPTCHA",
+    "captchaPlaceholder": "Enter verification code",
+    "captchaRefresh": "Click to refresh verification code",
     "twoFactor": {
       "prompt": "Signing in as {{username}}. Enter the 6-digit code from your Authenticator.",
       "codeLabel": "Authentication Code",
@@ -519,6 +522,8 @@
     "prefOutlineDefaultOpenHint": "When enabled, the outline panel on the right side is expanded every time you open a note. You can still toggle it manually at any time.",
     "prefLockOnOpen": "Lock notes on open",
     "prefLockOnOpenHint": "When enabled, every note opens in read-only view; click the unlock button to start editing. This lock applies only on this device, is not written to the note, and does not affect other users.",
+    "loginCaptchaLabel": "Login CAPTCHA",
+    "loginCaptchaHint": "When enabled, a graphic CAPTCHA is required on the login screen to prevent brute-force attacks.",
     "readingDensity": "Reading Density",
     "readingDensityDesc": "Adjust vertical spacing of paragraphs and list items. Compact saves screen space (per-device).",
     "densityCozy": "Cozy",
@@ -1139,14 +1144,8 @@
   "appearance": {
     "skinTitle": "Appearance Style",
     "skinDesc": "Pick an overall visual language. Different skins yield completely different mindsets and shapes.",
-    "skinMacos": "macOS",
-    "skinMacosDesc": "Apple design language with elegant translucency, native shadows, and system blue",
     "skinObsidian": "Obsidian (Default)",
     "skinObsidianDesc": "Obsidian quiet dark mode, minimalist style with sharp geometric corners",
-    "skinNotion": "Notion",
-    "skinNotionDesc": "Notion style, signature warm-grey sidebar, fine borders, and intellectual blue",
-    "skinMemos": "Memos",
-    "skinMemosDesc": "Memos style, comfortable grey canvas with separate cards, and fresh emerald green",
     "skinEink": "E-Ink",
     "skinEinkDesc": "E-Ink style, eye-care soft e-paper texture, monochrome high-contrast minimalism"
   },

@@ -44,45 +44,7 @@ const SKINS: SkinDescriptor[] = [
       text: "#dadada",
     },
   },
-  {
-    key: "macos",
-    titleKey: "appearance.skinMacos",
-    titleDefault: "macOS",
-    descKey: "appearance.skinMacosDesc",
-    descDefault: "Apple 设计语言，精致毛玻璃、柔和阴影与系统蓝",
-    swatch: {
-      bg: "#ECECEC",
-      sidebar: "rgba(246,246,246,0.85)",
-      accent: "#007AFF",
-      text: "#000000",
-    },
-  },
-  {
-    key: "notion",
-    titleKey: "appearance.skinNotion",
-    titleDefault: "Notion",
-    descKey: "appearance.skinNotionDesc",
-    descDefault: "Notion 风格，奶油灰侧栏与极细分隔线，经典知性蓝",
-    swatch: {
-      bg: "#ffffff",
-      sidebar: "#f1f1ef",
-      accent: "#2383e2",
-      text: "#37352f",
-    },
-  },
-  {
-    key: "memos",
-    titleKey: "appearance.skinMemos",
-    titleDefault: "Memos",
-    descKey: "appearance.skinMemosDesc",
-    descDefault: "Memos 风格，舒适灰底与独立卡片布局，生机翡翠绿",
-    swatch: {
-      bg: "#f3f4f6",
-      sidebar: "#ffffff",
-      accent: "#10b981",
-      text: "#1f2937",
-    },
-  },
+
   {
     key: "eink",
     titleKey: "appearance.skinEink",

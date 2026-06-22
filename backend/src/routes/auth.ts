@@ -28,6 +28,7 @@ import {
 import { logAudit } from "../services/audit";
 import jwt from "jsonwebtoken";
 import { disconnectUser } from "../services/realtime";
+import { generateCaptcha, verifyCaptcha } from "../lib/captcha";
 
 const auth = new Hono();
 
@@ -123,6 +124,21 @@ function extractUserId(c: any): string | null {
   if ((payload.tver ?? 0) !== user.tokenVersion) return null;
   return user.id;
 }
+
+function getLoginCaptchaEnabled(): boolean {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT value FROM system_settings WHERE key = 'login_captcha_enabled'")
+    .get() as { value: string } | undefined;
+  if (!row) return false;
+  return row.value === "true";
+}
+
+// ========== 验证码获取 ==========
+auth.get("/captcha", (c) => {
+  const captcha = generateCaptcha();
+  return c.json({ captchaId: captcha.id, svg: captcha.svg });
+});
 
 // ========== 注册配置（公开读取，管理员写入） ==========
 
@@ -230,7 +246,12 @@ auth.post("/register", async (c) => {
 
 auth.post("/login", async (c) => {
   const body = await c.req.json();
-  const { username, password } = body as { username: string; password: string };
+  const { username, password, captchaId, captchaText } = body as {
+    username: string;
+    password: string;
+    captchaId?: string;
+    captchaText?: string;
+  };
 
   if (!username || !password) {
     return c.json({ error: "用户名和密码不能为空" }, 400);
@@ -245,6 +266,16 @@ auth.post("/login", async (c) => {
       { error: `登录请求过于频繁，请 ${ipBlocked.retryAfterSec} 秒后重试`, code: "RATE_LIMITED" },
       429,
     );
+  }
+
+  // 验证码校验
+  if (getLoginCaptchaEnabled()) {
+    if (!captchaId || !captchaText) {
+      return c.json({ error: "请输入验证码", code: "CAPTCHA_REQUIRED" }, 400);
+    }
+    if (!verifyCaptcha(captchaId, captchaText)) {
+      return c.json({ error: "验证码错误或已过期", code: "CAPTCHA_INVALID" }, 400);
+    }
   }
 
   const db = getDb();

@@ -941,7 +941,7 @@ function AppLayout() {
           v16 P3 后续：Rail 三档模式（icon=48px 纯图标 / label=64px 图标+文字 / hidden=完全隐藏）；
           hidden 模式下若主侧栏也折叠，强制保留 Rail（避免完全无侧栏入口）。 */}
       {railVisible && <NavRail />}
-      {!state.sidebarCollapsed && (
+      {!state.sidebarCollapsed && !isDiaryView && !isMindMapView && (
         <div
           className="hidden md:flex shrink-0"
           style={{ width: `${state.sidebarWidth}px` }}
@@ -949,7 +949,7 @@ function AppLayout() {
           <Sidebar variant="desktop" />
         </div>
       )}
-      <SidebarResizeHandle />
+      {!isDiaryView && !isMindMapView && <SidebarResizeHandle />}
 
       {/* ===== 主内容区 ===== */}
       <div className={cn(
@@ -1180,7 +1180,27 @@ function MobileTopBar() {
   const { state } = useApp();
   const actions = useAppActions();
   const { siteConfig } = useSiteSettings();
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(true);
+
+  const getTitle = () => {
+    switch (state.viewMode) {
+      case "all":
+      case "notebook":
+      case "tag":
+        return t("sidebar.allNotes") || "全部笔记";
+      case "favorites":
+        return "我的收藏";
+      case "mindmaps":
+        return t("sidebar.mindMaps") || "思维导图";
+      case "tasks":
+        return t("projects.myTasks") || "我的待办";
+      case "trash":
+        return "回收站";
+      default:
+        return siteConfig.title || "星空笔记";
+    }
+  };
 
   useEffect(() => {
     const show = () => setVisible(true);
@@ -1264,7 +1284,7 @@ function MobileTopBar() {
           >
             <Menu size={24} />
           </button>
-          <span className="ml-3 text-sm font-semibold text-tx-primary">{siteConfig.title}</span>
+          <span className="ml-3 text-sm font-semibold text-tx-primary">{getTitle()}</span>
         </>
       )}
     </header>

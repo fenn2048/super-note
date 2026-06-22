@@ -2061,109 +2061,7 @@ body.density-compact {
   --color-elevated-solid: #242424;
 }
 
-/* ---------- macOS Light ---------- */
-:root[data-skin="macos"] {
-  --color-bg: #ECECEC;
-  --color-surface: #ffffff;
-  --color-sidebar: rgba(246, 246, 246, 0.72);
-  --color-sidebar-solid: #F6F6F6;
-  --color-elevated: rgba(255, 255, 255, 0.85);
-  --color-elevated-solid: #ffffff;
-  --color-border: rgba(0, 0, 0, 0.10);
-  --color-hover: rgba(0, 0, 0, 0.04);
-  --color-active: #B4D8FF;
 
-  --color-text-primary: #000000;
-  --color-text-secondary: rgba(0, 0, 0, 0.60);
-  --color-text-tertiary: rgba(0, 0, 0, 0.40);
-  --color-text-quaternary: rgba(0, 0, 0, 0.20);
-  --color-text-inverse: #ffffff;
-
-  --color-accent-primary: #007AFF;
-  --color-accent-secondary: #34C759;
-  --color-accent-warning: #FF9500;
-  --color-accent-danger: #FF3B30;
-  --color-accent-muted: rgba(0, 0, 0, 0.40);
-
-  /* 编辑器与默认皮肤解耦：macOS 皮肤下编辑器正文用白底 + SF 灰 */
-  --pm-text: #1d1d1f;
-  --pm-heading: #000000;
-  --pm-code-bg: rgba(0, 0, 0, 0.05);
-  --pm-code-text: #D70015;
-  --pm-pre-bg: #F6F6F6;
-  --pm-pre-border: rgba(0, 0, 0, 0.10);
-  --pm-pre-text: #1d1d1f;
-  --pm-blockquote-border: #007AFF;
-  --pm-blockquote-text: rgba(0, 0, 0, 0.55);
-  --pm-hr: rgba(0, 0, 0, 0.10);
-  --pm-placeholder: rgba(0, 0, 0, 0.30);
-  --pm-task-done: rgba(0, 0, 0, 0.30);
-  --pm-scrollbar: rgba(0, 0, 0, 0.20);
-  --pm-scrollbar-hover: rgba(0, 0, 0, 0.35);
-  --pm-selection: rgba(0, 122, 255, 0.20);
-}
-
-/* ---------- macOS Dark ---------- */
-:root[data-skin="macos"].dark {
-  --color-bg: #1E1E1E;
-  --color-surface: #2E2E2E;
-  --color-sidebar: rgba(30, 30, 30, 0.72);
-  --color-sidebar-solid: #252525;
-  --color-elevated: rgba(58, 58, 58, 0.85);
-  --color-elevated-solid: #3A3A3A;
-  --color-border: rgba(255, 255, 255, 0.12);
-  --color-hover: rgba(255, 255, 255, 0.06);
-  --color-active: rgba(10, 132, 255, 0.30);
-
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: rgba(255, 255, 255, 0.70);
-  --color-text-tertiary: rgba(255, 255, 255, 0.52);
-  --color-text-quaternary: rgba(255, 255, 255, 0.35);
-  --color-text-inverse: #1E1E1E;
-
-  --color-accent-primary: #0A84FF;
-  --color-accent-secondary: #30D158;
-  --color-accent-warning: #FF9F0A;
-  --color-accent-danger: #FF453A;
-  --color-accent-muted: rgba(255, 255, 255, 0.52);
-
-  --pm-text: #E8E8E8;
-  --pm-heading: #FFFFFF;
-  --pm-code-bg: rgba(255, 255, 255, 0.08);
-  --pm-code-text: #FF6B6B;
-  --pm-pre-bg: #252525;
-  --pm-pre-border: rgba(255, 255, 255, 0.10);
-  --pm-pre-text: #E8E8E8;
-  --pm-blockquote-border: #0A84FF;
-  --pm-blockquote-text: rgba(255, 255, 255, 0.65);
-  --pm-hr: rgba(255, 255, 255, 0.10);
-  --pm-placeholder: rgba(255, 255, 255, 0.35);
-  --pm-task-done: rgba(255, 255, 255, 0.45);
-  --pm-scrollbar: rgba(255, 255, 255, 0.20);
-  --pm-scrollbar-hover: rgba(255, 255, 255, 0.35);
-  --pm-selection: rgba(10, 132, 255, 0.30);
-}
-
-/* ---------- macOS 圆角令牌 ---------- */
-:root[data-skin="macos"] {
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 5px;
-}
-
-/* ---------- macOS 字体栈调整 ----------
- * 默认栈把 Inter 排在 -apple-system 之前。macOS 下 -apple-system 会命中 SF Pro，
- * 但被 Inter 抢先，用户感受不到"Apple 味"。皮肤激活后调换顺序。
- */
-:root[data-skin="macos"] {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
-               'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-               'Microsoft YaHei', Helvetica, Arial, sans-serif;
-  --editor-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
-               'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-               'Microsoft YaHei', Helvetica, Arial, sans-serif;
-}
 
 /* ============================================================================
  * Vibrancy（毛玻璃）工具类
@@ -2525,206 +2423,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 }
 
 
-/* ============================================================================
- * Notion 外观风格（Skin）
- * ----------------------------------------------------------------------------
- * 设计来源：Notion.so（奶油灰侧边栏、知性蓝强调色、精细分隔线、极小圆角）。
- * ========================================================================= */
 
-/* ---------- Notion Light ---------- */
-:root[data-skin="notion"] {
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-sidebar: #f1f1ef;
-  --color-sidebar-solid: #f1f1ef;
-  --color-elevated: #ffffff;
-  --color-elevated-solid: #ffffff;
-  --color-border: rgba(55, 53, 47, 0.09);
-  --color-hover: rgba(55, 53, 47, 0.04);
-  --color-active: rgba(55, 53, 47, 0.08);
-
-  --color-text-primary: #37352f;
-  --color-text-secondary: rgba(55, 53, 47, 0.72);
-  --color-text-tertiary: rgba(55, 53, 47, 0.58);
-  --color-text-quaternary: rgba(55, 53, 47, 0.35);
-  --color-text-inverse: #ffffff;
-
-  --color-accent-primary: #2383e2;
-  --color-accent-secondary: #0f7b6c;
-  --color-accent-warning: #dfab01;
-  --color-accent-danger: #e03e3e;
-  --color-accent-muted: rgba(55, 53, 47, 0.58);
-
-  --radius-window: 4px;
-  --radius-card: 4px;
-  --radius-button: 4px;
-  --radius-input: 4px;
-
-  /* 编辑器样式 */
-  --pm-text: #37352f;
-  --pm-heading: #1f1f1f;
-  --pm-code-bg: rgba(135, 131, 120, 0.15);
-  --pm-code-text: #eb5757;
-  --pm-pre-bg: #f7f7f5;
-  --pm-pre-border: rgba(55, 53, 47, 0.09);
-  --pm-pre-text: #37352f;
-  --pm-blockquote-border: #37352f;
-  --pm-blockquote-text: rgba(55, 53, 47, 0.70);
-  --pm-hr: rgba(55, 53, 47, 0.09);
-  --pm-placeholder: rgba(55, 53, 47, 0.40);
-  --pm-task-done: rgba(55, 53, 47, 0.50);
-  --pm-scrollbar: rgba(55, 53, 47, 0.15);
-  --pm-scrollbar-hover: rgba(55, 53, 47, 0.3);
-  --pm-selection: rgba(35, 131, 226, 0.15);
-}
-
-/* ---------- Notion Dark ---------- */
-:root[data-skin="notion"].dark {
-  --color-bg: #191919;
-  --color-surface: #191919;
-  --color-sidebar: #202020;
-  --color-sidebar-solid: #202020;
-  --color-elevated: #252525;
-  --color-elevated-solid: #252525;
-  --color-border: rgba(255, 255, 255, 0.09);
-  --color-hover: rgba(255, 255, 255, 0.055);
-  --color-active: rgba(255, 255, 255, 0.1);
-
-  --color-text-primary: rgba(255, 255, 255, 0.9);
-  --color-text-secondary: rgba(255, 255, 255, 0.72);
-  --color-text-tertiary: rgba(255, 255, 255, 0.55);
-  --color-text-quaternary: rgba(255, 255, 255, 0.35);
-  --color-text-inverse: #191919;
-
-  --color-accent-primary: #2eaadc;
-  --color-accent-secondary: #34d158;
-  --color-accent-warning: #eab308;
-  --color-accent-danger: #ef4444;
-  --color-accent-muted: rgba(255, 255, 255, 0.55);
-
-  --radius-window: 4px;
-  --radius-card: 4px;
-  --radius-button: 4px;
-  --radius-input: 4px;
-
-  /* 编辑器样式 */
-  --pm-text: rgba(255, 255, 255, 0.9);
-  --pm-heading: #ffffff;
-  --pm-code-bg: rgba(255, 255, 255, 0.1);
-  --pm-code-text: #ff7373;
-  --pm-pre-bg: #202020;
-  --pm-pre-border: rgba(255, 255, 255, 0.09);
-  --pm-pre-text: rgba(255, 255, 255, 0.9);
-  --pm-blockquote-border: rgba(255, 255, 255, 0.8);
-  --pm-blockquote-text: rgba(255, 255, 255, 0.70);
-  --pm-hr: rgba(255, 255, 255, 0.09);
-  --pm-placeholder: rgba(255, 255, 255, 0.40);
-  --pm-task-done: rgba(255, 255, 255, 0.50);
-  --pm-scrollbar: rgba(255, 255, 255, 0.15);
-  --pm-scrollbar-hover: rgba(255, 255, 255, 0.3);
-  --pm-selection: rgba(46, 170, 220, 0.25);
-}
-
-
-/* ============================================================================
- * Memos 外观风格（Skin）
- * ----------------------------------------------------------------------------
- * 设计来源：usememos（清爽翡翠绿强调色、灰色大背景、高亮独立的白色卡片容器）。
- * ========================================================================= */
-
-/* ---------- Memos Light ---------- */
-:root[data-skin="memos"] {
-  --color-bg: #f3f4f6;
-  --color-surface: #ffffff;
-  --color-sidebar: #ffffff;
-  --color-sidebar-solid: #ffffff;
-  --color-elevated: #ffffff;
-  --color-elevated-solid: #ffffff;
-  --color-border: #e5e7eb;
-  --color-hover: #f4f4f5;
-  --color-active: rgba(16, 185, 129, 0.08);
-
-  --color-text-primary: #1f2937;
-  --color-text-secondary: #4b5563;
-  --color-text-tertiary: #9ca3af;
-  --color-text-quaternary: #d1d5db;
-  --color-text-inverse: #ffffff;
-
-  --color-accent-primary: #10b981;
-  --color-accent-secondary: #06b6d4;
-  --color-accent-warning: #f59e0b;
-  --color-accent-danger: #ef4444;
-  --color-accent-muted: #9ca3af;
-
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 6px;
-
-  /* 编辑器样式 */
-  --pm-text: #1f2937;
-  --pm-heading: #111827;
-  --pm-code-bg: #f3f4f6;
-  --pm-code-text: #047857;
-  --pm-pre-bg: #f9fafb;
-  --pm-pre-border: #e5e7eb;
-  --pm-pre-text: #1f2937;
-  --pm-blockquote-border: #10b981;
-  --pm-blockquote-text: #4b5563;
-  --pm-hr: #e5e7eb;
-  --pm-placeholder: #9ca3af;
-  --pm-task-done: #9ca3af;
-  --pm-scrollbar: #d1d5db;
-  --pm-scrollbar-hover: #9ca3af;
-  --pm-selection: rgba(16, 185, 129, 0.2);
-}
-
-/* ---------- Memos Dark ---------- */
-:root[data-skin="memos"].dark {
-  --color-bg: #121214;
-  --color-surface: #1e1e24;
-  --color-sidebar: #121214;
-  --color-sidebar-solid: #121214;
-  --color-elevated: #1e1e24;
-  --color-elevated-solid: #1e1e24;
-  --color-border: #2e2e33;
-  --color-hover: #27272a;
-  --color-active: rgba(16, 185, 129, 0.15);
-
-  --color-text-primary: #e4e4e7;
-  --color-text-secondary: #a1a1aa;
-  --color-text-tertiary: #71717a;
-  --color-text-quaternary: #3f3f46;
-  --color-text-inverse: #121214;
-
-  --color-accent-primary: #10b981;
-  --color-accent-secondary: #06b6d4;
-  --color-accent-warning: #f59e0b;
-  --color-accent-danger: #ef4444;
-  --color-accent-muted: #71717a;
-
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 6px;
-
-  /* 编辑器样式 */
-  --pm-text: #e4e4e7;
-  --pm-heading: #ffffff;
-  --pm-code-bg: #27272a;
-  --pm-code-text: #34d399;
-  --pm-pre-bg: #1e1e24;
-  --pm-pre-border: #2e2e33;
-  --pm-pre-text: #e4e4e7;
-  --pm-blockquote-border: #10b981;
-  --pm-blockquote-text: #a1a1aa;
-  --pm-hr: #2e2e33;
-  --pm-placeholder: #71717a;
-  --pm-task-done: #71717a;
-  --pm-scrollbar: #27272a;
-  --pm-scrollbar-hover: #3f3f46;
-  --pm-selection: rgba(16, 185, 129, 0.25);
-}
 
 
 /* ============================================================================
@@ -2943,17 +2642,12 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   box-shadow: 0 0 8px rgba(0, 122, 255, 0.4) !important;
 }
 
-/* 弱化 eink、notion 和 claude 皮肤下的卡片立体虚饰投影 */
+/* 弱化 eink 和 claude 皮肤下的卡片立体虚饰投影 */
 :root[data-skin="eink"] .shadow-sm,
 :root[data-skin="eink"] .shadow,
 :root[data-skin="eink"] .shadow-md,
 :root[data-skin="eink"] .shadow-lg,
 :root[data-skin="eink"] .shadow-xl,
-:root[data-skin="notion"] .shadow-sm,
-:root[data-skin="notion"] .shadow,
-:root[data-skin="notion"] .shadow-md,
-:root[data-skin="notion"] .shadow-lg,
-:root[data-skin="notion"] .shadow-xl,
 :root[data-skin="claude"] .shadow-sm,
 :root[data-skin="claude"] .shadow,
 :root[data-skin="claude"] .shadow-md,
@@ -2962,7 +2656,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   box-shadow: none !important;
 }
 
-/* 弱化 eink、notion 和 claude 皮肤下卡片边框 */
+/* 弱化 eink 和 claude 皮肤下卡片边框 */
 :root[data-skin="eink"] .border-zinc-100,
 :root[data-skin="eink"] .border-zinc-200,
 :root[data-skin="eink"] .border-zinc-300,
@@ -2986,8 +2680,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 :root[data-skin="eink"] .border-slate-300,
 :root[data-skin="eink"] .border-slate-700,
 :root[data-skin="eink"] .border-slate-800,
-:root[data-skin="notion"] .border-zinc-200,
-:root[data-skin="notion"] .border-zinc-300,
 :root[data-skin="claude"] .border-zinc-200,
 :root[data-skin="claude"] .border-zinc-300 {
   border-color: var(--color-border) !important;
@@ -3041,10 +2733,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   background-color: var(--color-hover) !important;
 }
 
-/* Disable macOS/default focus ring and keep border consistent */
-:root[data-skin="macos"] input.no-focus-ring:focus-visible,
-:root[data-skin="macos"] textarea.no-focus-ring:focus-visible,
-:root[data-skin="macos"] select.no-focus-ring:focus-visible,
+/* Disable default focus ring and keep border consistent */
 :root[data-skin="claude"] input.no-focus-ring:focus-visible,
 :root[data-skin="claude"] textarea.no-focus-ring:focus-visible,
 :root[data-skin="claude"] select.no-focus-ring:focus-visible,

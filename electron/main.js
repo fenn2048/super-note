@@ -11,7 +11,6 @@ const { createTray, destroyTray, markQuitting, getIsQuitting } = require("./tray
 const { initAutoUpdater, checkForUpdatesManually, setUpdaterContext } = require("./updater");
 const { initLogger, getLogDir } = require("./logger");
 const { handleArgv, setupMacOpenFile, flushPending } = require("./fileAssoc");
-const { registerDiscoveryIpc, shutdown: shutdownDiscovery } = require("./discovery");
 const { setSettingsPath, readSettings, writeSettings } = require("./settings");
 const { openSetupWindow } = require("./setupWindow");
 const {
@@ -805,10 +804,9 @@ async function clearWebStorage() {
 function relaunchApp() {
   // 标记退出意图，避免 close → hide 拦截
   markQuitting();
-  // 先停掉 backend（如果有），关闭托盘 / discovery
+  // 先停掉 backend（如果有），关闭托盘
   try { stopBackend(); } catch { /* ignore */ }
   try { destroyTray(); } catch { /* ignore */ }
-  try { shutdownDiscovery(); } catch { /* ignore */ }
 
   app.relaunch();
   app.exit(0);
@@ -1072,7 +1070,6 @@ app.whenReady().then(async () => {
   // Lite-only 首启没有服务器地址：立刻弹 setup 窗口
   if (liteOnly && currentMode === "lite" && !currentRemoteUrl) {
     console.log("[Electron] lite-only first launch, opening setup window");
-    registerDiscoveryIpc(); // setup 依赖
     const r = await openSetupWindow({ initialUrl: "" });
     if (!r.ok) {
       // 用户取消 → 直接退出
@@ -1093,10 +1090,6 @@ app.whenReady().then(async () => {
       ? `正在连接 ${safeHost(currentRemoteUrl)}`
       : "正在启动本地服务"
   );
-
-  // discovery IPC 必须先注册：setup 窗口（首启失败 / 切换模式时）依赖它做 mDNS 列表。
-  // 它本身不会启动 mDNS 浏览器，只有 renderer 调 discovery:start 才会启动，因此空跑无副作用。
-  registerDiscoveryIpc();
 
   try {
     if (currentMode === "lite") {
@@ -1228,5 +1221,4 @@ app.on("before-quit", () => {
   markQuitting();
   stopBackend();
   destroyTray();
-  try { shutdownDiscovery(); } catch { /* ignore */ }
 });

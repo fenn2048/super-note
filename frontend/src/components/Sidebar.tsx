@@ -1839,6 +1839,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   const handleCreateNotebook = async () => {
     const nb = await api.createNotebook({ name: t('common.newNotebook'), icon: "📒" });
     actions.setNotebooks([...state.notebooks, nb]);
+    // 自动展开笔记本列表
+    if (!notebooksExpanded) {
+      setNotebooksExpanded(true);
+      try { localStorage.setItem("super-notebooks-expanded", "true"); } catch {}
+    }
     // 自动进入重命名
     setEditingId(nb.id);
     setEditValue(nb.name);

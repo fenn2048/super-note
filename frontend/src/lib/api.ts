@@ -701,6 +701,7 @@ export const api = {
     // 功能开关（字符串 "true"/"false"，未写过时 DEFAULTS 保证为 "true"）
     feature_personal_export_enabled?: string;
     feature_personal_import_enabled?: string;
+    login_captcha_enabled?: string;
   }> => {
     const res = await fetch(`${getBaseUrl()}/settings`);
     if (!res.ok)
@@ -711,6 +712,7 @@ export const api = {
         editor_lxgw_wenkai_enabled: "false",
         feature_personal_export_enabled: "true",
         feature_personal_import_enabled: "true",
+        login_captcha_enabled: "false",
       };
     return res.json();
   },
@@ -1326,6 +1328,7 @@ export const api = {
       // 调试开关："true" / "false"。仅管理员可写，未写过时为 "false"。
       debug_files_query?: string;
       web_ui_enabled?: string;
+      login_captcha_enabled?: string;
     }>("/settings"),
   updateSiteSettings: (data: {
     site_title?: string;
@@ -1338,6 +1341,7 @@ export const api = {
     // 同上：后端归一化为 "true"/"false"
     debug_files_query?: boolean | string;
     web_ui_enabled?: boolean | string;
+    login_captcha_enabled?: boolean | string;
   }) =>
     request<{
       site_title: string;
@@ -1348,6 +1352,7 @@ export const api = {
       feature_personal_import_enabled?: string;
       debug_files_query?: string;
       web_ui_enabled?: string;
+      login_captcha_enabled?: string;
     }>("/settings", {
       method: "PUT",
       body: JSON.stringify(data),

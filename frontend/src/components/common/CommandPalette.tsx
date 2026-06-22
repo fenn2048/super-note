@@ -238,26 +238,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           setSkin("eink");
         },
       },
-      {
-        id: "skin-macos",
-        type: "command",
-        title: "外观皮肤: macOS 风格",
-        subtitle: "切换为无缝轻量原生的苹果灰白皮肤",
-        icon: Palette,
-        handler: () => {
-          setSkin("macos");
-        },
-      },
-      {
-        id: "skin-notion",
-        type: "command",
-        title: "外观皮肤: Notion 风格",
-        subtitle: "切换为极简黑白像素线条皮肤",
-        icon: Palette,
-        handler: () => {
-          setSkin("notion");
-        },
-      },
+
     ];
   }, [theme, setTheme, setSkin, actions]);
 

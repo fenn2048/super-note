@@ -52,7 +52,6 @@ import { attachRealtimeServer, getRealtimeStats, shutdownRealtime } from "./serv
 import { getYjsStats } from "./services/yjs";
 import { initWebhookTables } from "./services/webhook";
 import { initAuditTables } from "./services/audit";
-import { publishMdns, stopMdns } from "./services/discovery";
 import { startEmbeddingWorker, stopEmbeddingWorker } from "./services/embedding-worker";
 import { initVecStore, reindexAllVectors, isVecAvailable } from "./services/vec-store";
 
@@ -181,8 +180,8 @@ app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
 // 站点设置（GET 无需 JWT，允许未登录时加载品牌信息）
 app.get("/api/settings", (c) => {
   const db = getDb();
-  const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled'").all() as { key: string; value: string }[];
-  const result: Record<string, string> = { site_title: "ark-notes", site_favicon: "", editor_font_family: "", editor_lxgw_wenkai_enabled: "false", debug_files_query: "false", web_ui_enabled: "true" };
+  const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled' OR key = 'login_captcha_enabled'").all() as { key: string; value: string }[];
+  const result: Record<string, string> = { site_title: "ark-notes", site_favicon: "", editor_font_family: "", editor_lxgw_wenkai_enabled: "false", debug_files_query: "false", web_ui_enabled: "true", login_captcha_enabled: "false" };
   for (const row of rows) {
     result[row.key] = row.value;
   }
@@ -602,22 +601,6 @@ const server = serve({ fetch: app.fetch, port });
 attachRealtimeServer(server as unknown as import("http").Server);
 console.log(`🛰  WebSocket endpoint: ws://localhost:${port}/ws`);
 
-// mDNS 广播：让同局域网内的桌面/移动客户端免输入发现本实例。
-//   - 仅在"对外暴露的端口"上广播才有意义（127.0.0.1 绑定的 Electron 内嵌后端
-//     也可以广播，但旁路设备根本连不上）。这里不做 bind 地址判断，保持无脑广播；
-//     如果想限制，可加 DISABLE_MDNS=1 环境变量。
-//   - 失败不影响主流程，函数内部已做 warn-only 降级。
-if (process.env.DISABLE_MDNS !== "1") {
-  try {
-    publishMdns({
-      port,
-      version: resolveAppVersion(),
-    });
-  } catch (e) {
-    console.warn("[discovery] publishMdns threw:", e);
-  }
-}
-
 // Phase 3: 优雅关停 —— 把内存中的 Y.Doc 状态 flush 到磁盘
 let shuttingDown = false;
 async function gracefulShutdown(signal: string) {
@@ -635,8 +618,6 @@ async function gracefulShutdown(signal: string) {
   } finally {
     // 停掉 embedding worker 的轮询定时器，避免 process.exit 之前还在发起 fetch
     try { stopEmbeddingWorker(); } catch { /* ignore */ }
-    // mDNS 停播放在最后：即使 realtime shutdown 抛错，也要尽量通知网络"下线"
-    try { stopMdns(); } catch { /* ignore */ }
     // 关停 DB 连接：内部会先 wal_checkpoint(TRUNCATE)，把 -wal 中的事务全部
     // 写回主 .db 文件。这样无论用户接下来是 cp 冷备、docker volume snapshot
     // 还是直接关机，拿到的 .db 都是完整的一致快照，不会丢最近事务。
