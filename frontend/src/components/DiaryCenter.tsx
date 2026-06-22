@@ -660,6 +660,12 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     }
   };
 
+  const handleDeleteVoice = useCallback(() => {
+    if (!pendingVoice) return;
+    api.diaryImages.remove(pendingVoice.id).catch(() => {});
+    setPendingVoice(null);
+  }, [pendingVoice]);
+
   const hasPendingUploads = pendingImages.some((p) => p.status === "uploading");
   const hasErrorImages = pendingImages.some((p) => p.status === "error");
   const readyImageIds = pendingImages
@@ -878,7 +884,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
           </div>
           
           <button
-            onClick={() => setPendingVoice(null)}
+            onClick={handleDeleteVoice}
             className="w-6 h-6 rounded-full bg-black/5 hover:bg-black/10 text-tx-secondary flex items-center justify-center transition-all"
             aria-label="删除录音"
           >
