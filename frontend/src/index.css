@@ -117,6 +117,21 @@ html.font-lxgw {
   --editor-font-family: "LXGW WenKai Screen", sans-serif !important;
 }
 
+/* 优化霞鹜文楷字体下的粗体文字：限制 font-weight 粗度为 550（中等偏粗）以防止笔画粘连模糊，并微调透明度使视觉重量更柔和 */
+html.font-lxgw h1,
+html.font-lxgw h2,
+html.font-lxgw h3,
+html.font-lxgw h4,
+html.font-lxgw h5,
+html.font-lxgw h6,
+html.font-lxgw strong,
+html.font-lxgw b,
+html.font-lxgw .font-bold,
+html.font-lxgw .font-semibold {
+  font-weight: 550 !important;
+  opacity: 0.92 !important;
+}
+
 /* ===== Dark Theme (默认：Obsidian Dark - 优化为高档深蓝灰) ===== */
 .dark {
   --color-bg: #12151d;
@@ -2726,7 +2741,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-sidebar-solid: #eae6e1;
   --color-elevated: #ffffff;
   --color-elevated-solid: #ffffff;
-  --color-border: #b8b5af;
+  --color-border: #dbd8d0;          /* 调柔和的灰色边框 */
   --color-hover: #e0dcd5;
   --color-active: #d5d0c9;
 
@@ -2740,7 +2755,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-accent-secondary: #4a4a4a;
   --color-accent-warning: #757575;
   --color-accent-danger: #1c1c1c;
-  --color-accent-muted: #b8b5af;
+  --color-accent-muted: #dbd8d0;    /* 与 border 同步调柔和 */
 
   --radius-window: 4px;
   --radius-card: 4px;
@@ -2753,11 +2768,11 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-code-bg: #eae6e1;
   --pm-code-text: #1c1c1c;
   --pm-pre-bg: #f7f5f2;
-  --pm-pre-border: #b8b5af;
+  --pm-pre-border: #dbd8d0;         /* 同步调柔和 */
   --pm-pre-text: #1c1c1c;
   --pm-blockquote-border: #1c1c1c;
   --pm-blockquote-text: #4a4a4a;
-  --pm-hr: #b8b5af;
+  --pm-hr: #dbd8d0;                 /* 同步调柔和 */
   --pm-placeholder: #9e9e9e;
   --pm-task-done: #9e9e9e;
   --pm-scrollbar: #eae6e1;
@@ -2873,7 +2888,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-sidebar-solid: #181818;
   --color-elevated: #2e2e2e;
   --color-elevated-solid: #2e2e2e;
-  --color-border: #444444;
+  --color-border: #333333;          /* 调柔和的暗灰边框 */
   --color-hover: #333333;
   --color-active: #3a3a3a;
 
@@ -2887,7 +2902,7 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --color-accent-secondary: #aaaaaa;
   --color-accent-warning: #777777;
   --color-accent-danger: #e0e0e0;
-  --color-accent-muted: #444444;
+  --color-accent-muted: #333333;    /* 与 border 同步调柔和 */
 
   --radius-window: 4px;
   --radius-card: 4px;
@@ -2900,11 +2915,11 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-code-bg: #262626;
   --pm-code-text: #e0e0e0;
   --pm-pre-bg: #181818;
-  --pm-pre-border: #444444;
+  --pm-pre-border: #333333;         /* 同步调柔和 */
   --pm-pre-text: #e0e0e0;
   --pm-blockquote-border: #e0e0e0;
   --pm-blockquote-text: #aaaaaa;
-  --pm-hr: #444444;
+  --pm-hr: #333333;                 /* 同步调柔和 */
   --pm-placeholder: #777777;
   --pm-task-done: #777777;
   --pm-scrollbar: #262626;
@@ -2948,8 +2963,29 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 }
 
 /* 弱化 eink、notion 和 claude 皮肤下卡片边框 */
+:root[data-skin="eink"] .border-zinc-100,
 :root[data-skin="eink"] .border-zinc-200,
 :root[data-skin="eink"] .border-zinc-300,
+:root[data-skin="eink"] .border-zinc-400,
+:root[data-skin="eink"] .border-zinc-700,
+:root[data-skin="eink"] .border-zinc-800,
+:root[data-skin="eink"] .border-zinc-900,
+:root[data-skin="eink"] .border-gray-100,
+:root[data-skin="eink"] .border-gray-200,
+:root[data-skin="eink"] .border-gray-300,
+:root[data-skin="eink"] .border-gray-400,
+:root[data-skin="eink"] .border-gray-700,
+:root[data-skin="eink"] .border-gray-800,
+:root[data-skin="eink"] .border-neutral-100,
+:root[data-skin="eink"] .border-neutral-200,
+:root[data-skin="eink"] .border-neutral-300,
+:root[data-skin="eink"] .border-neutral-700,
+:root[data-skin="eink"] .border-neutral-800,
+:root[data-skin="eink"] .border-slate-100,
+:root[data-skin="eink"] .border-slate-200,
+:root[data-skin="eink"] .border-slate-300,
+:root[data-skin="eink"] .border-slate-700,
+:root[data-skin="eink"] .border-slate-800,
 :root[data-skin="notion"] .border-zinc-200,
 :root[data-skin="notion"] .border-zinc-300,
 :root[data-skin="claude"] .border-zinc-200,

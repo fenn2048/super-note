@@ -1045,7 +1045,7 @@ function AppLayout() {
                       "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)] transition-transform duration-300 ease-in-out md:translate-x-0 md:opacity-100",
                       state.mobileView === "list"
                         ? "translate-x-0 opacity-100"
-                        : "-translate-x-1/3 opacity-50 pointer-events-none absolute inset-y-0 left-0 md:relative md:translate-x-0 md:opacity-100"
+                        : "-translate-x-1/3 opacity-50 pointer-events-none absolute inset-y-0 left-0 md:relative md:translate-x-0 md:opacity-100 md:pointer-events-auto"
                     )}
                     style={{
                       "--note-list-width": `${state.noteListWidth}px`,
