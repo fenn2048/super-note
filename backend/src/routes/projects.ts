@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getDb } from "../db/schema";
 import { getUserWorkspaceRole } from "../middleware/acl";
 import { v4 as uuid } from "uuid";
+import { handleRecurringTask } from "../lib/recurrence";
 
 const projectsRouter = new Hono();
 
@@ -603,7 +604,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0 } = body;
+  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
 
@@ -612,9 +613,9 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const sortOrder = (maxSort.max ?? -1) + 1;
 
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress);
+    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule);
 
   // Add participants
   if (Array.isArray(participants)) {
@@ -647,7 +648,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId } = body;
+  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -687,6 +688,8 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (remindAt !== undefined) { updates.push("remindAt = ?"); params.push(remindAt); }
   if (titleColor !== undefined) { updates.push("titleColor = ?"); params.push(titleColor); }
   if (finalProgress !== undefined) { updates.push("progress = ?"); params.push(finalProgress); }
+  if (isRecurring !== undefined) { updates.push("isRecurring = ?"); params.push((isRecurring === 1 || isRecurring === true) ? 1 : 0); }
+  if (recurrenceRule !== undefined) { updates.push("recurrenceRule = ?"); params.push(recurrenceRule); }
 
   if (updates.length > 0) {
     updates.push("modifierId = ?");
@@ -731,6 +734,11 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
     for (const tagId of tags) {
       db.prepare("INSERT INTO project_task_tags (taskId, tagId) VALUES (?, ?)").run(taskId, tagId);
     }
+  }
+
+  const compVal = (finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0;
+  if (compVal === 1 && task.isCompleted === 0) {
+    handleRecurringTask(db, taskId, true);
   }
 
   const updatedTask = getFullProjectTask(db, taskId);

@@ -17,6 +17,21 @@ let checkTimeout: any = null;
 async function init() {
   const cfg = await getConfig();
 
+  // 获取当前标签页标题，提供更友好的界面预览
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.title) {
+      document.getElementById("page-title")!.textContent = tab.title;
+    }
+  } catch (e) {
+    /* ignore */
+  }
+
+  // 绑定服务器配置显示/隐藏开关
+  document.getElementById("toggle-config")!.addEventListener("click", () => {
+    document.getElementById("config-section")!.classList.toggle("hidden");
+  });
+
   // 1. 初始化基础配置字段
   const serverInput = document.getElementById("server-url") as HTMLInputElement;
   const tokenInput = document.getElementById("api-token") as HTMLInputElement;
@@ -136,6 +151,7 @@ async function checkConnection(serverUrl: string, token: string) {
   if (!serverUrl || !token) {
     badge.className = "badge err";
     badge.textContent = "❌ 未连接";
+    document.getElementById("config-section")!.classList.remove("hidden");
     disableClipUI();
     return;
   }
@@ -150,6 +166,9 @@ async function checkConnection(serverUrl: string, token: string) {
     badge.className = "badge ok";
     badge.textContent = `✅ 连接正常 (${r.username})`;
     
+    // 连接成功后，自动折叠/隐藏配置区域，使用户界面极其清爽
+    document.getElementById("config-section")!.classList.add("hidden");
+    
     // 如果与原存储不同，进行保存
     await setConfig({ serverUrl, token });
     
@@ -158,6 +177,7 @@ async function checkConnection(serverUrl: string, token: string) {
   } catch (err: any) {
     badge.className = "badge err";
     badge.textContent = "❌ 连接失败";
+    document.getElementById("config-section")!.classList.remove("hidden");
     disableClipUI();
   }
 }

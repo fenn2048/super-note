@@ -21,6 +21,7 @@ import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from
 import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
+import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 
 // Import sub-views
@@ -386,6 +387,12 @@ export default function ProjectCenter() {
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskRemindAt, setTaskRemindAt] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
+
+  const [taskIsRecurring, setTaskIsRecurring] = useState(false);
+  const [taskRecurrenceRule, setTaskRecurrenceRule] = useState<RecurrenceRule>({ type: "weekday" });
+
+  const [quickAddIsRecurring, setQuickAddIsRecurring] = useState(false);
+  const [quickAddRecurrenceRule, setQuickAddRecurrenceRule] = useState<RecurrenceRule>({ type: "weekday" });
 
   // Autocomplete @mention cursors and states
   const [titleCursorPos, setTitleCursorPos] = useState(0);
@@ -904,6 +911,8 @@ export default function ProjectCenter() {
         endDate: quickAddDueDate ? new Date(quickAddDueDate).toISOString() : null,
         priority: 2,
         remindAt: defaultRemindAt,
+        isRecurring: quickAddIsRecurring ? 1 : 0,
+        recurrenceRule: quickAddIsRecurring ? JSON.stringify(quickAddRecurrenceRule) : null,
       };
 
       const newTask = await api.createProjectTask(targetProjectId, payload);
@@ -918,6 +927,8 @@ export default function ProjectCenter() {
 
       toast.success(t("projects.createTaskSuccess") || "创建任务成功");
       setQuickAddTitle("");
+      setQuickAddIsRecurring(false);
+      setQuickAddRecurrenceRule({ type: "weekday" });
       fetchMyTasks();
 
       if (newTask.remindAt) {
@@ -937,6 +948,8 @@ export default function ProjectCenter() {
     setTaskDueDate(quickAddDueDate);
     setTaskRemindAt(quickAddDueDate ? calculateDefaultReminderDate(quickAddDueDate) : "");
     setTaskDescription("");
+    setTaskIsRecurring(quickAddIsRecurring);
+    setTaskRecurrenceRule(quickAddRecurrenceRule);
     setShowTaskCreateModal(true);
   };
 
@@ -978,6 +991,8 @@ export default function ProjectCenter() {
         endDate: taskDueDate ? new Date(taskDueDate).toISOString() : null,
         priority: taskPriority,
         remindAt: taskRemindAt || null,
+        isRecurring: taskIsRecurring ? 1 : 0,
+        recurrenceRule: taskIsRecurring ? JSON.stringify(taskRecurrenceRule) : null,
       };
 
       const newTask = await api.createProjectTask(taskProjId, payload);
@@ -1003,9 +1018,13 @@ export default function ProjectCenter() {
         setTaskDescription("");
         setTaskDueDate("");
         setTaskRemindAt("");
+        setTaskIsRecurring(false);
+        setTaskRecurrenceRule({ type: "weekday" });
       } else {
         setShowTaskCreateModal(false);
         setQuickAddTitle(""); // Clear quick add input too
+        setQuickAddIsRecurring(false);
+        setQuickAddRecurrenceRule({ type: "weekday" });
       }
     } catch (err: any) {
       toast.error(err?.message || "创建任务失败");
@@ -1466,6 +1485,17 @@ export default function ProjectCenter() {
                           >
                             {t("common.add") || "添加"}
                           </Button>
+                        </div>
+
+                        {/* Quick Add Recurrence Configurator */}
+                        <div className="mt-2.5 pt-2 border-t border-app-border/20">
+                          <RecurrenceConfigurator
+                            isRecurring={quickAddIsRecurring}
+                            onChangeRecurring={setQuickAddIsRecurring}
+                            rule={quickAddRecurrenceRule}
+                            onChangeRule={setQuickAddRecurrenceRule}
+                            compact={true}
+                          />
                         </div>
                       </form>
                     )}
@@ -2304,6 +2334,16 @@ export default function ProjectCenter() {
                     showTime={true}
                   />
                 </div>
+              </div>
+
+              {/* Recurrence Configuration */}
+              <div className="border-t border-app-border/40 pt-4">
+                <RecurrenceConfigurator
+                  isRecurring={taskIsRecurring}
+                  onChangeRecurring={setTaskIsRecurring}
+                  rule={taskRecurrenceRule}
+                  onChangeRule={setTaskRecurrenceRule}
+                />
               </div>
 
               {/* Description */}

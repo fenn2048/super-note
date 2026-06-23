@@ -7,89 +7,91 @@
   </head>
   <body>
     <div class="app">
+      <!-- 头部：Logo 和状态 -->
       <header>
-        <img src="../icons/icon-32.png" class="logo" alt="" />
-        <h1>Super Note 智能剪藏</h1>
+        <div class="header-left">
+          <img src="../icons/icon-32.png" class="logo" alt="" />
+          <h1>Super Note 剪藏</h1>
+        </div>
+        <div class="header-right">
+          <span id="connection-badge" class="badge err">❌ 未连接</span>
+          <button type="button" id="toggle-config" class="config-toggle-btn" title="配置服务器">⚙️</button>
+        </div>
       </header>
 
+      <!-- 正在剪藏网页预览 -->
+      <div id="page-preview" class="section-card page-preview-card">
+        <label>正在剪藏</label>
+        <div id="page-title" class="page-title">获取网页标题中...</div>
+      </div>
+
       <!-- 1. 私有化服务器配置区域 -->
-      <div class="section-card config-section">
+      <div id="config-section" class="section-card config-section">
         <div class="row">
           <label for="server-url">服务器地址</label>
           <input id="server-url" type="text" placeholder="http://localhost:3000" autocomplete="off" />
         </div>
         <div class="row">
           <label for="api-token">访问令牌</label>
-          <input id="api-token" type="password" placeholder="输入 nkn_ 开头的个人访问令牌" autocomplete="off" />
-        </div>
-        <!-- 令牌连接状态提示 -->
-        <div class="status-row">
-          <span id="connection-badge" class="badge err">❌ 未连接</span>
+          <input id="api-token" type="password" placeholder="个人访问令牌 (nkn_...)" autocomplete="off" />
         </div>
       </div>
 
       <!-- 2. 剪藏设置区域 -->
       <div id="clip-settings-panel" class="section-card settings-section disabled">
-        <!-- 图片本地化开关 -->
-        <div class="row image-loc-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="image-localization" checked />
-            <span>图片本地化存储（上传至服务器）</span>
-          </label>
-        </div>
-
-        <!-- 工作区选择 -->
-        <div class="row">
-          <label for="workspace-select">工作区</label>
-          <div class="select-wrapper">
+        <div class="row-inline">
+          <div class="row">
+            <label for="workspace-select">工作区</label>
             <select id="workspace-select" disabled>
               <option value="personal">个人空间</option>
             </select>
           </div>
-        </div>
-
-        <!-- 笔记本选择 -->
-        <div class="row">
-          <label for="notebook-select">保存至</label>
-          <div class="select-wrapper">
+          <div class="row">
+            <label for="notebook-select">保存至</label>
             <select id="notebook-select" disabled>
-              <option value="__default__">📓 默认：剪藏笔记本</option>
+              <option value="__default__">📓 默认笔记本</option>
               <option value="__diary__">💬 保存为说说</option>
             </select>
           </div>
         </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" id="image-localization" checked />
+          <span>图片本地化存储 (上传至服务器)</span>
+        </label>
       </div>
 
-      <!-- 3. 高级可折叠面板 (标签、评论、AI) -->
+      <!-- 3. 高级设置面板 (标签、备注、AI) -->
       <div id="advanced-panel" class="section-card advanced-section disabled">
         <div class="advanced-header" id="toggle-advanced">
-          <span>高级设置 (标签、备注、AI)</span>
-          <svg class="chevron-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+          <span>高级选项 (标签/备注/AI)</span>
+          <svg class="chevron-icon" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
           </svg>
         </div>
 
         <div id="advanced-content" class="advanced-content hidden">
-          <!-- 标签 -->
           <div class="row">
-            <input id="tags" type="text" placeholder="标签（英文或中文逗号分隔）" autocomplete="off" />
+            <label for="tags">标签</label>
+            <input id="tags" type="text" placeholder="以逗号分隔，例如: 技术, 备忘" autocomplete="off" />
           </div>
 
-          <!-- 评论 -->
           <div class="row">
-            <textarea id="comment" rows="2" placeholder="添加备注评论..."></textarea>
+            <label for="comment">备注</label>
+            <textarea id="comment" placeholder="为剪藏添加一些备注描述..."></textarea>
           </div>
 
-          <!-- AI 优化 -->
+          <!-- AI 智能整理 -->
           <div class="ai-row">
             <label class="ai-toggle-label">
               <input type="checkbox" id="ai-enhance" />
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" class="ai-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13" class="ai-icon">
                 <path d="M10 2a1 1 0 01.894.553l1.382 2.764 3.05.443a1 1 0 01.554 1.706l-2.207 2.151.521 3.038a1 1 0 01-1.451 1.054L10 12.347l-2.728 1.434a1 1 0 01-1.451-1.054l.52-3.038-2.206-2.15a1 1 0 01.554-1.707l3.05-.443L9.106 2.553A1 1 0 0110 2z"/>
               </svg>
               <span>使用 AI 智能整理</span>
-              <button type="button" id="ai-toggle-details" class="ai-details-btn" title="AI任务勾选">⋯</button>
+              <button type="button" id="ai-toggle-details" class="ai-details-btn" title="配置任务">⚙️</button>
             </label>
+            
             <div id="ai-details" class="ai-details hidden">
               <label class="ai-task"><input type="checkbox" data-task="summary" /><span>TL;DR 摘要</span></label>
               <label class="ai-task"><input type="checkbox" data-task="tags" /><span>自动标签</span></label>
@@ -101,7 +103,7 @@
                 <span class="ai-mode-label">拼接方式</span>
                 <select id="ai-mode" class="ai-mode-select">
                   <option value="prepend">摘要置顶 + 原文</option>
-                  <option value="append">原文 + 摘要末尾</option>
+                  <option value="append">原文 + 摘要置尾</option>
                   <option value="replace">只保留 AI 产物</option>
                 </select>
               </div>
@@ -112,20 +114,20 @@
 
       <!-- 4. 双剪藏核心按钮 -->
       <div class="clip-actions">
-        <button id="clip-article" class="btn primary clip-btn" disabled>整页智能剪藏</button>
-        <button id="clip-selection" class="btn secondary clip-btn" disabled>选区精准剪藏</button>
+        <button id="clip-article" class="btn primary" disabled>整页智能剪藏</button>
+        <button id="clip-selection" class="btn secondary" disabled>选区精准剪藏</button>
       </div>
 
       <!-- 5. 更多剪藏模式 -->
       <div id="more-actions-row" class="more-actions-row disabled">
         <div class="mode-select-container">
-          <select id="clip-mode" class="more-select" disabled>
-            <option value="simplified">简化内容（无图纯文本）</option>
-            <option value="fullpage">完全克隆（1:1 离线HTML）</option>
-            <option value="fullScreenshot">滚动整页屏幕截图</option>
+          <select id="clip-mode" disabled>
+            <option value="simplified">简化内容 (无图纯文本)</option>
+            <option value="fullpage">完全克隆 (1:1 离线 HTML)</option>
+            <option value="fullScreenshot">滚动整页截图</option>
             <option value="screenshot">当前可视区域截图</option>
           </select>
-          <button id="clip-more" class="btn small-btn" disabled>剪藏</button>
+          <button id="clip-more" class="btn secondary small-btn" disabled>剪藏</button>
         </div>
       </div>
 
@@ -141,7 +143,7 @@
       <div class="quick-capture-row">
         <label class="checkbox-label">
           <input type="checkbox" id="quick-capture" />
-          <span>启用快速捕捉模式（点击图标自动剪藏）</span>
+          <span>启用快速捕捉模式 (点击图标直接剪藏)</span>
         </label>
       </div>
     </div>

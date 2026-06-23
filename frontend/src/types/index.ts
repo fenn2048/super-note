@@ -366,6 +366,8 @@ export interface Task {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  isRecurring?: number;
+  recurrenceRule?: string | null;
   tags?: Tag[];
   children?: Task[];
   /** 创建者用户名；仅 list/single read 时由后端 LEFT JOIN 返回。 */
@@ -648,6 +650,8 @@ export interface ProjectTask {
   assigneeAvatarUrl?: string | null;
   checklistTotal?: number;
   checklistCompleted?: number;
+  isRecurring?: number;
+  recurrenceRule?: string | null;
   participants?: Array<{ userId: string; username: string; displayName: string | null; avatarUrl: string | null }>;
   tags?: Array<{ id: string; name: string; color: string }>;
   checklists?: ProjectTaskChecklist[];

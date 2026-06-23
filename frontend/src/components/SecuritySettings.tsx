@@ -390,6 +390,66 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
   );
 }
 
+function CaptchaSection() {
+  const { t } = useTranslation();
+  const [loginCaptchaEnabled, setLoginCaptchaEnabled] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getSiteSettings()
+      .then((s) => {
+        if (!cancelled) {
+          setLoginCaptchaEnabled(s.login_captcha_enabled === "true");
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleToggleLoginCaptcha = async (next: boolean) => {
+    const prev = loginCaptchaEnabled;
+    setLoginCaptchaEnabled(next);
+    setSaving(true);
+    try {
+      const updated = await api.updateSiteSettings({ login_captcha_enabled: next });
+      setLoginCaptchaEnabled(updated.login_captcha_enabled === "true");
+    } catch {
+      setLoginCaptchaEnabled(prev);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-1">
+        <Shield className="w-4 h-4 text-indigo-500" />
+        <h3 className="text-lg font-bold text-tx-primary">{t('settings.loginCaptchaLabel', { defaultValue: "登录验证码" })}</h3>
+      </div>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+        {t('settings.loginCaptchaHint', { defaultValue: "开启后，登录界面需要输入图形验证码以防止暴力破解。" })}
+      </p>
+
+      <div className="max-w-md">
+        <label className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 cursor-pointer hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
+          <input
+            type="checkbox"
+            checked={loginCaptchaEnabled}
+            disabled={saving}
+            onChange={(e) => handleToggleLoginCaptcha(e.target.checked)}
+            className="w-4 h-4 accent-indigo-600 cursor-pointer disabled:opacity-50"
+          />
+          <span className="text-sm font-medium text-tx-primary flex items-center gap-1.5">
+            开启登录图形验证码
+            {saving && <Loader2 size={12} className="animate-spin text-zinc-400" />}
+          </span>
+        </label>
+      </div>
+    </section>
+  );
+}
+
 export default function SecuritySettings() {
   const { t } = useTranslation();
   const [user, setUser] = useState<any>(null);
@@ -407,10 +467,13 @@ export default function SecuritySettings() {
     fetchUser();
   }, [fetchUser]);
 
+  const isAdmin = user?.role === "admin";
+
   return (
     <div className="space-y-10">
       <ProfileSection user={user} onUpdate={fetchUser} />
       <PasswordSection />
+      {isAdmin && <CaptchaSection />}
       <TwoFactorSection />
       <SessionsSection />
     </div>

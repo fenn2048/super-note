@@ -252,7 +252,7 @@ const api = _api as any;
 | 服务 | 内存估算 | 存储估算 |
 |------|---------|---------|
 | super-note | ~80MB | ~100MB |
-| ollama (Qwen2.5:1.5b) | ~1.5GB (CPU) | ~1GB 模型 |
+| ollama (Qwen2.5:1.8b) | ~1.5GB (CPU) | ~1GB 模型 |
 | sensevoice | ~800MB (Python) | ~1GB 模型 |
 | **合计** | **~2.4GB** | **~2.1GB** |
 

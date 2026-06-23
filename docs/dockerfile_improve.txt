@@ -65,7 +65,7 @@
   │ 完整 │ + Ollama + SenseVoice │ ~2.4GB   │ AI 聊天+语音转文字 │
   └──────┴───────────────────────┴──────────┴────────────────────┘
 
-  同时 Ollama 额外自动拉取了 nomic-embed-text 模型（RAG 向量嵌入所需），与 Qwen2.5:1.5b 一并缓存。
+  同时 Ollama 额外自动拉取了 nomic-embed-text 模型（RAG 向量嵌入所需），与 Qwen2.5:1.8b 一并缓存。
 
 
  构建方式

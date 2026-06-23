@@ -457,6 +457,15 @@ export default function DataManager() {
     );
   }
 
+  if (!isAdmin) {
+    return (
+      <div className="py-12 text-center text-zinc-500">
+        <Database className="w-8 h-8 mx-auto mb-2 text-zinc-400" />
+        <p className="text-sm font-medium">{t('dataManager.scope.adminOnly', { defaultValue: '数据管理仅系统管理员可访问。' })}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -477,7 +486,7 @@ export default function DataManager() {
           className="flex flex-wrap gap-1 p-1 mb-3 rounded-lg bg-zinc-100/70 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-800"
         >
           {([
-            { id: "personal",  icon: UserIcon,  label: t('dataManager.scope.personal'), adminOnly: false },
+            { id: "personal",  icon: UserIcon,  label: t('dataManager.scope.personal'), adminOnly: true  },
             { id: "workspace", icon: Users,     label: t('dataManager.scope.workspace'), adminOnly: true  },
             { id: "system",    icon: ServerCog, label: t('dataManager.scope.system'),   adminOnly: true  },
           ] as const)

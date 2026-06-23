@@ -5,6 +5,7 @@ import { api, getCurrentWorkspace } from "@/lib/api";
 import { Project, ProjectMember, Tag } from "@/types";
 import { toast } from "@/lib/toast";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
+import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Capacitor } from "@capacitor/core";
@@ -28,6 +29,8 @@ export default function MobileTaskCreateModal({
   const [assigneeId, setAssigneeId] = useState("");
   const [priority, setPriority] = useState<number>(2); // Default to Medium (2)
   const [dueDate, setDueDate] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>({ type: "weekday" });
   const [remindAt, setRemindAt] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -136,6 +139,8 @@ export default function MobileTaskCreateModal({
         endDate: dueDate ? new Date(dueDate).toISOString() : null,
         priority,
         remindAt: remindAt || null,
+        isRecurring: isRecurring ? 1 : 0,
+        recurrenceRule: isRecurring ? JSON.stringify(recurrenceRule) : null,
       };
 
       // 3. Create project task
@@ -148,6 +153,8 @@ export default function MobileTaskCreateModal({
       setDueDate("");
       setRemindAt("");
       setPriority(2);
+      setIsRecurring(false);
+      setRecurrenceRule({ type: "weekday" });
 
       // Dispatch event to sync list UI
       window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
@@ -318,6 +325,16 @@ export default function MobileTaskCreateModal({
                         showTime={true}
                       />
                     </div>
+                  </div>
+
+                  {/* Recurrence Configuration */}
+                  <div className="border-t border-app-border/40 pt-4 mt-1">
+                    <RecurrenceConfigurator
+                      isRecurring={isRecurring}
+                      onChangeRecurring={setIsRecurring}
+                      rule={recurrenceRule}
+                      onChangeRule={setRecurrenceRule}
+                    />
                   </div>
 
                   {/* Detailed Description */}

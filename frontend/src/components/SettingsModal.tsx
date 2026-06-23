@@ -672,7 +672,6 @@ function SwitchesPanel() {
   const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
   const [isAdmin, setIsAdmin] = useState(false);
   const [webUiEnabled, setWebUiEnabled] = useState(false);
-  const [loginCaptchaEnabled, setLoginCaptchaEnabled] = useState(false);
   const [desktopHideMenuBar, setDesktopHideMenuBar] = useState(true);
   const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -688,7 +687,6 @@ function SwitchesPanel() {
       .then((s) => {
         if (!cancelled) {
           setWebUiEnabled(s.web_ui_enabled !== "false");
-          setLoginCaptchaEnabled(s.login_captcha_enabled === "true");
         }
       })
       .catch(() => {});
@@ -718,19 +716,6 @@ function SwitchesPanel() {
     }
   };
 
-  const handleToggleLoginCaptcha = async (next: boolean) => {
-    const prev = loginCaptchaEnabled;
-    setLoginCaptchaEnabled(next);
-    setSavingKey("loginCaptcha");
-    try {
-      const updated = await api.updateSiteSettings({ login_captcha_enabled: next });
-      setLoginCaptchaEnabled(updated.login_captcha_enabled === "true");
-    } catch {
-      setLoginCaptchaEnabled(prev);
-    } finally {
-      setSavingKey(null);
-    }
-  };
 
   const handleToggleDesktopMenuBar = async (hide: boolean) => {
     const prev = desktopHideMenuBar;
@@ -840,45 +825,24 @@ function SwitchesPanel() {
         )}
 
         {isAdmin && (
-          <>
-            <label className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
-              <input
-                type="checkbox"
-                checked={!webUiEnabled}
-                disabled={savingKey === "webUi"}
-                onChange={(e) => handleToggleWebUi(!e.target.checked)}
-                className="mt-0.5 w-3.5 h-3.5 accent-indigo-600 cursor-pointer disabled:opacity-50"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-tx-primary leading-none flex items-center gap-1.5">
-                  关闭网页端页面
-                  {savingKey === "webUi" && <Loader2 size={12} className="animate-spin text-zinc-400" />}
-                </div>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
-                  开启后服务器只保留 API；浏览器访问网页端会显示禁用提示。桌面客户端使用本地界面连接 API，不受影响。
-                </p>
+          <label className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
+            <input
+              type="checkbox"
+              checked={!webUiEnabled}
+              disabled={savingKey === "webUi"}
+              onChange={(e) => handleToggleWebUi(!e.target.checked)}
+              className="mt-0.5 w-3.5 h-3.5 accent-indigo-600 cursor-pointer disabled:opacity-50"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-tx-primary leading-none flex items-center gap-1.5">
+                关闭网页端页面
+                {savingKey === "webUi" && <Loader2 size={12} className="animate-spin text-zinc-400" />}
               </div>
-            </label>
-
-            <label className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
-              <input
-                type="checkbox"
-                checked={loginCaptchaEnabled}
-                disabled={savingKey === "loginCaptcha"}
-                onChange={(e) => handleToggleLoginCaptcha(e.target.checked)}
-                className="mt-0.5 w-3.5 h-3.5 accent-indigo-600 cursor-pointer disabled:opacity-50"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-tx-primary leading-none flex items-center gap-1.5">
-                  {t('settings.loginCaptchaLabel', { defaultValue: "登录验证码" })}
-                  {savingKey === "loginCaptcha" && <Loader2 size={12} className="animate-spin text-zinc-400" />}
-                </div>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
-                  {t('settings.loginCaptchaHint', { defaultValue: "开启后，登录界面需要输入图形验证码以防止暴力破解。" })}
-                </p>
-              </div>
-            </label>
-          </>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
+                开启后服务器只保留 API；浏览器访问网页端会显示禁用提示。桌面客户端使用本地界面连接 API，不受影响。
+              </p>
+            </div>
+          </label>
         )}
       </div>
     </div>
@@ -1409,8 +1373,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
     ...(isAdmin ? [{ id: "workspaces" as const, label: t('settings.workspaces'), icon: Building2 }] : []),
-    // 「数据管理」面板：仅在非移动端展示，避免移动端进行超大压缩包高负荷解压与迁移
-    ...(!isMobile ? [{ id: "data" as const, label: t('settings.dataManagement'), icon: Database }] : []),
+    // 「数据管理」面板：仅管理员且非移动端展示，避免移动端进行超大压缩包高负荷解压与迁移
+    ...(isAdmin && !isMobile ? [{ id: "data" as const, label: t('settings.dataManagement'), icon: Database }] : []),
     // 「开发者」面板：仅管理员可见，承载运行时调试开关（如 files-list 查询日志）。
     // 普通用户根本看不到这一项，与后端的 admin-only 写入闸门双层防御。
     ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench }] : []),
@@ -1470,7 +1434,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-        className="relative w-full max-w-4xl h-[80vh] min-h-[500px] flex flex-col md:flex-row overflow-hidden bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-md:h-[100dvh] max-md:max-w-none max-md:rounded-none max-md:border-0"
+        className="relative w-full max-w-4xl h-[80vh] min-h-[500px] flex flex-col md:flex-row overflow-hidden bg-zinc-50 dark:bg-[#0c0e14] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800/80 max-md:h-[100dvh] max-md:max-w-none max-md:rounded-none max-md:border-0"
         style={{ touchAction: "pan-y pinch-zoom" }}
         onClick={(e) => e.stopPropagation()}
         onPointerDownCapture={(e) => e.stopPropagation()}
@@ -1478,10 +1442,10 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
         {window.innerWidth < 768 ? (
           // Mobile H5 UI Flow (Menu -> Subpage)
           currentMobilePage === "menu" ? (
-            <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden h-full">
+            <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-[#0c0e14] overflow-hidden h-full">
               {/* Mobile Header */}
               <div 
-                className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 shrink-0"
+                className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/60 bg-zinc-50 dark:bg-[#0c0e14] px-4 py-3 shrink-0"
                 style={{ paddingTop: 'calc(var(--safe-area-top) + 12px)' }}
               >
                 <h2 className="text-base font-bold text-tx-primary">{t('settings.title')}</h2>
@@ -1496,7 +1460,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
 
               {/* Menu List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800">
+                <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#131722] overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800/50">
                   {SETTING_TABS.map((tab) => {
                     const Icon = tab.icon;
                     return (
@@ -1528,10 +1492,10 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col bg-white dark:bg-zinc-950 overflow-hidden h-full">
+            <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-[#0c0e14] overflow-hidden h-full">
               {/* Mobile Subpage Header */}
               <div 
-                className="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-3 shrink-0"
+                className="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-200/80 dark:border-zinc-800/60 bg-zinc-50 dark:bg-[#0c0e14] px-3 py-3 shrink-0"
                 style={{ paddingTop: 'calc(var(--safe-area-top) + 12px)' }}
               >
                 <button
@@ -1586,7 +1550,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
           // Desktop Layout (unchanged)
           <>
             {/* 桌面端：左侧导航栏 */}
-            <div className="hidden md:flex w-56 flex-shrink-0 bg-zinc-50 dark:bg-zinc-900/50 border-r border-zinc-200 dark:border-zinc-800 p-4 flex-col">
+            <div className="hidden md:flex w-56 flex-shrink-0 bg-zinc-50 dark:bg-[#0c0e14] border-r border-zinc-200/80 dark:border-zinc-800/60 p-4 flex-col">
               <div className="flex items-center gap-2 mb-6 px-2">
                 <Settings className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
                 <span className="font-bold text-sm text-tx-primary">{t('settings.title')}</span>
@@ -1619,7 +1583,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
             </div>
 
             {/* 右侧内容区 */}
-            <div className="flex-1 overflow-y-auto relative">
+            <div className="flex-1 overflow-y-auto relative bg-zinc-50 dark:bg-[#0c0e14]">
               <button
                 onClick={onClose}
                 className="hidden md:block absolute top-4 right-4 p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors z-10"

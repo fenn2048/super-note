@@ -64,7 +64,7 @@ services:
       - OLLAMA_URL=http://ollama:11434
 
   # ============================================================================
-  # Ollama 本地 LLM 服务 — Qwen2.5:1.5b（7×24 常驻）
+  # Ollama 本地 LLM 服务 — Qwen2.5:1.8b（7×24 常驻）
   #
   # 提供 OpenAI 兼容接口（http://ollama:11434/v1），
   # 已在 super-note 后端通过 OLLAMA_URL 自动对接。
@@ -84,12 +84,12 @@ services:
       - |
         /bin/ollama serve &
         sleep 3
-        echo "Pulling Qwen2.5:1.5b..."
-        # Qwen2.5:1.5b（默认，~1.1GB，适合 4GB 内存设备）
-        /bin/ollama pull qwen2.5:1.5b 2>&1
+        echo "Pulling Qwen2.5:1.8b..."
+        # Qwen2.5:1.8b（默认，~1.1GB，适合 4GB 内存设备）
+        /bin/ollama pull qwen2.5:1.8b 2>&1
         # Qwen2.5:7b（可选，~4.7GB，需要 8GB+ 内存；取消下行注释启用）
         # /bin/ollama pull qwen2.5:7b 2>&1
-        /bin/ollama pull nomic-embed-text 2>&1 || true
+        /bin/ollama pull bge-small-zh 2>&1
         echo "Models ready!"
         wait
 

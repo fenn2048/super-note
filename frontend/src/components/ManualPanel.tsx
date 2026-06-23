@@ -176,6 +176,10 @@ export default function ManualPanel() {
                   <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-500" />
                   <span><strong>共享成员智能指派</strong>：将项目公开（对工作区全员可见）后，在编辑任务或讨论区输入 <code>@</code> 时，系统会自动读取并展示工作区的全部成员供您快捷选择和提及。</span>
                 </li>
+                <li className="flex items-start gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-500" />
+                  <span><strong>周期性重复任务</strong>：支持为日常或团队任务配置自定义重复周期（如每个工作日、每周特定几天、每月固定某一天、每年固定某一天）。当周期任务被勾选完成时，系统会自动以正确周期推算并创建新一期的待办任务，同时复制原任务的所有标签、内容、子待办事项等，并归档已完成的原任务作为历史记录。</span>
+                </li>
               </ul>
             </div>
 
@@ -255,7 +259,7 @@ export default function ManualPanel() {
                 浏览器剪藏插件安装与使用
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                通过浏览器剪藏插件，您可以在浏览任意网页时一键将正文智能解析并永久保存至您的星空笔记中。
+                通过浏览器剪藏插件，您可以在浏览任意网页时一键将正文智能解析并永久保存至您的星空笔记中。剪藏扩展已全新升级至极简 Stitch 设计：优化了配置连接步骤，折叠了高级标签、备注与 AI 任务选项，整体界面更加聚焦、清爽和易用。
               </p>
             </div>
 
@@ -334,14 +338,15 @@ export default function ManualPanel() {
             <div>
               <h3 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">📥 备份与恢复方式</h3>
               <ul className="list-disc pl-4 space-y-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
-                <li><strong>个人数据导出</strong>：您可以在“数据管理”面板中，将个人空间的全部笔记以 <code>.zip</code> 压缩包或 <code>.json</code> 结构文件一键导出。</li>
+                <li><strong>个人数据导出限制</strong>：为了提升多用户及家庭空间的隐私与数据合规性，『数据管理』面板（包含个人空间和工作区的数据导入/导出）已调整为仅系统管理员（Admin）可见及可操作。</li>
+                <li><strong>安全设置调整</strong>：系统安全性设置（如登录图形验证码开关）已移入『账号安全』管理面板下，方便管理员统一进行双重验证、会话管理以及登录安全设置。</li>
                 <li><strong>系统自动备份（管理员专用）</strong>：系统管理员可在数据面板中启用定时备份任务。备份类型包括“仅数据库 (db-only)”和“全量打包 (full)”两种：
                   <ul className="list-circle pl-4 mt-1 space-y-1 text-zinc-500">
                     <li><code>.bak</code> 纯数据库包：占用空间极小，仅存储文本结构。</li>
                     <li><code>.zip</code> 全量打包：除数据库外，还会将您上传的所有图片、附件以及系统生成的资源一同备份，防御整盘损毁。</li>
                   </ul>
                 </li>
-                <li><strong>邮件通道（自动灾备）</strong>：在设置的“邮件通道”中配置 SMTP 后，系统支持在自动备份任务成功后将备份文件以邮件附件（25MB限制内）的形式安全投递到您的指定邮箱，实现异地容灾。</li>
+                <li><strong>邮件通道（自动灾备）</strong>：在设置的“邮件通道”中配置 SMTP 后，系统支持在自动备份任务成功后将备份 file 以邮件附件（25MB限制内）的形式安全投递到您的指定邮箱，实现异地容灾。</li>
                 <li><strong>Android 诊断日志导出</strong>：Android 客户端用户在“设置”的“关于”界面可以一键“导出运行日志”，并通过系统分享渠道（微信、邮件等）导出，便于遇到异常时协助排查。</li>
               </ul>
             </div>

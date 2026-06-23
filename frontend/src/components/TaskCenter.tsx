@@ -4,7 +4,7 @@ import {
   CheckCircle2, Circle, Flag, Calendar, Plus, ListTodo,
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
   Trash2, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
-  User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText
+  User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText, Repeat
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -19,6 +19,8 @@ import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 import TaskCalendar from "@/components/TaskCalendar";
 import OCRModal from "@/components/OCRModal";
+import SleekDatePicker from "@/components/common/SleekDatePicker";
+import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { syncTaskNotification, syncAllTaskNotifications } from "@/hooks/useCapacitor";
 
 /* ===========================================================================
@@ -482,6 +484,14 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
 
   const [remindAt, setRemindAt] = useState(task.remindAt || "");
   const [taskTags, setTaskTags] = useState<Tag[]>(task.tags || []);
+  const [isRecurring, setIsRecurring] = useState(task.isRecurring === 1);
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>(() => {
+    try {
+      return task.recurrenceRule ? JSON.parse(task.recurrenceRule) : { type: "weekday" };
+    } catch {
+      return { type: "weekday" };
+    }
+  });
 
   useEffect(() => {
     setTitle(task.title);
@@ -489,6 +499,12 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
     setDueDate(task.dueDate || "");
     setRemindAt(task.remindAt || "");
     setTaskTags(task.tags || []);
+    setIsRecurring(task.isRecurring === 1);
+    try {
+      setRecurrenceRule(task.recurrenceRule ? JSON.parse(task.recurrenceRule) : { type: "weekday" });
+    } catch {
+      setRecurrenceRule({ type: "weekday" });
+    }
   }, [task.id]);
 
   const handleSave = () => {
@@ -498,6 +514,17 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
       dueDate: dueDate || null,
       remindAt: remindAt || null,
       tagIds: taskTags.map((t) => t.id),
+      isRecurring: isRecurring ? 1 : 0,
+      recurrenceRule: isRecurring ? JSON.stringify(recurrenceRule) : null,
+    });
+  };
+
+  const handleUpdateRecurrence = (recurringVal: boolean, ruleVal: RecurrenceRule) => {
+    setIsRecurring(recurringVal);
+    setRecurrenceRule(ruleVal);
+    onUpdate(task.id, {
+      isRecurring: recurringVal ? 1 : 0,
+      recurrenceRule: recurringVal ? JSON.stringify(ruleVal) : null,
     });
   };
 
@@ -655,6 +682,16 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
           />
         </div>
 
+        {/* 周期设置 */}
+        <div className="border-t border-app-border/40 pt-4 mt-2">
+          <RecurrenceConfigurator
+            isRecurring={isRecurring}
+            onChangeRecurring={(val) => handleUpdateRecurrence(val, recurrenceRule)}
+            rule={recurrenceRule}
+            onChangeRule={(val) => handleUpdateRecurrence(isRecurring, val)}
+          />
+        </div>
+
         {/* 标签 */}
         <div>
           <label className="text-xs text-tx-tertiary uppercase tracking-wider mb-1.5 block">{t('tasks.tags', '任务标签')}</label>
@@ -709,7 +746,13 @@ function QuickAdd({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSubmit: (workspaceId?: string, addAsTodo?: boolean) => void;
+  onSubmit: (
+    workspaceId?: string,
+    addAsTodo?: boolean,
+    dueDate?: string | null,
+    isRecurring?: number,
+    recurrenceRule?: string | null
+  ) => void;
   onUploaded: (orphanIds: string[]) => void;
   inputRef: React.RefObject<HTMLInputElement>;
   workspaces: Workspace[];
@@ -779,6 +822,9 @@ function QuickAdd({
   const [isPersonal, setIsPersonal] = useState(true);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [addAsTodo, setAddAsTodo] = useState(false);
+  const [dueDate, setDueDate] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [rule, setRule] = useState<RecurrenceRule>({ type: "weekday" });
   const [showWsSelector, setShowWsSelector] = useState(false);
   const wsSelectorRef = useRef<HTMLDivElement>(null);
 
@@ -799,8 +845,17 @@ function QuickAdd({
       toast.error(t('tasks.emptyProjectWarning'));
       return;
     }
-    onSubmit(isPersonal ? "personal" : (selectedWorkspaceId || undefined), addAsTodo);
+    onSubmit(
+      isPersonal ? "personal" : (selectedWorkspaceId || undefined),
+      addAsTodo,
+      dueDate || null,
+      isRecurring ? 1 : 0,
+      isRecurring ? JSON.stringify(rule) : null
+    );
     setAddAsTodo(false);
+    setDueDate("");
+    setIsRecurring(false);
+    setRule({ type: "weekday" });
     // 把孤儿列表交给父组件处理 bind，本地清掉
     onUploaded(orphans.map((o) => o.id));
     setOrphans([]);
@@ -990,6 +1045,23 @@ function QuickAdd({
         </button>
         <button
           type="button"
+          onClick={() => {
+            const nextVal = !isRecurring;
+            setIsRecurring(nextVal);
+            if (nextVal && !dueDate) {
+              setDueDate(format(new Date(), "yyyy-MM-dd HH:mm"));
+            }
+          }}
+          title="设置周期任务"
+          className={cn(
+            "flex-shrink-0 p-1 rounded hover:bg-app-hover transition-colors",
+            isRecurring ? "text-accent-primary bg-accent-primary/10" : "text-tx-tertiary"
+          )}
+        >
+          <Repeat size={16} />
+        </button>
+        <button
+          type="button"
           onClick={() => setShowOCRModal(true)}
           title="提取图片文字"
           className="flex-shrink-0 p-1 rounded hover:bg-app-hover text-tx-tertiary hover:text-accent-primary transition-colors"
@@ -1033,6 +1105,27 @@ function QuickAdd({
           {t('tasks.addAsTodo') || '待办'}
         </label>
       </div>
+
+      {(isRecurring || dueDate) && (
+        <div className="mt-2.5 pt-2 border-t border-app-border/20 flex flex-wrap items-center gap-4 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-tx-tertiary">起始截止日期:</span>
+            <SleekDatePicker
+              value={dueDate}
+              onChange={setDueDate}
+              placeholder="选择起始截止日期"
+              showTime={true}
+            />
+          </div>
+          <RecurrenceConfigurator
+            isRecurring={isRecurring}
+            onChangeRecurring={setIsRecurring}
+            rule={rule}
+            onChangeRule={setRule}
+            compact={true}
+          />
+        </div>
+      )}
 
       {/* @提及选择器 */}
       {mentionTrigger && (
@@ -1232,7 +1325,13 @@ export default function TaskCenter() {
     }
   };
 
-  const handleCreate = async (workspaceId?: string, addAsTodo?: boolean) => {
+  const handleCreate = async (
+    workspaceId?: string,
+    addAsTodo?: boolean,
+    dueDateVal?: string | null,
+    isRecurring?: number,
+    recurrenceRule?: string | null
+  ) => {
     if (!newTitle.trim()) return;
     let titleToCreate = newTitle.trim();
     let descToCreate = "";
@@ -1260,6 +1359,9 @@ export default function TaskCenter() {
               stageId: todoStage.id,
               title: titleToCreate,
               description: descToCreate || titleToCreate,
+              endDate: dueDateVal ? new Date(dueDateVal).toISOString() : null,
+              isRecurring: isRecurring || 0,
+              recurrenceRule: recurrenceRule || null,
             });
 
             // 含 @su 时异步 AI 提炼标题
@@ -1290,6 +1392,9 @@ export default function TaskCenter() {
       const task = await api.createTask({
         title: titleToCreate,
         workspaceId: workspaceId || undefined,
+        dueDate: dueDateVal || null,
+        isRecurring: isRecurring || 0,
+        recurrenceRule: recurrenceRule || null,
       });
 
       // 含 @su 时异步 AI 提炼标题并更新

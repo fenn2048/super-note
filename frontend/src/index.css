@@ -2830,3 +2830,47 @@ textarea.no-focus-ring:focus-visible,
   background-color: color-mix(in srgb, var(--color-accent-primary) 15%, transparent) !important;
 }
 
+/* ============================================================================
+   Stitch Design System Card & Background Hierarchy Overrides
+   ============================================================================ */
+
+/* Unified background and card elevation layers for settings modal & imports */
+.bg-zinc-50\/50,
+.bg-zinc-50\/60,
+.bg-zinc-50\/70,
+.bg-zinc-50\/40 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+.dark .dark\:bg-zinc-800\/30,
+.dark .dark\:bg-zinc-800\/40,
+.dark .dark\:bg-zinc-800\/50,
+.dark .dark\:bg-zinc-800\/20,
+.dark .dark\:bg-zinc-900\/40,
+.dark .dark\:bg-zinc-900\/60 {
+  background-color: #131722 !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Soft, clean borders for cards */
+.border-zinc-200 {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.dark .dark\:border-zinc-800 {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Smooth transitions for settings switches */
+label.cursor-pointer {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+label.cursor-pointer:hover {
+  background-color: rgba(0, 0, 0, 0.02) !important;
+}
+.dark label.cursor-pointer:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+

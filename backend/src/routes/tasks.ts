@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { getDb } from "../db/schema";
 import crypto from "crypto";
+import { handleRecurringTask } from "../lib/recurrence";
 import {
   getUserWorkspaceRole,
   canManageResource,
@@ -267,7 +268,17 @@ tasks.post("/", requireWorkspaceFeature("tasks"), async (c) => {
 
   const body: any = await c.req.json();
   const id = crypto.randomUUID();
-  const { title, priority = 2, dueDate = null, remindAt = null, noteId = null, parentId = null, tagIds = [] } = body;
+  const {
+    title,
+    priority = 2,
+    dueDate = null,
+    remindAt = null,
+    noteId = null,
+    parentId = null,
+    tagIds = [],
+    isRecurring = 0,
+    recurrenceRule = null
+  } = body;
 
   if (!title || !title.trim()) {
     return c.json({ error: "Title is required" }, 400);
@@ -303,9 +314,9 @@ tasks.post("/", requireWorkspaceFeature("tasks"), async (c) => {
 
   const tx = db.transaction(() => {
     db.prepare(`
-      INSERT INTO tasks (id, userId, workspaceId, title, isCompleted, priority, dueDate, remindAt, noteId, parentId)
-      VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
-    `).run(id, userId, effectiveWorkspaceId, title.trim(), priority, dueDate, calculatedRemindAt, noteId, parentId);
+      INSERT INTO tasks (id, userId, workspaceId, title, isCompleted, priority, dueDate, remindAt, noteId, parentId, isRecurring, recurrenceRule)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, userId, effectiveWorkspaceId, title.trim(), priority, dueDate, calculatedRemindAt, noteId, parentId, isRecurring, recurrenceRule);
 
     if (Array.isArray(tagIds) && tagIds.length > 0) {
       const insertTag = db.prepare("INSERT INTO task_tags (taskId, tagId) VALUES (?, ?)");
@@ -362,6 +373,8 @@ tasks.put("/:id", (c) => {
     const noteId = body.noteId !== undefined ? body.noteId : existing.noteId;
     const parentId = body.parentId !== undefined ? body.parentId : existing.parentId;
     const sortOrder = body.sortOrder ?? existing.sortOrder;
+    const isRecurring = body.isRecurring ?? existing.isRecurring;
+    const recurrenceRule = body.recurrenceRule !== undefined ? body.recurrenceRule : existing.recurrenceRule;
     const tagIds = body.tagIds;
 
     if (dueDate && !remindAt && body.dueDate !== undefined) {
@@ -391,9 +404,9 @@ tasks.put("/:id", (c) => {
     const tx = db.transaction(() => {
       db.prepare(`
         UPDATE tasks SET title = ?, isCompleted = ?, priority = ?, dueDate = ?, remindAt = ?,
-          noteId = ?, parentId = ?, sortOrder = ?, updatedAt = datetime('now')
+          noteId = ?, parentId = ?, sortOrder = ?, isRecurring = ?, recurrenceRule = ?, updatedAt = datetime('now')
         WHERE id = ?
-      `).run(title, isCompleted, priority, dueDate, remindAt, noteId, parentId, sortOrder, id);
+      `).run(title, isCompleted, priority, dueDate, remindAt, noteId, parentId, sortOrder, isRecurring, recurrenceRule, id);
 
       if (tagIds !== undefined && Array.isArray(tagIds)) {
         db.prepare("DELETE FROM task_tags WHERE taskId = ?").run(id);
@@ -408,6 +421,9 @@ tasks.put("/:id", (c) => {
 
     try {
       tx();
+      if ((body.isCompleted === 1 || body.isCompleted === true) && existing.isCompleted === 0) {
+        handleRecurringTask(db, id, false);
+      }
     } catch (err: any) {
       return c.json({ error: `更新失败：${err?.message || err}` }, 500);
     }
@@ -449,6 +465,10 @@ tasks.patch("/:id/toggle", (c) => {
 
   const newStatus = task.isCompleted ? 0 : 1;
   db.prepare("UPDATE tasks SET isCompleted = ?, updatedAt = datetime('now') WHERE id = ?").run(newStatus, id);
+
+  if (newStatus === 1) {
+    handleRecurringTask(db, id, false);
+  }
 
   // 任务完成时通知工作区成员
   if (newStatus === 1 && task.workspaceId) {

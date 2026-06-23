@@ -1753,6 +1753,27 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 27,
+    name: "Add recurrence columns to tasks and project_tasks",
+    up: (db) => {
+      const tasksCols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      if (!tasksCols.some(c => c.name === "isRecurring")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN isRecurring INTEGER DEFAULT 0;");
+      }
+      if (!tasksCols.some(c => c.name === "recurrenceRule")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN recurrenceRule TEXT;");
+      }
+
+      const projectTasksCols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!projectTasksCols.some(c => c.name === "isRecurring")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN isRecurring INTEGER DEFAULT 0;");
+      }
+      if (!projectTasksCols.some(c => c.name === "recurrenceRule")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN recurrenceRule TEXT;");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

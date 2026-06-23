@@ -1266,7 +1266,7 @@ function ImageGrid({
   return (
     <div
       className={cn(
-        "mt-3 grid gap-1.5",
+        "mt-3 grid gap-1.5 max-w-[66.7%]",
         cols === 1 && "grid-cols-1",
         cols === 2 && "grid-cols-2",
         cols === 3 && "grid-cols-3",
@@ -1282,7 +1282,7 @@ function ImageGrid({
             className={cn(
               "relative overflow-hidden rounded-lg border border-app-border bg-app-hover/30 hover:opacity-90 transition-opacity",
               // 单图按宽高自然比；多图统一正方形避免参差
-              count === 1 ? "max-h-[320px]" : "aspect-square",
+              count === 1 ? "max-h-[213px]" : "aspect-square",
             )}
           >
             {isVideo ? (
