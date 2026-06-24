@@ -22,6 +22,7 @@ import tls from "tls";
 import crypto from "crypto";
 import { getDb } from "../db/schema.js";
 
+import { JWT_SECRET } from "../lib/auth-security";
 // ============================================================================
 // 类型
 // ============================================================================
@@ -80,7 +81,7 @@ export const EMAIL_ATTACHMENT_LIMIT = 25 * 1024 * 1024;
 function deriveCipherKey(): Buffer {
   // 不直接用 JWT_SECRET 原值，避免"解密邮件密码 === 伪造 JWT"的攻击面耦合；
   // 加固定盐 + scryptSync 派生 32 字节密钥。
-  const secret = process.env.JWT_SECRET || "super-note-default-secret";
+  const secret = JWT_SECRET;
   return crypto.scryptSync(secret, "super-smtp-v1", 32);
 }
 

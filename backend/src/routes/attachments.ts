@@ -432,6 +432,8 @@ export async function handleDownloadAttachment(c: Context): Promise<Response> {
   const headers: Record<string, string> = {
     "Content-Type": row.mimeType || "application/octet-stream",
     // uuid 文件名不可变，可以长缓存
+    // Phase 5: 为附件下载添加严格 CSP，防止 SVG/HTML 等类型导致 XSS
+    "Content-Security-Policy": "default-src 'none'; sandbox;",
     "Cache-Control": "public, max-age=31536000, immutable",
   };
   // 非图片（或显式 ?download=1）：带 Content-Disposition，浏览器点击会按原名下载。

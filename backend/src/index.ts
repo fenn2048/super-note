@@ -92,6 +92,17 @@ seedDatabase();
 // 同步调用 emitWebhook() / logAudit()，如果用户从未访问过 /api/webhooks 或 /api/audit，
 // 表就不存在，会在每次写操作时打印：
 //   [Webhook] 事件分发错误: no such table: webhooks
+// Phase 5: 全局安全响应头
+app.use("/api/*", async (c, next) => {
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("X-XSS-Protection", "1; mode=block");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  // API 默认禁用所有外部资源引用和 iframe 嵌入
+  c.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none';");
+  await next();
+});
 //   [Audit] 日志记录失败: no such table: audit_logs
 // 在启动时强制建表即可消除这些噪音日志。CREATE TABLE IF NOT EXISTS 幂等，重复调用无害。
 try { initWebhookTables(); } catch (e) { console.warn("[init] initWebhookTables failed:", e); }
@@ -128,11 +139,6 @@ app.use("/api/shared/*", async (c, next) => {
     }
   }
 
-  // Phase 5: 安全响应头
-  c.header("X-Content-Type-Options", "nosniff");
-  c.header("X-Frame-Options", "DENY");
-  c.header("X-XSS-Protection", "1; mode=block");
-  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
 
   await next();
 });
