@@ -1889,6 +1889,7 @@ export default function ProjectCenter() {
           ) : (
             <ProjectCalendar
               stages={filteredWorkspaceStages}
+              showProjectFilter={true}
               onTaskClick={(task) => {
                 selectProject(task.projectId);
                 setTimeout(() => {
