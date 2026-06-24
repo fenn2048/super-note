@@ -3,6 +3,8 @@ import { getDb } from "../db/schema";
 import { getUserWorkspaceRole } from "../middleware/acl";
 import { v4 as uuid } from "uuid";
 import { handleRecurringTask } from "../lib/recurrence";
+import { propagateProjectStatusUp, syncMilestoneStatusDirect } from "../lib/planStatusSync.js";
+import { logAudit } from "../services/audit.js";
 
 const projectsRouter = new Hono();
 
@@ -44,6 +46,13 @@ function getFullProjectTask(db: any, taskId: string) {
     FROM task_attachments
     WHERE taskId = ?
     ORDER BY createdAt ASC
+  `).all(taskId);
+
+  task.dependencies = db.prepare(`
+    SELECT pt.id, pt.title, pt.isCompleted
+    FROM project_task_dependencies ptd
+    JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+    WHERE ptd.taskId = ?
   `).all(taskId);
 
   return task;
@@ -238,6 +247,14 @@ projectsRouter.get("/my-tasks", (c) => {
       ORDER BY createdAt ASC
     `).all(task.id);
     task.attachments = attachments;
+
+    const dependencies = db.prepare(`
+      SELECT pt.id, pt.title, pt.isCompleted
+      FROM project_task_dependencies ptd
+      JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+      WHERE ptd.taskId = ?
+    `).all(task.id);
+    task.dependencies = dependencies;
   }
 
   return c.json(tasks);
@@ -387,7 +404,7 @@ projectsRouter.post("/", async (c) => {
   const userId = c.req.header("X-User-Id")!;
   const body = await c.req.json();
 
-  const { name, description = "", cover = "", startDate = null, endDate = null, visibility = "PRIVATE", workspaceId = null, groupId = null } = body;
+  const { name, description = "", cover = "", startDate = null, endDate = null, visibility = "PRIVATE", workspaceId = null, groupId = null, status = "pending", milestoneId = null } = body;
   if (!name) return c.json({ error: "项目名称不能为空" }, 400);
 
   if (workspaceId) {
@@ -397,9 +414,13 @@ projectsRouter.post("/", async (c) => {
 
   const projectId = uuid();
   db.prepare(`
-    INSERT INTO projects (id, name, description, cover, startDate, endDate, visibility, workspaceId, groupId, ownerId)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(projectId, name, description, cover, startDate, endDate, visibility, workspaceId, groupId, userId);
+    INSERT INTO projects (id, name, description, cover, startDate, endDate, visibility, workspaceId, groupId, ownerId, status, milestoneId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(projectId, name, description, cover, startDate, endDate, visibility, workspaceId, groupId, userId, status, milestoneId);
+
+  if (milestoneId) {
+    propagateProjectStatusUp(db, projectId, userId);
+  }
 
   // Add owner to members list
   db.prepare("INSERT INTO project_members (projectId, userId, role) VALUES (?, ?, 'owner')").run(projectId, userId);
@@ -423,7 +444,9 @@ projectsRouter.put("/:id", async (c) => {
   if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
   if (!canWrite) return c.json({ error: "无权编辑该项目", code: "FORBIDDEN" }, 403);
 
-  const { name, description, cover, startDate, endDate, visibility, groupId, isArchived, isDeleted } = body;
+  const { name, description, cover, startDate, endDate, visibility, groupId, isArchived, isDeleted, status, milestoneId } = body;
+
+  const oldProject = db.prepare("SELECT name, milestoneId, status FROM projects WHERE id = ?").get(id) as { name: string; milestoneId: string | null; status: string };
 
   const updates: string[] = [];
   const params: any[] = [];
@@ -437,11 +460,26 @@ projectsRouter.put("/:id", async (c) => {
   if (groupId !== undefined) { updates.push("groupId = ?"); params.push(groupId); }
   if (isArchived !== undefined) { updates.push("isArchived = ?"); params.push(isArchived); }
   if (isDeleted !== undefined) { updates.push("isDeleted = ?"); params.push(isDeleted); }
+  if (status !== undefined) { updates.push("status = ?"); params.push(status); }
+  if (milestoneId !== undefined) { updates.push("milestoneId = ?"); params.push(milestoneId); }
 
   if (updates.length > 0) {
     updates.push("updatedAt = datetime('now')");
     params.push(id);
     db.prepare(`UPDATE projects SET ${updates.join(", ")} WHERE id = ?`).run(params);
+  }
+
+  if (status !== undefined && status !== oldProject.status) {
+    logAudit(userId, "system", "project_status_update", `修改项目「${name || oldProject.name}」状态为: ${status}`, { targetType: "project", targetId: id });
+  } else if (updates.length > 0) {
+    logAudit(userId, "system", "project_update", `修改了项目「${name || oldProject.name}」的属性`, { targetType: "project", targetId: id });
+  }
+
+  if (status !== undefined || milestoneId !== undefined) {
+    propagateProjectStatusUp(db, id, userId);
+    if (milestoneId !== undefined && oldProject.milestoneId && oldProject.milestoneId !== milestoneId) {
+      syncMilestoneStatusDirect(db, oldProject.milestoneId, userId);
+    }
   }
 
   const updatedProject = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
@@ -521,6 +559,14 @@ projectsRouter.get("/:id/stages", (c) => {
         ORDER BY createdAt ASC
       `).all(task.id);
       task.attachments = attachments;
+
+      const dependencies = db.prepare(`
+        SELECT pt.id, pt.title, pt.isCompleted
+        FROM project_task_dependencies ptd
+        JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+        WHERE ptd.taskId = ?
+      `).all(task.id);
+      task.dependencies = dependencies;
     }
     stage.tasks = tasks;
   }
@@ -604,7 +650,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null } = body;
+  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null, dependencies = [] } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
 
@@ -616,6 +662,17 @@ projectsRouter.post("/:id/tasks", async (c) => {
     INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule)
     VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule);
+
+  // Add dependencies
+  if (Array.isArray(dependencies)) {
+    for (const depId of dependencies) {
+      if (depId !== taskId) {
+        db.prepare("INSERT INTO project_task_dependencies (taskId, dependsOnTaskId) VALUES (?, ?)").run(taskId, depId);
+      }
+    }
+  }
+
+  logAudit(userId, "task", "create_task", `创建任务「${title}」`, { targetType: "project_task", targetId: taskId });
 
   // Add participants
   if (Array.isArray(participants)) {
@@ -648,7 +705,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule } = body;
+  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, dependencies } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -669,6 +726,44 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
         finalProgress = 0;
       }
     }
+  }
+
+  // Enforce task dependency constraint
+  if (finalIsCompleted === 1 && task.isCompleted === 0) {
+    const incompleteDeps = db.prepare(`
+      SELECT pt.title FROM project_task_dependencies ptd
+      JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+      WHERE ptd.taskId = ? AND pt.isCompleted = 0
+    `).all(taskId) as { title: string }[];
+    
+    if (incompleteDeps.length > 0) {
+      const depTitles = incompleteDeps.map(d => `「${d.title}」`).join(", ");
+      return c.json({
+        error: `无法完成任务，因为前置依赖任务尚未完成: ${depTitles}`,
+        code: "DEPENDENCY_UNRESOLVED"
+      }, 400);
+    }
+  }
+
+  // Audit Log Changes
+  if (title !== undefined && title !== task.title) {
+    logAudit(userId, "task", "update_task_title", `修改任务标题为: 「${title}」`, { targetType: "project_task", targetId: taskId });
+  }
+  if (description !== undefined && description !== task.description) {
+    logAudit(userId, "task", "update_task_desc", "修改了任务描述", { targetType: "project_task", targetId: taskId });
+  }
+  if (finalIsCompleted !== undefined && ((finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0) !== task.isCompleted) {
+    const isComp = (finalIsCompleted === 1 || finalIsCompleted === true);
+    logAudit(userId, "task", isComp ? "complete_task" : "reopen_task", isComp ? "完成了任务" : "重新开启了任务", { targetType: "project_task", targetId: taskId });
+  }
+  if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
+    logAudit(userId, "task", "update_task_assignee", "更新了任务负责人", { targetType: "project_task", targetId: taskId });
+  }
+  if (startDate !== undefined && startDate !== task.startDate) {
+    logAudit(userId, "task", "update_task_start_date", `更新了任务开始时间为: ${startDate || "无"}`, { targetType: "project_task", targetId: taskId });
+  }
+  if (endDate !== undefined && endDate !== task.endDate) {
+    logAudit(userId, "task", "update_task_end_date", `更新了任务截止时间为: ${endDate || "无"}`, { targetType: "project_task", targetId: taskId });
   }
 
   const updates: string[] = [];
@@ -733,6 +828,16 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
     db.prepare("DELETE FROM project_task_tags WHERE taskId = ?").run(taskId);
     for (const tagId of tags) {
       db.prepare("INSERT INTO project_task_tags (taskId, tagId) VALUES (?, ?)").run(taskId, tagId);
+    }
+  }
+
+  // Sync dependencies
+  if (dependencies !== undefined && Array.isArray(dependencies)) {
+    db.prepare("DELETE FROM project_task_dependencies WHERE taskId = ?").run(taskId);
+    for (const depId of dependencies) {
+      if (depId !== taskId) {
+        db.prepare("INSERT INTO project_task_dependencies (taskId, dependsOnTaskId) VALUES (?, ?)").run(taskId, depId);
+      }
     }
   }
 

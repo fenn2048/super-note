@@ -856,9 +856,9 @@ export default function ProjectCenter() {
       if (activeFilter.type === "my-tasks") {
         fetchMyTasks();
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error("操作失败");
+      toast.error(e?.message || "操作失败");
     }
   };
 

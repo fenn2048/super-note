@@ -1,4 +1,4 @@
-import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion } from "@/types";
+import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion, Plan, Milestone, AuditLog } from "@/types";
 import {
   shouldEnqueue as _shouldEnqueue,
   enqueue as _enqueue,
@@ -1126,8 +1126,8 @@ export const api = {
     return request<ProjectTask[]>(`/projects/my-tasks${qs}`);
   },
 
-  createProjectTask: (projectId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags"> & { participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(data) }),
-  updateProjectTask: (taskId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags" | "checklists"> & { checklists?: any[]; participants?: string[]; tags?: string[] }) => request<ProjectTask>(`/projects/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
+  createProjectTask: (projectId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags" | "dependencies"> & { participants?: string[]; tags?: string[]; dependencies?: string[] }) => request<ProjectTask>(`/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(data) }),
+  updateProjectTask: (taskId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags" | "checklists" | "dependencies"> & { checklists?: any[]; participants?: string[]; tags?: string[]; dependencies?: string[] }) => request<ProjectTask>(`/projects/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteProjectTask: (taskId: string) => request<{ message: string }>(`/projects/tasks/${taskId}`, { method: "DELETE" }),
 
   getProjectDiscussions: (projectId: string) => request<ProjectDiscussion[]>(`/projects/${projectId}/discussions`),
@@ -1135,6 +1135,28 @@ export const api = {
 
   addProjectMember: (projectId: string, memberUserId: string, role?: string) => request<{ message: string }>(`/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ memberUserId, role }) }),
   removeProjectMember: (projectId: string, memberUserId: string) => request<{ message: string }>(`/projects/${projectId}/members/${memberUserId}`, { method: "DELETE" }),
+
+  // Plans API
+  getPlans: (workspaceId?: string) => {
+    const params = new URLSearchParams();
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    if (ws && ws !== "") params.set("workspaceId", ws);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<Plan[]>(`/plans${qs}`);
+  },
+  getPlan: (id: string) => request<Plan>(`/plans/${id}`),
+  createPlan: (data: Omit<Partial<Plan>, "milestones" | "participants"> & { milestones?: Partial<Milestone>[]; participants?: string[] }) => {
+    const ws = getCurrentWorkspace();
+    const payload = {
+      workspaceId: ws && ws !== "" ? ws : null,
+      ...data
+    };
+    return request<Plan>("/plans", { method: "POST", body: JSON.stringify(payload) });
+  },
+  updatePlan: (id: string, data: Omit<Partial<Plan>, "milestones" | "participants"> & { milestones?: Partial<Milestone>[]; participants?: string[] }) => request<Plan>(`/plans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deletePlan: (id: string) => request<{ success: boolean }>(`/plans/${id}`, { method: "DELETE" }),
+  updateMilestoneStatus: (milestoneId: string, status: string) => request<Milestone>(`/plans/milestones/${milestoneId}`, { method: "PUT", body: JSON.stringify({ status }) }),
+  getTargetAuditLogs: (targetType: string, targetId: string) => request<AuditLog[]>(`/audit/target?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(targetId)}`),
 
   // Avatars
   uploadAvatar: async (fileOrFormData: File | FormData): Promise<{ success: boolean; avatarUrl: string }> => {
@@ -1975,9 +1997,9 @@ export const api = {
 
   // AI
   getAISettings: () =>
-    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string }>("/ai/settings"),
-  updateAISettings: (data: { ai_provider?: string; ai_api_url?: string; ai_api_key?: string; ai_model?: string }) =>
-    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string }>("/ai/settings", {
+    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string }>("/ai/settings"),
+  updateAISettings: (data: { ai_provider?: string; ai_api_url?: string; ai_api_key?: string; ai_model?: string; ai_think_keywords?: string }) =>
+    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string }>("/ai/settings", {
       method: "PUT",
       body: JSON.stringify(data),
     }),

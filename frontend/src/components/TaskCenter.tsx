@@ -4,7 +4,8 @@ import {
   CheckCircle2, Circle, Flag, Calendar, Plus, ListTodo,
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
   Trash2, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
-  User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText, Repeat
+  User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText, Repeat,
+  Compass, AlertCircle
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -493,6 +494,11 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
     }
   });
 
+  const [dependencies, setDependencies] = useState<Array<{ id: string; title: string; isCompleted: number }>>([]);
+  const [taskLogs, setTaskLogs] = useState<any[]>([]);
+  const [loadingTaskLogs, setLoadingTaskLogs] = useState(false);
+  const [allWorkspaceTasks, setAllWorkspaceTasks] = useState<Task[]>([]);
+
   useEffect(() => {
     setTitle(task.title);
     setPriority(task.priority);
@@ -505,7 +511,49 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
     } catch {
       setRecurrenceRule({ type: "weekday" });
     }
+
+    // Fetch dependencies
+    api.getTask(task.id).then(fullTask => {
+      setDependencies(fullTask.dependencies || []);
+    }).catch(err => {
+      console.error("Failed to load task dependencies:", err);
+      setDependencies([]);
+    });
+
+    // Fetch workspace tasks for dependencies
+    api.getTasks().then(tasksList => {
+      setAllWorkspaceTasks(tasksList.filter(t => t.id !== task.id));
+    }).catch(err => {
+      console.error("Failed to load workspace tasks for dependencies:", err);
+      setAllWorkspaceTasks([]);
+    });
+
+    // Fetch logs
+    setLoadingTaskLogs(true);
+    api.getTargetAuditLogs("task", task.id).then(logs => {
+      setTaskLogs(logs);
+    }).catch(err => {
+      console.error("Failed to load task audit logs:", err);
+      setTaskLogs([]);
+    }).finally(() => {
+      setLoadingTaskLogs(false);
+    });
   }, [task.id]);
+
+  const handleAddDependency = (depId: string) => {
+    const depTask = allWorkspaceTasks.find(t => t.id === depId);
+    if (!depTask) return;
+    if (dependencies.some(d => d.id === depId)) return;
+    const nextDeps = [...dependencies, { id: depId, title: depTask.title, isCompleted: depTask.isCompleted }];
+    setDependencies(nextDeps);
+    onUpdate(task.id, { dependencies: nextDeps.map(d => d.id) } as any);
+  };
+
+  const handleRemoveDependency = (depId: string) => {
+    const nextDeps = dependencies.filter(d => d.id !== depId);
+    setDependencies(nextDeps);
+    onUpdate(task.id, { dependencies: nextDeps.map(d => d.id) } as any);
+  };
 
   const handleSave = () => {
     onUpdate(task.id, {
@@ -593,6 +641,13 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
             rows={Math.min(4, Math.max(2, title.split("\n").length))}
             className="w-full px-3 py-2 rounded-md bg-app-bg border border-app-border text-sm text-tx-primary focus:outline-none focus:border-accent-primary transition-colors resize-y font-mono"
           />
+
+          {dependencies.some(d => d.isCompleted === 0) && (
+            <div className="mt-2 flex items-center gap-1.5 p-2.5 bg-amber-50 text-amber-800 border border-amber-200/50 rounded-lg text-xs">
+              <AlertCircle size={13} className="text-amber-600 shrink-0" />
+              <span>前置依赖任务尚未完成，无法完成当前任务</span>
+            </div>
+          )}
 
           {/* @提及选择器 */}
           {mentionTrigger && (
@@ -708,6 +763,116 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
           <span className="text-sm text-tx-secondary">
             {format(parseISO(task.createdAt + (task.createdAt.endsWith("Z") ? "" : "Z")), "yyyy-MM-dd HH:mm", { locale: dateLocale })}
           </span>
+        </div>
+
+        {/* Task Dependencies */}
+        <div className="space-y-3 border-t border-app-border/40 pt-4 mt-2">
+          <label className="text-xs text-tx-tertiary uppercase tracking-wider block flex items-center gap-1">
+            <LinkIcon size={12} className="text-accent-primary" />
+            <span>前置依赖任务</span>
+          </label>
+
+          {/* Current dependencies list */}
+          {dependencies.length === 0 ? (
+            <div className="text-xs text-tx-tertiary italic py-1 px-2 rounded border border-dashed border-app-border/60">
+              暂无前置依赖任务
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {dependencies.map((dep) => (
+                <div 
+                  key={dep.id} 
+                  className="flex items-center justify-between p-2 rounded bg-app-sidebar/20 border border-app-border/40 text-xs text-tx-secondary"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    {dep.isCompleted === 1 ? (
+                      <CheckCircle2 size={13} className="text-green-500 shrink-0" />
+                    ) : (
+                      <AlertCircle size={13} className="text-amber-500 shrink-0" />
+                    )}
+                    <span className={cn("truncate font-medium", dep.isCompleted === 1 && "line-through opacity-55")}>
+                      {dep.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <span className={cn("text-[9px] px-1 py-0.5 rounded border font-bold", 
+                      dep.isCompleted === 1 
+                        ? "bg-green-50 text-green-700 border-green-200/50" 
+                        : "bg-amber-50 text-amber-700 border-amber-200/50"
+                    )}>
+                      {dep.isCompleted === 1 ? "已完成" : "未完成"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDependency(dep.id)}
+                      className="p-0.5 hover:bg-app-hover rounded text-tx-tertiary hover:text-red-500 transition-colors"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add dependency dropdown */}
+          {allWorkspaceTasks.filter(t => !dependencies.some(d => d.id === t.id)).length > 0 && (
+            <div className="flex items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-tx-tertiary shrink-0">添加依赖:</span>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleAddDependency(e.target.value);
+                    e.target.value = "";
+                  }
+                }}
+                className="flex-1 text-xs border border-app-border bg-app-bg rounded p-1 outline-none text-tx-secondary"
+              >
+                <option value="">-- 选择前置任务 --</option>
+                {allWorkspaceTasks
+                  .filter(t => !dependencies.some(d => d.id === t.id))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))
+                }
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Task Modification Logs */}
+        <div className="space-y-3 border-t border-app-border/40 pt-4 mt-2">
+          <label className="text-xs text-tx-tertiary uppercase tracking-wider block flex items-center gap-1">
+            <Compass size={12} className="text-accent-primary" />
+            <span>任务修改记录</span>
+          </label>
+
+          {loadingTaskLogs ? (
+            <div className="flex justify-center py-2">
+              <Loader2 size={14} className="animate-spin text-accent-primary" />
+            </div>
+          ) : taskLogs.length === 0 ? (
+            <div className="text-xs text-tx-tertiary italic py-1 px-2 rounded border border-dashed border-app-border/60">
+              暂无修改记录
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+              {taskLogs.map((log) => (
+                <div key={log.id} className="text-[10px] text-tx-secondary space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-tx-primary">{log.displayName || log.username}</span>
+                    <span className="text-[9px] text-tx-tertiary font-mono">
+                      {format(parseISO(log.createdAt + (log.createdAt.endsWith("Z") ? "" : "Z")), "yyyy-MM-dd HH:mm", { locale: dateLocale })}
+                    </span>
+                  </div>
+                  <p className="bg-app-sidebar/10 px-2 py-1 rounded border border-app-border/20">
+                    {log.details || log.action}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1320,7 +1485,8 @@ export default function TaskCenter() {
       // Refresh stats
       const s = await api.getTaskStats();
       setStats(s);
-    } catch {
+    } catch (e: any) {
+      toast.error(e?.message || "操作失败，前置依赖未完成");
       loadTasks(); // rollback
     }
   };

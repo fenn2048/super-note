@@ -10,6 +10,7 @@ interface AISettingsState {
   ai_api_key: string;
   ai_model: string;
   ai_api_key_set: boolean;
+  ai_think_keywords?: string;
 }
 
 interface ProviderPreset {
@@ -89,7 +90,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 export default function AISettingsPanel() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<AISettingsState>({
-    ai_provider: "openai", ai_api_url: "", ai_api_key: "", ai_model: "", ai_api_key_set: false,
+    ai_provider: "openai", ai_api_url: "", ai_api_key: "", ai_model: "", ai_api_key_set: false, ai_think_keywords: "",
   });
   const [localKey, setLocalKey] = useState("");
   // 缓存每个服务商的 API Key，切换时不丢失
@@ -155,6 +156,9 @@ export default function AISettingsPanel() {
         ai_api_url: settings.ai_api_url,
         ai_model: settings.ai_model,
       };
+      if (settings.ai_provider === "ollama") {
+        payload.ai_think_keywords = settings.ai_think_keywords;
+      }
       if (localKey && !localKey.includes("****")) {
         payload.ai_api_key = localKey;
       }
@@ -179,6 +183,9 @@ export default function AISettingsPanel() {
         ai_api_url: settings.ai_api_url,
         ai_model: settings.ai_model,
       };
+      if (settings.ai_provider === "ollama") {
+        payload.ai_think_keywords = settings.ai_think_keywords;
+      }
       if (localKey && !localKey.includes("****")) payload.ai_api_key = localKey;
       await api.updateAISettings(payload);
       const result = await api.testAIConnection();
@@ -198,6 +205,9 @@ export default function AISettingsPanel() {
         ai_api_url: settings.ai_api_url,
         ai_model: settings.ai_model,
       };
+      if (settings.ai_provider === "ollama") {
+        payload.ai_think_keywords = settings.ai_think_keywords;
+      }
       if (localKey && !localKey.includes("****")) payload.ai_api_key = localKey;
       await api.updateAISettings(payload);
       const data = await api.getAIModels();
@@ -392,6 +402,23 @@ export default function AISettingsPanel() {
             </button>
           </div>
         </div>
+        
+        {/* Keywords (only shown for Ollama) */}
+        {settings.ai_provider === "ollama" && (
+          <div className="space-y-1.5 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+            <label className="text-xs font-medium text-tx-secondary">{t("ai.thinkKeywords")}</label>
+            <input
+              type="text"
+              value={settings.ai_think_keywords || ""}
+              onChange={(e) => setSettings(prev => ({ ...prev, ai_think_keywords: e.target.value }))}
+              placeholder={t("ai.thinkKeywordsPlaceholder")}
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+            />
+            <p className="text-[11px] text-tx-tertiary">
+              {t("ai.thinkKeywordsDesc")}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 操作按钮 */}

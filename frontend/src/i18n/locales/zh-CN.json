@@ -121,6 +121,7 @@
     "aiChat": "AI 问答",
     "diary": "说说",
     "fileManager": "文件管理",
+    "plans": "计划管理",
     "projects": "项目管理",
 
     "favorites": "收藏",
@@ -1373,6 +1374,9 @@
     "saveSuccess": "配置保存成功",
     "saveFailed": "保存失败",
     "testFailed": "连接测试失败",
+    "thinkKeywords": "思考模式激活关键词",
+    "thinkKeywordsDesc": "当输入包含以下关键词时自动开启 Ollama 思考模式（用英文逗号分隔）",
+    "thinkKeywordsPlaceholder": "例如：分析, 拆解, 规划",
     "assistant": "AI 写作助手",
     "selectedText": "选中的文本",
     "actionContinue": "续写",

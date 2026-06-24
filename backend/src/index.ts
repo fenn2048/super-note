@@ -27,6 +27,7 @@ import mentionsRouter from "./routes/mentions";
 import notificationsRouter from "./routes/notifications";
 import urlImportRouter from "./routes/url-import";
 import projectsRouter from "./routes/projects";
+import plansRouter from "./routes/plans";
 
 import aiRouter from "./routes/ai";
 import pluginsRouter from "./routes/plugins";
@@ -402,6 +403,7 @@ app.route("/api/mentions", mentionsRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/url-import", urlImportRouter);
 app.route("/api/projects", projectsRouter);
+app.route("/api/plans", plansRouter);
 app.route("/api/ai", aiRouter);
 app.route("/api/plugins", pluginsRouter);
 app.route("/api/webhooks", webhooksRouter);

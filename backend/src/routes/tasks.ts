@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { getDb } from "../db/schema";
 import crypto from "crypto";
 import { handleRecurringTask } from "../lib/recurrence";
+import { logAudit } from "../services/audit.js";
 import {
   getUserWorkspaceRole,
   canManageResource,
@@ -255,7 +256,14 @@ tasks.get("/:id", (c) => {
     return { ...child, tags: childTags };
   });
 
-  return c.json({ ...task, tags, children: childrenWithTags });
+  const dependencies = db.prepare(`
+    SELECT t.id, t.title, t.isCompleted
+    FROM task_dependencies td
+    JOIN tasks t ON td.dependsOnTaskId = t.id
+    WHERE td.taskId = ?
+  `).all(id);
+
+  return c.json({ ...task, tags, children: childrenWithTags, dependencies });
 });
 
 // 创建任务
@@ -277,7 +285,8 @@ tasks.post("/", requireWorkspaceFeature("tasks"), async (c) => {
     parentId = null,
     tagIds = [],
     isRecurring = 0,
-    recurrenceRule = null
+    recurrenceRule = null,
+    dependencies = []
   } = body;
 
   if (!title || !title.trim()) {
@@ -324,6 +333,16 @@ tasks.post("/", requireWorkspaceFeature("tasks"), async (c) => {
         insertTag.run(id, tagId);
       }
     }
+
+    // Add dependencies
+    if (Array.isArray(dependencies) && dependencies.length > 0) {
+      const insertDep = db.prepare("INSERT INTO task_dependencies (taskId, dependsOnTaskId) VALUES (?, ?)");
+      for (const depId of dependencies) {
+        if (depId !== id) {
+          insertDep.run(id, depId);
+        }
+      }
+    }
   });
 
   try {
@@ -347,6 +366,8 @@ tasks.post("/", requireWorkspaceFeature("tasks"), async (c) => {
       console.warn("[tasks.post] createMentions failed:", e);
     }
   }
+
+  logAudit(userId, "task", "create_task", `创建待办「${title}」`, { targetType: "task", targetId: id });
 
   return c.json({ ...created, tags }, 201);
 });
@@ -376,6 +397,7 @@ tasks.put("/:id", (c) => {
     const isRecurring = body.isRecurring ?? existing.isRecurring;
     const recurrenceRule = body.recurrenceRule !== undefined ? body.recurrenceRule : existing.recurrenceRule;
     const tagIds = body.tagIds;
+    const dependencies = body.dependencies;
 
     if (dueDate && !remindAt && body.dueDate !== undefined) {
       try {
@@ -385,6 +407,38 @@ tasks.put("/:id", (c) => {
       } catch {}
     } else if (!dueDate) {
       remindAt = null;
+    }
+
+    // Enforce task dependency constraint
+    if ((isCompleted === 1 || isCompleted === true) && existing.isCompleted === 0) {
+      const incompleteDeps = db.prepare(`
+        SELECT t.title FROM task_dependencies td
+        JOIN tasks t ON td.dependsOnTaskId = t.id
+        WHERE td.taskId = ? AND t.isCompleted = 0
+      `).all(id) as { title: string }[];
+      
+      if (incompleteDeps.length > 0) {
+        const depTitles = incompleteDeps.map(d => `「${d.title}」`).join(", ");
+        return c.json({
+          error: `无法完成任务，因为前置依赖任务尚未完成: ${depTitles}`,
+          code: "DEPENDENCY_UNRESOLVED"
+        }, 400);
+      }
+    }
+
+    // Audit Log Changes
+    if (body.title !== undefined && body.title !== existing.title) {
+      logAudit(userId, "task", "update_task_title", `修改任务标题为: 「${body.title}」`, { targetType: "task", targetId: id });
+    }
+    if (body.isCompleted !== undefined && (body.isCompleted ? 1 : 0) !== existing.isCompleted) {
+      const isComp = !!body.isCompleted;
+      logAudit(userId, "task", isComp ? "complete_task" : "reopen_task", isComp ? "完成了任务" : "重新开启了任务", { targetType: "task", targetId: id });
+    }
+    if (body.priority !== undefined && body.priority !== existing.priority) {
+      logAudit(userId, "task", "update_task_priority", `修改任务优先级为: ${body.priority}`, { targetType: "task", targetId: id });
+    }
+    if (body.dueDate !== undefined && body.dueDate !== existing.dueDate) {
+      logAudit(userId, "task", "update_task_due_date", `修改截止日期为: ${body.dueDate || "无"}`, { targetType: "task", targetId: id });
     }
 
     // 重新挂接父任务时再次校验同域约束
@@ -417,6 +471,16 @@ tasks.put("/:id", (c) => {
           }
         }
       }
+
+      // Sync dependencies
+      if (dependencies !== undefined && Array.isArray(dependencies)) {
+        db.prepare("DELETE FROM task_dependencies WHERE taskId = ?").run(id);
+        for (const depId of dependencies) {
+          if (depId !== id) {
+            db.prepare("INSERT INTO task_dependencies (taskId, dependsOnTaskId) VALUES (?, ?)").run(id, depId);
+          }
+        }
+      }
     });
 
     try {
@@ -444,7 +508,14 @@ tasks.put("/:id", (c) => {
       WHERE tt.taskId = ?
     `).all(id);
 
-    return c.json({ ...updated, tags });
+    const updatedDependencies = db.prepare(`
+      SELECT t.id, t.title, t.isCompleted
+      FROM task_dependencies td
+      JOIN tasks t ON td.dependsOnTaskId = t.id
+      WHERE td.taskId = ?
+    `).all(id);
+
+    return c.json({ ...updated, tags, dependencies: updatedDependencies });
   });
 });
 
@@ -464,7 +535,25 @@ tasks.patch("/:id/toggle", (c) => {
   }
 
   const newStatus = task.isCompleted ? 0 : 1;
+  
+  if (newStatus === 1) {
+    const incompleteDeps = db.prepare(`
+      SELECT t.title FROM task_dependencies td
+      JOIN tasks t ON td.dependsOnTaskId = t.id
+      WHERE td.taskId = ? AND t.isCompleted = 0
+    `).all(id) as { title: string }[];
+    
+    if (incompleteDeps.length > 0) {
+      const depTitles = incompleteDeps.map(d => `「${d.title}」`).join(", ");
+      return c.json({
+        error: `无法完成任务，因为前置依赖任务尚未完成: ${depTitles}`,
+        code: "DEPENDENCY_UNRESOLVED"
+      }, 400);
+    }
+  }
+
   db.prepare("UPDATE tasks SET isCompleted = ?, updatedAt = datetime('now') WHERE id = ?").run(newStatus, id);
+  logAudit(userId, "task", newStatus === 1 ? "complete_task" : "reopen_task", newStatus === 1 ? "完成了任务" : "重新开启了任务", { targetType: "task", targetId: id });
 
   if (newStatus === 1) {
     handleRecurringTask(db, id, false);

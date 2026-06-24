@@ -202,7 +202,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans";
 
 export type MobileView = "list" | "editor";
 
@@ -372,6 +372,7 @@ export interface Task {
   children?: Task[];
   /** 创建者用户名；仅 list/single read 时由后端 LEFT JOIN 返回。 */
   creatorName?: string | null;
+  dependencies?: Array<{ id: string; title: string; isCompleted: number }>;
 }
 
 export interface TaskStats {
@@ -596,6 +597,8 @@ export interface Project {
   completedTasksCount?: number;
   totalTasksCount?: number;
   members?: ProjectMember[];
+  milestoneId?: string | null;
+  status?: "pending" | "in_progress" | "completed";
 }
 
 export interface ProjectMember {
@@ -656,6 +659,7 @@ export interface ProjectTask {
   tags?: Array<{ id: string; name: string; color: string }>;
   checklists?: ProjectTaskChecklist[];
   attachments?: Array<{ id: string; filename: string; mimeType: string; size: number }>;
+  dependencies?: Array<{ id: string; title: string; isCompleted: number }>;
 }
 
 export interface ProjectTaskChecklist {
@@ -675,6 +679,65 @@ export interface ProjectDiscussion {
   images: string[];
   attachments: any[];
   linkedCards: Array<{ type: "task" | "note"; id: string; title: string }>;
+  createdAt: string;
+  username?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+}
+
+// ========== 计划与里程碑 (Plans & Milestones) ==========
+
+export interface Plan {
+  id: string;
+  name: string;
+  background: string;
+  goal: string;
+  details: string; // 支持 markdown
+  startDate: string | null;
+  endDate: string | null;
+  status: "pending" | "in_progress" | "completed";
+  workspaceId: string | null;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+  milestones?: Milestone[];
+  participants?: PlanParticipant[];
+  totalMilestones?: number;
+  completedMilestones?: number;
+}
+
+export interface Milestone {
+  id: string;
+  planId: string;
+  name: string;
+  description: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: "pending" | "in_progress" | "completed";
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  projects?: Project[];
+}
+
+export interface PlanParticipant {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  category: string;
+  action: string;
+  level: string;
+  targetType: string;
+  targetId: string;
+  details: string;
+  ip: string;
+  userAgent: string;
   createdAt: string;
   username?: string;
   displayName?: string | null;

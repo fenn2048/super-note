@@ -30,7 +30,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   BookOpen, Star, Trash2, ListTodo, BrainCircuit,
-  Sparkles, NotebookPen, FolderOpen, Briefcase,
+  Sparkles, NotebookPen, FolderOpen, Briefcase, Compass,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
   Columns2, Columns3, Cloud, CloudOff, Bell, Home,
 } from "lucide-react";
@@ -62,6 +62,7 @@ const RAIL_ICON_SIZE = 18;
 const NAV_CONFIG: NavConfigItem[] = [
   // ─── 工作台 ───
   { icon: <Home size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.home",       mode: "home",                                 group: "workspace" },
+  { icon: <Compass size={RAIL_ICON_SIZE} />,     labelKey: "sidebar.plans",       mode: "plans",      feature: "projects",  group: "workspace" },
   { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "workspace" },
   { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "workspace" },
   { icon: <BookOpen size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.allNotes",    mode: "all",        feature: "notes",     group: "workspace" },
@@ -183,7 +184,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     actions.setSelectedNotebook(null);
     
     // 只要是笔记/项目相关视图（所有笔记、收藏、回收站、项目），中间栏默认显示；其他模块（如首页、说说等）默认隐藏中间栏
-    const isNoteOrProjectView = mode === "all" || mode === "favorites" || mode === "trash" || mode === "notebook" || mode === "tag" || mode === "search" || mode === "projects";
+    const isNoteOrProjectView = mode === "all" || mode === "favorites" || mode === "trash" || mode === "notebook" || mode === "tag" || mode === "search" || mode === "projects" || mode === "plans";
     if (isNoteOrProjectView) {
       actions.setSidebarCollapsed(false);
     } else {

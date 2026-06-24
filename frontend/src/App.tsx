@@ -28,6 +28,7 @@ const EditorPane = React.lazy(() => import("@/components/EditorPane"));
 const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
 const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
+const PlanCenter = React.lazy(() => import("@/components/PlanCenter"));
 import MobileCameraModal from "@/components/MobileCameraModal";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
 import FirstRunWizard from "@/components/FirstRunWizard";
@@ -369,6 +370,7 @@ function AppLayout() {
   const isHomeView = state.viewMode === "home";
   const isDiaryView = state.viewMode === "diary";
   const isProjectsView = state.viewMode === "projects";
+  const isPlansView = state.viewMode === "plans";
   const isTasksView = state.viewMode === "tasks";
   const isNotesView = ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode);
   const isFilesView = state.viewMode === "files";
@@ -1008,6 +1010,13 @@ function AppLayout() {
                 <MobileTopBar />
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
                   <ProjectCenter />
+                </Suspense>
+              </div>
+            ) : isPlansView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <PlanCenter />
                 </Suspense>
               </div>
             ) : isTasksView ? (

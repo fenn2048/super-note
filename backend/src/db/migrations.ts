@@ -1774,6 +1774,89 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 28,
+    name: "Add plans, milestones, task dependencies, and project status columns",
+    up: (db) => {
+      // 1. Create plans table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS plans (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          background TEXT DEFAULT '',
+          goal TEXT DEFAULT '',
+          details TEXT DEFAULT '',
+          startDate TEXT,
+          endDate TEXT,
+          status TEXT DEFAULT 'pending',
+          workspaceId TEXT,
+          ownerId TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+
+      // 2. Create milestones table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS milestones (
+          id TEXT PRIMARY KEY,
+          planId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          startDate TEXT,
+          endDate TEXT,
+          status TEXT DEFAULT 'pending',
+          sortOrder INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (planId) REFERENCES plans(id) ON DELETE CASCADE
+        );
+      `);
+
+      // 3. Create plan_participants table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS plan_participants (
+          planId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          PRIMARY KEY (planId, userId),
+          FOREIGN KEY (planId) REFERENCES plans(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+
+      // 4. Add columns to projects table: milestoneId, status
+      const projectsCols = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
+      if (!projectsCols.some(c => c.name === "milestoneId")) {
+        db.exec("ALTER TABLE projects ADD COLUMN milestoneId TEXT;");
+      }
+      if (!projectsCols.some(c => c.name === "status")) {
+        db.exec("ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'pending';");
+      }
+
+      // 5. Create task_dependencies table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_dependencies (
+          taskId TEXT NOT NULL,
+          dependsOnTaskId TEXT NOT NULL,
+          PRIMARY KEY (taskId, dependsOnTaskId),
+          FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (dependsOnTaskId) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+      `);
+
+      // 6. Create project_task_dependencies table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_task_dependencies (
+          taskId TEXT NOT NULL,
+          dependsOnTaskId TEXT NOT NULL,
+          PRIMARY KEY (taskId, dependsOnTaskId),
+          FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (dependsOnTaskId) REFERENCES project_tasks(id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

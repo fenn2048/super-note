@@ -1080,6 +1080,8 @@ function initSchema(db: Database.Database) {
       visibility TEXT NOT NULL DEFAULT 'PRIVATE',
       workspaceId TEXT,
       groupId TEXT,
+      milestoneId TEXT,
+      status TEXT DEFAULT 'pending',
       isArchived INTEGER DEFAULT 0,
       isDeleted INTEGER DEFAULT 0,
       ownerId TEXT NOT NULL,
@@ -1194,6 +1196,60 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_diary_comments_diary ON diary_comments(diaryId);
+
+    CREATE TABLE IF NOT EXISTS plans (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      background TEXT DEFAULT '',
+      goal TEXT DEFAULT '',
+      details TEXT DEFAULT '',
+      startDate TEXT,
+      endDate TEXT,
+      status TEXT DEFAULT 'pending',
+      workspaceId TEXT,
+      ownerId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS milestones (
+      id TEXT PRIMARY KEY,
+      planId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      startDate TEXT,
+      endDate TEXT,
+      status TEXT DEFAULT 'pending',
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (planId) REFERENCES plans(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS plan_participants (
+      planId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      PRIMARY KEY (planId, userId),
+      FOREIGN KEY (planId) REFERENCES plans(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS task_dependencies (
+      taskId TEXT NOT NULL,
+      dependsOnTaskId TEXT NOT NULL,
+      PRIMARY KEY (taskId, dependsOnTaskId),
+      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (dependsOnTaskId) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS project_task_dependencies (
+      taskId TEXT NOT NULL,
+      dependsOnTaskId TEXT NOT NULL,
+      PRIMARY KEY (taskId, dependsOnTaskId),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (dependsOnTaskId) REFERENCES project_tasks(id) ON DELETE CASCADE
+    );
 
     -- 任务附件删除触发器（支持 tasks 和 project_tasks 两个表的级联删除）
     CREATE TRIGGER IF NOT EXISTS delete_task_attachments_on_task_delete

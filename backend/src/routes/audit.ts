@@ -40,6 +40,30 @@ auditRouter.get("/", (c) => {
   return c.json(result);
 });
 
+// ===== GET /api/audit/target =====
+auditRouter.get("/target", (c) => {
+  ensureTables();
+  const { getDb } = require("../db/schema");
+  const db = getDb();
+  
+  const targetType = c.req.query("targetType");
+  const targetId = c.req.query("targetId");
+  
+  if (!targetType || !targetId) {
+    return c.json({ error: "Missing targetType or targetId" }, 400);
+  }
+
+  const logs = db.prepare(`
+    SELECT al.*, u.username, u.displayName, u.avatarUrl
+    FROM audit_logs al
+    LEFT JOIN users u ON al.userId = u.id
+    WHERE al.targetType = ? AND al.targetId = ?
+    ORDER BY al.createdAt DESC
+  `).all(targetType, targetId) as any[];
+
+  return c.json(logs);
+});
+
 // ===== GET /api/audit/stats =====
 auditRouter.get("/stats", (c) => {
   ensureTables();

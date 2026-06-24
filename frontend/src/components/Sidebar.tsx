@@ -8,6 +8,7 @@ import {
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2,
   Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Globe, Lock, Eye,
+  Compass, Milestone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -870,6 +871,7 @@ function ProjectSidebar() {
   }, []);
 
   const selectFilter = (filter: typeof activeFilter) => {
+    actions.setViewMode("projects");
     setActiveFilter(filter);
     sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
     window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
@@ -981,14 +983,52 @@ function ProjectSidebar() {
     <ScrollArea className="flex-1 min-h-0 px-2 space-y-4">
       {/* Top Section */}
       <div className="space-y-0.5 py-2">
+        {/* 我的计划 */}
         <div
           className={cn(
-            "flex items-center justify-between group/my-projects px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
-            activeFilter.type === "all"
+            "flex items-center justify-between group/my-plans px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            state.viewMode === "plans"
               ? "bg-app-active text-tx-primary font-medium"
               : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
           )}
-          onClick={() => selectFilter({ type: "all" })}
+          onClick={() => {
+            actions.setViewMode("plans");
+            sessionStorage.setItem("super-active-plan-filter", JSON.stringify({ type: "all" }));
+            window.dispatchEvent(new CustomEvent("super:plan-filter-changed", { detail: { type: "all" } }));
+            actions.setMobileSidebar(false);
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Compass size={16} />
+            <span>{t("plans.myPlans") || "我的计划"}</span>
+          </div>
+          <button
+            type="button"
+            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-plans:opacity-100 opacity-100 transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.setViewMode("plans");
+              sessionStorage.setItem("super-pending-create-plan", "1");
+              actions.setMobileSidebar(false);
+              window.dispatchEvent(new CustomEvent("super:create-plan-trigger"));
+            }}
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {/* 我的项目 */}
+        <div
+          className={cn(
+            "flex items-center justify-between group/my-projects px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            state.viewMode === "projects" && activeFilter.type === "all"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={() => {
+            actions.setViewMode("projects");
+            selectFilter({ type: "all" });
+          }}
         >
           <div className="flex items-center gap-2">
             <Briefcase size={16} />
@@ -2359,7 +2399,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       {/* Separator——已移除：移动端导航迁出后无需在主区上方加分隔；
           WorkspaceSwitcher + 搜索 与笔记本的视觉间距已经足够。 */}
 
-      {state.viewMode === "projects" ? (
+      {state.viewMode === "projects" || state.viewMode === "plans" ? (
         <ProjectSidebar />
       ) : (
         <>
