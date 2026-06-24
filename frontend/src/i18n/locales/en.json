@@ -1393,7 +1393,13 @@
     "copied": "Copied",
     "retry": "Retry",
     "requestFailed": "AI request failed, please check settings",
-    "generating": "AI is generating…"
+    "generating": "AI is generating…",
+    "ollamaNumCtx": "Context Window (num_ctx)",
+    "ollamaNumCtxDesc": "Set based on available memory (e.g. 2048 or 4096, default: 2048)",
+    "ollamaNumCtxPlaceholder": "e.g., 2048",
+    "ollamaNumThreads": "CPU Threads (num_threads)",
+    "ollamaNumThreadsDesc": "Set to physical CPU cores for better CPU inference performance (default: 4)",
+    "ollamaNumThreadsPlaceholder": "e.g., 4"
   },
   "aiChat": {
     "title": "AI Knowledge Q&A",

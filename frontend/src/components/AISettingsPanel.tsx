@@ -10,7 +10,7 @@ interface AISettingsState {
   ai_api_key: string;
   ai_model: string;
   ai_api_key_set: boolean;
-  ai_think_keywords?: string;
+  ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string;
 }
 
 interface ProviderPreset {
@@ -158,6 +158,8 @@ export default function AISettingsPanel() {
       };
       if (settings.ai_provider === "ollama") {
         payload.ai_think_keywords = settings.ai_think_keywords;
+        payload.ai_ollama_num_ctx = settings.ai_ollama_num_ctx;
+        payload.ai_ollama_num_threads = settings.ai_ollama_num_threads;
       }
       if (localKey && !localKey.includes("****")) {
         payload.ai_api_key = localKey;
@@ -185,6 +187,8 @@ export default function AISettingsPanel() {
       };
       if (settings.ai_provider === "ollama") {
         payload.ai_think_keywords = settings.ai_think_keywords;
+        payload.ai_ollama_num_ctx = settings.ai_ollama_num_ctx;
+        payload.ai_ollama_num_threads = settings.ai_ollama_num_threads;
       }
       if (localKey && !localKey.includes("****")) payload.ai_api_key = localKey;
       await api.updateAISettings(payload);
@@ -207,6 +211,8 @@ export default function AISettingsPanel() {
       };
       if (settings.ai_provider === "ollama") {
         payload.ai_think_keywords = settings.ai_think_keywords;
+        payload.ai_ollama_num_ctx = settings.ai_ollama_num_ctx;
+        payload.ai_ollama_num_threads = settings.ai_ollama_num_threads;
       }
       if (localKey && !localKey.includes("****")) payload.ai_api_key = localKey;
       await api.updateAISettings(payload);
@@ -405,6 +411,7 @@ export default function AISettingsPanel() {
         
         {/* Keywords (only shown for Ollama) */}
         {settings.ai_provider === "ollama" && (
+          <>
           <div className="space-y-1.5 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
             <label className="text-xs font-medium text-tx-secondary">{t("ai.thinkKeywords")}</label>
             <input
@@ -418,6 +425,32 @@ export default function AISettingsPanel() {
               {t("ai.thinkKeywordsDesc")}
             </p>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-tx-secondary">{t("ai.ollamaNumCtx")}</label>
+              <input
+                type="number"
+                value={settings.ai_ollama_num_ctx || ""}
+                onChange={(e) => setSettings(prev => ({ ...prev, ai_ollama_num_ctx: e.target.value }))}
+                placeholder={t("ai.ollamaNumCtxPlaceholder")}
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+              />
+              <p className="text-[11px] text-tx-tertiary">{t("ai.ollamaNumCtxDesc")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-tx-secondary">{t("ai.ollamaNumThreads")}</label>
+              <input
+                type="number"
+                value={settings.ai_ollama_num_threads || ""}
+                onChange={(e) => setSettings(prev => ({ ...prev, ai_ollama_num_threads: e.target.value }))}
+                placeholder={t("ai.ollamaNumThreadsPlaceholder")}
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+              />
+              <p className="text-[11px] text-tx-tertiary">{t("ai.ollamaNumThreadsDesc")}</p>
+            </div>
+          </div>
+          </>
         )}
       </div>
 
