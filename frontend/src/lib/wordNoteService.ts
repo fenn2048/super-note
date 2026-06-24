@@ -289,7 +289,7 @@ export async function replaceWordAttachment(params: {
   try {
     await api.attachments.remove(oldAttachmentId);
   } catch (err) {
-    // eslint-disable-next-line no-console
+
     console.warn("旧 .docx 附件清理失败（可由后端 GC 后续清理）:", err);
   }
 

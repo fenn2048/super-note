@@ -12,23 +12,26 @@ import {
   Timer,
   Award,
   Activity,
-  UserCheck
+  UserCheck,
+  Smile
 } from "lucide-react";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { toast } from "@/lib/toast";
+import FaceMimicGame from "./FaceMimicGame";
+
 
 interface SpaceshipReminderProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type GameId = "neck-circle" | "shrugs" | "chin-tuck" | "stretch";
+type GameId = "neck-circle" | "shrugs" | "chin-tuck" | "stretch" | "face-mimic";
 
 export default function SpaceshipReminder({ isOpen, onClose }: SpaceshipReminderProps) {
   const { prefs: userPrefs } = useUserPreferences();
   const intervalMinutes = userPrefs.reminderInterval;
 
-  const games: GameId[] = ["neck-circle", "shrugs", "chin-tuck", "stretch"];
+  const games: GameId[] = ["neck-circle", "shrugs", "chin-tuck", "stretch", "face-mimic"];
   
   // Randomly select one game on mount
   const [activeGame, setActiveGame] = useState<GameId>(() => {
@@ -41,6 +44,7 @@ export default function SpaceshipReminder({ isOpen, onClose }: SpaceshipReminder
     shrugs: false,
     "chin-tuck": false,
     stretch: false,
+    "face-mimic": false,
   });
 
   // Camera tracking states
@@ -299,6 +303,7 @@ export default function SpaceshipReminder({ isOpen, onClose }: SpaceshipReminder
                           {activeGame === "shrugs" && "肩膀高度: 92%"}
                           {activeGame === "chin-tuck" && "下巴距离: -1.2cm"}
                           {activeGame === "stretch" && "倾斜角度: 18°"}
+                          {activeGame === "face-mimic" && "表情匹配度: 85%"}
                         </div>
                       </div>
                     </div>
@@ -312,6 +317,7 @@ export default function SpaceshipReminder({ isOpen, onClose }: SpaceshipReminder
                           {activeGame === "shrugs" && "肩肌收缩拉伸"}
                           {activeGame === "chin-tuck" && "下巴内收对齐"}
                           {activeGame === "stretch" && "左右侧向拉伸"}
+                          {activeGame === "face-mimic" && "表情模仿秀"}
                         </span>
                       </div>
                       <div className="flex flex-col items-end">
@@ -321,6 +327,7 @@ export default function SpaceshipReminder({ isOpen, onClose }: SpaceshipReminder
                           {activeGame === "shrugs" && "4% (良好)"}
                           {activeGame === "chin-tuck" && "0.2cm (精确)"}
                           {activeGame === "stretch" && "±2.1° (良好)"}
+                          {activeGame === "face-mimic" && "85% (优秀)"}
                         </span>
                       </div>
                       <div className="flex flex-col">
@@ -330,6 +337,7 @@ export default function SpaceshipReminder({ isOpen, onClose }: SpaceshipReminder
                           {activeGame === "shrugs" && "91.8%"}
                           {activeGame === "chin-tuck" && "97.2%"}
                           {activeGame === "stretch" && "93.4%"}
+                          {activeGame === "face-mimic" && "88.5%"}
                         </span>
                       </div>
                       <div className="flex flex-col items-end">

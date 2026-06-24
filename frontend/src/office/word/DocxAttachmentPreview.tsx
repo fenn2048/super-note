@@ -162,7 +162,7 @@ export default function DocxAttachmentPreview({ url, filename, heightClass, onRe
         await onReplace(file);
       } catch (err) {
         // 失败由 onReplace 内部 toast，组件这里只复位 state
-        // eslint-disable-next-line no-console
+
         console.error("Replace docx failed:", err);
       } finally {
         setUploading(false);

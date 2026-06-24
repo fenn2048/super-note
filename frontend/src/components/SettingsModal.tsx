@@ -802,6 +802,44 @@ function SwitchesPanel() {
             <option value={120}>2 小时</option>
           </select>
         </div>
+        <div className="flex items-center justify-between px-3 py-2.5 hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="text-xs font-medium text-tx-primary leading-none">
+              表情模仿秀 Good 阈值
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
+              设置检测到用户表情和目标表情相似度的最低标准，达到此标准给予 Good 动画效果。
+            </p>
+          </div>
+          <select
+            value={userPrefs.faceMimicGoodThreshold}
+            onChange={(e) => setUserPref("faceMimicGoodThreshold", Number(e.target.value))}
+            className="text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-tx-primary px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+          >
+            {[50, 60, 70, 75, 80, 85].map((val) => (
+              <option key={val} value={val}>{val}%</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center justify-between px-3 py-2.5 hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="text-xs font-medium text-tx-primary leading-none">
+              表情模仿秀 Wonderful 阈值
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
+              设置检测到用户表情和目标表情相似度的最低标准，达到此标准给予 Wonderful 动画效果，并自动切换到下一个。
+            </p>
+          </div>
+          <select
+            value={userPrefs.faceMimicWonderfulThreshold}
+            onChange={(e) => setUserPref("faceMimicWonderfulThreshold", Number(e.target.value))}
+            className="text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-tx-primary px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+          >
+            {[60, 70, 80, 85, 90, 95].map((val) => (
+              <option key={val} value={val}>{val}%</option>
+            ))}
+          </select>
+        </div>
 
         {supportsDesktopMenuBarToggle && (
           <label className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">

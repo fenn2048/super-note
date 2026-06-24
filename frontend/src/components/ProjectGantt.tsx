@@ -32,12 +32,12 @@ export default function ProjectGantt({ stages, onTaskClick }: ProjectGanttProps)
       .filter((d) => d.start || d.end);
 
     if (taskDates.length > 0) {
-      let absoluteMin = new Date(
+      const absoluteMin = new Date(
         Math.min(
           ...taskDates.map((d) => (d.start || d.end)!.getTime())
         )
       );
-      let absoluteMax = new Date(
+      const absoluteMax = new Date(
         Math.max(
           ...taskDates.map((d) => (d.end || d.start)!.getTime())
         )
@@ -53,7 +53,7 @@ export default function ProjectGantt({ stages, onTaskClick }: ProjectGanttProps)
 
     // Generate list of days
     const days: Date[] = [];
-    let current = new Date(minDate);
+    const current = new Date(minDate);
     while (current <= maxDate) {
       days.push(new Date(current));
       current.setDate(current.getDate() + 1);

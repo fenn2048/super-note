@@ -47,6 +47,10 @@ export interface UserPreferences {
   readingDensity: ReadingDensity;
   /** 太空飞船健康提醒间隔（单位：分钟）。默认 30。 */
   reminderInterval: number;
+  /** 表情模仿秀：Good 相似度阈值。默认 70。 */
+  faceMimicGoodThreshold: number;
+  /** 表情模仿秀：Wonderful 相似度阈值。默认 80。 */
+  faceMimicWonderfulThreshold: number;
 }
 
 const DEFAULT_PREFS: UserPreferences = {
@@ -55,6 +59,8 @@ const DEFAULT_PREFS: UserPreferences = {
   lockOnOpen: false,
   readingDensity: "cozy",
   reminderInterval: 30,
+  faceMimicGoodThreshold: 70,
+  faceMimicWonderfulThreshold: 80,
 };
 
 function readFromStorage(): UserPreferences {
@@ -79,6 +85,12 @@ function readFromStorage(): UserPreferences {
       reminderInterval: typeof parsed.reminderInterval === "number"
         ? parsed.reminderInterval
         : DEFAULT_PREFS.reminderInterval,
+      faceMimicGoodThreshold: typeof parsed.faceMimicGoodThreshold === "number"
+        ? parsed.faceMimicGoodThreshold
+        : DEFAULT_PREFS.faceMimicGoodThreshold,
+      faceMimicWonderfulThreshold: typeof parsed.faceMimicWonderfulThreshold === "number"
+        ? parsed.faceMimicWonderfulThreshold
+        : DEFAULT_PREFS.faceMimicWonderfulThreshold,
     };
   } catch {
     return DEFAULT_PREFS;

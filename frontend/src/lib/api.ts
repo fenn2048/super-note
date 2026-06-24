@@ -97,7 +97,7 @@ export function getServerUrl(): string {
   if (!raw) return "";
   if (!isValidServerUrl(raw)) {
     // 自愈：清掉坏值，避免无限触发 `<!DOCTYPE` 报错
-    // eslint-disable-next-line no-console
+
     console.warn("[api] invalid server url in localStorage, clearing:", raw);
     try { localStorage.removeItem(SERVER_URL_KEY); } catch { /* ignore */ }
     raw = injected;
@@ -508,7 +508,7 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
       if (connId) {
         try {
           res = await fetch(fullUrl, { ...restOptions, signal: linkedController.signal, headers: buildHeaders(false) });
-          // eslint-disable-next-line no-console
+
           console.warn(
             "[api] retry without X-Connection-Id succeeded — backend CORS likely missing this header in allowHeaders. Disabling injection for this session.",
           );
