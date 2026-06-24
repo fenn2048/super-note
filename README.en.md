@@ -16,7 +16,7 @@
 - **Collaboration & history**: Shared links with 4 permission tiers (view / comment / edit / edit-with-login), guest comments, password / expiry, version rollback
 - **File manager**: Image thumbnails (sharp webp at 240/480/960, ~100x bandwidth saving on dense galleries), "My uploads" view (referenced / unreferenced), orphan cleanup
 - **Automation**: Sandboxed plugin system, Webhooks, audit log, scheduled auto-backup
-- **Cross-platform**: Web / Electron (Win/macOS/Linux) / Android (Capacitor)
+- **Cross-platform**: Web / Electron (Win/macOS/Linux) / Android (Capacitor) / NAS (fnOS / UGOS)
 - **Developer ecosystem**: MCP Server, TypeScript SDK, CLI, [browser clipper extension](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg), OpenAPI 3.0 — see [`packages/`](./packages)
 
 ## Stack
@@ -90,6 +90,12 @@ Grab the latest `super-note-x.y.z.fpk` from [Releases](https://github.com/cropfl
 
 > The .fpk currently targets x86_64 fnOS only (`platform=x86`). To build it yourself, see [scripts/fpk/README.md](./scripts/fpk/README.md).
 
+### UGREEN UGOS (one-click .upk install)
+
+Grab the latest `super-note-x.y.z.upk` from [Releases](https://github.com/cropflre/super-note/releases). On your UGREEN NAS, open **App Center → Settings → Local Install** and pick the file. After installation, click the "Super Note" icon on the desktop.
+
+> To build it yourself, see [scripts/upk/README.md](./scripts/upk/README.md).
+
 ## Configuration
 
 | Env var | Default | Description |
@@ -132,62 +138,6 @@ If this project helps you, feel free to scan the QR code and buy the author a co
 <!-- CHANGELOG:BEGIN -->
 ## 更新日志
 
-> 最近 5 个版本的更新内容，完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
-
-### v1.1.13 - 2026-06-02
-
-### 🐛 修复
-
-- restrict color-mix focus fallback to form elements only (f9e58ec)
-- Backspace at line start now correctly decreases indent (Office-like behavior) (aadc88a)
-- add CSS fallbacks for older Android WebViews (Xiaomi 8 black screen) (aa9a2fd)
-
-### v1.1.12 - 2026-06-01
-
-### 🐛 修复
-
-- resolve remaining TS null-check and changeIndent type errors (98fc8fd)
-- resolve all 13 TS7006/7022/7023/7031 implicit any errors (732420d)
-- clip row resize guide line to table bounds (a5a6c5c)
-- clip row resize guide line to editor bounds (45f9342)
-- table row height drag now follows mouse in real-time via transaction (1edae9c)
-- improve table row height resize UX - wider hit area and real-time visual feedback (539c56c)
-- Backspace at line start reduces indent level (437fb38)
-- table bubble merge button visibility + mini toolbar (ea6a088)
-
-### 📌 杂项
-
-- Update README.md (4b9a660)
-
-### v1.1.11 - 2026-05-29
-
-### ✨ 新增
-
-- **editor**: 表格交互优化 - 网格选择器与行高丝滑拖拽 (f92168e)
-
-### v1.1.10 - 2026-05-29
-
-### ✨ 新增
-
-- **prefs**: 新增阅读密度偏好（宽松/紧凑） (3d94607)
-- **mobile**: 搜索按钮上提到笔记标题栏 (e0f047c)
-- **editor**: 表格新增行高可拖拽功能 (c5c2461)
-- 新增客户端下载面板 + Gitee Release 镜像同步 (93a6117)
-
-### 🐛 修复
-
-- **download**: 修复 DownloadPanel icon 类型 TS2322 编译错误 (ced169b)
-- **editor**: 收紧图片上下间距 (29ccead)
-- **upk**: use host network for ugreen package (68065b9)
-
-### 🔧 其他
-
-- **upk**: update zh-CN display name (bcd55ee)
-
-### v1.1.9 - 2026-05-28
-
-### 🐛 修复
-
-- **desktop**: prevent local mode reload loop (490f5a3)
+> 最近 0 个版本的更新内容，完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
 
 <!-- CHANGELOG:END -->
