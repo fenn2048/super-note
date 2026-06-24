@@ -39,15 +39,12 @@ ARG TARGETARCH=
 ARG APK_MIRROR=""
 ARG NPM_REGISTRY=""
 
-# 通过 --build-arg SKIP_ANDROID=1 跳过 Android APK 打包（加快构建速度）
-ARG SKIP_ANDROID=""
 
 # ---------- Stage 1: 前端构建 ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS frontend-build
 ARG TARGETARCH
 ARG APK_MIRROR
 ARG NPM_REGISTRY
-ARG SKIP_ANDROID
 WORKDIR /app
 
 # 安装 bash（脚本依赖）
@@ -88,15 +85,6 @@ RUN cd frontend \
     fi; \
     \
     npm run build
-
-# Step 2: Android APK 打包（默认执行；传入 --build-arg SKIP_ANDROID=1 时跳过）
-RUN if [ -z "$SKIP_ANDROID" ]; then \
-      chmod +x frontend/android/build_signed_debug_apk.sh \
-      && TARGETARCH=${TARGETARCH} ./frontend/android/build_signed_debug_apk.sh || \
-      echo "警告：Android APK 打包失败（可能缺少 Android SDK），但不影响前端构建"; \
-    else \
-      echo "SKIP_ANDROID=1，跳过 Android APK 打包"; \
-    fi
 
 # ---------- Stage 2: 后端构建（tsc） ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS backend-build
