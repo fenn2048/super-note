@@ -3932,7 +3932,12 @@ export default function DiaryCenter() {
             }
           }}
           onDelete={async () => {
-            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            const ok = await confirmDialog({
+              title: t("sidebar.deleteTagTitle"),
+              description: t("sidebar.confirmDeleteTag", { name: tagColorPopover.tagName }),
+              danger: true,
+            });
+            if (!ok) return;
             try {
               await api.deleteTag(tagColorPopover.tagId);
               if (filterMode === tagColorPopover.tagId) {

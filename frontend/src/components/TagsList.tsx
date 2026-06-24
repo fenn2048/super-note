@@ -13,6 +13,7 @@ import { useApp, useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import TagColorPopover from "@/components/TagColorPopover";
+import { confirm as confirmDialog } from "@/components/ui/confirm";
 
 export default function TagsList() {
   const { t } = useTranslation();
@@ -149,7 +150,12 @@ export default function TagsList() {
             }
           }}
           onDelete={async () => {
-            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            const ok = await confirmDialog({
+              title: t("sidebar.deleteTagTitle"),
+              description: t("sidebar.confirmDeleteTag", { name: tagColorPopover.tagName }),
+              danger: true,
+            });
+            if (!ok) return;
             try {
               await api.deleteTag(tagColorPopover.tagId);
               if (state.selectedTagId === tagColorPopover.tagId) {

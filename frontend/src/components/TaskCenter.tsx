@@ -14,6 +14,7 @@ import { api, getCurrentWorkspace } from "@/lib/api";
 import { Task, TaskFilter, TaskPriority, TaskStats, Workspace, Tag } from "@/types";
 import { cn, detectSuMention } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { useApp, useAppActions } from "@/store/AppContext";
 import TagColorPopover from "@/components/TagColorPopover";
 import GenericTagInput from "@/components/GenericTagInput";
@@ -1992,7 +1993,12 @@ export default function TaskCenter() {
             }
           }}
           onDelete={async () => {
-            if (!window.confirm(t("tags.confirmDelete", "确定要删除该标签吗？"))) return;
+            const ok = await confirmDialog({
+              title: t("sidebar.deleteTagTitle"),
+              description: t("sidebar.confirmDeleteTag", { name: tagColorPopover.tagName }),
+              danger: true,
+            });
+            if (!ok) return;
             try {
               await api.deleteTag(tagColorPopover.tagId);
               if (selectedTagId === tagColorPopover.tagId) {

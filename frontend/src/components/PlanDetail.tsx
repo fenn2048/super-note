@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
+import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -110,12 +111,16 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
     if (newStatus === plan.status) return;
 
     const confirmMsg = newStatus === "completed" 
-      ? "手动将计划设为「已完成」将会把该计划下的所有里程碑以及关联的项目自动标记为「已完成」。确定要继续吗？"
+      ? t("sidebar.planStatusConfirmCompleted")
       : newStatus === "pending"
-      ? "手动将计划设为「待启动」将会把该计划下的所有里程碑以及关联的项目重置为「待启动」。确定要继续吗？"
-      : "手动将计划设为「进行中」将会把对应的「待启动」里程碑以及其下的项目更改为「进行中」。确定要继续吗？";
+      ? t("sidebar.planStatusConfirmPending")
+      : t("sidebar.planStatusConfirmInProgress");
 
-    if (!window.confirm(confirmMsg)) return;
+    const ok = await confirmDialog({
+      title: t("sidebar.updateStatusTitle"),
+      description: confirmMsg,
+    });
+    if (!ok) return;
 
     try {
       await api.updatePlan(planId, { status: newStatus });
@@ -128,13 +133,16 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
   // Handle milestone status change
   const handleMilestoneStatusChange = async (milestoneId: string, milestoneName: string, newStatus: "pending" | "in_progress" | "completed") => {
-    const confirmMsg = newStatus === "completed" 
-      ? `将里程碑「${milestoneName}」设为「已完成」将会把该里程碑关联的所有项目自动标记为「已完成」。确定要继续吗？`
+    const confirmMsg = newStatus === "completed"
+      ? t("sidebar.milestoneStatusConfirmCompleted", { name: milestoneName })
       : newStatus === "pending"
-      ? `将里程碑「${milestoneName}」设为「待启动」将会把该里程碑关联的所有项目重置为「待启动」。确定要继续吗？`
-      : `将里程碑「${milestoneName}」设为「进行中」将会把其下「待启动」的项目更改为「进行中」。确定要继续吗？`;
-
-    if (!window.confirm(confirmMsg)) return;
+      ? t("sidebar.milestoneStatusConfirmPending", { name: milestoneName })
+      : t("sidebar.milestoneStatusConfirmInProgress", { name: milestoneName });
+    const ok = await confirmDialog({
+      title: t("sidebar.updateStatusTitle"),
+      description: confirmMsg,
+    });
+    if (!ok) return;
 
     try {
       await api.updateMilestoneStatus(milestoneId, newStatus);
@@ -158,7 +166,12 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
   // Dissociate project from a milestone
   const handleDissociateProject = async (projectId: string) => {
-    if (!window.confirm("确定要取消该项目与当前里程碑的关联吗？")) return;
+    const ok = await confirmDialog({
+      title: t("sidebar.dissociateProjectTitle"),
+      description: t("sidebar.dissociateProjectConfirm"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.updateProject(projectId, { milestoneId: null });
       toast.success("成功取消关联");
@@ -250,7 +263,12 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
   // Delete Plan
   const handleDeletePlan = async () => {
-    if (!window.confirm("确定要删除该计划吗？此操作将永久删除计划及其对应的里程碑，但不会删除关联的项目。确定继续吗？")) return;
+    const ok = await confirmDialog({
+      title: t("sidebar.deletePlanTitle"),
+      description: t("sidebar.deletePlanConfirm"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.deletePlan(planId);
       toast.success("计划已删除");
