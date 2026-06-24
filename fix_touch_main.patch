@@ -1,0 +1,11 @@
+--- frontend/src/components/NoteList.tsx
++++ frontend/src/components/NoteList.tsx
+@@ -3275,7 +3275,7 @@
+                       onDragEnd={handleDragEnd}
+                       onDrop={(e) => handleDrop(e, note.id)}
+                       isDragOver={dragOverNoteId === note.id}
+-                      onTouchStart={(e) => handleTouchStart(note.id, e)}
++                      onTouchStart={handleTouchStart}
+                       onTouchMove={handleTouchMove}
+                       onTouchEnd={handleTouchEnd}
+                     />
