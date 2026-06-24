@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { EmojiPicker } from "./EmojiPicker";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send,
@@ -105,11 +106,6 @@ const MOODS = [
   { value: "shock", emoji: "😱" },
 ];
 
-const COMMENT_EMOJIS = [
-  "😊", "👍", "🙌", "👏", "🎉", "❤️", "🥰", "🥳", 
-  "🔥", "✨", "🤔", "😌", "🤣", "😮", "😢", "😤", 
-  "😎", "😴", "🤒", "😱", "👀", "🤝", "💪", "💡"
-];
 
 export const SU_USER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -2475,36 +2471,46 @@ function DiaryCard({
                             initial={{ opacity: 0, scale: 0.9, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                            className="absolute bottom-full right-0 mb-2 p-2 bg-app-elevated border border-app-border shadow-lg rounded-xl z-50 w-48"
+                            className="absolute bottom-full right-0 mb-2 p-2 bg-app-elevated border border-app-border shadow-lg rounded-xl z-50"
                           >
-                            <div className="grid grid-cols-6 gap-1">
-                              {COMMENT_EMOJIS.map((emoji) => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => {
-                                    const text = newCommentText;
-                                    const before = text.substring(0, commentCursorPos);
-                                    const after = text.substring(commentCursorPos);
-                                    const updated = before + emoji + after;
-                                    setNewCommentText(updated);
-                                    const newPos = commentCursorPos + emoji.length;
-                                    setCommentCursorPos(newPos);
-                                    setShowCommentEmojis(false);
-                                    
-                                    setTimeout(() => {
-                                      if (commentInputRef.current) {
-                                        commentInputRef.current.focus();
-                                        commentInputRef.current.setSelectionRange(newPos, newPos);
-                                      }
-                                    }, 0);
-                                  }}
-                                  className="w-7 h-7 hover:bg-app-hover rounded flex items-center justify-center text-sm transition-colors"
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
+                            <EmojiPicker
+                              onSelectTextEmoji={(emoji) => {
+                                const text = newCommentText;
+                                const before = text.substring(0, commentCursorPos);
+                                const after = text.substring(commentCursorPos);
+                                const updated = before + emoji + after;
+                                setNewCommentText(updated);
+                                const newPos = commentCursorPos + emoji.length;
+                                setCommentCursorPos(newPos);
+                                setShowCommentEmojis(false);
+
+                                setTimeout(() => {
+                                  if (commentInputRef.current) {
+                                    commentInputRef.current.focus();
+                                    commentInputRef.current.setSelectionRange(newPos, newPos);
+                                  }
+                                }, 0);
+                              }}
+                              onSelectImageEmoji={(url) => {
+                                const markdownImg = `![emoji](${url})`;
+                                const text = newCommentText;
+                                const before = text.substring(0, commentCursorPos);
+                                const after = text.substring(commentCursorPos);
+                                const updated = before + markdownImg + after;
+                                setNewCommentText(updated);
+                                const newPos = commentCursorPos + markdownImg.length;
+                                setCommentCursorPos(newPos);
+                                setShowCommentEmojis(false);
+
+                                setTimeout(() => {
+                                  if (commentInputRef.current) {
+                                    commentInputRef.current.focus();
+                                    commentInputRef.current.setSelectionRange(newPos, newPos);
+                                  }
+                                }, 0);
+                              }}
+                              className="w-72"
+                            />
                           </motion.div>
                         )}
                       </AnimatePresence>

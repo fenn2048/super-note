@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { EmojiPicker } from "./EmojiPicker";
 import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video, AtSign, MoreHorizontal, ScanText } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -982,7 +983,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   };
 
   // ----------------- Emoji Keyboard area -----------------
-  const EMOJIS = ["😊", "🥳", "😌", "🤔", "😴", "😢", "😤", "🤒", "🥰", "😎", "🤣", "😱", "👍", "🔥", "🎉", "❤️", "👏", "🙌", "✨", "🌟", "💡", "🍀", "📱", "🏠"];
   const MOODS = [
     { value: "happy", emoji: "😊", label: "开心" },
     { value: "excited", emoji: "🥳", label: "超棒" },
@@ -998,7 +998,24 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     { value: "shock", emoji: "😱", label: "吃惊" },
   ];
 
-  const handleEmojiSelect = (emoji: string) => {
+    const handleImageEmojiSelect = (url: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart || 0;
+    const end = el.selectionEnd || 0;
+    const markdownImg = `![emoji](${url})`;
+    const nextText = text.slice(0, start) + markdownImg + text.slice(end);
+    setText(nextText);
+
+    // Position cursor after inserted emoji
+    setTimeout(() => {
+      el.focus();
+      const pos = start + markdownImg.length;
+      el.setSelectionRange(pos, pos);
+    }, 50);
+  };
+
+const handleEmojiSelect = (emoji: string) => {
     const el = textareaRef.current;
     if (!el) return;
     const start = el.selectionStart || 0;
@@ -1477,17 +1494,11 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
               {/* 表情键盘 */}
               <div>
                 <h4 className="text-[10px] font-semibold text-tx-tertiary uppercase tracking-wider mb-2">常用表情</h4>
-                <div className="grid grid-cols-8 gap-2">
-                  {EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => handleEmojiSelect(emoji)}
-                      className="w-10 h-10 rounded-lg bg-app-surface border border-app-border/40 flex items-center justify-center text-lg hover:bg-app-hover active:scale-90 transition-transform"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
+                <EmojiPicker
+                  onSelectTextEmoji={handleEmojiSelect}
+                  onSelectImageEmoji={handleImageEmojiSelect}
+                  className="w-full h-64 border-none shadow-none bg-app-surface"
+                />
               </div>
             </div>
           </motion.div>

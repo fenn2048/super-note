@@ -2874,3 +2874,12 @@ label.cursor-pointer:hover {
   background-color: rgba(255, 255, 255, 0.02) !important;
 }
 
+
+/* ===== Emoji Image Markdown Rendering ===== */
+img[alt="emoji"] {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  vertical-align: middle;
+  margin: 0 2px;
+}
