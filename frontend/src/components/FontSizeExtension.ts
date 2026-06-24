@@ -40,7 +40,7 @@ import {
 } from "@tiptap/extension-text-style";
 
 declare module "@tiptap/core" {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   interface Commands<ReturnType> {
     fontSize: {
       /** 设置选区字号，传入 CSS font-size 合法值（如 "20px" / "1.2em" / "150%"） */

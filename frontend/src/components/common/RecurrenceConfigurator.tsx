@@ -39,7 +39,7 @@ export default function RecurrenceConfigurator({
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const type = e.target.value as RecurrenceRule["type"];
-    let defaultRule: RecurrenceRule = { type };
+    const defaultRule: RecurrenceRule = { type };
 
     if (type === "interval") {
       defaultRule.value = 1;

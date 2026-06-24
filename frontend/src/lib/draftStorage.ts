@@ -107,7 +107,7 @@ export function saveDraft(draft: NoteDraft): void {
       addToIndex(draft.noteId);
     } catch {
       // 仍然失败：放弃，但不影响主流程
-      // eslint-disable-next-line no-console
+
       console.warn("[draftStorage] saveDraft failed:", e);
     }
   }
