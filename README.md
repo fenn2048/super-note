@@ -16,7 +16,7 @@
 - **协作 & 历史**：分享支持 4 档权限（仅查看 / 可评论 / 可编辑 / 可编辑需登录）+ 访客留言 + 密码 / 有效期、版本回溯
 - **文件管理**：图片缩略图（webp 三档自适应，密集图床场景流量降至 1/100）、「我的上传」分类（已引用 / 未引用细分）、孤儿清理
 - **自动化**：沙箱插件系统、Webhook、审计日志、定时自动备份
-- **多端**：Web / Electron（Win/macOS/Linux）/ Android（Capacitor）
+- **多端**：Web / Electron（Win/macOS/Linux）/ Android（Capacitor）/ NAS（飞牛 fnOS / 绿联 UGOS）
 - **开发者生态**：MCP Server、TypeScript SDK、CLI、[浏览器剪藏扩展](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)、OpenAPI 3.0（见 [`packages/`](./packages)）
 
 ## 技术栈
@@ -90,6 +90,12 @@ Android 可直接从 [Releases](https://github.com/cropflre/super-note/releases)
 
 > 当前 .fpk 仅支持 x86_64 飞牛设备（`platform=x86`）。手动打包参见 [scripts/fpk/README.md](./scripts/fpk/README.md)。
 
+### 绿联 UGOS（.upk 一键安装）
+
+从 [Releases](https://github.com/cropflre/super-note/releases) 下载最新 `super-note-x.y.z.upk`，在绿联 NAS 「应用中心 → 设置 → 本地安装」选中文件即可。安装后桌面出现「弄文笔记」图标。
+
+> 手动打包参见 [scripts/upk/README.md](./scripts/upk/README.md)。
+
 ## 配置
 
 | 环境变量 | 默认值 | 说明 |
@@ -151,62 +157,6 @@ QQ 群：`1093473044`
 <!-- CHANGELOG:BEGIN -->
 ## 更新日志
 
-> 最近 5 个版本的更新内容，完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
-
-### v1.1.13 - 2026-06-02
-
-### 🐛 修复
-
-- restrict color-mix focus fallback to form elements only (f9e58ec)
-- Backspace at line start now correctly decreases indent (Office-like behavior) (aadc88a)
-- add CSS fallbacks for older Android WebViews (Xiaomi 8 black screen) (aa9a2fd)
-
-### v1.1.12 - 2026-06-01
-
-### 🐛 修复
-
-- resolve remaining TS null-check and changeIndent type errors (98fc8fd)
-- resolve all 13 TS7006/7022/7023/7031 implicit any errors (732420d)
-- clip row resize guide line to table bounds (a5a6c5c)
-- clip row resize guide line to editor bounds (45f9342)
-- table row height drag now follows mouse in real-time via transaction (1edae9c)
-- improve table row height resize UX - wider hit area and real-time visual feedback (539c56c)
-- Backspace at line start reduces indent level (437fb38)
-- table bubble merge button visibility + mini toolbar (ea6a088)
-
-### 📌 杂项
-
-- Update README.md (4b9a660)
-
-### v1.1.11 - 2026-05-29
-
-### ✨ 新增
-
-- **editor**: 表格交互优化 - 网格选择器与行高丝滑拖拽 (f92168e)
-
-### v1.1.10 - 2026-05-29
-
-### ✨ 新增
-
-- **prefs**: 新增阅读密度偏好（宽松/紧凑） (3d94607)
-- **mobile**: 搜索按钮上提到笔记标题栏 (e0f047c)
-- **editor**: 表格新增行高可拖拽功能 (c5c2461)
-- 新增客户端下载面板 + Gitee Release 镜像同步 (93a6117)
-
-### 🐛 修复
-
-- **download**: 修复 DownloadPanel icon 类型 TS2322 编译错误 (ced169b)
-- **editor**: 收紧图片上下间距 (29ccead)
-- **upk**: use host network for ugreen package (68065b9)
-
-### 🔧 其他
-
-- **upk**: update zh-CN display name (bcd55ee)
-
-### v1.1.9 - 2026-05-28
-
-### 🐛 修复
-
-- **desktop**: prevent local mode reload loop (490f5a3)
+> 最近 0 个版本的更新内容，完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
 
 <!-- CHANGELOG:END -->
