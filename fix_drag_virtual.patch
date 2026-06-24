@@ -1,0 +1,17 @@
+--- frontend/src/components/NoteList.tsx
++++ frontend/src/components/NoteList.tsx
+@@ -1132,10 +1132,10 @@
+               onClick={(e) => onSelectNote(note.id, e)}
+               onContextMenu={(e) => onContextMenu(e, note.id)}
+               draggable={canDragSort}
+-              onDragStart={(e) => onDragStart?.(e, note.id)}
+-              onDragOver={(e) => onDragOver?.(e, note.id)}
+-              onDragEnd={() => onDragEnd?.()}
+-              onDrop={(e) => onDrop?.(e, note.id)}
++              onDragStart={onDragStart}
++              onDragOver={onDragOver}
++              onDragEnd={onDragEnd}
++              onDrop={onDrop}
+               isDragOver={dragOverNoteId === note.id}
+               onTouchStart={onTouchStart}
+               onTouchMove={onTouchMove}

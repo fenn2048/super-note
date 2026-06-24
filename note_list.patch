@@ -1,0 +1,24 @@
+--- frontend/src/components/NoteList.tsx
++++ frontend/src/components/NoteList.tsx
+@@ -1503,11 +1503,11 @@
+   // 防止快速点击导致多个并发 getNote 请求
+   const selectNoteAbortRef = useRef<AbortController | null>(null);
+
+-  const handleSelectNote = async (noteId: string, e?: React.MouseEvent) => {
++  const handleSelectNote = useCallback(async (noteId: string, e?: React.MouseEvent) => {
+     const isCtrl = !!e && (e.ctrlKey || e.metaKey);
+     const isShift = !!e && e.shiftKey;
+
+     // Ctrl/Cmd 点击：切换此项在多选集合中的状态，不打开笔记
+     if (isCtrl) {
+       setSelectedIds((prev) => {
+         const next = new Set(prev);
+@@ -1585,7 +1585,7 @@
+         actions.setNoteLoading(false);
+       }
+     }
+-  };
++  }, [actions, api, state.activeNote?.id, sortedNotes, lastClickedId, selectedIds.size, t]);
+
+   const handleCreateNote = async (noteType: "normal" | "word" = "normal") => {
+     haptic.light();

@@ -1138,7 +1138,7 @@ function VirtualNoteList({
               onDragEnd={() => onDragEnd?.()}
               onDrop={(e) => onDrop?.(e, note.id)}
               isDragOver={dragOverNoteId === note.id}
-              onTouchStart={(e) => onTouchStart?.(note.id, e)}
+              onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
             />
@@ -1218,7 +1218,7 @@ export default function NoteList() {
 
   // Mobile favorites segment/tab selection: "notes" | "tasks" | "talks"
   const [favSegmentTab, setFavSegmentTab] = useState<"notes" | "tasks" | "talks">("notes");
-  
+
   // Local states for loaded favorite tasks and talks
   const [favTasks, setFavTasks] = useState<any[]>([]);
   const [favDiaries, setFavDiaries] = useState<any[]>([]);
@@ -1595,7 +1595,7 @@ export default function NoteList() {
         actions.setNoteLoading(false);
       }
     }
-  }, [actions, state.activeNote?.id, sortedNotes, lastClickedId, selectedIds.size, t]);
+  }, [actions, api, state.activeNote?.id, sortedNotes, lastClickedId, selectedIds.size, t]);
 
   const handleCreateNote = async (noteType: "normal" | "word" = "normal") => {
     haptic.light();

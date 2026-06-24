@@ -432,6 +432,7 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_notes_user ON notes(userId);
     CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updatedAt DESC);
     CREATE INDEX IF NOT EXISTS idx_notes_trashed ON notes(isTrashed);
+    CREATE INDEX IF NOT EXISTS idx_notes_query_v2 ON notes(userId, workspaceId, isTrashed, isPinned DESC, updatedAt DESC);
     CREATE INDEX IF NOT EXISTS idx_notebooks_parent ON notebooks(parentId);
     CREATE INDEX IF NOT EXISTS idx_notebooks_user ON notebooks(userId);
     CREATE INDEX IF NOT EXISTS idx_note_tags_note ON note_tags(noteId);
