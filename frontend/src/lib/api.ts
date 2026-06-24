@@ -1997,9 +1997,9 @@ export const api = {
 
   // AI
   getAISettings: () =>
-    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string }>("/ai/settings"),
-  updateAISettings: (data: { ai_provider?: string; ai_api_url?: string; ai_api_key?: string; ai_model?: string; ai_think_keywords?: string }) =>
-    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string }>("/ai/settings", {
+    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string }>("/ai/settings"),
+  updateAISettings: (data: { ai_provider?: string; ai_api_url?: string; ai_api_key?: string; ai_model?: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string }) =>
+    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string }>("/ai/settings", {
       method: "PUT",
       body: JSON.stringify(data),
     }),

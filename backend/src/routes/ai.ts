@@ -68,6 +68,8 @@ export interface AISettings {
   ai_embedding_key: string;
   ai_embedding_model: string;
   ai_think_keywords?: string; // 思考模式触发关键词
+  ai_ollama_num_ctx?: string;
+  ai_ollama_num_threads?: string;
 }
 
 const AI_DEFAULTS: AISettings = {
@@ -79,6 +81,8 @@ const AI_DEFAULTS: AISettings = {
   ai_embedding_key: "",
   ai_embedding_model: "",
   ai_think_keywords: "分析,拆解,规划",
+  ai_ollama_num_ctx: "2048",
+  ai_ollama_num_threads: "4",
 };
 
 // 不需要 API Key 的 Provider
@@ -159,6 +163,12 @@ ai.put("/settings", async (c) => {
     if (body.ai_api_key !== undefined && !body.ai_api_key.includes("****")) {
       upsert.run("ai_api_key", body.ai_api_key);
     }
+    if (body.ai_ollama_num_ctx !== undefined) {
+      upsert.run("ai_ollama_num_ctx", body.ai_ollama_num_ctx);
+    }
+    if (body.ai_ollama_num_threads !== undefined) {
+      upsert.run("ai_ollama_num_threads", body.ai_ollama_num_threads);
+    }
     if (body.ai_model !== undefined) {
       upsert.run("ai_model", body.ai_model);
     }
@@ -215,6 +225,7 @@ ai.post("/test", async (c) => {
         model: settings.ai_model,
         messages: testMessages,
         max_tokens: 5,
+        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
         ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(testMessages, settings) } : {}),
       }),
       signal: AbortSignal.timeout(15000),
@@ -366,6 +377,7 @@ ai.post("/chat", async (c) => {
         stream: true,
         temperature: action === "fix_grammar" ? 0.1 : action === "format_code" ? 0.2 : 0.7,
         max_tokens: action === "title" ? 50 : action === "tags" ? 100 : action === "summarize" ? 300 : action === "custom" ? 4000 : 2000,
+        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
         ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
       }),
     });
@@ -716,6 +728,7 @@ ai.post("/ask", async (c) => {
         stream: true,
         temperature: 0.7,
         max_tokens: 2000,
+        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
         ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
       }),
     });
@@ -899,6 +912,7 @@ ai.post("/parse-document", async (c) => {
         stream: false,
         temperature: 0.3,
         max_tokens: 4000,
+        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
         ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
       }),
     });
@@ -1346,7 +1360,8 @@ ai.post("/batch-format", async (c) => {
           stream: false,
           temperature: 0.2,
           max_tokens: 4000,
-          ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(batchMessages, settings) } : {}),
+          ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
+        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(batchMessages, settings) } : {}),
         }),
       });
 
@@ -1535,7 +1550,8 @@ ai.post("/import-to-knowledge", async (c) => {
                 stream: false,
                 temperature: 0.2,
                 max_tokens: 4000,
-                ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(importMessages, settings) } : {}),
+                ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
+        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(importMessages, settings) } : {}),
               }),
               signal: AbortSignal.timeout(30000),
             });
@@ -2429,6 +2445,7 @@ ai.post("/classify", async (c) => {
         stream: false,
         temperature: 0.1,
         max_tokens: 600,
+        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
         ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(classifyMessages, settings) } : {}),
       }),
       signal: AbortSignal.timeout(30000),
@@ -2528,7 +2545,8 @@ export async function callLLM(
       messages,
       temperature: 0.7,
       max_tokens: 2000,
-      ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
+      ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
+        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
     }),
     signal: AbortSignal.timeout(30000),
   });

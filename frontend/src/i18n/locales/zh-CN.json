@@ -123,7 +123,6 @@
     "fileManager": "文件管理",
     "plans": "计划管理",
     "projects": "项目管理",
-
     "favorites": "收藏",
     "trash": "回收站",
     "emptyTrash": "清空回收站",
@@ -667,7 +666,6 @@
     "searchPlaceholder": "搜索用户名 / 昵称 / 邮箱",
     "filterRoleAll": "全部角色",
     "filterStatusAll": "全部状态",
-    "roleAdmin": "管理员",
     "roleUser": "普通用户",
     "statusActive": "正常",
     "statusDisabled": "已禁用",
@@ -986,7 +984,6 @@
       "sudoTitle": "身份验证",
       "sudoPasswordLabel": "当前密码",
       "sudoPasswordPlaceholder": "输入登录密码",
-
       "dirConfigTitle": "备份目录",
       "currentBackupDir": "当前备份目录",
       "currentDataDir": "数据目录",
@@ -1003,7 +1000,6 @@
       "dirSwitching": "切换中...",
       "dirSwitchSuccess": "已切换到 {{path}}。注意：旧备份文件未自动迁移。",
       "dirMigrateHint": "切换不会自动迁移旧目录的备份文件，如需保留请管理员通过 docker exec 手动 cp。",
-
       "autoConfigTitle": "自动备份",
       "autoEnabledLabel": "已启用",
       "autoDisabledLabel": "已停用",
@@ -1025,7 +1021,6 @@
       "saveAuto": "保存配置",
       "savingAuto": "保存中...",
       "saveAutoFailed": "保存失败：{{error}}",
-
       "restoreTooltip": "从此备份恢复（高危）",
       "restoreTitle": "从备份恢复",
       "restoreDangerTitle": "这是破坏性操作",
@@ -1046,7 +1041,6 @@
       "restoreFailed": "恢复失败",
       "cancel": "取消",
       "close": "关闭",
-
       "sendEmailTooltip": "将此备份作为附件发送到邮箱",
       "sendEmailTitle": "发送备份到邮箱",
       "sendEmailTo": "收件人邮箱",
@@ -1059,7 +1053,6 @@
       "sendEmailSuccess": "已发送到 {{to}}：{{resp}}",
       "sendEmailGeneratedSuccess": "已新建备份 {{filename}} 并发送到 {{to}}：{{resp}}",
       "sendEmailFailed": "发送失败：{{error}}",
-
       "sendEmailFormat": "附件格式",
       "sendEmailFormatCurrent": "直接发送当前备份（{{type}} · {{size}}）",
       "sendEmailFormatCurrentHint": "不会新建文件，发送速度最快；附件大小 = 当前备份大小。",
@@ -1091,7 +1084,6 @@
       "testSend": "发送测试",
       "testSuccess": "测试邮件已发送到 {{to}}：{{resp}}",
       "testFailed": "测试失败：{{error}}",
-
       "guide": {
         "title": "常见邮箱 SMTP 配置教程",
         "subtitle": "QQ / 163 / Gmail / Outlook 速查",
@@ -1412,7 +1404,13 @@
     "copied": "已复制",
     "retry": "重试",
     "requestFailed": "AI 请求失败，请检查设置",
-    "generating": "AI 正在生成内容…"
+    "generating": "AI 正在生成内容…",
+    "ollamaNumCtx": "上下文大小 (num_ctx)",
+    "ollamaNumCtxDesc": "建议根据内存大小设置（例如：2048或4096，默认: 2048）",
+    "ollamaNumCtxPlaceholder": "例如：2048",
+    "ollamaNumThreads": "CPU 线程数 (num_threads)",
+    "ollamaNumThreadsDesc": "建议设置为物理 CPU 核心数，提升纯 CPU 运行速度（默认: 4）",
+    "ollamaNumThreadsPlaceholder": "例如：4"
   },
   "aiChat": {
     "title": "AI 知识问答",
@@ -1494,7 +1492,7 @@
     "placeholder": "此刻想说点什么...",
     "searchPlaceholder": "搜索说说...",
     "tagFilter": "标签",
-    "allTags": "全部标签",
+    "allTags": "所有",
     "post": "发布",
     "mood": "心情",
     "moodHappy": "开心",
@@ -1539,7 +1537,6 @@
     "waitingUpload": "等待图片上传完成",
     "errorImagesHint": "请先移除上传失败的图片",
     "filterAll": "全部",
-    "allTags": "所有",
     "filterToday": "今天",
     "filterWeek": "近 7 天",
     "filterMonth": "近 30 天",
@@ -1550,7 +1547,7 @@
     "filterClear": "清除",
     "emptyFiltered": "该时间范围内没有内容",
     "favorites": "收藏",
-    "noFavorites":"暂无收藏",
+    "noFavorites": "暂无收藏",
     "emptyFilteredHint": "试试切换其他时间范围"
   },
   "download": {
@@ -1848,7 +1845,7 @@
     "noFavorites": "暂无收藏",
     "familyTodo": "家庭待办",
     "personalTodo": "个人待办",
-    "tasksCount":"个任务",
+    "tasksCount": "个任务",
     "members": "项目成员",
     "quickAccess": "快捷访问",
     "pending": "进行中"
