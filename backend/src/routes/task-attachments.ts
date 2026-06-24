@@ -85,6 +85,8 @@ export function handleDownloadTaskAttachment(c: Context): Response {
     headers: {
       "Content-Type": row.mimeType || "application/octet-stream",
       "Cache-Control": "public, max-age=31536000, immutable",
+      // Phase 5: 为附件下载添加严格 CSP
+      "Content-Security-Policy": "default-src 'none'; sandbox;",
     },
   });
 }
