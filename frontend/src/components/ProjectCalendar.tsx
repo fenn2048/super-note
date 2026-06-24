@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CheckCircle2, Circle } from "lucide-react";
@@ -7,16 +7,28 @@ import { Button } from "@/components/ui/button";
 interface ProjectCalendarProps {
   stages: ProjectStage[];
   onTaskClick?: (task: ProjectTask) => void;
+  showProjectFilter?: boolean;
 }
 
-export default function ProjectCalendar({ stages, onTaskClick }: ProjectCalendarProps) {
+export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter }: ProjectCalendarProps) {
   const { t } = useTranslation();
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
 
   // Extract all tasks
   const tasks = stages.reduce<ProjectTask[]>((acc, stage) => {
     return [...acc, ...(stage.tasks || [])];
   }, []);
+
+  const uniqueProjects = useMemo(() => {
+    const projMap = new Map<string, string>();
+    tasks.forEach((task) => {
+      if (task.projectId && !projMap.has(task.projectId)) {
+        projMap.set(task.projectId, (task as any).projectName || task.projectId);
+      }
+    });
+    return Array.from(projMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [tasks]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -78,6 +90,9 @@ export default function ProjectCalendar({ stages, onTaskClick }: ProjectCalendar
   const getTasksForDate = (date: Date) => {
     const dStr = date.toISOString().split("T")[0];
     return tasks.filter((task) => {
+      if (selectedProjectId !== "all" && task.projectId !== selectedProjectId) {
+        return false;
+      }
       if (!task.startDate && !task.endDate) return false;
       const start = task.startDate ? task.startDate.split("T")[0] : dStr;
       const end = task.endDate ? task.endDate.split("T")[0] : dStr;
@@ -106,6 +121,20 @@ export default function ProjectCalendar({ stages, onTaskClick }: ProjectCalendar
           </h2>
         </div>
         <div className="flex items-center gap-1.5">
+          {showProjectFilter && (
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary max-w-[150px] truncate"
+            >
+              <option value="all">{t("projects.allProjects") || "全部项目"}</option>
+              {uniqueProjects.map((proj) => (
+                <option key={proj.id} value={proj.id}>
+                  {proj.name}
+                </option>
+              ))}
+            </select>
+          )}
           <Button variant="outline" size="sm" onClick={today} className="text-xs">
             {t("calendar.today") || "今天"}
           </Button>
