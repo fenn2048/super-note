@@ -1,3 +1,4 @@
+import { EmojiPicker } from "./EmojiPicker";
 import { useState, useEffect, useRef } from "react";
 import { Project, ProjectDiscussion, ProjectTask, NoteListItem } from "@/types";
 import { api } from "@/lib/api";
@@ -67,7 +68,6 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const EMOJIS = ["😊", "👍", "🙌", "🔥", "👏", "🎉", "💡", "🎯", "🚀", "🤔", "👀", "❌", "✅", "⚠️"];
 
   const fetchDiscussions = async () => {
     try {
@@ -607,17 +607,11 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
 
       {/* Emojis Selector Bar */}
       {showEmojiPicker && (
-        <div className="absolute bottom-16 left-4 bg-app-elevated border border-app-border p-2 rounded-xl shadow-xl z-20 flex gap-1 items-center max-w-sm flex-wrap select-none animate-in slide-in-from-bottom-2 duration-200">
-          {EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => addEmoji(emoji)}
-              className="w-7 h-7 flex items-center justify-center hover:bg-app-hover rounded text-sm transition-colors"
-            >
-              {emoji}
-            </button>
-          ))}
+        <div className="absolute bottom-16 left-4 bg-app-elevated border border-app-border rounded-xl shadow-xl z-20 select-none animate-in slide-in-from-bottom-2 duration-200">
+          <EmojiPicker
+            onSelectTextEmoji={addEmoji}
+            onSelectImageEmoji={(url) => addEmoji(`![emoji](${url})`)}
+          />
         </div>
       )}
 
