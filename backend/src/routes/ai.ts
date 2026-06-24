@@ -56,7 +56,7 @@ function resolveScope(
 // ===== AI 设置管理 =====
 
 export interface AISettings {
-  ai_provider: string;       // "openai" | "ollama" | "custom" | "qwen" | "deepseek" | "gemini" | "doubao"
+  ai_provider: string;       // "openai" | "ollama" | "custom" | "qwen" | "deepseek" | "gemini" | "doubao" | "openmodel"
   ai_api_url: string;        // 对话 API 端点
   ai_api_key: string;        // API Key（Ollama 可为空）
   ai_model: string;          // 对话模型名称
@@ -127,6 +127,72 @@ function shouldEnableThink(messages: { role: string; content: string }[], settin
     }
   }
   return false;
+}
+
+function prepareAiRequest(
+  settings: AISettings,
+  messages: { role: string; content: string }[],
+  options: {
+    stream?: boolean;
+    temperature?: number;
+    max_tokens?: number;
+    response_format?: any;
+  } = {}
+) {
+  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  let url = "";
+  let body: any = {};
+
+  if (settings.ai_provider === "openmodel") {
+    url = baseUrl.endsWith("/messages")
+      ? baseUrl
+      : (baseUrl.endsWith("/v1") ? `${baseUrl}/messages` : `${baseUrl}/v1/messages`);
+
+    if (settings.ai_api_key) {
+      headers["x-api-key"] = settings.ai_api_key;
+      headers["anthropic-version"] = "2023-06-01";
+    }
+
+    // Extract system messages for Anthropic style
+    const systemMessages = messages.filter(m => m.role === "system").map(m => m.content);
+    const systemPrompt = systemMessages.length > 0 ? systemMessages.join("\n") : undefined;
+    const filteredMessages = messages.filter(m => m.role !== "system");
+
+    body = {
+      model: settings.ai_model,
+      messages: filteredMessages,
+      max_tokens: options.max_tokens ?? 1024,
+      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.stream !== undefined ? { stream: options.stream } : {}),
+      ...(systemPrompt ? { system: systemPrompt } : {}),
+    };
+  } else {
+    url = `${baseUrl}/chat/completions`;
+    if (settings.ai_api_key) {
+      headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
+    }
+
+    body = {
+      model: settings.ai_model,
+      messages,
+      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.max_tokens !== undefined ? { max_tokens: options.max_tokens } : {}),
+      ...(options.stream !== undefined ? { stream: options.stream } : {}),
+      ...(options.response_format ? { response_format: options.response_format } : {}),
+      ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads)
+        ? {
+            options: {
+              ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}),
+              ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}),
+            },
+          }
+        : {}),
+      ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
+    };
+  }
+
+  return { url, headers, body };
 }
 
 // GET /api/ai/settings
@@ -208,26 +274,14 @@ ai.post("/test", async (c) => {
     return c.json({ success: false, error: "未配置 API Key" }, 400);
   }
 
-  // 规范化 URL：去除末尾斜杠，避免拼接出双斜杠
-  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (settings.ai_api_key) {
-      headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
-    }
-
+    const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
     const testMessages = [{ role: "user", content: "Hi" }];
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const { url, headers, body } = prepareAiRequest(settings, testMessages, { max_tokens: 5 });
+    const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: settings.ai_model,
-        messages: testMessages,
-        max_tokens: 5,
-        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(testMessages, settings) } : {}),
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     });
 
@@ -269,11 +323,31 @@ ai.get("/models", async (c) => {
 
   try {
     const headers: Record<string, string> = {};
-    if (settings.ai_api_key) {
-      headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
+    if (settings.ai_provider === "openmodel") {
+      if (settings.ai_api_key) {
+        headers["x-api-key"] = settings.ai_api_key;
+        headers["anthropic-version"] = "2023-06-01";
+      }
+    } else {
+      if (settings.ai_api_key) {
+        headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
+      }
     }
 
-    const res = await fetch(`${settings.ai_api_url.replace(/\/+$/, "")}/models`, {
+    let modelsUrl = settings.ai_api_url.replace(/\/+$/, "");
+    if (settings.ai_provider === "openmodel") {
+      if (modelsUrl.endsWith("/messages")) {
+        modelsUrl = modelsUrl.replace(/\/messages$/, "/models");
+      } else if (modelsUrl.endsWith("/v1")) {
+        modelsUrl = `${modelsUrl}/models`;
+      } else {
+        modelsUrl = `${modelsUrl}/v1/models`;
+      }
+    } else {
+      modelsUrl = `${modelsUrl}/models`;
+    }
+
+    const res = await fetch(modelsUrl, {
       headers,
       signal: AbortSignal.timeout(10000),
     });
@@ -359,27 +433,18 @@ ai.post("/chat", async (c) => {
 
   messages.push({ role: "user", content: `${systemPrompt}\n\n${text}` });
 
-  // 规范化 URL：去除末尾斜杠，避免拼接出双斜杠
-  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ai_api_key) {
-    headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
-  }
-
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const maxTokens = action === "title" ? 50 : action === "tags" ? 100 : action === "summarize" ? 300 : action === "custom" ? 4000 : 2000;
+    const temperature = action === "fix_grammar" ? 0.1 : action === "format_code" ? 0.2 : 0.7;
+    const { url, headers, body } = prepareAiRequest(settings, messages, {
+      stream: true,
+      temperature,
+      max_tokens: maxTokens,
+    });
+    const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: settings.ai_model,
-        messages,
-        stream: true,
-        temperature: action === "fix_grammar" ? 0.1 : action === "format_code" ? 0.2 : 0.7,
-        max_tokens: action === "title" ? 50 : action === "tags" ? 100 : action === "summarize" ? 300 : action === "custom" ? 4000 : 2000,
-        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -412,7 +477,9 @@ ai.post("/chat", async (c) => {
             }
             try {
               const json = JSON.parse(data);
-              const content = json.choices?.[0]?.delta?.content;
+              const content = settings.ai_provider === "openmodel"
+                ? (json.type === "content_block_delta" && json.delta?.text ? json.delta.text : "")
+                : json.choices?.[0]?.delta?.content;
               if (content) {
                 // 同 /ask：用 JSON 包裹，避免换行被 SSE 行分隔符吞掉。
                 await stream.writeSSE({ data: JSON.stringify({ t: content }), event: "message" });
@@ -710,27 +777,16 @@ ai.post("/ask", async (c) => {
 
   messages.push({ role: "user", content: question });
 
-  // 规范化 URL：去除末尾斜杠，避免拼接出双斜杠
-  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ai_api_key) {
-    headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
-  }
-
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const { url, headers, body } = prepareAiRequest(settings, messages, {
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 2000,
+    });
+    const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: settings.ai_model,
-        messages,
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 2000,
-        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -784,7 +840,9 @@ ai.post("/ask", async (c) => {
             }
             try {
               const json = JSON.parse(data);
-              const content = json.choices?.[0]?.delta?.content;
+              const content = settings.ai_provider === "openmodel"
+                ? (json.type === "content_block_delta" && json.delta?.text ? json.delta.text : "")
+                : json.choices?.[0]?.delta?.content;
               if (content) {
                 // SSE 协议中 `\n` 会被解析为字段分隔符，直接把带换行的 Markdown
                 // 放进 data 字段会丢失换行（或被错误拆成多条消息）。
@@ -897,24 +955,15 @@ ai.post("/parse-document", async (c) => {
       { role: "user", content: `${aiPrompt}\n\n${rawText.slice(0, 8000)}` },
     ];
 
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (settings.ai_api_key) {
-      headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
-    }
-
-    const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const { url, headers, body } = prepareAiRequest(settings, messages, {
+      stream: false,
+      temperature: 0.3,
+      max_tokens: 4000,
+    });
+    const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: settings.ai_model,
-        messages,
-        stream: false,
-        temperature: 0.3,
-        max_tokens: 4000,
-        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -923,7 +972,9 @@ ai.post("/parse-document", async (c) => {
     }
 
     const data = await res.json();
-    const markdownContent = data.choices?.[0]?.message?.content || rawText;
+    const markdownContent = settings.ai_provider === "openmodel"
+      ? (data.content?.map((c: any) => c.text || "").join("") || rawText)
+      : (data.choices?.[0]?.message?.content || rawText);
 
     // 如果指定了 notebookId，直接创建笔记
     if (notebookId) {
@@ -1154,41 +1205,27 @@ Rules: be concise, neutral, faithful to source. If source is unusable, return em
     (isChinese ? "正文：\n" : "Content:\n") +
     inputText;
 
-  const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ai_api_key) {
-    aiHeaders["Authorization"] = `Bearer ${settings.ai_api_key}`;
-  }
-
-  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-
   try {
-    // 优先用 OpenAI 风格的 response_format: { type: "json_object" }
-    // 某些 provider（Ollama 老版本、自建 vLLM 等）不支持，失败后会自动回退到普通模式。
-    const reqBody: any = {
-      model: settings.ai_model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      stream: false,
-      temperature: 0.3,
-      max_tokens: 2000,
-    };
-    if (settings.ai_provider === "ollama") {
-      reqBody.think = shouldEnableThink(reqBody.messages, settings);
-    }
-    // 尝试启用 JSON mode（OpenAI / DeepSeek / Qwen / Gemini OpenAI-compat 都支持）
-    if (
+    const classifyMessages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ];
+    const responseFormat = (
       settings.ai_provider === "openai" ||
       settings.ai_provider === "deepseek" ||
       settings.ai_provider === "qwen" ||
       settings.ai_provider === "doubao" ||
       settings.ai_provider === "custom"
-    ) {
-      reqBody.response_format = { type: "json_object" };
-    }
+    ) ? { type: "json_object" } : undefined;
 
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const { url, headers: aiHeaders, body: reqBody } = prepareAiRequest(settings, classifyMessages, {
+      stream: false,
+      temperature: 0.3,
+      max_tokens: 2000,
+      response_format: responseFormat,
+    });
+
+    const res = await fetch(url, {
       method: "POST",
       headers: aiHeaders,
       body: JSON.stringify(reqBody),
@@ -1204,7 +1241,9 @@ Rules: be concise, neutral, faithful to source. If source is unusable, return em
     }
 
     const data = await res.json();
-    let raw = data?.choices?.[0]?.message?.content;
+    let raw = settings.ai_provider === "openmodel"
+      ? data.content?.map((c: any) => c.text || "").join("")
+      : data?.choices?.[0]?.message?.content;
     if (!raw || typeof raw !== "string") {
       return c.json({ ok: false, error: "AI 返回内容为空" }, 200);
     }
@@ -1320,11 +1359,6 @@ ai.post("/batch-format", async (c) => {
   const db = getDb();
   const results: { id: string; title: string; success: boolean; error?: string }[] = [];
 
-  const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ai_api_key) {
-    aiHeaders["Authorization"] = `Bearer ${settings.ai_api_key}`;
-  }
-
   for (const noteId of noteIds) {
     try {
       const note = db.prepare(
@@ -1346,23 +1380,19 @@ ai.post("/batch-format", async (c) => {
         continue;
       }
 
-      const batchBaseUrl = settings.ai_api_url.replace(/\/+$/, "");
       const batchMessages = [
         { role: "system", content: "你是一个专业的文档格式化助手。请将内容转换为规范的 Markdown 格式，合理使用标题层级、列表、表格、代码块、引用等元素。保持原始图片链接（![...](...)）不变。保持代码块的语言标记正确。保持内嵌表格格式完整。直接输出结果，不要添加额外解释。" },
         { role: "user", content: `请将以下笔记内容格式化为规范的 Markdown：\n\n${note.contentText.slice(0, 6000)}` },
       ];
-      const res = await fetch(`${batchBaseUrl}/chat/completions`, {
+      const { url, headers, body } = prepareAiRequest(settings, batchMessages, {
+        stream: false,
+        temperature: 0.2,
+        max_tokens: 4000,
+      });
+      const res = await fetch(url, {
         method: "POST",
-        headers: aiHeaders,
-        body: JSON.stringify({
-          model: settings.ai_model,
-          messages: batchMessages,
-          stream: false,
-          temperature: 0.2,
-          max_tokens: 4000,
-          ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(batchMessages, settings) } : {}),
-        }),
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -1371,7 +1401,9 @@ ai.post("/batch-format", async (c) => {
       }
 
       const data = await res.json();
-      const formatted = data.choices?.[0]?.message?.content;
+      const formatted = settings.ai_provider === "openmodel"
+        ? data.content?.map((c: any) => c.text || "").join("")
+        : data.choices?.[0]?.message?.content;
 
       if (formatted) {
         const contentText = formatted.replace(/[#*`>\-|_\[\]()]/g, "").replace(/\n{2,}/g, "\n").trim();
@@ -1469,10 +1501,7 @@ ai.post("/import-to-knowledge", async (c) => {
     }
 
     const results: { fileName: string; success: boolean; noteId?: string; error?: string }[] = [];
-    const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    if (settings.ai_api_key) {
-      aiHeaders["Authorization"] = `Bearer ${settings.ai_api_key}`;
-    }
+
 
     for (const file of files) {
       try {
@@ -1536,28 +1565,26 @@ ai.post("/import-to-knowledge", async (c) => {
         let finalContent = rawText;
         if (settings.ai_api_url && (NO_KEY_PROVIDERS.includes(settings.ai_provider) || settings.ai_api_key)) {
           try {
-            const importBaseUrl = settings.ai_api_url.replace(/\/+$/, "");
             const importMessages = [
               { role: "system", content: "你是一个文档格式化助手。请将文档内容整理为结构清晰的 Markdown 笔记格式，保留原始信息。直接输出结果。" },
               { role: "user", content: `请格式化以下文档内容：\n\n${rawText.slice(0, 6000)}` },
             ];
-            const res = await fetch(`${importBaseUrl}/chat/completions`, {
+            const { url, headers, body } = prepareAiRequest(settings, importMessages, {
+              stream: false,
+              temperature: 0.2,
+              max_tokens: 4000,
+            });
+            const res = await fetch(url, {
               method: "POST",
-              headers: aiHeaders,
-              body: JSON.stringify({
-                model: settings.ai_model,
-                messages: importMessages,
-                stream: false,
-                temperature: 0.2,
-                max_tokens: 4000,
-                ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(importMessages, settings) } : {}),
-              }),
+              headers,
+              body: JSON.stringify(body),
               signal: AbortSignal.timeout(30000),
             });
             if (res.ok) {
               const data = await res.json();
-              const aiContent = data.choices?.[0]?.message?.content;
+              const aiContent = settings.ai_provider === "openmodel"
+                ? data.content?.map((c: any) => c.text || "").join("")
+                : data.choices?.[0]?.message?.content;
               if (aiContent) finalContent = aiContent;
             }
           } catch {
@@ -2425,29 +2452,20 @@ ai.post("/classify", async (c) => {
       : "") +
     `笔记摘要：\n${noteSnippet || "（无内容）"}`;
 
-  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ai_api_key) {
-    headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
-  }
-
   try {
     const classifyMessages = [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
     ];
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const { url, headers, body } = prepareAiRequest(settings, classifyMessages, {
+      stream: false,
+      temperature: 0.1,
+      max_tokens: 600,
+    });
+    const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: settings.ai_model,
-        messages: classifyMessages,
-        stream: false,
-        temperature: 0.1,
-        max_tokens: 600,
-        ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(classifyMessages, settings) } : {}),
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000),
     });
 
@@ -2456,10 +2474,10 @@ ai.post("/classify", async (c) => {
       return c.json({ error: `AI 服务返回错误：${res.status} ${errText.slice(0, 200)}` }, 502);
     }
 
-    const data = await res.json() as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const raw = data.choices?.[0]?.message?.content || "";
+    const data = await res.json() as any;
+    const raw = settings.ai_provider === "openmodel"
+      ? (data.content?.map((c: any) => c.text || "").join("") || "")
+      : (data.choices?.[0]?.message?.content || "");
 
     const parsed = extractJsonObject(raw);
     if (!parsed || !Array.isArray(parsed.suggestions)) {
@@ -2533,21 +2551,16 @@ export async function callLLM(
   }
   messages.push({ role: "user", content: userMessage });
 
-  const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.ai_api_key) headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
+  const { url, headers, body } = prepareAiRequest(settings, messages, {
+    stream: false,
+    temperature: 0.7,
+    max_tokens: 2000,
+  });
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const res = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      model: settings.ai_model,
-      messages,
-      temperature: 0.7,
-      max_tokens: 2000,
-      ...(settings.ai_provider === "ollama" && (settings.ai_ollama_num_ctx || settings.ai_ollama_num_threads) ? { options: { ...(settings.ai_ollama_num_ctx ? { num_ctx: parseInt(settings.ai_ollama_num_ctx, 10) } : {}), ...(settings.ai_ollama_num_threads ? { num_threads: parseInt(settings.ai_ollama_num_threads, 10) } : {}) } } : {}),
-        ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(30000),
   });
 
@@ -2557,5 +2570,7 @@ export async function callLLM(
   }
 
   const data = await res.json() as any;
-  return data.choices?.[0]?.message?.content || "";
+  return settings.ai_provider === "openmodel"
+    ? (data.content?.map((c: any) => c.text || "").join("") || "")
+    : (data.choices?.[0]?.message?.content || "");
 }

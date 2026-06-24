@@ -76,6 +76,16 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     color: "from-orange-500 to-pink-500",
   },
   {
+    id: "openmodel",
+    name: "OpenModel",
+    desc: "ai.openmodelDesc",
+    models: "deepseek-v4-flash",
+    url: "https://api.openmodel.ai/v1",
+    defaultModel: "deepseek-v4-flash",
+    needsKey: true,
+    color: "from-indigo-500 to-purple-600",
+  },
+  {
     id: "ollama",
     name: "Custom / Ollama",
     desc: "ai.ollamaCustomDesc",

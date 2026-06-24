@@ -1355,6 +1355,7 @@
     "geminiDesc": "Google AI",
     "deepseekDesc": "深度求索",
     "doubaoDesc": "字节跳动",
+    "openmodelDesc": "OpenModel API",
     "ollamaCustomDesc": "自定义 / 本地",
     "apiUrl": "API 地址",
     "apiKey": "API Key",

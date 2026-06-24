@@ -1344,6 +1344,7 @@
     "geminiDesc": "Google AI",
     "deepseekDesc": "DeepSeek AI",
     "doubaoDesc": "ByteDance",
+    "openmodelDesc": "OpenModel API",
     "ollamaCustomDesc": "Custom / Local",
     "apiUrl": "API URL",
     "apiKey": "API Key",
