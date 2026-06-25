@@ -29,7 +29,7 @@
  */
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  BookOpen, Star, Trash2, ListTodo, BrainCircuit,
+  BookOpen, Star, Trash, Trash2, ListTodo, BrainCircuit,
   Sparkles, NotebookPen, FolderOpen, Briefcase, Compass,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
   Columns2, Columns3, Cloud, CloudOff, Bell, Home,

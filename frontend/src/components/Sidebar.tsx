@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  BookOpen, Plus, Star, Trash2, Search, ChevronRight, FileText,
+  BookOpen, Plus, Star, Trash, Trash2, Search, ChevronRight, FileText,
   ChevronDown, ListTodo, CheckSquare,
   Settings, LogOut, FilePlus, FolderPlus, Edit2, X, BrainCircuit,
   Sparkles, NotebookPen, Smile, GripVertical,
@@ -2306,7 +2306,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     { icon: <BookOpen size={16} />, label: t('sidebar.allNotes'), mode: "all", active: state.viewMode === "all", feature: "notes", group: "workspace" },
     { icon: <Star size={16} />, label: t('sidebar.favorites'), mode: "favorites", active: state.viewMode === "favorites", feature: "favorites", group: "workspace" },
     { icon: <FolderOpen size={16} />, label: t('sidebar.fileManager'), mode: "files", active: state.viewMode === "files", feature: "files", group: "workspace" },
-    { icon: <Trash2 size={16} />, label: t('sidebar.trash'), mode: "trash", active: state.viewMode === "trash", group: "workspace" },
+    { icon: <Trash size={16} />, label: t('sidebar.trash'), mode: "trash", active: state.viewMode === "trash", group: "workspace" },
 
     // ─── 内容模块 ───
     { icon: <NotebookPen size={16} />, label: t('sidebar.diary'), mode: "diary", active: state.viewMode === "diary", feature: "diaries", group: "modules" },
