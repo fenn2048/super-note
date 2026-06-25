@@ -221,7 +221,7 @@ app.get("/:id/members", (c) => {
     .prepare(
       `
       SELECT m.workspaceId, m.userId, m.role, m.joinedAt,
-             u.username, u.email, u.avatarUrl
+             u.username, u.displayName, u.email, u.avatarUrl
       FROM workspace_members m
       JOIN users u ON u.id = m.userId
       WHERE m.workspaceId = ?
