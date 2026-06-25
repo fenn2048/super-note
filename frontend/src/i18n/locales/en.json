@@ -1356,6 +1356,8 @@
     "deepseekDesc": "DeepSeek AI",
     "doubaoDesc": "ByteDance",
     "openmodelDesc": "OpenModel API",
+    "agnesDesc": "Agnes AI Assistant",
+    "glmDesc": "Zhipu GLM Assistant",
     "ollamaCustomDesc": "Custom / Local",
     "apiUrl": "API URL",
     "apiKey": "API Key",

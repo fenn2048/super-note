@@ -56,13 +56,13 @@ function resolveScope(
 // ===== AI 设置管理 =====
 
 export interface AISettings {
-  ai_provider: string;       // "openai" | "ollama" | "custom" | "qwen" | "deepseek" | "gemini" | "doubao" | "openmodel"
+  ai_provider: string;       // "openai" | "ollama" | "custom" | "qwen" | "deepseek" | "gemini" | "doubao" | "openmodel" | "agnes" | "glm"
   ai_api_url: string;        // 对话 API 端点
   ai_api_key: string;        // API Key（Ollama 可为空）
   ai_model: string;          // 对话模型名称
   // RAG Phase 1：embedding 配置（独立于对话模型）。
   //   - 三个字段全空 → embedding-worker 直接 noop，不做向量化（行为兼容老版）
-  //   - ai_embedding_url / ai_embedding_key 留空时回退到 ai_api_url / ai_api_key
+  //   - ai_embedding_url / ai_embedding_key 留空时回退 to ai_api_url / ai_api_key
   //   - 推荐模型：text-embedding-3-small (OpenAI)、bge-m3 (Ollama)、text-embedding-v3 (通义)
   ai_embedding_url: string;
   ai_embedding_key: string;
@@ -70,6 +70,8 @@ export interface AISettings {
   ai_think_keywords?: string; // 思考模式触发关键词
   ai_ollama_num_ctx?: string;
   ai_ollama_num_threads?: string;
+  ai_temperature?: string;   // Temperature
+  ai_top_p?: string;         // Top P
 }
 
 const AI_DEFAULTS: AISettings = {
@@ -83,6 +85,8 @@ const AI_DEFAULTS: AISettings = {
   ai_think_keywords: "分析,拆解,规划",
   ai_ollama_num_ctx: "2048",
   ai_ollama_num_threads: "4",
+  ai_temperature: "",
+  ai_top_p: "",
 };
 
 // 不需要 API Key 的 Provider
@@ -106,9 +110,6 @@ function getAISettings(): AISettings {
 }
 
 function shouldEnableThink(messages: { role: string; content: string }[], settings: AISettings): boolean {
-  if (settings.ai_provider !== "ollama") {
-    return false;
-  }
   const keywordsStr = settings.ai_think_keywords ?? AI_DEFAULTS.ai_think_keywords ?? "";
   if (!keywordsStr.trim()) {
     return false;
@@ -137,12 +138,34 @@ function prepareAiRequest(
     temperature?: number;
     max_tokens?: number;
     response_format?: any;
+    think?: boolean;
   } = {}
 ) {
   const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   let url = "";
   let body: any = {};
+
+  // Resolve temperature and top_p from settings, fallback to options
+  let reqTemperature: number | undefined = options.temperature;
+  if (settings.ai_temperature !== undefined && settings.ai_temperature !== "") {
+    const parsedTemp = parseFloat(settings.ai_temperature);
+    if (!isNaN(parsedTemp)) {
+      reqTemperature = parsedTemp;
+    }
+  }
+
+  let reqTopP: number | undefined = undefined;
+  if (settings.ai_top_p !== undefined && settings.ai_top_p !== "") {
+    const parsedTopP = parseFloat(settings.ai_top_p);
+    if (!isNaN(parsedTopP)) {
+      reqTopP = parsedTopP;
+    }
+  }
+
+  const isThinkEnabled = options.think !== undefined
+    ? options.think
+    : shouldEnableThink(messages, settings);
 
   if (settings.ai_provider === "openmodel") {
     url = baseUrl.endsWith("/messages")
@@ -163,20 +186,36 @@ function prepareAiRequest(
       model: settings.ai_model,
       messages: filteredMessages,
       max_tokens: options.max_tokens ?? 1024,
-      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(reqTemperature !== undefined ? { temperature: reqTemperature } : {}),
+      ...(reqTopP !== undefined ? { top_p: reqTopP } : {}),
       ...(options.stream !== undefined ? { stream: options.stream } : {}),
       ...(systemPrompt ? { system: systemPrompt } : {}),
     };
   } else {
-    url = `${baseUrl}/chat/completions`;
+    url = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
     if (settings.ai_api_key) {
       headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
     }
 
+    // GLM-4.7-Flash: thinking is ENABLED by default — must explicitly disable it for fast responses.
+    // Per-provider thinking mode strategy:
+    //   ollama / custom → `think: true` (Ollama native field)
+    //   agnes           → `chat_template_kwargs: { enable_thinking: true }`
+    //   glm             → `thinking: { type: "enabled" | "disabled" }`  (must always send to control default-on behavior)
+    //   all others      → no thinking param (OpenAI / Qwen / DeepSeek / Gemini / Doubao etc.)
+
+    // GLM default temperature is 1 (per official docs); only override if user has configured one.
+    const glmDefaultTemperature = settings.ai_provider === "glm" && reqTemperature === undefined ? 1 : undefined;
+
     body = {
       model: settings.ai_model,
       messages,
-      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(reqTemperature !== undefined
+        ? { temperature: reqTemperature }
+        : glmDefaultTemperature !== undefined
+          ? { temperature: glmDefaultTemperature }
+          : {}),
+      ...(reqTopP !== undefined ? { top_p: reqTopP } : {}),
       ...(options.max_tokens !== undefined ? { max_tokens: options.max_tokens } : {}),
       ...(options.stream !== undefined ? { stream: options.stream } : {}),
       ...(options.response_format ? { response_format: options.response_format } : {}),
@@ -188,7 +227,18 @@ function prepareAiRequest(
             },
           }
         : {}),
-      ...(settings.ai_provider === "ollama" ? { think: shouldEnableThink(messages, settings) } : {}),
+      // Ollama / custom: `think` field
+      ...((settings.ai_provider === "ollama" || settings.ai_provider === "custom") && isThinkEnabled
+        ? { think: true }
+        : {}),
+      // Agnes: `chat_template_kwargs.enable_thinking`
+      ...(settings.ai_provider === "agnes" && isThinkEnabled
+        ? { chat_template_kwargs: { enable_thinking: true } }
+        : {}),
+      // GLM: always send `thinking` to control its default-on behavior
+      ...(settings.ai_provider === "glm"
+        ? { thinking: { type: isThinkEnabled ? "enabled" : "disabled" } }
+        : {}),
     };
   }
 
@@ -250,6 +300,12 @@ ai.put("/settings", async (c) => {
     }
     if (body.ai_think_keywords !== undefined) {
       upsert.run("ai_think_keywords", body.ai_think_keywords);
+    }
+    if (body.ai_temperature !== undefined) {
+      upsert.run("ai_temperature", body.ai_temperature);
+    }
+    if (body.ai_top_p !== undefined) {
+      upsert.run("ai_top_p", body.ai_top_p);
     }
   });
   tx();
@@ -321,6 +377,31 @@ ai.get("/models", async (c) => {
     return c.json({ models: [] });
   }
 
+  // GLM (Zhipu) does not expose a /models endpoint — return hardcoded list
+  if (settings.ai_provider === "glm") {
+    return c.json({
+      models: [
+        { id: "glm-4.7-flash", name: "glm-4.7-flash" },
+        { id: "glm-4-flash",   name: "glm-4-flash" },
+        { id: "glm-4-plus",    name: "glm-4-plus" },
+        { id: "glm-4-air",     name: "glm-4-air" },
+        { id: "glm-4",         name: "glm-4" },
+      ],
+    });
+  }
+
+  // Agnes AI — return hardcoded model list to avoid slow/unreliable remote /models call
+  if (settings.ai_provider === "agnes") {
+    return c.json({
+      models: [
+        { id: "agnes-2.0-flash",  name: "agnes-2.0-flash" },
+        { id: "agnes-2.0-pro",    name: "agnes-2.0-pro" },
+      ],
+    });
+  }
+
+  // Agnes uses OpenAI-compatible /models endpoint under its base URL
+  // Other providers: build models URL
   try {
     const headers: Record<string, string> = {};
     if (settings.ai_provider === "openmodel") {
@@ -398,11 +479,12 @@ ai.post("/chat", async (c) => {
     return c.json({ error: "未配置 API Key" }, 400);
   }
 
-  const { action, text, context, customPrompt } = await c.req.json() as {
+  const { action, text, context, customPrompt, think } = await c.req.json() as {
     action: AIAction;
     text: string;
     context?: string;
     customPrompt?: string;
+    think?: boolean;
   };
 
   if (!action || !text) {
@@ -440,6 +522,7 @@ ai.post("/chat", async (c) => {
       stream: true,
       temperature,
       max_tokens: maxTokens,
+      think,
     });
     const res = await fetch(url, {
       method: "POST",
@@ -572,9 +655,10 @@ ai.post("/ask", async (c) => {
     return c.json({ error: "未配置 API Key" }, 400);
   }
 
-  const { question, history } = await c.req.json() as {
+  const { question, history, think } = await c.req.json() as {
     question: string;
     history?: { role: string; content: string }[];
+    think?: boolean;
   };
 
   if (!question) {
@@ -782,6 +866,7 @@ ai.post("/ask", async (c) => {
       stream: true,
       temperature: 0.7,
       max_tokens: 2000,
+      think,
     });
     const res = await fetch(url, {
       method: "POST",

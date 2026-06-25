@@ -7,7 +7,7 @@ import { useAppActions } from "@/store/AppContext";
 import {
   Send, Smile, Image as ImageIcon, Link2, X, MessageSquare,
   Bookmark, Briefcase, FileText, CheckCircle2, Circle, Loader2, Check, AlertTriangle,
-  Sparkles, ArrowRight
+  Sparkles, ArrowRight, Brain
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   const [executingOps, setExecutingOps] = useState(false);
   // AI 思考中状态
   const [aiThinking, setAiThinking] = useState(false);
+  const [alwaysThink, setAlwaysThink] = useState(false);
   const [userQueryText, setUserQueryText] = useState("");
 
   // Autocomplete @mention states
@@ -282,10 +283,44 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         `注意：任务 id 已在任务列表中给出，请直接引用正确的 id。`;
 
       try {
-        const aiReply = await api.aiChat("custom", su.cleanText, fullContext, undefined, customPrompt);
+        const aiTempPostId = `ai-temp-${Date.now()}`;
+        const aiTempMsg: ProjectDiscussion = {
+          id: aiTempPostId,
+          projectId: project.id,
+          userId: "ai",
+          username: AI_NAME,
+          displayName: AI_NAME,
+          content: `**AI 助手** 🤖\n\n`,
+          linkedCards: [],
+          images: [],
+          attachments: [],
+          createdAt: new Date().toISOString(),
+        } as any;
+        setPosts((prev) => [...prev, aiTempMsg]);
+
+        let accumulatedReply = "";
+        const aiReply = await api.aiChat(
+          "custom",
+          su.cleanText,
+          fullContext,
+          (chunk) => {
+            accumulatedReply += chunk;
+            setPosts((prev) =>
+              prev.map((p) =>
+                p.id === aiTempPostId
+                  ? { ...p, content: `**AI 助手** 🤖\n\n${accumulatedReply}` }
+                  : p
+              )
+            );
+          },
+          customPrompt,
+          alwaysThink ? true : undefined
+        );
+
         const ops = parseAIOperations(aiReply);
 
         setAiThinking(false);
+        setPosts((prev) => prev.filter((p) => p.id !== aiTempPostId));
 
         if (ops.length > 0) {
           const explanation = aiReply.replace(/```json[\s\S]*```/, "").trim();
@@ -301,6 +336,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         }
       } catch (err: any) {
         setAiThinking(false);
+        setPosts((prev) => prev.filter((p) => p.id && !p.id.startsWith("ai-temp-")));
         // 显示错误消息
         const errorPost: ProjectDiscussion = {
           id: `ai-error-${Date.now()}`,
@@ -629,6 +665,24 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           />
         </div>
       )}
+
+      {/* Thinking Toggle */}
+      <div className="px-3 py-1 flex items-center justify-between bg-app-sidebar/40 border-t border-app-border/40 select-none shrink-0">
+        <button
+          type="button"
+          onClick={() => setAlwaysThink(!alwaysThink)}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-semibold transition-all cursor-pointer select-none",
+            alwaysThink
+              ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+              : "bg-app-surface text-tx-tertiary border-app-border hover:border-zinc-300 dark:hover:border-zinc-700"
+          )}
+          title={alwaysThink ? "已直接启用深度思考模式" : "当输入包含特定关键词（如分析、拆解、规划）时自动启用深度思考模式"}
+        >
+          <Brain size={10} className={cn(alwaysThink ? "animate-pulse" : "")} />
+          <span>{alwaysThink ? "深度思考" : "自动深度思考"}</span>
+        </button>
+      </div>
 
       {/* Text Composer Form */}
       <form onSubmit={handleSend} className="p-3 border-t border-app-border bg-app-sidebar flex items-center gap-2 shrink-0">

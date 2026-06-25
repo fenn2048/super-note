@@ -1124,7 +1124,12 @@ function VirtualNoteList({
           {visibleNotes.map((note) => (
             <NoteCard
               key={note.id}
-              cardRef={(el) => handleCardRef(note.id, el)}
+              cardRef={(el) => {
+                if (noteCardRefs) {
+                  if (el) noteCardRefs.current.set(note.id, el);
+                  else noteCardRefs.current.delete(note.id);
+                }
+              }}
               note={note}
               isActive={activeNoteId === note.id}
               isContextTarget={menuState.isOpen && menuState.targetId === note.id}
@@ -3273,7 +3278,7 @@ export default function NoteList() {
                       onDragEnd={handleDragEnd}
                       onDrop={(e) => handleDrop(e, note.id)}
                       isDragOver={dragOverNoteId === note.id}
-                      onTouchStart={handleTouchStart}
+                      onTouchStart={(e) => handleTouchStart(note.id, e)}
                       onTouchMove={handleTouchMove}
                       onTouchEnd={handleTouchEnd}
                     />

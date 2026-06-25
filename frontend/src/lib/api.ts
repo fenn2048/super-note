@@ -1997,9 +1997,9 @@ export const api = {
 
   // AI
   getAISettings: () =>
-    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string }>("/ai/settings"),
-  updateAISettings: (data: { ai_provider?: string; ai_api_url?: string; ai_api_key?: string; ai_model?: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string }) =>
-    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string }>("/ai/settings", {
+    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string; ai_temperature?: string; ai_top_p?: string }>("/ai/settings"),
+  updateAISettings: (data: { ai_provider?: string; ai_api_url?: string; ai_api_key?: string; ai_model?: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string; ai_temperature?: string; ai_top_p?: string }) =>
+    request<{ ai_provider: string; ai_api_url: string; ai_api_key: string; ai_api_key_set: boolean; ai_model: string; ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string; ai_temperature?: string; ai_top_p?: string }>("/ai/settings", {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -2007,7 +2007,7 @@ export const api = {
     request<{ success: boolean; message?: string; error?: string }>("/ai/test", { method: "POST" }),
   getAIModels: () =>
     request<{ models: { id: string; name: string }[] }>("/ai/models"),
-  aiChat: async (action: string, text: string, context?: string, onChunk?: (chunk: string) => void, customPrompt?: string): Promise<string> => {
+  aiChat: async (action: string, text: string, context?: string, onChunk?: (chunk: string) => void, customPrompt?: string, think?: boolean): Promise<string> => {
     const token = getToken();
     const res = await fetch(`${getBaseUrl()}/ai/chat`, {
       method: "POST",
@@ -2015,7 +2015,7 @@ export const api = {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ action, text, context, ...(customPrompt ? { customPrompt } : {}) }),
+      body: JSON.stringify({ action, text, context, ...(customPrompt ? { customPrompt } : {}), ...(think !== undefined ? { think } : {}) }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2084,7 +2084,8 @@ export const api = {
       kind?: "note" | "attachment";
       attachmentId?: string;
       attachmentFilename?: string;
-    }[]) => void
+    }[]) => void,
+    think?: boolean
   ): Promise<string> => {
     const token = getToken();
     // v7 RAG 隔离：把当前 scope 透传给后端
@@ -2098,7 +2099,7 @@ export const api = {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ question, history }),
+      body: JSON.stringify({ question, history, ...(think !== undefined ? { think } : {}) }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

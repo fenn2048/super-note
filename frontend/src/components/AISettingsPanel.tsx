@@ -10,7 +10,11 @@ interface AISettingsState {
   ai_api_key: string;
   ai_model: string;
   ai_api_key_set: boolean;
-  ai_think_keywords?: string; ai_ollama_num_ctx?: string; ai_ollama_num_threads?: string;
+  ai_think_keywords?: string;
+  ai_ollama_num_ctx?: string;
+  ai_ollama_num_threads?: string;
+  ai_temperature?: string;
+  ai_top_p?: string;
 }
 
 interface ProviderPreset {
@@ -86,12 +90,32 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     color: "from-indigo-500 to-purple-600",
   },
   {
+    id: "agnes",
+    name: "Agnes AI",
+    desc: "ai.agnesDesc",
+    models: "agnes-2.0-flash",
+    url: "https://apihub.agnes-ai.com/v1/chat/completions",
+    defaultModel: "agnes-2.0-flash",
+    needsKey: true,
+    color: "from-purple-500 to-indigo-600",
+  },
+  {
+    id: "glm",
+    name: "智谱清言 (GLM)",
+    desc: "ai.glmDesc",
+    models: "glm-4.7-flash",
+    url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    defaultModel: "glm-4.7-flash",
+    needsKey: true,
+    color: "from-blue-600 to-teal-500",
+  },
+  {
     id: "ollama",
     name: "Custom / Ollama",
     desc: "ai.ollamaCustomDesc",
     models: "OpenAI 兼容接口 · Docker 自动连接",
     url: "http://localhost:11434/v1",
-    defaultModel: "qwen2.5:7b",
+    defaultModel: "qwen3:1.7b",
     needsKey: false,
     color: "from-zinc-500 to-zinc-600",
   },
@@ -100,7 +124,14 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 export default function AISettingsPanel() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<AISettingsState>({
-    ai_provider: "openai", ai_api_url: "", ai_api_key: "", ai_model: "", ai_api_key_set: false, ai_think_keywords: "",
+    ai_provider: "openai",
+    ai_api_url: "",
+    ai_api_key: "",
+    ai_model: "",
+    ai_api_key_set: false,
+    ai_think_keywords: "",
+    ai_temperature: "",
+    ai_top_p: "",
   });
   const [localKey, setLocalKey] = useState("");
   // 缓存每个服务商的 API Key，切换时不丢失
@@ -115,6 +146,7 @@ export default function AISettingsPanel() {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [dropdownDirection, setDropdownDirection] = useState<"down" | "up">("down");
   const modelInputRef = useRef<HTMLInputElement>(null);
+  const modelsCacheRef = useRef<Map<string, { id: string; name: string }[]>>(new Map());
   const [isConfigured, setIsConfigured] = useState(false);
 
   const loadSettings = useCallback(async () => {
@@ -165,9 +197,11 @@ export default function AISettingsPanel() {
         ai_provider: settings.ai_provider,
         ai_api_url: settings.ai_api_url,
         ai_model: settings.ai_model,
+        ai_think_keywords: settings.ai_think_keywords,
+        ai_temperature: settings.ai_temperature,
+        ai_top_p: settings.ai_top_p,
       };
       if (settings.ai_provider === "ollama") {
-        payload.ai_think_keywords = settings.ai_think_keywords;
         payload.ai_ollama_num_ctx = settings.ai_ollama_num_ctx;
         payload.ai_ollama_num_threads = settings.ai_ollama_num_threads;
       }
@@ -194,9 +228,11 @@ export default function AISettingsPanel() {
         ai_provider: settings.ai_provider,
         ai_api_url: settings.ai_api_url,
         ai_model: settings.ai_model,
+        ai_think_keywords: settings.ai_think_keywords,
+        ai_temperature: settings.ai_temperature,
+        ai_top_p: settings.ai_top_p,
       };
       if (settings.ai_provider === "ollama") {
-        payload.ai_think_keywords = settings.ai_think_keywords;
         payload.ai_ollama_num_ctx = settings.ai_ollama_num_ctx;
         payload.ai_ollama_num_threads = settings.ai_ollama_num_threads;
       }
@@ -212,23 +248,25 @@ export default function AISettingsPanel() {
   };
 
   const fetchModels = async () => {
+    const provider = settings.ai_provider;
+
+    // Serve from in-session cache to avoid repeated network calls
+    const cached = modelsCacheRef.current.get(provider);
+    if (cached && cached.length > 0) {
+      setModels(cached);
+      computeDropdownDirection();
+      setModelDropdownOpen(true);
+      return;
+    }
+
     setLoadingModels(true);
     try {
-      const payload: any = {
-        ai_provider: settings.ai_provider,
-        ai_api_url: settings.ai_api_url,
-        ai_model: settings.ai_model,
-      };
-      if (settings.ai_provider === "ollama") {
-        payload.ai_think_keywords = settings.ai_think_keywords;
-        payload.ai_ollama_num_ctx = settings.ai_ollama_num_ctx;
-        payload.ai_ollama_num_threads = settings.ai_ollama_num_threads;
-      }
-      if (localKey && !localKey.includes("****")) payload.ai_api_key = localKey;
-      await api.updateAISettings(payload);
+      // Fetch directly — backend reads its own DB, no need to save settings first
       const data = await api.getAIModels();
-      setModels(data.models || []);
-      if (data.models?.length) {
+      const list = data.models || [];
+      modelsCacheRef.current.set(provider, list);
+      setModels(list);
+      if (list.length) {
         computeDropdownDirection();
         setModelDropdownOpen(true);
       }
@@ -419,23 +457,55 @@ export default function AISettingsPanel() {
           </div>
         </div>
         
-        {/* Keywords (only shown for Ollama) */}
-        {settings.ai_provider === "ollama" && (
-          <>
-          <div className="space-y-1.5 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <label className="text-xs font-medium text-tx-secondary">{t("ai.thinkKeywords")}</label>
+        {/* Keywords (shown for all) */}
+        <div className="space-y-1.5 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <label className="text-xs font-medium text-tx-secondary">{t("ai.thinkKeywords")}</label>
+          <input
+            type="text"
+            value={settings.ai_think_keywords || ""}
+            onChange={(e) => setSettings(prev => ({ ...prev, ai_think_keywords: e.target.value }))}
+            placeholder={t("ai.thinkKeywordsPlaceholder")}
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+          />
+          <p className="text-[11px] text-tx-tertiary">
+            {t("ai.thinkKeywordsDesc")}
+          </p>
+        </div>
+
+        {/* Temperature & Top P (shown for all) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-tx-secondary">{t("ai.temperature") || "Temperature"}</label>
             <input
-              type="text"
-              value={settings.ai_think_keywords || ""}
-              onChange={(e) => setSettings(prev => ({ ...prev, ai_think_keywords: e.target.value }))}
-              placeholder={t("ai.thinkKeywordsPlaceholder")}
+              type="number"
+              step="0.1"
+              min="0"
+              max="2"
+              value={settings.ai_temperature || ""}
+              onChange={(e) => setSettings(prev => ({ ...prev, ai_temperature: e.target.value }))}
+              placeholder="0.7"
               className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
             />
-            <p className="text-[11px] text-tx-tertiary">
-              {t("ai.thinkKeywordsDesc")}
-            </p>
+            <p className="text-[11px] text-tx-tertiary">{t("ai.temperatureDesc") || "值越大回复越具随机性/创意性"}</p>
           </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-tx-secondary">{t("ai.topP") || "Top P"}</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="1"
+              value={settings.ai_top_p || ""}
+              onChange={(e) => setSettings(prev => ({ ...prev, ai_top_p: e.target.value }))}
+              placeholder="0.9"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+            />
+            <p className="text-[11px] text-tx-tertiary">{t("ai.topPDesc") || "核采样概率，值越大回复越具创意性"}</p>
+          </div>
+        </div>
 
+        {/* Ollama options (only shown for Ollama) */}
+        {settings.ai_provider === "ollama" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-tx-secondary">{t("ai.ollamaNumCtx")}</label>
@@ -460,7 +530,6 @@ export default function AISettingsPanel() {
               <p className="text-[11px] text-tx-tertiary">{t("ai.ollamaNumThreadsDesc")}</p>
             </div>
           </div>
-          </>
         )}
       </div>
 

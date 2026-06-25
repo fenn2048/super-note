@@ -3,7 +3,7 @@ import {
   Bot, Send, Trash2, X, Loader2, FileText, Sparkles, User,
   BookOpen, Database, MessageCircleQuestion, ArrowRight,
   Upload, FileUp, Wand2, FolderUp, Check, Copy, ChevronDown, ChevronUp,
-  Paperclip, Plus, MessageSquare, Menu, Pencil
+  Paperclip, Plus, MessageSquare, Menu, Pencil, Brain
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -72,6 +72,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [alwaysThink, setAlwaysThink] = useState(false);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   // 历史加载中：避免首次渲染闪一下"空状态"然后再跳到历史
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -336,7 +337,8 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
               ? { ...m, references: refs }
               : m
           ));
-        }
+        },
+        alwaysThink ? true : undefined
       );
     } catch (err: any) {
       finalContent = err.message || t("ai.requestFailed");
@@ -1034,6 +1036,22 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
 
       {/* Input */}
       <div className="px-2 py-2 md:px-4 md:py-3 border-t border-app-border bg-app-surface/30">
+        <div className="flex items-center justify-between mb-1 px-1">
+          <button
+            type="button"
+            onClick={() => setAlwaysThink(!alwaysThink)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition-all select-none cursor-pointer",
+              alwaysThink
+                ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                : "bg-app-surface text-tx-tertiary border-app-border hover:border-zinc-300 dark:hover:border-zinc-700"
+            )}
+            title={alwaysThink ? "已直接启用深度思考模式" : "当输入包含特定关键词（如分析、拆解、规划）时自动启用深度思考模式"}
+          >
+            <Brain size={12} className={cn(alwaysThink ? "animate-pulse" : "")} />
+            <span>{alwaysThink ? "深度思考" : "自动深度思考"}</span>
+          </button>
+        </div>
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
