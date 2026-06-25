@@ -62,7 +62,6 @@ const RAIL_ICON_SIZE = 18;
 const NAV_CONFIG: NavConfigItem[] = [
   // ─── 工作台 ───
   { icon: <Home size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.home",       mode: "home",                                 group: "workspace" },
-  { icon: <Compass size={RAIL_ICON_SIZE} />,     labelKey: "sidebar.plans",       mode: "plans",      feature: "projects",  group: "workspace" },
   { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "workspace" },
   { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "workspace" },
   { icon: <BookOpen size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.allNotes",    mode: "all",        feature: "notes",     group: "workspace" },
@@ -80,6 +79,9 @@ const NAV_CONFIG: NavConfigItem[] = [
 function isActive(itemMode: ViewMode, viewMode: ViewMode): boolean {
   if (itemMode === "all") {
     return viewMode === "all" || viewMode === "search" || viewMode === "tag";
+  }
+  if (itemMode === "projects") {
+    return viewMode === "projects" || viewMode === "plans";
   }
   return viewMode === itemMode;
 }
