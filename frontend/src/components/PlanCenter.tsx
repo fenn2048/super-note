@@ -173,12 +173,14 @@ export default function PlanCenter() {
   };
 
   const getStatusLabel = (status: string) => {
+    if (status === "paused") return "已暂停";
     if (status === "completed") return t("plans.statusCompleted");
     if (status === "in_progress") return t("plans.statusInProgress");
     return t("plans.statusToStart");
   };
 
   const getStatusStyle = (status: string) => {
+    if (status === "paused") return "bg-amber-50 text-amber-700 border-amber-200/50";
     if (status === "completed") return "bg-green-50 text-green-700 border-green-200/50";
     if (status === "in_progress") return "bg-indigo-50 text-indigo-700 border-indigo-200/50";
     return "bg-stone-100 text-stone-600 border-stone-200/50";
@@ -187,6 +189,7 @@ export default function PlanCenter() {
   const getStatusIcon = (status: string) => {
     if (status === "completed") return <CheckCircle2 size={12} className="text-green-600 shrink-0" />;
     if (status === "in_progress") return <Clock size={12} className="text-indigo-600 shrink-0" />;
+    if (status === "paused") return <Pause size={12} className="text-amber-600 shrink-0" />;
     return <AlertCircle size={12} className="text-stone-500 shrink-0" />;
   };
 
@@ -249,7 +252,7 @@ export default function PlanCenter() {
                 >
                   {/* Top Cover Banner */}
                   <div
-                    className="h-20 shrink-0 relative p-3 flex justify-between items-start"
+                    className="h-20 shrink-0 relative p-3 flex justify-between items-center"
                     style={{
                       background: PRESET_COVERS[p.name.length % PRESET_COVERS.length],
                       backgroundSize: "cover",
@@ -259,6 +262,19 @@ export default function PlanCenter() {
                     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusStyle(p.status)} backdrop-blur-md`}>
                       {getStatusIcon(p.status)}
                       <span>{getStatusLabel(p.status)}</span>
+                    <div className="flex items-center gap-1.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newStatus = p.status === "paused" ? "in_progress" : "paused";
+                          api.updatePlan(p.id, { status: newStatus }).then(() => fetchPlans());
+                        }}
+                        className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-all"
+                        title={p.status === "paused" ? "恢复" : "暂停"}
+                      >
+                        {p.status === "paused" ? <Play size={10} /> : <Pause size={10} />}
+                      </button>
+                    </div>
                     </span>
                   </div>
 

@@ -131,8 +131,13 @@ function TaskItem({
         {item.isCompleted && <span className="text-[9px]">✓</span>}
       </div>
       <div className="flex-1 min-w-0">
-        <p className={cn("text-xs text-tx-primary", item.isCompleted && "line-through text-tx-tertiary")}>
+        <p className={cn("text-xs text-tx-primary", item.isCompleted ? "line-through text-tx-tertiary" : (item.status === "paused" ? "opacity-60" : ""))}>
           {item.title}
+          {item.status === "paused" && (
+            <span className="ml-2 px-1 py-0.5 bg-amber-500/10 text-amber-500 text-[8px] rounded border border-amber-500/20 font-bold">
+              已暂停
+            </span>
+          )}
         </p>
         {dueDate && (
           <span className={cn("text-[10px] mt-0.5", isOverdue ? "text-red-500" : "text-tx-tertiary")}>

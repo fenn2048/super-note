@@ -1,3 +1,4 @@
+import { Play, Pause } from "lucide-react";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
@@ -453,6 +454,9 @@ export default function ProjectCenter() {
   const [projEnd, setProjEnd] = useState("");
   const [projVisibility, setProjVisibility] = useState<"PRIVATE" | "PUBLIC">("PRIVATE");
   const [projGroupId, setProjGroupId] = useState<string | null>(null);
+  const [projPlanId, setProjPlanId] = useState<string | null>(null);
+  const [projMilestoneId, setProjMilestoneId] = useState<string | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
 
   // Star / Favorite toggle helper
   const isFavorite = useCallback((id: string) => favorites.includes(id), [favorites]);
@@ -481,6 +485,8 @@ export default function ProjectCenter() {
 
       const gs = await api.getProjectGroups(workspaceId);
       setGroups(gs);
+      const plans = await api.getPlans(workspaceId);
+      setAvailablePlans(plans);
 
       let ps = await api.getProjects(workspaceId, "active");
 
@@ -750,6 +756,8 @@ export default function ProjectCenter() {
       setProjGroupId(activeFilter.groupId);
     } else {
       setProjGroupId(null);
+    setProjPlanId(null);
+    setProjMilestoneId(null);
     }
     setShowCreateModal(true);
   };
@@ -781,6 +789,10 @@ export default function ProjectCenter() {
     setProjEnd(proj.endDate ? proj.endDate.split("T")[0] : "");
     setProjVisibility(proj.visibility);
     setProjGroupId(proj.groupId);
+    setProjMilestoneId(proj.milestoneId || null);
+    // Find planId from milestone
+    const plan = availablePlans.find(p => p.milestones?.some(m => m.id === proj.milestoneId));
+    setProjPlanId(plan ? plan.id : null);
     setShowCreateModal(true);
   };
 
@@ -811,6 +823,7 @@ export default function ProjectCenter() {
       endDate: projEnd ? new Date(projEnd).toISOString() : null,
       visibility: projVisibility,
       groupId: projGroupId,
+      milestoneId: projMilestoneId,
     };
 
     try {
@@ -859,6 +872,18 @@ export default function ProjectCenter() {
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "操作失败");
+    }
+  };
+  const handleTogglePauseProject = async (proj: Project, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newStatus = proj.status === "paused" ? "in_progress" : "paused";
+    try {
+      await api.updateProject(proj.id, { status: newStatus });
+      toast.success(newStatus === "paused" ? "已暂停项目" : "已恢复项目");
+      fetchDashboard();
+      window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
+    } catch (err: any) {
+      toast.error(err?.message || "操作失败");
     }
   };
 
@@ -1965,6 +1990,13 @@ export default function ProjectCenter() {
                       {/* Right Side Card Controls */}
                       <div className="flex items-center gap-1.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
                         <button
+                          onClick={(e) => handleTogglePauseProject(p, e)}
+                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-all"
+                          title={p.status === "paused" ? "恢复" : "暂停"}
+                        >
+                          {p.status === "paused" ? <Play size={12} /> : <Pause size={12} />}
+                        </button>
+                        <button
                           onClick={(e) => toggleFavorite(p.id, e)}
                           className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 hover:border-accent-primary/50 transition-all"
                         >
@@ -1988,8 +2020,13 @@ export default function ProjectCenter() {
                     {/* Card Content info */}
                     <div className="p-4 flex-1 flex flex-col justify-between">
                       <div className="space-y-1">
-                        <h3 className="font-bold text-sm text-tx-primary truncate group-hover/card:text-accent-primary transition-colors">
+                        <h3 className={cn("font-bold text-sm text-tx-primary truncate group-hover/card:text-accent-primary transition-colors", p.status === "paused" && "opacity-60")}>
                           {p.name}
+                          {p.status === "paused" && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-amber-500/10 text-amber-500 text-[10px] rounded-md border border-amber-500/20">
+                              已暂停
+                            </span>
+                          )}
                         </h3>
                         <p className="text-xs text-tx-tertiary line-clamp-2 leading-relaxed">
                           {p.description || t("projects.noDescription") || "暂无项目描述"}
@@ -2158,6 +2195,46 @@ export default function ProjectCenter() {
                     <option value="PRIVATE">{t("projects.private") || "私有：仅项目成员可见"}</option>
                     <option value="PUBLIC">{t("projects.public") || "公开：工作区全员可见"}</option>
                   </select>
+              {/* Plan & Milestone Selection */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Plan Selection */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">所属规划方案</label>
+                  <select
+                    value={projPlanId || ""}
+                    onChange={(e) => {
+                        setProjPlanId(e.target.value || null);
+                        setProjMilestoneId(null);
+                    }}
+                    className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
+                  >
+                    <option value="">不归属任何规划</option>
+                    {availablePlans.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Milestone Selection */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">归属里程碑</label>
+                  <select
+                    value={projMilestoneId || ""}
+                    onChange={(e) => setProjMilestoneId(e.target.value || null)}
+                    disabled={!projPlanId}
+                    className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary disabled:opacity-50"
+                  >
+                    <option value="">不归属里程碑</option>
+                    {projPlanId && availablePlans.find(p => p.id === projPlanId)?.milestones?.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
                 </div>
               </div>
             </ScrollArea>

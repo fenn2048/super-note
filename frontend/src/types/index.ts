@@ -358,6 +358,7 @@ export interface Task {
   workspaceId: string | null;
   title: string;
   isCompleted: number;
+  status?: "pending" | "in_progress" | "completed" | "paused";
   priority: TaskPriority;
   dueDate: string | null;
   remindAt: string | null;
@@ -598,7 +599,7 @@ export interface Project {
   totalTasksCount?: number;
   members?: ProjectMember[];
   milestoneId?: string | null;
-  status?: "pending" | "in_progress" | "completed";
+  status?: "pending" | "in_progress" | "completed" | "paused";
 }
 
 export interface ProjectMember {
@@ -634,6 +635,7 @@ export interface ProjectTask {
   stageId: string;
   title: string;
   isCompleted: number;
+  status?: "pending" | "in_progress" | "completed" | "paused";
   assigneeId: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -667,6 +669,7 @@ export interface ProjectTaskChecklist {
   taskId: string;
   title: string;
   isCompleted: number;
+  status?: "pending" | "in_progress" | "completed" | "paused";
   sortOrder: number;
   createdAt: string;
 }
@@ -695,7 +698,7 @@ export interface Plan {
   details: string; // 支持 markdown
   startDate: string | null;
   endDate: string | null;
-  status: "pending" | "in_progress" | "completed";
+  status: "pending" | "in_progress" | "completed" | "paused";
   workspaceId: string | null;
   ownerId: string;
   createdAt: string;
@@ -713,7 +716,7 @@ export interface Milestone {
   description: string;
   startDate: string | null;
   endDate: string | null;
-  status: "pending" | "in_progress" | "completed";
+  status: "pending" | "in_progress" | "completed" | "paused";
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
