@@ -1000,7 +1000,7 @@ function ProjectSidebar() {
         >
           <div className="flex items-center gap-2">
             <Compass size={16} />
-            <span>{t("plans.myPlans") || "我的计划"}</span>
+            <span>{t("plans.myPlans")}</span>
           </div>
           <button
             type="button"
