@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Plan, Milestone, Project, AuditLog, UserPublicInfo, User } from "@/types";
+import { Plan, Project, AuditLog, User, WorkspaceMember } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { useTranslation } from "react-i18next";
-import { useApp, useAppActions } from "@/store/AppContext";
+import { useAppActions } from "@/store/AppContext";
 import { 
-  ArrowLeft, Plus, Calendar, Loader2, X, CheckCircle2, 
-  Clock, AlertCircle, Trash2, Edit, CheckSquare, Settings, 
-  Compass, Link, Unlink, ExternalLink, RefreshCw, Milestone as MilestoneIcon,
-  MessageSquare, UserCheck, ArrowRight, ListTodo
+  ArrowLeft, Plus, Calendar, Loader2, X, Trash2, Edit, CheckSquare,
+  Compass, Unlink, RefreshCw, Milestone as MilestoneIcon,
+  ListTodo
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { toast } from "@/lib/toast";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
@@ -29,7 +28,7 @@ interface PlanDetailProps {
 
 export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const { t, i18n } = useTranslation();
-  const { state } = useApp();
+
   const actions = useAppActions();
   const dateLocale = i18n.language === "zh-CN" ? zhCN : enUS;
 
@@ -38,7 +37,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [workspaceId, setWorkspaceId] = useState(getCurrentWorkspace());
+  const [workspaceId] = useState(getCurrentWorkspace());
 
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -50,7 +49,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const [editEndDate, setEditEndDate] = useState("");
   const [editParticipants, setEditParticipants] = useState<string[]>([]);
   const [editMilestones, setEditMilestones] = useState<Array<{ id?: string; name: string; description: string; startDate: string; endDate: string; status: "pending" | "in_progress" | "completed" }>>([]);
-  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -76,7 +75,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
       setAllProjects(filteredProjects);
     } catch (e) {
       console.error("Failed to load plan detail:", e);
-      toast.error("加载计划详情失败");
+      toast.error(t("plans.loadFailed"));
     } finally {
       setLoading(false);
       setLoadingLogs(false);
@@ -96,9 +95,9 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
           .catch(() => setWorkspaceMembers([]));
       } else if (currentUser) {
         setWorkspaceMembers([{
-          userId: currentUser.id,
+          userId: currentUser.id, workspaceId: "", role: "owner", joinedAt: "", email: "",
           username: currentUser.username,
-          displayName: currentUser.displayName || currentUser.username,
+
           avatarUrl: currentUser.avatarUrl
         }]);
       }
@@ -124,10 +123,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
     try {
       await api.updatePlan(planId, { status: newStatus });
-      toast.success("计划状态已更新");
+      toast.success(t("sidebar.planStatusSuccess"));
       loadPlanDetail();
     } catch (err: any) {
-      toast.error(err?.message || "更新计划状态失败");
+      toast.error((err as any)?.message || t("sidebar.planStatusFail"));
     }
   };
 
@@ -146,10 +145,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
     try {
       await api.updateMilestoneStatus(milestoneId, newStatus);
-      toast.success("里程碑状态已更新");
+      toast.success(t("sidebar.milestoneStatusSuccess"));
       loadPlanDetail();
     } catch (err: any) {
-      toast.error(err?.message || "更新里程碑状态失败");
+      toast.error((err as any)?.message || t("sidebar.milestoneStatusFail"));
     }
   };
 
@@ -157,10 +156,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const handleAssociateProject = async (milestoneId: string, projectId: string) => {
     try {
       await api.updateProject(projectId, { milestoneId });
-      toast.success("成功关联项目到里程碑");
+      toast.success(t("sidebar.associateSuccess"));
       loadPlanDetail();
     } catch (err: any) {
-      toast.error(err?.message || "关联项目失败");
+      toast.error((err as any)?.message || t("sidebar.associateFail"));
     }
   };
 
@@ -174,10 +173,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
     if (!ok) return;
     try {
       await api.updateProject(projectId, { milestoneId: null });
-      toast.success("成功取消关联");
+      toast.success(t("sidebar.dissociateSuccess"));
       loadPlanDetail();
     } catch (err: any) {
-      toast.error(err?.message || "取消关联失败");
+      toast.error((err as any)?.message || t("sidebar.dissociateFail"));
     }
   };
 
@@ -214,7 +213,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const handleUpdatePlanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editName.trim()) {
-      toast.error("计划名称不能为空");
+      toast.error(t("plans.nameRequired"));
       return;
     }
 
@@ -230,11 +229,11 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
         milestones: editMilestones
       };
       await api.updatePlan(planId, payload);
-      toast.success("计划更新成功");
+      toast.success(t("plans.updateSuccess"));
       setShowEditModal(false);
       loadPlanDetail();
     } catch (err: any) {
-      toast.error(err?.message || "更新计划失败");
+      toast.error((err as any)?.message || t("plans.updateFailed"));
     }
   };
 
@@ -271,10 +270,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
     if (!ok) return;
     try {
       await api.deletePlan(planId);
-      toast.success("计划已删除");
+      toast.success(t("common.deleteSuccess"));
       onBack();
     } catch (err: any) {
-      toast.error(err?.message || "删除计划失败");
+      toast.error((err as any)?.message || t("sidebar.deletePlanFail"));
     }
   };
 
@@ -288,9 +287,9 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
   // Labels and Styles helpers
   const getStatusLabel = (status: string) => {
-    if (status === "completed") return "已完成";
-    if (status === "in_progress") return "进行中";
-    return "待启动";
+    if (status === "completed") return t("plans.statusCompleted");
+    if (status === "in_progress") return t("plans.statusInProgress");
+    return t("plans.statusToStart");
   };
 
   const getStatusStyle = (status: string) => {
@@ -299,21 +298,21 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
     return "bg-stone-100 text-stone-600 border-stone-200/50";
   };
 
-  const getStatusIcon = (status: string) => {
+  /* const getStatusIcon = (status: string) => {
     if (status === "completed") return <CheckCircle2 size={12} className="text-green-600 shrink-0" />;
     if (status === "in_progress") return <Clock size={12} className="text-indigo-600 shrink-0" />;
     return <AlertCircle size={12} className="text-stone-500 shrink-0" />;
-  };
+  }; */
 
   const getAuditActionText = (action: string, details: string) => {
-    if (action === "create_plan") return "创建了计划";
-    if (action === "plan_update") return "修改了计划信息";
-    if (action === "plan_status_update") return `手动修改了计划状态`;
-    if (action === "plan_status_auto_update") return `系统自动触发了计划状态变更`;
-    if (action === "milestone_status_update") return `手动修改了里程碑状态`;
-    if (action === "milestone_status_auto_update") return `系统自动更新了里程碑状态`;
-    if (action === "project_status_update") return `修改了项目状态`;
-    if (action === "project_status_auto_update") return `里程碑更新自动修改了项目状态`;
+    if (action === "create_plan") return t("plans.logs.create_plan");
+    if (action === "plan_update") return t("plans.logs.plan_update");
+    if (action === "plan_status_update") return t("plans.logs.plan_status_update");
+    if (action === "plan_status_auto_update") return t("plans.logs.plan_status_auto_update");
+    if (action === "milestone_status_update") return t("plans.logs.milestone_status_update");
+    if (action === "milestone_status_auto_update") return t("plans.logs.milestone_status_auto_update");
+    if (action === "project_status_update") return t("plans.logs.project_status_update");
+    if (action === "project_status_auto_update") return t("plans.logs.project_status_auto_update");
     return details || action;
   };
 
@@ -357,7 +356,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             className="h-8 text-xs font-semibold px-3 rounded-lg border-app-border hover:bg-app-hover flex items-center gap-1.5"
           >
             <Edit size={14} />
-            <span>编辑</span>
+            <span>{t("sidebar.edit")}</span>
           </Button>
           <Button
             onClick={handleDeletePlan}
@@ -365,7 +364,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             className="h-8 text-xs font-semibold px-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-1.5"
           >
             <Trash2 size={14} />
-            <span>删除</span>
+            <span>{t("common.delete")}</span>
           </Button>
         </div>
       </div>
@@ -382,10 +381,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             <div className="p-4 border border-app-border bg-app-sidebar/10 rounded-2xl space-y-2">
               <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1.5">
                 <Compass size={13} className="text-accent-primary" />
-                <span>计划背景</span>
+                <span>{t("plans.background")}</span>
               </h3>
               <p className="text-xs text-tx-secondary leading-relaxed min-h-[50px] whitespace-pre-wrap">
-                {plan.background || <span className="text-tx-tertiary italic">暂无背景说明</span>}
+                {plan.background || <span className="text-tx-tertiary italic">{t("sidebar.noBackground")}</span>}
               </p>
             </div>
 
@@ -393,10 +392,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             <div className="p-4 border border-app-border bg-app-sidebar/10 rounded-2xl space-y-2">
               <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1.5">
                 <CheckSquare size={13} className="text-accent-primary" />
-                <span>达成目标</span>
+                <span>{t("plans.goal")}</span>
               </h3>
               <p className="text-xs text-tx-secondary leading-relaxed min-h-[50px] whitespace-pre-wrap">
-                {plan.goal || <span className="text-tx-tertiary italic">暂无目标描述</span>}
+                {plan.goal || <span className="text-tx-tertiary italic">{t("sidebar.noGoal")}</span>}
               </p>
             </div>
           </div>
@@ -404,7 +403,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
           {/* Plan Details Card (Markdown support) */}
           <div className="p-6 border border-app-border bg-app-sidebar/10 rounded-2xl space-y-4">
             <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider border-b border-app-border/40 pb-2">
-              计划大纲详情
+              {t("sidebar.planOutline")}
             </h3>
             <div className="prose prose-sm max-w-none text-tx-secondary leading-relaxed dark:prose-invert">
               {plan.details ? (
@@ -412,7 +411,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                   {plan.details}
                 </ReactMarkdown>
               ) : (
-                <p className="text-xs text-tx-tertiary italic">暂无大纲详情</p>
+                <p className="text-xs text-tx-tertiary italic">{t("sidebar.noOutline")}</p>
               )}
             </div>
           </div>
@@ -421,18 +420,18 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
           <div className="p-6 border border-app-border bg-app-sidebar/10 rounded-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-app-border/40 pb-2">
               <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider">
-                修改与状态日志
+                {t("sidebar.activityLog")}
               </h3>
               <button 
                 onClick={loadPlanDetail}
                 className="p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-tx-primary transition-colors"
-                title="刷新日志"
+                title={t("sidebar.refreshLogs")}
               >
                 <RefreshCw size={12} className={cn(loadingLogs && "animate-spin")} />
               </button>
             </div>
             {auditLogs.length === 0 ? (
-              <p className="text-xs text-tx-tertiary italic">暂无任何修改记录</p>
+              <p className="text-xs text-tx-tertiary italic">{t("sidebar.noActivity")}</p>
             ) : (
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                 {auditLogs.map((log) => (
@@ -472,16 +471,16 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
           <div className="p-4 border border-app-border bg-app-sidebar/20 rounded-2xl space-y-4 shadow-sm">
             {/* Status Dropdown */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-tx-tertiary uppercase">计划状态</span>
+              <span className="text-xs font-semibold text-tx-tertiary uppercase">{t("sidebar.planStatus")}</span>
               <div className="relative">
                 <select
                   value={plan.status}
                   onChange={(e) => handlePlanStatusChange(e.target.value as any)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border outline-none cursor-pointer ${getStatusStyle(plan.status)}`}
                 >
-                  <option value="pending">待启动</option>
-                  <option value="in_progress">进行中</option>
-                  <option value="completed">已完成</option>
+                  <option value="pending">{t("plans.statusToStart")}</option>
+                  <option value="in_progress">{t("plans.statusInProgress")}</option>
+                  <option value="completed">{t("plans.statusCompleted")}</option>
                 </select>
               </div>
             </div>
@@ -491,7 +490,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               <div className="flex justify-between items-center text-[10px] font-bold text-tx-tertiary font-mono">
                 <span className="flex items-center gap-0.5">
                   <MilestoneIcon size={10} />
-                  里程碑总进度
+                  {t("sidebar.totalProgress")}
                 </span>
                 <span>{completedMilestones}/{totalMilestones} ({progressPercentage}%)</span>
               </div>
@@ -507,7 +506,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             <div className="flex items-center justify-between text-xs text-tx-secondary py-1 border-t border-app-border/40 pt-3">
               <span className="text-tx-tertiary flex items-center gap-1">
                 <Calendar size={13} />
-                <span>计划周期</span>
+                <span>{t("sidebar.planCycle")}</span>
               </span>
               <span className="font-mono text-tx-primary">
                 {plan.startDate || "-"} ~ {plan.endDate || "-"}
@@ -516,7 +515,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
             {/* Participants */}
             <div className="space-y-2 border-t border-app-border/40 pt-3">
-              <span className="text-xs text-tx-tertiary block font-semibold">参与人员 ({plan.participants?.length || 0})</span>
+              <span className="text-xs text-tx-tertiary block font-semibold">{t("sidebar.memberCount", { count: plan.participants?.length || 0 })}</span>
               <div className="flex flex-wrap gap-1.5">
                 {plan.participants?.map((u) => (
                   <div 
@@ -530,11 +529,11 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                         u.displayName?.slice(0, 1) || u.username.slice(0, 1)
                       )}
                     </div>
-                    <span className="truncate max-w-[80px]">{u.displayName || u.username}</span>
+                    <span className="truncate max-w-[80px]">{u.username}</span>
                   </div>
                 ))}
                 {(!plan.participants || plan.participants.length === 0) && (
-                  <span className="text-[10px] text-tx-tertiary italic">无参与人员</span>
+                  <span className="text-[10px] text-tx-tertiary italic">{t("sidebar.noMembers")}</span>
                 )}
               </div>
             </div>
@@ -544,7 +543,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1">
               <MilestoneIcon size={14} className="text-accent-primary" />
-              <span>里程碑与项目关联</span>
+              <span>{t("sidebar.milestonesAndProjects")}</span>
             </h3>
 
             {plan.milestones?.map((ms, index) => (
@@ -569,9 +568,9 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                     onChange={(e) => handleMilestoneStatusChange(ms.id, ms.name, e.target.value as any)}
                     className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border outline-none cursor-pointer ${getStatusStyle(ms.status)}`}
                   >
-                    <option value="pending">待启动</option>
-                    <option value="in_progress">进行中</option>
-                    <option value="completed">已完成</option>
+                    <option value="pending">{t("plans.statusToStart")}</option>
+                    <option value="in_progress">{t("plans.statusInProgress")}</option>
+                    <option value="completed">{t("plans.statusCompleted")}</option>
                   </select>
                 </div>
 
@@ -585,7 +584,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
                 {/* Associated Projects list */}
                 <div className="space-y-2 pt-1">
-                  <span className="text-[10px] text-tx-tertiary block font-bold">对应项目：</span>
+                  <span className="text-[10px] text-tx-tertiary block font-bold">{t("sidebar.relatedProject")}</span>
                   {ms.projects && ms.projects.length > 0 ? (
                     <div className="space-y-1.5">
                       {ms.projects.map((proj) => {
@@ -623,7 +622,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                               <button
                                 onClick={() => handleDissociateProject(proj.id)}
                                 className="p-1 hover:bg-red-50 text-tx-tertiary hover:text-red-500 rounded transition-colors"
-                                title="取消关联"
+                                title={t("sidebar.removeAssociation")}
                               >
                                 <Unlink size={11} />
                               </button>
@@ -634,7 +633,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                     </div>
                   ) : (
                     <p className="text-[10px] text-tx-tertiary italic bg-app-bg/30 p-2 rounded-xl border border-dashed border-app-border/40 text-center">
-                      无关联项目，除个人/家庭TODO外其他项目必须对应一个里程碑
+                      {t("sidebar.noRelatedProject")}
                     </p>
                   )}
                 </div>
@@ -642,7 +641,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                 {/* Associate project dropdown */}
                 {unassociatedProjects.length > 0 && (
                   <div className="pt-1 flex items-center gap-1">
-                    <span className="text-[9px] text-tx-tertiary shrink-0">关联项目：</span>
+                    <span className="text-[9px] text-tx-tertiary shrink-0">{t("sidebar.relatedProject")}</span>
                     <select
                       value=""
                       onChange={(e) => {
@@ -653,7 +652,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                       }}
                       className="flex-1 text-[10px] border border-app-border bg-app-bg rounded p-1 outline-none text-tx-secondary"
                     >
-                      <option value="">-- 选择要关联的项目 --</option>
+                      <option value="">{t("sidebar.selectProject")}</option>
                       {unassociatedProjects.map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -666,8 +665,8 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             {(!plan.milestones || plan.milestones.length === 0) && (
               <div className="p-6 border border-app-border border-dashed bg-app-sidebar/5 rounded-2xl text-center text-tx-tertiary">
                 <MilestoneIcon size={24} className="mx-auto mb-1 opacity-50" />
-                <p className="text-xs font-semibold">暂无里程碑</p>
-                <p className="text-[10px]">点击上方“编辑”添加计划里程碑</p>
+                <p className="text-xs font-semibold">{t("common.empty")}</p>
+                <p className="text-[10px]">{t("sidebar.addMilestonesHint")}</p>
               </div>
             )}
           </div>
@@ -682,7 +681,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
           <div className="bg-app-sidebar border border-app-border rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-app-border flex items-center justify-between">
-              <h2 className="text-sm font-bold text-tx-primary">编辑计划</h2>
+              <h2 className="text-sm font-bold text-tx-primary">{t("plans.editPlan")}</h2>
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
@@ -696,11 +695,11 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             <form onSubmit={handleUpdatePlanSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Name */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">计划名称</label>
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.name")}</label>
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="例如：2026年技术平台架构升级计划…"
+                  placeholder={t("plans.namePlaceholder")}
                   className="h-10 text-xs border-app-border w-full rounded-xl"
                   required
                 />
@@ -709,20 +708,20 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               {/* Background & Goal */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">计划背景</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.background")}</label>
                   <Textarea
                     value={editBackground}
                     onChange={(e) => setEditBackground(e.target.value)}
-                    placeholder="为什么要启动这个计划？"
+                    placeholder={t("plans.backgroundPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">达成目标</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.goal")}</label>
                   <Textarea
                     value={editGoal}
                     onChange={(e) => setEditGoal(e.target.value)}
-                    placeholder="这个计划达成的效果与关键指标是什么？"
+                    placeholder={t("plans.goalPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
                 </div>
@@ -731,7 +730,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               {/* Start & End Dates */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">开始时间</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.startDate")}</label>
                   <input
                     type="date"
                     value={editStartDate}
@@ -740,7 +739,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">截止时间</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.endDate")}</label>
                   <input
                     type="date"
                     value={editEndDate}
@@ -752,7 +751,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
               {/* Participants */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">参与人</label>
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.participants")}</label>
                 <div className="flex flex-wrap gap-2 p-3 border border-app-border rounded-xl bg-app-bg max-h-36 overflow-y-auto">
                   {workspaceMembers.map((u) => {
                     const active = editParticipants.includes(u.userId);
@@ -767,7 +766,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                             : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
                         }`}
                       >
-                        {u.displayName || u.username}
+                        {u.username}
                       </button>
                     );
                   })}
@@ -777,7 +776,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               {/* Milestones Manager */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">计划里程碑</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.milestones")}</label>
                   <Button
                     type="button"
                     onClick={handleAddEditMilestone}
@@ -785,7 +784,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                     className="h-6 text-[10px] text-accent-primary hover:text-accent-primary/80 flex items-center gap-1"
                   >
                     <Plus size={10} />
-                    添加里程碑
+                    {t("plans.addMilestone")}
                   </Button>
                 </div>
 
@@ -801,29 +800,29 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                       </button>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">里程碑 {index + 1} 名称</label>
+                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">{t("plans.milestoneName", { index: index + 1 })}</label>
                         <Input
                           value={ms.name}
                           onChange={(e) => handleEditMilestoneChange(index, "name", e.target.value)}
-                          placeholder="例如：Phase 1 架构设计完成"
+                          placeholder={t("plans.milestonePlaceholder")}
                           className="h-8 text-xs border-app-border w-full rounded-lg"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">里程碑描述</label>
+                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">{t("plans.milestoneDescription")}</label>
                         <Textarea
                           value={ms.description}
                           onChange={(e) => handleEditMilestoneChange(index, "description", e.target.value)}
-                          placeholder="里程碑产出与交付物是什么…"
+                          placeholder={t("plans.descriptionPlaceholder")}
                           className="min-h-[50px] text-xs border-app-border w-full rounded-lg"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">开始时间</label>
+                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">{t("plans.startDate")}</label>
                           <input
                             type="date"
                             value={ms.startDate}
@@ -832,7 +831,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">截止时间</label>
+                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">{t("plans.endDate")}</label>
                           <input
                             type="date"
                             value={ms.endDate}
@@ -848,11 +847,11 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
 
               {/* Markdown Details */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">计划正文详情 (Markdown)</label>
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.details")}</label>
                 <Textarea
                   value={editDetails}
                   onChange={(e) => setEditDetails(e.target.value)}
-                  placeholder="# 计划大纲..."
+                  placeholder={t("plans.detailsPlaceholder")}
                   className="min-h-[160px] text-xs border-app-border w-full rounded-xl font-mono leading-relaxed"
                 />
               </div>
@@ -865,13 +864,13 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                   onClick={() => setShowEditModal(false)}
                   className="h-9 px-4 rounded-xl text-xs hover:bg-app-hover"
                 >
-                  取消
+                  {t("plans.cancel")}
                 </Button>
                 <Button
                   type="submit"
                   className="h-9 px-4 rounded-xl text-xs bg-accent-primary text-white hover:bg-accent-primary/95"
                 >
-                  保存修改
+                  {t("plans.save")}
                 </Button>
               </div>
             </form>

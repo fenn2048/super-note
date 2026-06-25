@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plan, Milestone, UserPublicInfo, User } from "@/types";
+import { Plan, User, WorkspaceMember } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/store/AppContext";
 import { 
-  Plus, Calendar, User as UserIcon, Compass, Loader2, X, FolderOpen, 
-  Milestone as MilestoneIcon, ChevronRight, CheckCircle2, 
-  Clock, AlertCircle, ArrowRight
+  Plus, Calendar, Compass, Loader2, X, FolderOpen,
+  Milestone as MilestoneIcon, CheckCircle2,
+  Clock, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
 import PlanDetail from "./PlanDetail";
 
@@ -25,7 +23,6 @@ const PRESET_COVERS = [
 
 export default function PlanCenter() {
   const { t } = useTranslation();
-  const { state } = useApp();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -48,7 +45,7 @@ export default function PlanCenter() {
   const [milestones, setMilestones] = useState<Array<{ name: string; description: string; startDate: string; endDate: string }>>([]);
 
   // Workspace members
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
 
   useEffect(() => {
     const handleWsChange = () => {
@@ -66,7 +63,7 @@ export default function PlanCenter() {
       setPlans(data);
     } catch (e) {
       console.error("Failed to load plans:", e);
-      toast.error("加载计划失败");
+      toast.error(t("plans.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -85,9 +82,9 @@ export default function PlanCenter() {
     } else {
       if (currentUser) {
         setMembers([{
-          userId: currentUser.id,
+          userId: currentUser.id, workspaceId: "", role: "owner", joinedAt: "", email: "",
           username: currentUser.username,
-          displayName: currentUser.displayName || currentUser.username,
+
           avatarUrl: currentUser.avatarUrl
         }]);
       }
@@ -150,7 +147,7 @@ export default function PlanCenter() {
   const handleCreatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!planName.trim()) {
-      toast.error("计划名称不能为空");
+      toast.error(t("plans.nameRequired"));
       return;
     }
 
@@ -167,18 +164,18 @@ export default function PlanCenter() {
         milestones
       };
       await api.createPlan(payload);
-      toast.success("计划创建成功");
+      toast.success(t("plans.createSuccess"));
       setShowCreateModal(false);
       loadPlans();
-    } catch (err: any) {
-      toast.error(err?.message || "创建计划失败");
+    } catch (err: unknown) {
+      toast.error((err as any)?.message || t("plans.createFailed"));
     }
   };
 
   const getStatusLabel = (status: string) => {
-    if (status === "completed") return "已完成";
-    if (status === "in_progress") return "进行中";
-    return "待启动";
+    if (status === "completed") return t("plans.statusCompleted");
+    if (status === "in_progress") return t("plans.statusInProgress");
+    return t("plans.statusToStart");
   };
 
   const getStatusStyle = (status: string) => {
@@ -214,14 +211,14 @@ export default function PlanCenter() {
       >
         <div className="flex items-center gap-2">
           <Compass size={18} className="text-accent-primary shrink-0" />
-          <h1 className="text-base font-bold text-tx-primary">计划管理</h1>
+          <h1 className="text-base font-bold text-tx-primary">{t("plans.title")}</h1>
         </div>
         <Button
           onClick={handleOpenCreateModal}
           className="h-8 text-xs font-semibold px-3 rounded-lg bg-accent-primary hover:bg-accent-primary/95 text-white flex items-center gap-1.5"
         >
           <Plus size={14} />
-          <span>新建计划</span>
+          <span>{t("plans.newPlan")}</span>
         </Button>
       </div>
 
@@ -234,8 +231,8 @@ export default function PlanCenter() {
         ) : plans.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center text-tx-tertiary h-full">
             <FolderOpen size={48} className="stroke-1 mb-2 opacity-50" />
-            <p className="text-sm font-semibold">暂无计划</p>
-            <p className="text-xs max-w-xs">点击右上角“新建计划”开始规划您的目标！</p>
+            <p className="text-sm font-semibold">{t("plans.noPlans")}</p>
+            <p className="text-xs max-w-xs">{t("plans.noPlansDesc")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto pb-12">
@@ -273,7 +270,7 @@ export default function PlanCenter() {
                       </h3>
                       {p.goal && (
                         <p className="text-xs text-tx-secondary line-clamp-2 leading-relaxed">
-                          目标：{p.goal}
+                          {t("plans.goal")}: {p.goal}
                         </p>
                       )}
                     </div>
@@ -283,7 +280,7 @@ export default function PlanCenter() {
                       <div className="flex items-center justify-between text-[10px] text-tx-tertiary font-bold font-mono">
                         <span className="flex items-center gap-0.5">
                           <MilestoneIcon size={10} />
-                          里程碑进度
+                          {t("plans.milestoneProgress")}
                         </span>
                         <span>
                           {completedMilestones}/{totalMilestones} ({progressPercentage}%)
@@ -308,16 +305,16 @@ export default function PlanCenter() {
 
                       {/* Participants */}
                       <div className="flex items-center -space-x-1.5 overflow-hidden">
-                        {p.participants?.slice(0, 3).map((u, index) => (
+                        {p.participants?.slice(0, 3).map((u) => (
                           <div 
                             key={u.userId}
                             className="w-4 h-4 rounded-full bg-accent-primary/20 border border-app-sidebar shrink-0 flex items-center justify-center text-[8px] font-bold text-accent-primary uppercase"
-                            title={u.displayName || u.username}
+                            title={u.username}
                           >
                             {u.avatarUrl ? (
                               <img src={u.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
                             ) : (
-                              (u.displayName || u.username).slice(0, 1)
+                              (u.username).slice(0, 1)
                             )}
                           </div>
                         ))}
@@ -340,7 +337,7 @@ export default function PlanCenter() {
           <div className="bg-app-sidebar border border-app-border rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b border-app-border flex items-center justify-between">
-              <h2 className="text-sm font-bold text-tx-primary">创建新计划</h2>
+              <h2 className="text-sm font-bold text-tx-primary">{t("plans.createPlan")}</h2>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
@@ -354,11 +351,11 @@ export default function PlanCenter() {
             <form onSubmit={handleCreatePlan} className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Plan Name */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">计划名称</label>
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.name")}</label>
                 <Input
                   value={planName}
                   onChange={(e) => setPlanName(e.target.value)}
-                  placeholder="例如：2026年技术平台架构升级计划…"
+                  placeholder={t("plans.namePlaceholder")}
                   className="h-10 text-xs border-app-border w-full rounded-xl"
                   required
                 />
@@ -367,20 +364,20 @@ export default function PlanCenter() {
               {/* Background & Goal */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">背景背景</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.background")}</label>
                   <Textarea
                     value={background}
                     onChange={(e) => setBackground(e.target.value)}
-                    placeholder="为什么要启动这个计划？（选填）"
+                    placeholder={t("plans.backgroundPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">目标目标</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.goal")}</label>
                   <Textarea
                     value={goal}
                     onChange={(e) => setGoal(e.target.value)}
-                    placeholder="这个计划达成的效果与关键指标是什么？（选填）"
+                    placeholder={t("plans.goalPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
                 </div>
@@ -389,7 +386,7 @@ export default function PlanCenter() {
               {/* Start & End Dates */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">开始时间</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.startDate")}</label>
                   <input
                     type="date"
                     value={startDate}
@@ -398,7 +395,7 @@ export default function PlanCenter() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">截止时间</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.endDate")}</label>
                   <input
                     type="date"
                     value={endDate}
@@ -410,7 +407,7 @@ export default function PlanCenter() {
 
               {/* Participants Selector */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">参与人</label>
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.participants")}</label>
                 <div className="flex flex-wrap gap-2 p-3 border border-app-border rounded-xl bg-app-bg max-h-36 overflow-y-auto">
                   {members.map((u) => {
                     const active = selectedParticipants.includes(u.userId);
@@ -425,7 +422,7 @@ export default function PlanCenter() {
                             : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
                         }`}
                       >
-                        {u.displayName || u.username}
+                        {u.username}
                       </button>
                     );
                   })}
@@ -435,7 +432,7 @@ export default function PlanCenter() {
               {/* Milestones Manager */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">多个里程碑</label>
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.milestones")}</label>
                   <Button
                     type="button"
                     onClick={handleAddMilestone}
@@ -443,7 +440,7 @@ export default function PlanCenter() {
                     className="h-6 text-[10px] text-accent-primary hover:text-accent-primary/80 flex items-center gap-1"
                   >
                     <Plus size={10} />
-                    添加里程碑
+                    {t("plans.addMilestone")}
                   </Button>
                 </div>
 
@@ -459,29 +456,29 @@ export default function PlanCenter() {
                       </button>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">里程碑 {index + 1} 名称</label>
+                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">{t("plans.milestoneName", { index: index + 1 })}</label>
                         <Input
                           value={ms.name}
                           onChange={(e) => handleMilestoneChange(index, "name", e.target.value)}
-                          placeholder="例如：Phase 1 架构设计完成"
+                          placeholder={t("plans.milestonePlaceholder")}
                           className="h-8 text-xs border-app-border w-full rounded-lg"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">里程碑描述</label>
+                        <label className="text-[10px] font-semibold text-tx-tertiary uppercase block">{t("plans.milestoneDescription")}</label>
                         <Textarea
                           value={ms.description}
                           onChange={(e) => handleMilestoneChange(index, "description", e.target.value)}
-                          placeholder="里程碑产出与交付物是什么…"
+                          placeholder={t("plans.descriptionPlaceholder")}
                           className="min-h-[50px] text-xs border-app-border w-full rounded-lg"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">开始时间</label>
+                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">{t("plans.startDate")}</label>
                           <input
                             type="date"
                             value={ms.startDate}
@@ -490,7 +487,7 @@ export default function PlanCenter() {
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">截止时间</label>
+                          <label className="text-[10px] font-semibold text-tx-tertiary uppercase block mb-1">{t("plans.endDate")}</label>
                           <input
                             type="date"
                             value={ms.endDate}
@@ -506,11 +503,11 @@ export default function PlanCenter() {
 
               {/* Long Description (Markdown Details) */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">计划正文详情 (支持 Markdown)</label>
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.details")}</label>
                 <Textarea
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
-                  placeholder="# 计划详细大纲&#10;&#10;使用 Markdown 编写长篇计划大纲与实施步骤…"
+                  placeholder={t("plans.detailsPlaceholder")}
                   className="min-h-[160px] text-xs border-app-border w-full rounded-xl font-mono leading-relaxed"
                 />
               </div>
@@ -523,13 +520,13 @@ export default function PlanCenter() {
                   onClick={() => setShowCreateModal(false)}
                   className="h-9 px-4 rounded-xl text-xs hover:bg-app-hover"
                 >
-                  取消
+                  {t("plans.cancel")}
                 </Button>
                 <Button
                   type="submit"
                   className="h-9 px-4 rounded-xl text-xs bg-accent-primary text-white hover:bg-accent-primary/95"
                 >
-                  创建计划
+                  {t("plans.createPlan")}
                 </Button>
               </div>
             </form>
