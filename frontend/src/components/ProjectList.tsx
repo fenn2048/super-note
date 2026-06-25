@@ -108,8 +108,13 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete,
                             onClick={() => onTaskClick?.(task)}
                           >
                             <div className="flex flex-col gap-1">
-                              <span className={task.isCompleted === 1 ? "line-through opacity-50" : ""}>
+                              <span className={task.isCompleted === 1 ? "line-through opacity-50" : (task.status === "paused" ? "opacity-60" : "")}>
                                 {task.title}
+                                {task.status === "paused" && (
+                                  <span className="ml-2 px-1 py-0.5 bg-amber-500/10 text-amber-500 text-[8px] rounded border border-amber-500/20 font-bold">
+                                    已暂停
+                                  </span>
+                                )}
                               </span>
                               {task.description && (
                                 <span className="text-[10px] text-tx-tertiary font-normal line-clamp-1 max-w-lg">

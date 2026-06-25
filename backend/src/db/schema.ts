@@ -279,6 +279,7 @@ function initSchema(db: Database.Database) {
       userId TEXT NOT NULL,
       title TEXT NOT NULL,
       isCompleted INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
       priority INTEGER DEFAULT 2,
       dueDate TEXT,
       remindAt TEXT,
@@ -1112,6 +1113,7 @@ function initSchema(db: Database.Database) {
       stageId TEXT NOT NULL,
       title TEXT NOT NULL,
       isCompleted INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
       assigneeId TEXT,
       startDate TEXT,
       endDate TEXT,
@@ -1141,6 +1143,7 @@ function initSchema(db: Database.Database) {
       taskId TEXT NOT NULL,
       title TEXT NOT NULL,
       isCompleted INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
       sortOrder INTEGER DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE
@@ -1268,6 +1271,8 @@ function initSchema(db: Database.Database) {
     END;
   `);
 
+  try { db.exec("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'pending'"); } catch {}
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN status TEXT DEFAULT 'pending'"); } catch {}
   // v?? 说说 AI 助手：trigger_user_id 记录谁调起了 AI（用于删除权限判断）
   try { db.exec("ALTER TABLE diary_comments ADD COLUMN trigger_user_id TEXT"); } catch {}
   try { db.exec("ALTER TABLE diaries ADD COLUMN trigger_user_id TEXT"); } catch {}

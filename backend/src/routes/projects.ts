@@ -1,401 +1,62 @@
 import { Hono } from "hono";
-import { getDb } from "../db/schema";
-import { getUserWorkspaceRole } from "../middleware/acl";
-import { v4 as uuid } from "uuid";
-import { handleRecurringTask } from "../lib/recurrence";
-import { propagateProjectStatusUp, syncMilestoneStatusDirect } from "../lib/planStatusSync.js";
+import { getDb } from "../db/index.js";
+import { uuid } from "../lib/utils.js";
 import { logAudit } from "../services/audit.js";
+import { getUserWorkspaceRole } from "../lib/permissions.js";
+import { propagateProjectStatusUp, syncMilestoneStatusDirect, propagateStatusDown } from "../lib/planStatusSync.js";
+import { handleRecurringTask } from "../lib/recurringTasks.js";
 
 const projectsRouter = new Hono();
 
-// Helper to get project task with all associations (participants, tags, checklists, attachments)
-function getFullProjectTask(db: any, taskId: string) {
-  const task = db.prepare(`
-    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl,
-      (SELECT COUNT(*) FROM project_task_checklists WHERE taskId = pt.id) as checklistTotal,
-      (SELECT COUNT(*) FROM project_task_checklists WHERE taskId = pt.id AND isCompleted = 1) as checklistCompleted
-    FROM project_tasks pt
-    LEFT JOIN users u ON pt.assigneeId = u.id
-    WHERE pt.id = ?
-  `).get(taskId) as any;
-  
-  if (!task) return null;
-
-  task.participants = db.prepare(`
-    SELECT ptm.userId, u.username, u.displayName, u.avatarUrl
-    FROM project_task_members ptm
-    JOIN users u ON ptm.userId = u.id
-    WHERE ptm.taskId = ?
-  `).all(taskId);
-
-  task.tags = db.prepare(`
-    SELECT t.id, t.userId, t.name, t.color, t.createdAt
-    FROM project_task_tags ptt
-    JOIN tags t ON ptt.tagId = t.id
-    WHERE ptt.taskId = ?
-  `).all(taskId);
-  
-  task.checklists = db.prepare(`
-    SELECT * FROM project_task_checklists
-    WHERE taskId = ?
-    ORDER BY sortOrder ASC
-  `).all(taskId);
-
-  task.attachments = db.prepare(`
-    SELECT id, filename, mimeType, size, path, createdAt
-    FROM task_attachments
-    WHERE taskId = ?
-    ORDER BY createdAt ASC
-  `).all(taskId);
-
-  task.dependencies = db.prepare(`
-    SELECT pt.id, pt.title, pt.isCompleted
-    FROM project_task_dependencies ptd
-    JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
-    WHERE ptd.taskId = ?
-  `).all(taskId);
-
-  return task;
-}
-
-// Helper to check if project exists and user has access
+// Helper: check project permission
 function getProjectPermission(projectId: string, userId: string) {
   const db = getDb();
-  const project = db.prepare("SELECT ownerId, visibility, workspaceId, isDeleted, isArchived FROM projects WHERE id = ?").get(projectId) as { ownerId: string; visibility: string; workspaceId: string | null; isDeleted: number; isArchived: number } | undefined;
-  if (!project) return { canRead: false, canWrite: false, isOwner: false, project: null };
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as any;
+  if (!project) return { project: null, canRead: false, canWrite: false, isOwner: false };
 
-  const isOwner = project.ownerId === userId;
+  if (project.ownerId === userId) return { project, canRead: true, canWrite: true, isOwner: true };
 
-  if (project.workspaceId) {
-    const role = getUserWorkspaceRole(project.workspaceId, userId);
-    if (!role) return { canRead: false, canWrite: false, isOwner: false, project };
-
-    const isWorkspaceAdmin = role === "owner" || role === "admin";
-    if (project.visibility === "PUBLIC" || isWorkspaceAdmin) {
-      return { canRead: true, canWrite: true, isOwner, project };
-    } else {
-      const member = db.prepare("SELECT role FROM project_members WHERE projectId = ? AND userId = ?").get(projectId, userId);
-      const hasAccess = isOwner || !!member;
-      return { canRead: hasAccess, canWrite: hasAccess, isOwner, project };
-    }
-  } else {
-    return { canRead: isOwner, canWrite: isOwner, isOwner, project };
+  // Check if user is a member
+  const member = db.prepare("SELECT role FROM project_members WHERE projectId = ? AND userId = ?").get(projectId, userId) as { role: string } | undefined;
+  if (member) {
+    return { project, canRead: true, canWrite: member.role === "admin" || member.role === "member" || member.role === "owner", isOwner: member.role === "owner" };
   }
+
+  // Check workspace visibility
+  if (project.visibility === "PUBLIC" || project.visibility === "WORKSPACE") {
+    return { project, canRead: true, canWrite: false, isOwner: false };
+  }
+
+  return { project, canRead: false, canWrite: false, isOwner: false };
 }
 
-// 1. Projects CRUD
+// 1. Project CRUD
 // List projects
 projectsRouter.get("/", (c) => {
   const db = getDb();
   const userId = c.req.header("X-User-Id")!;
-  const workspaceId = c.req.query("workspaceId") || null;
-  const filter = c.req.query("filter") || "active";
-  const groupId = c.req.query("groupId") || null;
+  const workspaceId = c.req.query("workspaceId");
 
-  let bypassPrivate = false;
-  if (workspaceId) {
-    const role = getUserWorkspaceRole(workspaceId, userId);
-    if (!role) return c.json({ error: "无权访问该工作区", code: "FORBIDDEN" }, 403);
-    if (role === "owner" || role === "admin") {
-      bypassPrivate = true;
-    }
-  }
-
-  let sql = `
-    SELECT p.*, u.username as ownerName, u.displayName as ownerDisplayName, pg.name as groupName,
-      (SELECT COUNT(*) FROM project_tasks pt WHERE pt.projectId = p.id AND pt.isCompleted = 1) as completedTasksCount,
-      (SELECT COUNT(*) FROM project_tasks pt WHERE pt.projectId = p.id) as totalTasksCount
+  let query = `
+    SELECT p.*, u.username as ownerName, u.displayName as ownerDisplayName
     FROM projects p
     LEFT JOIN users u ON p.ownerId = u.id
-    LEFT JOIN project_groups pg ON p.groupId = pg.id
-    WHERE `;
-
-  const params: any[] = [];
-  if (workspaceId) {
-    sql += `p.workspaceId = ? `;
-    params.push(workspaceId);
-  } else {
-    sql += `p.workspaceId IS NULL `;
-  }
-
-  if (filter === "trash") {
-    sql += `AND p.isDeleted = 1 `;
-  } else if (filter === "archived") {
-    sql += `AND p.isArchived = 1 AND p.isDeleted = 0 `;
-  } else {
-    sql += `AND p.isArchived = 0 AND p.isDeleted = 0 `;
-  }
-
-  if (groupId) {
-    sql += `AND p.groupId = ? `;
-    params.push(groupId);
-  }
-
-  if (workspaceId && !bypassPrivate) {
-    sql += `AND (p.visibility = 'PUBLIC' OR p.ownerId = ? OR p.id IN (SELECT projectId FROM project_members WHERE userId = ?)) `;
-    params.push(userId, userId);
-  } else if (!workspaceId) {
-    sql += `AND p.ownerId = ? `;
-    params.push(userId);
-  }
-
-  sql += `ORDER BY p.createdAt DESC`;
-  const rows = db.prepare(sql).all(params);
-  return c.json(rows);
-});
-
-// Get workspace-wide tasks for current user
-projectsRouter.get("/my-tasks", (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const workspaceId = c.req.query("workspaceId") || null;
-  const filter = c.req.query("filter") || "all"; // "all", "assigned", "created", "participating"
-
-  // Query all active projects the user has access to
-  let bypassPrivate = false;
-  if (workspaceId && workspaceId !== "personal") {
-    const role = getUserWorkspaceRole(workspaceId, userId);
-    if (!role) return c.json({ error: "无权访问该工作区", code: "FORBIDDEN" }, 403);
-    if (role === "owner" || role === "admin") {
-      bypassPrivate = true;
-    }
-  }
-
-  let projectsSql = `SELECT id FROM projects WHERE isDeleted = 0 AND isArchived = 0 `;
-  const projectsParams: any[] = [];
-  if (workspaceId && workspaceId !== "personal") {
-    projectsSql += `AND workspaceId = ? `;
-    projectsParams.push(workspaceId);
-  } else {
-    projectsSql += `AND workspaceId IS NULL `;
-  }
-
-  if (workspaceId && workspaceId !== "personal" && !bypassPrivate) {
-    projectsSql += `AND (visibility = 'PUBLIC' OR ownerId = ? OR id IN (SELECT projectId FROM project_members WHERE userId = ?)) `;
-    projectsParams.push(userId, userId);
-  } else if (!workspaceId || workspaceId === "personal") {
-    projectsSql += `AND ownerId = ? `;
-    projectsParams.push(userId);
-  }
-
-  const allowedProjects = db.prepare(projectsSql).all(projectsParams) as { id: string }[];
-  if (allowedProjects.length === 0) {
-    return c.json([]);
-  }
-
-  const projectIds = allowedProjects.map(p => p.id);
-  const placeholders = projectIds.map(() => "?").join(",");
-
-  let sql = `
-    SELECT pt.*, p.name as projectName, ps.name as stageName, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl
-    FROM project_tasks pt
-    JOIN projects p ON pt.projectId = p.id
-    JOIN project_stages ps ON pt.stageId = ps.id
-    LEFT JOIN users u ON pt.assigneeId = u.id
-    WHERE pt.projectId IN (${placeholders})
+    WHERE p.isDeleted = 0
   `;
-  const params: any[] = [...projectIds];
-
-  // Apply filter: "我负责的" (assigned), "我创建的" (created), "我参与的" (participating)
-  if (filter === "assigned") {
-    sql += ` AND pt.assigneeId = ?`;
-    params.push(userId);
-  } else if (filter === "created") {
-    sql += ` AND pt.creatorId = ?`;
-    params.push(userId);
-  } else if (filter === "participating") {
-    sql += ` AND (pt.assigneeId = ? OR pt.creatorId = ? OR pt.id IN (SELECT taskId FROM project_task_members WHERE userId = ?))`;
-    params.push(userId, userId, userId);
-  } else {
-    // default/all: any association
-    sql += ` AND (pt.assigneeId = ? OR pt.creatorId = ? OR pt.id IN (SELECT taskId FROM project_task_members WHERE userId = ?))`;
-    params.push(userId, userId, userId);
-  }
-
-  sql += ` ORDER BY pt.endDate ASC, pt.createdAt DESC`;
-  const tasks = db.prepare(sql).all(params) as any[];
-
-  // Attach tags, checklists, and participants to each task
-  for (const task of tasks) {
-    const participants = db.prepare(`
-      SELECT ptm.userId, u.username, u.displayName, u.avatarUrl
-      FROM project_task_members ptm
-      JOIN users u ON ptm.userId = u.id
-      WHERE ptm.taskId = ?
-    `).all(task.id);
-    task.participants = participants;
-
-    const tags = db.prepare(`
-      SELECT t.id, t.name, t.color
-      FROM project_task_tags ptt
-      JOIN tags t ON ptt.tagId = t.id
-      WHERE ptt.taskId = ?
-    `).all(task.id);
-    task.tags = tags;
-
-    const checklists = db.prepare(`
-      SELECT * FROM project_task_checklists
-      WHERE taskId = ?
-      ORDER BY sortOrder ASC
-    `).all(task.id);
-    task.checklists = checklists;
-
-    const attachments = db.prepare(`
-      SELECT id, filename, mimeType, size, path, createdAt
-      FROM task_attachments
-      WHERE taskId = ?
-      ORDER BY createdAt ASC
-    `).all(task.id);
-    task.attachments = attachments;
-
-    const dependencies = db.prepare(`
-      SELECT pt.id, pt.title, pt.isCompleted
-      FROM project_task_dependencies ptd
-      JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
-      WHERE ptd.taskId = ?
-    `).all(task.id);
-    task.dependencies = dependencies;
-  }
-
-  return c.json(tasks);
-});
-
-// 2. Project Groups
-// List groups
-projectsRouter.get("/groups", (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const workspaceId = c.req.query("workspaceId") || null;
-
-  if (workspaceId) {
-    const role = getUserWorkspaceRole(workspaceId, userId);
-    if (!role) return c.json({ error: "无权访问该工作区", code: "FORBIDDEN" }, 403);
-  }
-
-  let sql = "SELECT * FROM project_groups WHERE ";
   const params: any[] = [];
+
   if (workspaceId) {
-    sql += "workspaceId = ? ";
+    query += " AND p.workspaceId = ?";
     params.push(workspaceId);
   } else {
-    sql += "workspaceId IS NULL AND userId = ? ";
-    params.push(userId);
-  }
-  sql += "ORDER BY sortOrder ASC, name ASC";
-
-  const rows = db.prepare(sql).all(params);
-  return c.json(rows);
-});
-
-// Create group
-projectsRouter.post("/groups", async (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const body = await c.req.json();
-  const { name, workspaceId = null } = body;
-
-  if (!name) return c.json({ error: "分组名称不能为空" }, 400);
-
-  if (workspaceId) {
-    const role = getUserWorkspaceRole(workspaceId, userId);
-    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
+    query += " AND (p.visibility = 'PUBLIC' OR p.ownerId = ? OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.projectId = p.id AND pm.userId = ?))";
+    params.push(userId, userId);
   }
 
-  const id = uuid();
-  db.prepare("INSERT INTO project_groups (id, name, workspaceId, userId) VALUES (?, ?, ?, ?)").run(id, name, workspaceId, userId);
-  const newGroup = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(id);
-  return c.json(newGroup);
-});
+  query += " ORDER BY p.createdAt DESC";
+  const projects = db.prepare(query).all(params);
 
-// Update group
-projectsRouter.put("/groups/:groupId", async (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const groupId = c.req.param("groupId");
-  const body = await c.req.json();
-  const { name, sortOrder } = body;
-
-  const group = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId) as any;
-  if (!group) return c.json({ error: "分组不存在" }, 404);
-
-  if (group.workspaceId) {
-    const role = getUserWorkspaceRole(group.workspaceId, userId);
-    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
-  } else {
-    if (group.userId !== userId) return c.json({ error: "权限不足", code: "FORBIDDEN" }, 403);
-  }
-
-  if (name !== undefined) {
-    db.prepare("UPDATE project_groups SET name = ? WHERE id = ?").run(name, groupId);
-  }
-  if (sortOrder !== undefined) {
-    db.prepare("UPDATE project_groups SET sortOrder = ? WHERE id = ?").run(sortOrder, groupId);
-  }
-
-  const updatedGroup = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId);
-  return c.json(updatedGroup);
-});
-
-// Delete group
-projectsRouter.delete("/groups/:groupId", (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const groupId = c.req.param("groupId");
-
-  const group = db.prepare("SELECT * FROM project_groups WHERE id = ?").get(groupId) as any;
-  if (!group) return c.json({ error: "分组不存在" }, 404);
-
-  if (group.workspaceId) {
-    const role = getUserWorkspaceRole(group.workspaceId, userId);
-    if (!role) return c.json({ error: "无权在该工作区内操作", code: "FORBIDDEN" }, 403);
-  } else {
-    if (group.userId !== userId) return c.json({ error: "权限不足", code: "FORBIDDEN" }, 403);
-  }
-
-  db.prepare("DELETE FROM project_groups WHERE id = ?").run(groupId);
-  return c.json({ message: "分组已删除" });
-});
-
-// Get single project
-projectsRouter.get("/:id", (c) => {
-  const userId = c.req.header("X-User-Id")!;
-  const id = c.req.param("id");
-  const { canRead, project } = getProjectPermission(id, userId);
-
-  if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
-  if (!canRead) return c.json({ error: "无权查看该项目", code: "FORBIDDEN" }, 403);
-
-  // Fetch complete project details with members
-  const db = getDb();
-  const projectDetails = db.prepare(`
-    SELECT p.*, u.username as ownerName, u.displayName as ownerDisplayName, pg.name as groupName
-    FROM projects p
-    LEFT JOIN users u ON p.ownerId = u.id
-    LEFT JOIN project_groups pg ON p.groupId = pg.id
-    WHERE p.id = ?
-  `).get(id) as any;
-
-  let members;
-  if (projectDetails.visibility === "PUBLIC" && projectDetails.workspaceId) {
-    members = db.prepare(`
-      SELECT DISTINCT wm.userId,
-             CASE WHEN wm.role = 'owner' THEN 'owner' WHEN wm.role = 'admin' THEN 'admin' ELSE 'member' END as role,
-             u.username, u.displayName, u.avatarUrl
-      FROM workspace_members wm
-      JOIN users u ON wm.userId = u.id
-      WHERE wm.workspaceId = ?
-    `).all(projectDetails.workspaceId);
-  } else {
-    members = db.prepare(`
-      SELECT pm.userId, pm.role, u.username, u.displayName, u.avatarUrl
-      FROM project_members pm
-      JOIN users u ON pm.userId = u.id
-      WHERE pm.projectId = ?
-    `).all(id);
-  }
-
-  projectDetails.members = members;
-  return c.json(projectDetails);
+  return c.json(projects);
 });
 
 // Create project
@@ -429,8 +90,10 @@ projectsRouter.post("/", async (c) => {
   const defaultStageId = uuid();
   db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(defaultStageId, projectId, "待规划", 0);
 
-  const newProject = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId);
-  return c.json(newProject);
+  logAudit(userId, "system", "create_project", `创建项目「${name}」`, { targetType: "project", targetId: projectId });
+
+  const createdProject = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId);
+  return c.json(createdProject);
 });
 
 // Update project
@@ -440,8 +103,7 @@ projectsRouter.put("/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
 
-  const { canWrite, project } = getProjectPermission(id, userId);
-  if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
+  const { isOwner, canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目", code: "FORBIDDEN" }, 403);
 
   const { name, description, cover, startDate, endDate, visibility, groupId, isArchived, isDeleted, status, milestoneId } = body;
@@ -471,6 +133,7 @@ projectsRouter.put("/:id", async (c) => {
 
   if (status !== undefined && status !== oldProject.status) {
     logAudit(userId, "system", "project_status_update", `修改项目「${name || oldProject.name}」状态为: ${status}`, { targetType: "project", targetId: id });
+    propagateStatusDown(db, "project", id, status, userId);
   } else if (updates.length > 0) {
     logAudit(userId, "system", "project_update", `修改了项目「${name || oldProject.name}」的属性`, { targetType: "project", targetId: id });
   }
@@ -486,27 +149,23 @@ projectsRouter.put("/:id", async (c) => {
   return c.json(updatedProject);
 });
 
-// Delete project
+// Delete project (soft delete)
 projectsRouter.delete("/:id", (c) => {
   const db = getDb();
   const userId = c.req.header("X-User-Id")!;
   const id = c.req.param("id");
 
-  const { canWrite, project } = getProjectPermission(id, userId);
-  if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
-  if (!canWrite) return c.json({ error: "无权删除该项目", code: "FORBIDDEN" }, 403);
+  const { isOwner } = getProjectPermission(id, userId);
+  if (!isOwner) return c.json({ error: "仅项目创建者能删除项目", code: "FORBIDDEN" }, 403);
 
-  if (project.isDeleted === 1) {
-    db.prepare("DELETE FROM projects WHERE id = ?").run(id);
-    return c.json({ message: "项目已彻底删除" });
-  } else {
-    db.prepare("UPDATE projects SET isDeleted = 1, updatedAt = datetime('now') WHERE id = ?").run(id);
-    return c.json({ message: "项目已移入回收站" });
-  }
+  db.prepare("UPDATE projects SET isDeleted = 1, updatedAt = datetime('now') WHERE id = ?").run(id);
+  logAudit(userId, "system", "delete_project", "删除了项目", { targetType: "project", targetId: id });
+
+  return c.json({ message: "项目已删除" });
 });
 
-// 3. Project Stages & Tasks
-// Get stages with nested tasks
+// 2. Project Stages
+// List stages
 projectsRouter.get("/:id/stages", (c) => {
   const userId = c.req.header("X-User-Id")!;
   const id = c.req.param("id");
@@ -515,62 +174,7 @@ projectsRouter.get("/:id/stages", (c) => {
   if (!canRead) return c.json({ error: "无权查看该项目", code: "FORBIDDEN" }, 403);
 
   const db = getDb();
-  const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
-
-  for (const stage of stages) {
-    const tasks = db.prepare(`
-      SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl,
-        (SELECT COUNT(*) FROM project_task_checklists WHERE taskId = pt.id) as checklistTotal,
-        (SELECT COUNT(*) FROM project_task_checklists WHERE taskId = pt.id AND isCompleted = 1) as checklistCompleted
-      FROM project_tasks pt
-      LEFT JOIN users u ON pt.assigneeId = u.id
-      WHERE pt.projectId = ? AND pt.stageId = ?
-      ORDER BY pt.sortOrder ASC, pt.createdAt DESC
-    `).all(id, stage.id) as any[];
-
-    for (const task of tasks) {
-      const participants = db.prepare(`
-        SELECT ptm.userId, u.username, u.displayName, u.avatarUrl
-        FROM project_task_members ptm
-        JOIN users u ON ptm.userId = u.id
-        WHERE ptm.taskId = ?
-      `).all(task.id);
-      task.participants = participants;
-
-      const tags = db.prepare(`
-        SELECT t.id, t.userId, t.name, t.color, t.createdAt
-        FROM project_task_tags ptt
-        JOIN tags t ON ptt.tagId = t.id
-        WHERE ptt.taskId = ?
-      `).all(task.id);
-      task.tags = tags;
-      
-      const checklists = db.prepare(`
-        SELECT * FROM project_task_checklists
-        WHERE taskId = ?
-        ORDER BY sortOrder ASC
-      `).all(task.id);
-      task.checklists = checklists;
-
-      const attachments = db.prepare(`
-        SELECT id, filename, mimeType, size, path, createdAt
-        FROM task_attachments
-        WHERE taskId = ?
-        ORDER BY createdAt ASC
-      `).all(task.id);
-      task.attachments = attachments;
-
-      const dependencies = db.prepare(`
-        SELECT pt.id, pt.title, pt.isCompleted
-        FROM project_task_dependencies ptd
-        JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
-        WHERE ptd.taskId = ?
-      `).all(task.id);
-      task.dependencies = dependencies;
-    }
-    stage.tasks = tasks;
-  }
-
+  const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(id);
   return c.json(stages);
 });
 
@@ -580,20 +184,21 @@ projectsRouter.post("/:id/stages", async (c) => {
   const userId = c.req.header("X-User-Id")!;
   const id = c.req.param("id");
   const body = await c.req.json();
-  const { name } = body;
-
-  if (!name) return c.json({ error: "阶段名称不能为空" }, 400);
 
   const { canWrite } = getProjectPermission(id, userId);
-  if (!canWrite) return c.json({ error: "无权在此项目内操作", code: "FORBIDDEN" }, 403);
+  if (!canWrite) return c.json({ error: "无权编辑该项目", code: "FORBIDDEN" }, 403);
+
+  const { name, bgColor = null } = body;
+  if (!name) return c.json({ error: "看板列名称不能为空" }, 400);
 
   const stageId = uuid();
   const maxSort = db.prepare("SELECT MAX(sortOrder) as max FROM project_stages WHERE projectId = ?").get(id) as { max: number | null };
   const sortOrder = (maxSort.max ?? -1) + 1;
 
-  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(stageId, id, name, sortOrder);
-  const newStage = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId);
-  return c.json(newStage);
+  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder, bgColor) VALUES (?, ?, ?, ?, ?)").run(stageId, id, name, sortOrder, bgColor);
+
+  const createdStage = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId);
+  return c.json(createdStage);
 });
 
 // Update stage
@@ -602,26 +207,27 @@ projectsRouter.put("/stages/:stageId", async (c) => {
   const userId = c.req.header("X-User-Id")!;
   const stageId = c.req.param("stageId");
   const body = await c.req.json();
-  const { name, sortOrder, bgColor } = body;
 
-  const stage = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId) as { name: string; projectId: string } | undefined;
-  if (!stage) return c.json({ error: "阶段不存在" }, 404);
+  const stage = db.prepare("SELECT projectId FROM project_stages WHERE id = ?").get(stageId) as { projectId: string } | undefined;
+  if (!stage) return c.json({ error: "看板列不存在" }, 404);
 
   const { canWrite } = getProjectPermission(stage.projectId, userId);
-  if (!canWrite) return c.json({ error: "无权编辑该项目的阶段", code: "FORBIDDEN" }, 403);
+  if (!canWrite) return c.json({ error: "无权编辑该项目", code: "FORBIDDEN" }, 403);
 
-  if (name !== undefined) {
-    db.prepare("UPDATE project_stages SET name = ? WHERE id = ?").run(name, stageId);
-  }
-  if (sortOrder !== undefined) {
-    db.prepare("UPDATE project_stages SET sortOrder = ? WHERE id = ?").run(sortOrder, stageId);
-  }
-  if (bgColor !== undefined) {
-    db.prepare("UPDATE project_stages SET bgColor = ? WHERE id = ?").run(bgColor, stageId);
+  const { name, sortOrder, bgColor } = body;
+  const updates: string[] = [];
+  const params: any[] = [];
+
+  if (name !== undefined) { updates.push("name = ?"); params.push(name); }
+  if (sortOrder !== undefined) { updates.push("sortOrder = ?"); params.push(sortOrder); }
+  if (bgColor !== undefined) { updates.push("bgColor = ?"); params.push(bgColor); }
+
+  if (updates.length > 0) {
+    params.push(stageId);
+    db.prepare(`UPDATE project_stages SET ${updates.join(", ")} WHERE id = ?`).run(params);
   }
 
-  const updated = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId);
-  return c.json(updated);
+  return c.json({ success: true });
 });
 
 // Delete stage
@@ -630,15 +236,91 @@ projectsRouter.delete("/stages/:stageId", (c) => {
   const userId = c.req.header("X-User-Id")!;
   const stageId = c.req.param("stageId");
 
-  const stage = db.prepare("SELECT * FROM project_stages WHERE id = ?").get(stageId) as { projectId: string } | undefined;
-  if (!stage) return c.json({ error: "阶段不存在" }, 404);
+  const stage = db.prepare("SELECT projectId FROM project_stages WHERE id = ?").get(stageId) as { projectId: string } | undefined;
+  if (!stage) return c.json({ error: "看板列不存在" }, 404);
 
   const { canWrite } = getProjectPermission(stage.projectId, userId);
-  if (!canWrite) return c.json({ error: "无权删除该项目的阶段", code: "FORBIDDEN" }, 403);
+  if (!canWrite) return c.json({ error: "无权编辑该项目", code: "FORBIDDEN" }, 403);
+
+  // Move tasks to another stage or delete them? For now, prevent delete if not empty.
+  const taskCount = db.prepare("SELECT COUNT(*) as count FROM project_tasks WHERE stageId = ?").get(stageId) as { count: number };
+  if (taskCount.count > 0) {
+    return c.json({ error: "请先清空或转移该看板列下的任务" }, 400);
+  }
 
   db.prepare("DELETE FROM project_stages WHERE id = ?").run(stageId);
-  return c.json({ message: "阶段已成功删除" });
+  return c.json({ message: "看板列已删除" });
 });
+
+// 3. Project Tasks
+// List tasks
+projectsRouter.get("/:id/tasks", (c) => {
+  const userId = c.req.header("X-User-Id")!;
+  const id = c.req.param("id");
+
+  const { canRead } = getProjectPermission(id, userId);
+  if (!canRead) return c.json({ error: "无权查看该项目任务", code: "FORBIDDEN" }, 403);
+
+  const db = getDb();
+  const tasks = db.prepare("SELECT * FROM project_tasks WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
+
+  for (const t of tasks) {
+    t.participants = db.prepare(`
+      SELECT u.id, u.username, u.displayName, u.avatarUrl
+      FROM project_task_members ptm
+      JOIN users u ON ptm.userId = u.id
+      WHERE ptm.taskId = ?
+    `).all(t.id);
+
+    t.tags = db.prepare(`
+      SELECT tg.*
+      FROM project_task_tags ptt
+      JOIN tags tg ON ptt.tagId = tg.id
+      WHERE ptt.taskId = ?
+    `).all(t.id);
+
+    t.checklists = db.prepare("SELECT * FROM project_task_checklists WHERE taskId = ? ORDER BY sortOrder ASC").all(t.id);
+
+    t.dependencies = db.prepare(`
+      SELECT pt.id, pt.title, pt.isCompleted
+      FROM project_task_dependencies ptd
+      JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+      WHERE ptd.taskId = ?
+    `).all(t.id);
+  }
+
+  return c.json(tasks);
+});
+
+function getFullProjectTask(db: any, taskId: string) {
+  const t = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId) as any;
+  if (!t) return null;
+
+  t.participants = db.prepare(`
+    SELECT u.id, u.username, u.displayName, u.avatarUrl
+    FROM project_task_members ptm
+    JOIN users u ON ptm.userId = u.id
+    WHERE ptm.taskId = ?
+  `).all(taskId);
+
+  t.tags = db.prepare(`
+    SELECT tg.*
+    FROM project_task_tags ptt
+    JOIN tags tg ON ptt.tagId = tg.id
+    WHERE ptt.taskId = ?
+  `).all(taskId);
+
+  t.checklists = db.prepare("SELECT * FROM project_task_checklists WHERE taskId = ? ORDER BY sortOrder ASC").all(taskId);
+
+  t.dependencies = db.prepare(`
+    SELECT pt.id, pt.title, pt.isCompleted
+    FROM project_task_dependencies ptd
+    JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+    WHERE ptd.taskId = ?
+  `).all(taskId);
+
+  return t;
+}
 
 // Create project task
 projectsRouter.post("/:id/tasks", async (c) => {
@@ -650,7 +332,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null, dependencies = [] } = body;
+  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null, dependencies = [], status = 'pending' } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
 
@@ -659,9 +341,9 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const sortOrder = (maxSort.max ?? -1) + 1;
 
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule);
+    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(taskId, id, stageId, title, status, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule);
 
   // Add dependencies
   if (Array.isArray(dependencies)) {
@@ -688,8 +370,8 @@ projectsRouter.post("/:id/tasks", async (c) => {
     }
   }
 
-  const newTask = getFullProjectTask(db, taskId);
-  return c.json(newTask);
+  const createdTask = getFullProjectTask(db, taskId);
+  return c.json(createdTask);
 });
 
 // Update project task
@@ -705,7 +387,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, dependencies } = body;
+  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, dependencies } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -752,6 +434,9 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (description !== undefined && description !== task.description) {
     logAudit(userId, "task", "update_task_desc", "修改了任务描述", { targetType: "project_task", targetId: taskId });
   }
+  if (status !== undefined && status !== task.status) {
+    logAudit(userId, "task", "update_task_status", `修改任务状态为: ${status}`, { targetType: "project_task", targetId: taskId });
+  }
   if (finalIsCompleted !== undefined && ((finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0) !== task.isCompleted) {
     const isComp = (finalIsCompleted === 1 || finalIsCompleted === true);
     logAudit(userId, "task", isComp ? "complete_task" : "reopen_task", isComp ? "完成了任务" : "重新开启了任务", { targetType: "project_task", targetId: taskId });
@@ -772,6 +457,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (title !== undefined) { updates.push("title = ?"); params.push(title); }
   if (description !== undefined) { updates.push("description = ?"); params.push(description); }
   if (finalIsCompleted !== undefined) { updates.push("isCompleted = ?"); params.push((finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0); }
+  if (status !== undefined) { updates.push("status = ?"); params.push(status); }
   if (assigneeId !== undefined) { updates.push("assigneeId = ?"); params.push(assigneeId); }
   if (startDate !== undefined) { updates.push("startDate = ?"); params.push(startDate); }
   if (endDate !== undefined) { updates.push("endDate = ?"); params.push(endDate); }

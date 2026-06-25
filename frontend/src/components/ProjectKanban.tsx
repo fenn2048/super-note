@@ -3,7 +3,7 @@ import { Project, ProjectStage, ProjectTask, Tag, UserPublicInfo, AuditLog } fro
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import {
-  Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus,
+  Plus, Edit2, Trash2, Play, Pause, CheckSquare, Calendar, User, UserPlus,
   Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles, MoveRight,
   Eye, FileVideo, Image as ImageIcon, Paperclip, Upload, AlertCircle, Link, Compass, Loader2
 } from "lucide-react";
@@ -587,16 +587,32 @@ export default function ProjectKanban({
                     <h4
                       style={titleStyle}
                       className={`text-xs font-semibold text-tx-primary leading-snug break-words ${
-                        task.isCompleted === 1 ? "line-through opacity-55 decoration-tx-primary/30" : ""
+                        task.isCompleted === 1 ? "line-through opacity-55 decoration-tx-primary/30" : (task.status === "paused" ? "opacity-60" : "")
                       }`}
                     >
                       {task.title}
+                      {task.status === "paused" && (
+                        <span className="ml-2 px-1 py-0.5 bg-amber-500/10 text-amber-500 text-[8px] rounded border border-amber-500/20 font-bold">
+                          已暂停
+                        </span>
+                      )}
                     </h4>
 
                     {/* Progress Bar & Quick Pickers */}
                     <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between text-[9px] text-tx-tertiary">
                         <span>进度: {task.progress || 0}%</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newStatus = task.status === "paused" ? "in_progress" : "paused";
+                            api.updateProjectTask(task.id, { status: newStatus }).then(() => onRefresh());
+                          }}
+                          className="p-1 rounded text-tx-tertiary hover:text-accent-primary transition-all shrink-0"
+                          title={task.status === "paused" ? "恢复" : "暂停"}
+                        >
+                          {task.status === "paused" ? <Play size={10} /> : <Pause size={10} />}
+                        </button>
                       </div>
                       <div className="w-full bg-app-hover/50 h-1 rounded-full overflow-hidden">
                         <div

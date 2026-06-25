@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Circle, Flag, Calendar, Plus, ListTodo,
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
-  Trash2, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
+  Trash2, Play, Pause, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
   User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText, Repeat,
   Compass, AlertCircle
 } from "lucide-react";
@@ -337,11 +337,16 @@ const TaskRow = React.forwardRef<HTMLDivElement, {
             //     允许在任意位置（包括链接胶囊前后）软换行，杜绝胶囊把行宽撑到父容器外。
             //   - `line-clamp-2` 保留省略号截断：超过 2 行的标题尾部 ... 收起。
             "text-[13px] md:text-sm leading-relaxed break-words [overflow-wrap:anywhere] line-clamp-2 transition-all",
-            isCompleted ? "line-through text-tx-tertiary" : "text-tx-primary"
+            isCompleted ? "line-through text-tx-tertiary" : (task.status === "paused" ? "text-tx-tertiary opacity-70" : "text-tx-primary")
           )}
           title={task.title}
         >
           <TitleView title={task.title} compact isCompleted={isCompleted} />
+          {task.status === "paused" && (
+            <span className="ml-2 px-1 py-0.5 bg-amber-500/10 text-amber-500 text-[9px] rounded border border-amber-500/20 font-bold">
+              已暂停
+            </span>
+          )}
         </span>
         {/* 移动端元信息行：DateBadge + creator，flex-wrap 防止两者并排时溢出。
             注意 md:hidden——桌面端 DateBadge 仍在右侧 Badges 里，避免重复。 */}
@@ -397,6 +402,17 @@ const TaskRow = React.forwardRef<HTMLDivElement, {
           <DateBadge dateStr={task.dueDate} />
         </span>
         <Flag size={14} className={pri.flagClass} />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            const newStatus = task.status === "paused" ? "pending" : "paused";
+            api.updateTask(task.id, { status: newStatus }).then(() => onToggle("")); // trigger refresh via onToggle hack or custom event
+          }}
+          className="p-1 rounded text-tx-tertiary hover:text-accent-primary transition-all shrink-0 active:scale-95"
+          title={task.status === "paused" ? "恢复" : "暂停"}
+        >
+          {task.status === "paused" ? <Play size={14} /> : <Pause size={14} />}
+        </button>
         {window.innerWidth < 768 && (
           <button
             onClick={handleToggleStar}
@@ -601,8 +617,18 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-app-border" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
-        <span className="text-sm font-semibold text-tx-primary">{t('tasks.taskDetail')}</span>
+        <span className="text-sm font-semibold text-tx-primary">{t("tasks.taskDetail")}</span>
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              const newStatus = task.status === "paused" ? "pending" : "paused";
+              onUpdate(task.id, { status: newStatus });
+            }}
+            className="p-1 rounded-md hover:bg-app-hover transition-colors"
+            title={task.status === "paused" ? "恢复" : "暂停"}
+          >
+            {task.status === "paused" ? <Play size={16} className="text-accent-primary" /> : <Pause size={16} className="text-tx-secondary" />}
+          </button>
           {window.innerWidth < 768 && (
             <button
               onClick={handleToggleStar}
@@ -1473,6 +1499,7 @@ export default function TaskCenter() {
   }, [isLoading, tasks]);
 
   const handleToggle = async (id: string) => {
+    if (!id) { loadTasks(); return; }
     // Optimistic update
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, isCompleted: t.isCompleted ? 0 : 1 } : t))
@@ -1614,7 +1641,7 @@ export default function TaskCenter() {
         "dueDate" in data ||
         "isCompleted" in data ||
         "priority" in data ||
-        "remindAt" in data;
+        "remindAt" in data || "status" in data;
       if (affectsStats) {
         try {
           const s = await api.getTaskStats();
