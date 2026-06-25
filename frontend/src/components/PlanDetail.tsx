@@ -526,10 +526,10 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                       {u.avatarUrl ? (
                         <img src={u.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
-                        u.displayName?.slice(0, 1) || u.username.slice(0, 1)
+                        (u.displayName || u.username).slice(0, 1)
                       )}
                     </div>
-                    <span className="truncate max-w-[80px]">{u.username}</span>
+                    <span className="truncate max-w-[80px]">{u.displayName || u.username}</span>
                   </div>
                 ))}
                 {(!plan.participants || plan.participants.length === 0) && (
@@ -766,7 +766,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                             : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
                         }`}
                       >
-                        {u.username}
+                        {u.displayName || u.username}
                       </button>
                     );
                   })}

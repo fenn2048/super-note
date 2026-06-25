@@ -309,12 +309,12 @@ export default function PlanCenter() {
                           <div 
                             key={u.userId}
                             className="w-4 h-4 rounded-full bg-accent-primary/20 border border-app-sidebar shrink-0 flex items-center justify-center text-[8px] font-bold text-accent-primary uppercase"
-                            title={u.username}
+                            title={u.displayName || u.username}
                           >
                             {u.avatarUrl ? (
                               <img src={u.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
                             ) : (
-                              (u.username).slice(0, 1)
+                              (u.displayName || u.username).slice(0, 1)
                             )}
                           </div>
                         ))}
@@ -422,7 +422,7 @@ export default function PlanCenter() {
                             : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
                         }`}
                       >
-                        {u.username}
+                        {u.displayName || u.username}
                       </button>
                     );
                   })}

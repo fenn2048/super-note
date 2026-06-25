@@ -70,6 +70,7 @@ export interface WorkspaceMember {
   userId: string;
   role: WorkspaceRole;
   joinedAt: string;
+  displayName: string | null;
   username: string;
   email: string | null;
   avatarUrl: string | null;
