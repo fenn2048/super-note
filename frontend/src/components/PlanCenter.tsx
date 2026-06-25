@@ -1,3 +1,4 @@
+import { detectSuMention } from '@/lib/utils';
 import React, { useState, useEffect, useCallback } from "react";
 import { Plan, User, WorkspaceMember } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
@@ -368,6 +369,15 @@ export default function PlanCenter() {
                   <Textarea
                     value={background}
                     onChange={(e) => setBackground(e.target.value)}
+                    onBlur={() => {
+                      const su = detectSuMention(background);
+                      if (su.hasSu) {
+                        api.aiChat("summarize", su.cleanText).then((summary) => {
+                          const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                          if (cleaned) setBackground(su.cleanText + "\n\n" + cleaned);
+                        }).catch(console.error);
+                      }
+                    }}
                     placeholder={t("plans.backgroundPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
@@ -377,6 +387,15 @@ export default function PlanCenter() {
                   <Textarea
                     value={goal}
                     onChange={(e) => setGoal(e.target.value)}
+                    onBlur={() => {
+                      const su = detectSuMention(goal);
+                      if (su.hasSu) {
+                        api.aiChat("summarize", su.cleanText).then((summary) => {
+                          const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                          if (cleaned) setGoal(su.cleanText + "\n\n" + cleaned);
+                        }).catch(console.error);
+                      }
+                    }}
                     placeholder={t("plans.goalPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
@@ -471,6 +490,15 @@ export default function PlanCenter() {
                         <Textarea
                           value={ms.description}
                           onChange={(e) => handleMilestoneChange(index, "description", e.target.value)}
+                          onBlur={() => {
+                            const su = detectSuMention(ms.description);
+                            if (su.hasSu) {
+                              api.aiChat("summarize", su.cleanText).then((summary) => {
+                                const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                                if (cleaned) handleMilestoneChange(index, "description", su.cleanText + "\n\n" + cleaned);
+                              }).catch(console.error);
+                            }
+                          }}
                           placeholder={t("plans.descriptionPlaceholder")}
                           className="min-h-[50px] text-xs border-app-border w-full rounded-lg"
                         />
@@ -507,6 +535,15 @@ export default function PlanCenter() {
                 <Textarea
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
+                  onBlur={() => {
+                    const su = detectSuMention(details);
+                    if (su.hasSu) {
+                      api.aiChat("summarize", su.cleanText).then((summary) => {
+                        const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                        if (cleaned) setDetails(su.cleanText + "\n\n" + cleaned);
+                      }).catch(console.error);
+                    }
+                  }}
                   placeholder={t("plans.detailsPlaceholder")}
                   className="min-h-[160px] text-xs border-app-border w-full rounded-xl font-mono leading-relaxed"
                 />

@@ -557,6 +557,18 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
   };
 
   const handleSave = () => {
+    const su = detectSuMention(title);
+    if (su.hasSu) {
+      api.aiChat("summarize", su.cleanText).then((summary) => {
+        const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+        if (cleaned) {
+          setTitle(cleaned);
+          onUpdate(task.id, { title: cleaned });
+        }
+      }).catch(console.error);
+      return;
+    }
+
     onUpdate(task.id, {
       title: title.trim() || task.title,
       priority,
@@ -1501,15 +1513,14 @@ export default function TaskCenter() {
   ) => {
     if (!newTitle.trim()) return;
     let titleToCreate = newTitle.trim();
-    let descToCreate = "";
+    const descToCreate = "";
     const orphanIds = pendingOrphansRef.current;
     pendingOrphansRef.current = [];
 
     // 检测 @su 标记
     const su = detectSuMention(titleToCreate);
     if (su.hasSu) {
-      descToCreate = su.cleanText;
-      titleToCreate = su.cleanText.slice(0, 50);
+      titleToCreate = su.cleanText;
     }
 
     try {
@@ -1532,8 +1543,8 @@ export default function TaskCenter() {
             });
 
             // 含 @su 时异步 AI 提炼标题
-            if (su.hasSu && descToCreate) {
-              api.aiChat("title", descToCreate.slice(0, 2000)).then(async (rawTitle) => {
+            if (su.hasSu) {
+              api.aiChat("summarize", titleToCreate.slice(0, 2000)).then(async (rawTitle) => {
                 const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
                 if (cleaned) await api.updateProjectTask(task.id, { title: cleaned }).catch(() => {});
               }).catch(() => {});
@@ -1565,8 +1576,8 @@ export default function TaskCenter() {
       });
 
       // 含 @su 时异步 AI 提炼标题并更新
-      if (su.hasSu && descToCreate) {
-        api.aiChat("title", descToCreate.slice(0, 2000)).then(async (rawTitle) => {
+      if (su.hasSu) {
+        api.aiChat("summarize", titleToCreate.slice(0, 2000)).then(async (rawTitle) => {
           const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
           if (cleaned) {
             await api.updateTask(task.id, { title: cleaned }).catch(() => {});

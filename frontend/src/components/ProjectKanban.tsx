@@ -240,7 +240,7 @@ export default function ProjectKanban({
       if (newDesc.includes("@su") && newDesc !== prevDescription) {
         const cleanDesc = newDesc.replace(/@su\s*/g, "").trim();
         if (cleanDesc) {
-          api.aiChat("title", cleanDesc.slice(0, 2000)).then(async (rawTitle) => {
+          api.aiChat("summarize", cleanDesc.slice(0, 2000)).then(async (rawTitle) => {
             const cleanedTitle = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
             if (cleanedTitle) {
               await api.updateProjectTask(activeTask.id, { title: cleanedTitle }).catch(() => {});
@@ -857,6 +857,17 @@ export default function ProjectKanban({
                   onChange={(e) =>
                     setActiveTask((prev) => (prev ? { ...prev, title: e.target.value } : null))
                   }
+                  onBlur={() => {
+                    const su = detectSuMention(activeTask.title);
+                    if (su.hasSu) {
+                      api.aiChat("summarize", su.cleanText).then((summary) => {
+                        const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                        if (cleaned) {
+                          setActiveTask(prev => prev ? { ...prev, title: cleaned } : null);
+                        }
+                      }).catch(console.error);
+                    }
+                  }}
                   className="text-base font-bold bg-transparent border-none p-0 focus-visible:ring-0 focus-visible:border-none focus-visible:outline-none placeholder:text-tx-tertiary"
                   placeholder={t("projects.taskTitlePlaceholder") || "任务标题"}
                 />
@@ -1200,6 +1211,20 @@ export default function ProjectKanban({
                     onChange={(e) =>
                       setActiveTask((prev) => (prev ? { ...prev, description: e.target.value } : null))
                     }
+                    onBlur={() => {
+                      const su = detectSuMention(activeTask.description || "");
+                      if (su.hasSu) {
+                        api.aiChat("summarize", su.cleanText).then((summary) => {
+                          const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                          if (cleaned) {
+                            setActiveTask(prev => {
+                              if (!prev) return null;
+                              return { ...prev, description: su.cleanText + "\n\n" + cleaned };
+                            });
+                          }
+                        }).catch(console.error);
+                      }
+                    }}
                     className="text-xs leading-relaxed min-h-[120px] font-mono bg-app-sidebar/20 border-app-border rounded-xl"
                     placeholder={t("projects.taskDescPlaceholder") || "支持 Markdown 和 HTML/CSS 格式…"}
                   />

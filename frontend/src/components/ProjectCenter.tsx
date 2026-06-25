@@ -919,7 +919,7 @@ export default function ProjectCenter() {
 
       // 含 @su 时异步 AI 提炼标题
       if (suQuick.hasSu) {
-        api.aiChat("title", suQuick.cleanText.slice(0, 2000)).then(async (rawTitle) => {
+        api.aiChat("summarize", suQuick.cleanText.slice(0, 2000)).then(async (rawTitle) => {
           const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
           if (cleaned) await api.updateProjectTask(newTask.id, { title: cleaned }).catch(() => {});
         }).catch(() => {});
@@ -1005,7 +1005,7 @@ export default function ProjectCenter() {
 
       // 含 @su 时异步 AI 提炼标题
       if (su.hasSu) {
-        api.aiChat("title", cleanCombined.slice(0, 2000)).then(async (rawTitle) => {
+        api.aiChat("summarize", cleanCombined.slice(0, 2000)).then(async (rawTitle) => {
           const cleaned = rawTitle.replace(/^["'"""'']+|["'"""'']+$/g, "").trim();
           if (cleaned) {
             await api.updateProjectTask(newTask.id, { title: cleaned }).catch(() => {});

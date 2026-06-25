@@ -1,3 +1,4 @@
+import { detectSuMention } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Plan, Project, AuditLog, User, WorkspaceMember } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
@@ -815,6 +816,15 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                         <Textarea
                           value={ms.description}
                           onChange={(e) => handleEditMilestoneChange(index, "description", e.target.value)}
+                          onBlur={() => {
+                            const su = detectSuMention(ms.description);
+                            if (su.hasSu) {
+                              api.aiChat("summarize", su.cleanText).then((summary) => {
+                                const cleaned = summary.replace(/^["']+|["']+$/g, "").trim();
+                                if (cleaned) handleEditMilestoneChange(index, "description", su.cleanText + "\n\n" + cleaned);
+                              }).catch(console.error);
+                            }
+                          }}
                           placeholder={t("plans.descriptionPlaceholder")}
                           className="min-h-[50px] text-xs border-app-border w-full rounded-lg"
                         />
