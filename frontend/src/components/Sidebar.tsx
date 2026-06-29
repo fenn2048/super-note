@@ -2366,7 +2366,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
 
 
       {/* Search */}
-      {state.viewMode !== "projects" && (
+      {state.viewMode !== "projects" && state.viewMode !== "plans" && (
         <div className="px-3 pb-1.5">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />

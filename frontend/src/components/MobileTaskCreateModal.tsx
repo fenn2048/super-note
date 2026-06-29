@@ -120,11 +120,11 @@ export default function MobileTaskCreateModal({
 
     setSubmitting(true);
     try {
-      // 1. Get stages of project to find the first stageId (fallback to "进行中")
+      // 1. Get stages of project to find the first stageId (fallback to "待启动")
       const stages = await api.getProjectStages(selectedProjectId);
       let stageId = "";
       if (stages.length === 0) {
-        const newStage = await api.createProjectStage(selectedProjectId, { name: "进行中" });
+        const newStage = await api.createProjectStage(selectedProjectId, { name: "待启动" });
         stageId = newStage.id;
       } else {
         stageId = stages[0].id;

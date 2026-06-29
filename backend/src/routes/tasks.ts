@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { getDb } from "../db/index.js";
-import { uuid } from "../lib/utils.js";
+import { getDb } from "../db/schema.js";
+import { v4 as uuid } from "uuid";
 import { logAudit } from "../services/audit.js";
-import { canManageResource } from "../lib/permissions.js";
-import { handleRecurringTask } from "../lib/recurringTasks.js";
-import { broadcastToWorkspace } from "../services/websocket.js";
-import { createMentions } from "../services/mentions.js";
+import { canManageResource } from "../middleware/acl.js";
+import { handleRecurringTask } from "../lib/recurrence.js";
+import { broadcastToWorkspace } from "../lib/mentions.js";
+import { createMentions } from "../lib/mentions.js";
 
 const tasks = new Hono();
 
@@ -398,6 +398,33 @@ tasks.delete("/:id", (c) => {
 
   db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
   return c.json({ success: true });
+});
+
+// 任务统计摘要
+tasks.get("/stats/summary", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const workspaceId = c.req.query("workspaceId");
+
+  const baseWhere = workspaceId
+    ? "WHERE userId = ? AND workspaceId = ?"
+    : "WHERE userId = ? AND (workspaceId IS NULL OR workspaceId = '')";
+  const baseParams: any[] = workspaceId ? [userId, workspaceId] : [userId];
+
+  const count = (sql: string) => {
+    const row = db.prepare(`SELECT COUNT(*) as count FROM tasks ${baseWhere} AND ${sql}`).get(...baseParams) as any;
+    return row?.count ?? 0;
+  };
+
+  const total = (db.prepare(`SELECT COUNT(*) as count FROM tasks ${baseWhere}`).get(...baseParams) as any)?.count ?? 0;
+  const completed = count("isCompleted = 1");
+  const pending = total - completed;
+  const today = count("isCompleted = 0 AND dueDate = date('now')");
+  const overdue = count("isCompleted = 0 AND dueDate IS NOT NULL AND dueDate < date('now')");
+  const week = count("isCompleted = 0 AND dueDate IS NOT NULL AND dueDate >= date('now') AND dueDate <= date('now', '+7 days')");
+  const activeReminders = count("isCompleted = 0 AND remindAt IS NOT NULL AND remindAt <= date('now', '+1 days')");
+
+  return c.json({ total, completed, pending, today, overdue, week, activeReminders });
 });
 
 export default tasks;

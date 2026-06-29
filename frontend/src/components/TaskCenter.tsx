@@ -1547,7 +1547,7 @@ export default function TaskCenter() {
         const todoProject = projects.find(p => p.name === "家庭TODO" || p.name === "个人TODO");
         if (todoProject) {
           const stages = await api.getProjectStages(todoProject.id);
-          const todoStage = stages.find(s => s.name === "待规划");
+          const todoStage = stages.find(s => s.name === "待启动" || s.name === "待规划") || stages[0];
           if (todoStage) {
             const task = await api.createProjectTask(todoProject.id, {
               stageId: todoStage.id,

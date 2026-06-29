@@ -116,6 +116,10 @@ RUN npm_config_platform=linux npm_config_libc=musl \
 COPY backend/ .
 RUN npx tsc
 
+# 构建阶段完成后修剪 devDependencies，仅保留生产依赖
+# 这样运行时 stage 只需复制 node_modules，无需重新编译原生模块
+RUN npm prune --omit=dev --no-audit --no-fund
+
 # build-deps 在这个 stage 用不着保留，最终运行时镜像会从 runtime stage 重新编译
 RUN apk del .build-deps
 
@@ -143,18 +147,10 @@ RUN if [ -n "$APK_MIRROR" ]; then \
 # docker-cli 用于按需启停 SenseVoice 容器
 RUN apk add --no-cache tini docker-cli
 
-# 运行时依赖（production only）：独立编译一次，确保 .node 是正确架构的 musl 版
-# 根 package.json 是运行时版本号的真相源
+# 运行时依赖（production only）：直接复制构建阶段已编译的 node_modules
+# 避免在无缓存环境下重新编译 better-sqlite3 等原生模块
 COPY package.json ./package.json
-COPY backend/package.json backend/package-lock.json ./backend/
-# vips-dev + fftw-dev 供 sharp 在 Alpine (musl) 下编译或加载预构建二进制
-RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers vips-dev fftw-dev \
-    && cd backend \
-    && npm_config_platform=linux npm_config_libc=musl \
-       npm install --omit=dev --no-audit --no-fund --legacy-peer-deps \
-    && apk del .build-deps \
-    && npm cache clean --force \
-    && rm -rf /root/.npm /tmp/* /var/cache/apk/*
+COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
 
 COPY --from=backend-build /app/backend/dist ./backend/dist
 COPY backend/templates ./backend/templates

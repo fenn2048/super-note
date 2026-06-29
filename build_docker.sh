@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# Run all backend test cases before building
+#echo "Running backend test suites..."
+#cd backend
+#node --import tsx --test src/routes/__tests__/projects.test.ts src/routes/__tests__/#diary.test.ts src/routes/__tests__/notes.test.ts src/routes/__tests__/mindmaps.test.ts
+#cd ..
+
+
 # Run Android build script
 echo "Running frontend/android/build_signed_debug_apk.sh..."
 cd frontend/android

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Plan, User, WorkspaceMember } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { useTranslation } from "react-i18next";
-import { 
-  Plus, Calendar, Compass, Loader2, X, FolderOpen,
+import {
+  Plus, Calendar, Compass, Loader2, X, FolderOpen, Play, Pause,
   Milestone as MilestoneIcon, CheckCircle2,
   Clock, AlertCircle
 } from "lucide-react";
@@ -84,7 +84,7 @@ export default function PlanCenter() {
         setMembers([{
           userId: currentUser.id, workspaceId: "", role: "owner", joinedAt: "", email: "",
           username: currentUser.username,
-
+          displayName: currentUser.displayName || null,
           avatarUrl: currentUser.avatarUrl
         }]);
       }
@@ -267,7 +267,7 @@ export default function PlanCenter() {
                         onClick={(e) => {
                           e.stopPropagation();
                           const newStatus = p.status === "paused" ? "in_progress" : "paused";
-                          api.updatePlan(p.id, { status: newStatus }).then(() => fetchPlans());
+                          api.updatePlan(p.id, { status: newStatus }).then(() => loadPlans());
                         }}
                         className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-all"
                         title={p.status === "paused" ? "恢复" : "暂停"}

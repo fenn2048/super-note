@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Bot, Loader2, Check, AlertCircle, RefreshCw, Eye, EyeOff, ChevronDown, Zap, CircleCheck } from "lucide-react";
+import { Bot, Loader2, Check, AlertCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronRight, Zap, CircleCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,11 @@ interface AISettingsState {
   ai_ollama_num_threads?: string;
   ai_temperature?: string;
   ai_top_p?: string;
+  // Embedding 模型（独立配置，留空回退到主 AI 配置）
+  ai_embedding_model?: string;
+  ai_embedding_url?: string;
+  ai_embedding_key?: string;
+  ai_embedding_key_set?: boolean;
 }
 
 interface ProviderPreset {
@@ -132,11 +137,18 @@ export default function AISettingsPanel() {
     ai_think_keywords: "",
     ai_temperature: "",
     ai_top_p: "",
+    ai_embedding_model: "",
+    ai_embedding_url: "",
+    ai_embedding_key: "",
+    ai_embedding_key_set: false,
   });
   const [localKey, setLocalKey] = useState("");
   // 缓存每个服务商的 API Key，切换时不丢失
   const [keyMap, setKeyMap] = useState<Record<string, string>>({});
   const [showKey, setShowKey] = useState(false);
+  const [localEmbeddingKey, setLocalEmbeddingKey] = useState("");
+  const [showEmbeddingKey, setShowEmbeddingKey] = useState(false);
+  const [showEmbeddingSection, setShowEmbeddingSection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -159,6 +171,7 @@ export default function AISettingsPanel() {
       if (serverKey) {
         setKeyMap(prev => ({ ...prev, [data.ai_provider]: serverKey }));
       }
+      setLocalEmbeddingKey(data.ai_embedding_key || "");
       setIsConfigured(!!data.ai_api_url && (data.ai_api_key_set || !getPreset(data.ai_provider)?.needsKey));
     } catch { /* ignore */ }
   }, []);
@@ -207,6 +220,12 @@ export default function AISettingsPanel() {
       }
       if (localKey && !localKey.includes("****")) {
         payload.ai_api_key = localKey;
+      }
+      // Embedding 配置
+      payload.ai_embedding_model = settings.ai_embedding_model || "";
+      payload.ai_embedding_url = settings.ai_embedding_url || "";
+      if (localEmbeddingKey && !localEmbeddingKey.includes("****")) {
+        payload.ai_embedding_key = localEmbeddingKey;
       }
       const data = await api.updateAISettings(payload);
       setSettings(data);
@@ -528,6 +547,75 @@ export default function AISettingsPanel() {
                 className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
               />
               <p className="text-[11px] text-tx-tertiary">{t("ai.ollamaNumThreadsDesc")}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---- Embedding 模型配置 ---- */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <button
+          onClick={() => setShowEmbeddingSection(!showEmbeddingSection)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center bg-gradient-to-br from-cyan-500 to-blue-500 text-white">
+              <Zap size={12} />
+            </div>
+            <span className="text-sm font-semibold text-tx-primary">{t("ai.embeddingTitle") || "Embedding 模型配置"}</span>
+            <span className="text-[10px] text-tx-tertiary">{t("ai.embeddingOptional") || "可选，留空回退到主 AI 配置"}</span>
+          </div>
+          {showEmbeddingSection ? <ChevronDown size={16} className="text-tx-tertiary" /> : <ChevronRight size={16} className="text-tx-tertiary" />}
+        </button>
+
+        {showEmbeddingSection && (
+          <div className="p-4 space-y-4 border-t border-zinc-200 dark:border-zinc-800">
+            <p className="text-[11px] text-tx-tertiary leading-relaxed">
+              {t("ai.embeddingDesc") || "Embedding 模型用于将笔记内容转为向量，实现语义搜索和 AI 问答。如不单独配置，自动复用上方主 AI 服务的地址和密钥。"}
+            </p>
+
+            {/* Embedding 模型名 */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-tx-secondary">{t("ai.embeddingModel") || "Embedding 模型名"}</label>
+              <input
+                type="text"
+                value={settings.ai_embedding_model || ""}
+                onChange={(e) => setSettings(prev => ({ ...prev, ai_embedding_model: e.target.value }))}
+                placeholder="text-embedding-3-small / bge-m3 / nomic-embed-text"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+              />
+            </div>
+
+            {/* Embedding API URL */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-tx-secondary">{t("ai.embeddingUrl") || "Embedding API 地址"}</label>
+              <input
+                type="text"
+                value={settings.ai_embedding_url || ""}
+                onChange={(e) => setSettings(prev => ({ ...prev, ai_embedding_url: e.target.value }))}
+                placeholder={t("ai.embeddingUrlPlaceholder") || "留空则复用主 AI 的 API 地址"}
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+              />
+            </div>
+
+            {/* Embedding API Key */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-tx-secondary">{t("ai.embeddingKey") || "Embedding API Key"}</label>
+              <div className="relative">
+                <input
+                  type={showEmbeddingKey ? "text" : "password"}
+                  value={localEmbeddingKey}
+                  onChange={(e) => { setLocalEmbeddingKey(e.target.value); }}
+                  placeholder={settings.ai_embedding_key_set ? t("ai.apiKeySet") || "已设置" : t("ai.embeddingKeyPlaceholder") || "留空则复用主 AI 的 Key"}
+                  className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                />
+                <button
+                  onClick={() => setShowEmbeddingKey(!showEmbeddingKey)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  {showEmbeddingKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
             </div>
           </div>
         )}

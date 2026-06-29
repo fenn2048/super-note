@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { getDb } from "../db/index.js";
-import { uuid } from "../lib/utils.js";
+import { getDb } from "../db/schema.js";
+import { v4 as uuid } from "uuid";
 import { logAudit } from "../services/audit.js";
-import { getUserWorkspaceRole } from "../lib/permissions.js";
+import { getUserWorkspaceRole } from "../middleware/acl.js";
 import { propagateProjectStatusUp, syncMilestoneStatusDirect, propagateStatusDown } from "../lib/planStatusSync.js";
-import { handleRecurringTask } from "../lib/recurringTasks.js";
+import { handleRecurringTask } from "../lib/recurrence.js";
 
 const projectsRouter = new Hono();
 
@@ -59,6 +59,71 @@ projectsRouter.get("/", (c) => {
   return c.json(projects);
 });
 
+// 获取项目分组列表
+projectsRouter.get("/groups", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const workspaceId = c.req.query("workspaceId");
+
+  let query = "SELECT * FROM project_groups WHERE userId = ?";
+  const params: any[] = [userId];
+
+  if (workspaceId) {
+    query += " AND workspaceId = ?";
+    params.push(workspaceId);
+  } else {
+    query += " AND (workspaceId IS NULL OR workspaceId = '')";
+  }
+
+  query += " ORDER BY sortOrder ASC";
+  const groups = db.prepare(query).all(...params);
+  return c.json(groups);
+});
+
+// 获取分配给当前用户的项目任务
+projectsRouter.get("/my-tasks", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const workspaceId = c.req.query("workspaceId");
+
+  let query = `
+    SELECT pt.*, p.name as projectName, p.workspaceId as projectWorkspaceId, ps.name as stageName
+    FROM project_tasks pt
+    JOIN projects p ON pt.projectId = p.id
+    LEFT JOIN project_stages ps ON pt.stageId = ps.id
+    WHERE p.isDeleted = 0 AND pt.assigneeId = ?
+  `;
+  const params: any[] = [userId];
+
+  if (workspaceId) {
+    query += " AND p.workspaceId = ?";
+    params.push(workspaceId);
+  }
+
+  query += " ORDER BY pt.isCompleted ASC, pt.endDate ASC, pt.createdAt DESC LIMIT 200";
+  const tasks = db.prepare(query).all(...params) as any[];
+
+  // 补充参与者和标签信息
+  for (const t of tasks) {
+    t.participants = db.prepare(`
+      SELECT u.id, u.username, u.displayName, u.avatarUrl
+      FROM project_task_members ptm
+      JOIN users u ON ptm.userId = u.id
+      WHERE ptm.taskId = ?
+    `).all(t.id);
+
+    t.tags = db.prepare(`
+      SELECT tg.*
+      FROM project_task_tags ptt
+      JOIN tags tg ON ptt.tagId = tg.id
+      WHERE ptt.taskId = ?
+    `).all(t.id);
+  }
+
+  return c.json(tasks);
+});
+
+
 // Create project
 projectsRouter.post("/", async (c) => {
   const db = getDb();
@@ -67,6 +132,25 @@ projectsRouter.post("/", async (c) => {
 
   const { name, description = "", cover = "", startDate = null, endDate = null, visibility = "PRIVATE", workspaceId = null, groupId = null, status = "pending", milestoneId = null } = body;
   if (!name) return c.json({ error: "项目名称不能为空" }, 400);
+
+  if (name === "家庭TODO" || name === "个人TODO") {
+    let existingProject: any = null;
+    if (workspaceId) {
+      existingProject = db.prepare(`
+        SELECT * FROM projects 
+        WHERE name = ? AND workspaceId = ? AND isDeleted = 0
+      `).get(name, workspaceId);
+    } else {
+      existingProject = db.prepare(`
+        SELECT * FROM projects 
+        WHERE name = ? AND ownerId = ? AND (workspaceId IS NULL OR workspaceId = '') AND isDeleted = 0
+      `).get(name, userId);
+    }
+
+    if (existingProject) {
+      return c.json(existingProject);
+    }
+  }
 
   if (workspaceId) {
     const role = getUserWorkspaceRole(workspaceId, userId);
@@ -86,14 +170,39 @@ projectsRouter.post("/", async (c) => {
   // Add owner to members list
   db.prepare("INSERT INTO project_members (projectId, userId, role) VALUES (?, ?, 'owner')").run(projectId, userId);
 
-  // Create default "待规划" stage
-  const defaultStageId = uuid();
-  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(defaultStageId, projectId, "待规划", 0);
+  // Create default stages: "待启动", "进行中", "已完成"
+  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(uuid(), projectId, "待启动", 0);
+  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(uuid(), projectId, "进行中", 1);
+  db.prepare("INSERT INTO project_stages (id, projectId, name, sortOrder) VALUES (?, ?, ?, ?)").run(uuid(), projectId, "已完成", 2);
 
   logAudit(userId, "system", "create_project", `创建项目「${name}」`, { targetType: "project", targetId: projectId });
 
   const createdProject = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId);
   return c.json(createdProject);
+});
+
+// Get project detail
+projectsRouter.get("/:id", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const id = c.req.param("id");
+
+  const { project, canRead } = getProjectPermission(id, userId);
+  if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
+  if (!canRead) return c.json({ error: "无权查看该项目", code: "FORBIDDEN" }, 403);
+
+  const projectWithUserInfo = db.prepare(`
+    SELECT p.*, u.username as ownerName, u.displayName as ownerDisplayName
+    FROM projects p
+    LEFT JOIN users u ON p.ownerId = u.id
+    WHERE p.id = ? AND p.isDeleted = 0
+  `).get(id);
+
+  if (!projectWithUserInfo) {
+    return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
+  }
+
+  return c.json(projectWithUserInfo);
 });
 
 // Update project
@@ -174,7 +283,50 @@ projectsRouter.get("/:id/stages", (c) => {
   if (!canRead) return c.json({ error: "无权查看该项目", code: "FORBIDDEN" }, 403);
 
   const db = getDb();
-  const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(id);
+  const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
+
+  // Fetch all tasks for this project and populate metadata
+  const tasks = db.prepare("SELECT * FROM project_tasks WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
+
+  for (const t of tasks) {
+    t.participants = db.prepare(`
+      SELECT u.id, u.username, u.displayName, u.avatarUrl
+      FROM project_task_members ptm
+      JOIN users u ON ptm.userId = u.id
+      WHERE ptm.taskId = ?
+    `).all(t.id);
+
+    t.tags = db.prepare(`
+      SELECT tg.*
+      FROM project_task_tags ptt
+      JOIN tags tg ON ptt.tagId = tg.id
+      WHERE ptt.taskId = ?
+    `).all(t.id);
+
+    t.checklists = db.prepare("SELECT * FROM project_task_checklists WHERE taskId = ? ORDER BY sortOrder ASC").all(t.id);
+
+    t.dependencies = db.prepare(`
+      SELECT pt.id, pt.title, pt.isCompleted
+      FROM project_task_dependencies ptd
+      JOIN project_tasks pt ON ptd.dependsOnTaskId = pt.id
+      WHERE ptd.taskId = ?
+    `).all(t.id);
+  }
+
+  // Group tasks by stageId
+  const tasksByStage: Record<string, any[]> = {};
+  for (const t of tasks) {
+    if (!tasksByStage[t.stageId]) {
+      tasksByStage[t.stageId] = [];
+    }
+    tasksByStage[t.stageId].push(t);
+  }
+
+  // Attach tasks to stages
+  for (const stage of stages) {
+    stage.tasks = tasksByStage[stage.id] || [];
+  }
+
   return c.json(stages);
 });
 

@@ -433,7 +433,6 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_notes_user ON notes(userId);
     CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updatedAt DESC);
     CREATE INDEX IF NOT EXISTS idx_notes_trashed ON notes(isTrashed);
-    CREATE INDEX IF NOT EXISTS idx_notes_query_v2 ON notes(userId, workspaceId, isTrashed, isPinned DESC, updatedAt DESC);
     CREATE INDEX IF NOT EXISTS idx_notebooks_parent ON notebooks(parentId);
     CREATE INDEX IF NOT EXISTS idx_notebooks_user ON notebooks(userId);
     CREATE INDEX IF NOT EXISTS idx_note_tags_note ON note_tags(noteId);
@@ -1277,4 +1276,5 @@ function initSchema(db: Database.Database) {
   try { db.exec("ALTER TABLE diary_comments ADD COLUMN trigger_user_id TEXT"); } catch {}
   try { db.exec("ALTER TABLE diaries ADD COLUMN trigger_user_id TEXT"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_workspace ON task_attachments(workspaceId);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_notes_query_v2 ON notes(userId, workspaceId, isTrashed, isPinned DESC, updatedAt DESC);"); } catch {}
 }

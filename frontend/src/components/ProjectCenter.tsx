@@ -1,7 +1,7 @@
 import { Play, Pause } from "lucide-react";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
+import { Plan, Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn, detectSuMention } from "@/lib/utils";
@@ -23,6 +23,7 @@ import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
+import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 
 // Import sub-views
@@ -168,11 +169,15 @@ function TaskRow({
   onToggleComplete,
   onDelete,
   onSelectProject,
+  onStartTask,
+  onPauseTask,
 }: {
   task: ProjectTask;
   onToggleComplete: (taskId: string, currentCompleted: number) => void;
   onDelete: (taskId: string) => void;
   onSelectProject: (projectId: string) => void;
+  onStartTask?: (task: ProjectTask) => void;
+  onPauseTask?: (task: ProjectTask) => void;
 }) {
   return (
     <div className="group flex items-center justify-between p-3.5 hover:bg-app-hover/20 transition-all gap-4">
@@ -215,6 +220,64 @@ function TaskRow({
 
       {/* Due Date & Assignee & Actions */}
       <div className="flex items-center gap-3 shrink-0">
+        {/* Start / Pause / Complete / Resume Action Buttons */}
+        {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划") && onStartTask && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartTask(task);
+            }}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-all text-xs font-semibold"
+            title="启动任务"
+          >
+            <Play size={10} fill="currentColor" />
+            <span>启动</span>
+          </button>
+        )}
+
+        {task.isCompleted !== 1 && task.status === "paused" && onStartTask && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartTask(task);
+            }}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all text-xs font-semibold"
+            title="恢复任务"
+          >
+            <Play size={10} fill="currentColor" />
+            <span>恢复</span>
+          </button>
+        )}
+
+        {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && (
+          <div className="flex items-center gap-1">
+            {onPauseTask && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPauseTask(task);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-all text-xs font-semibold"
+                title="暂停任务"
+              >
+                <Pause size={10} fill="currentColor" />
+                <span>暂停</span>
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleComplete(task.id, task.isCompleted);
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all text-xs font-semibold"
+              title="完成任务"
+            >
+              <Check size={10} />
+              <span>完成</span>
+            </button>
+          </div>
+        )}
+
         {/* Due Date Badge */}
         {task.endDate && <DateBadge dateStr={task.endDate} />}
 
@@ -236,6 +299,18 @@ function TaskRow({
             </div>
           )
         ) : null}
+
+        {/* Edit button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
+          }}
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-primary transition-all shrink-0"
+          title="编辑任务"
+        >
+          <Edit2 size={14} />
+        </button>
 
         {/* Trash can button */}
         <button
@@ -373,6 +448,7 @@ export default function ProjectCenter() {
   const [quickAddAssigneeId, setQuickAddAssigneeId] = useState("");
   const [quickAddDueDate, setQuickAddDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [quickAddIsPersonal, setQuickAddIsPersonal] = useState(true);
+  const [quickAddTags, setQuickAddTags] = useState<Tag[]>([]);
 
   const personalTodoProject = useMemo(
     () => projects.find((p) => p.name === "个人TODO"),
@@ -388,6 +464,7 @@ export default function ProjectCenter() {
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskRemindAt, setTaskRemindAt] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
+  const [taskTags, setTaskTags] = useState<Tag[]>([]);
 
   const [taskIsRecurring, setTaskIsRecurring] = useState(false);
   const [taskRecurrenceRule, setTaskRecurrenceRule] = useState<RecurrenceRule>({ type: "weekday" });
@@ -426,7 +503,9 @@ export default function ProjectCenter() {
   // Sections collapse state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     overdue: true,
+    notStarted: true,
     pending: true,
+    paused: true,
     completed: true,
     today: true
   });
@@ -434,7 +513,9 @@ export default function ProjectCenter() {
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({
     overdue: 15,
     today: 15,
+    notStarted: 15,
     pending: 15,
+    paused: 15,
     completed: 15
   });
 
@@ -859,7 +940,45 @@ export default function ProjectCenter() {
     try {
       const isCompleted = currentCompleted === 1 ? 0 : 1;
       const progress = isCompleted === 1 ? 100 : 0;
-      await api.updateProjectTask(taskId, { isCompleted, progress });
+      const payload: any = { isCompleted, progress };
+
+      // Try to find the task to get its projectId and auto-move stages
+      let taskProjId = selectedProject?.id;
+      if (!taskProjId) {
+        const allTasks = [
+          ...myTasksCategorized.overdue,
+          ...myTasksCategorized.today,
+          ...myTasksCategorized.notStarted,
+          ...myTasksCategorized.pending,
+          ...myTasksCategorized.paused,
+          ...myTasksCategorized.completed
+        ];
+        const taskObj = allTasks.find(t => t.id === taskId);
+        if (taskObj) {
+          taskProjId = taskObj.projectId;
+        }
+      }
+
+      if (taskProjId) {
+        const stages = await api.getProjectStages(taskProjId);
+        if (isCompleted === 1) {
+          let completedStage = stages.find(s => s.name === "已完成");
+          if (!completedStage) {
+            completedStage = await api.createProjectStage(taskProjId, { name: "已完成" });
+          }
+          payload.stageId = completedStage.id;
+          payload.status = "completed";
+        } else {
+          let inProgressStage = stages.find(s => s.name === "进行中");
+          if (!inProgressStage) {
+            inProgressStage = await api.createProjectStage(taskProjId, { name: "进行中" });
+          }
+          payload.stageId = inProgressStage.id;
+          payload.status = "pending";
+        }
+      }
+
+      await api.updateProjectTask(taskId, payload);
       // Re-fetch project details stages
       if (selectedProject) {
         const stages = await api.getProjectStages(selectedProject.id);
@@ -872,6 +991,39 @@ export default function ProjectCenter() {
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "操作失败");
+    }
+  };
+
+  const handleStartTask = async (task: ProjectTask) => {
+    try {
+      const stages = await api.getProjectStages(task.projectId);
+      let inProgressStage = stages.find(s => s.name === "进行中");
+      if (!inProgressStage) {
+        inProgressStage = await api.createProjectStage(task.projectId, { name: "进行中" });
+      }
+      await api.updateProjectTask(task.id, { stageId: inProgressStage.id, status: "pending" });
+      toast.success("任务已启动");
+      fetchMyTasks();
+      if (selectedProject && task.projectId === selectedProject.id) {
+        const updatedStages = await api.getProjectStages(task.projectId);
+        setProjectStages(updatedStages);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "启动任务失败");
+    }
+  };
+
+  const handlePauseTask = async (task: ProjectTask) => {
+    try {
+      await api.updateProjectTask(task.id, { status: "paused" });
+      toast.success("任务已暂停");
+      fetchMyTasks();
+      if (selectedProject && task.projectId === selectedProject.id) {
+        const updatedStages = await api.getProjectStages(task.projectId);
+        setProjectStages(updatedStages);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "暂停任务失败");
     }
   };
   const handleTogglePauseProject = async (proj: Project, e: React.MouseEvent) => {
@@ -914,7 +1066,7 @@ export default function ProjectCenter() {
       const stages = await api.getProjectStages(targetProjectId);
       let stageId: string;
       if (stages.length === 0) {
-        const newStage = await api.createProjectStage(targetProjectId, { name: "进行中" });
+        const newStage = await api.createProjectStage(targetProjectId, { name: "待启动" });
         stageId = newStage.id;
       } else {
         stageId = stages[0].id;
@@ -938,6 +1090,7 @@ export default function ProjectCenter() {
         remindAt: defaultRemindAt,
         isRecurring: quickAddIsRecurring ? 1 : 0,
         recurrenceRule: quickAddIsRecurring ? JSON.stringify(quickAddRecurrenceRule) : null,
+        tags: quickAddTags.map((t) => t.id),
       };
 
       const newTask = await api.createProjectTask(targetProjectId, payload);
@@ -954,7 +1107,12 @@ export default function ProjectCenter() {
       setQuickAddTitle("");
       setQuickAddIsRecurring(false);
       setQuickAddRecurrenceRule({ type: "weekday" });
+      setQuickAddTags([]);
       fetchMyTasks();
+      if (selectedProject && targetProjectId === selectedProject.id) {
+        const updatedStages = await api.getProjectStages(targetProjectId);
+        setProjectStages(updatedStages);
+      }
 
       if (newTask.remindAt) {
         syncTaskNotification(newTask as any);
@@ -975,6 +1133,7 @@ export default function ProjectCenter() {
     setTaskDescription("");
     setTaskIsRecurring(quickAddIsRecurring);
     setTaskRecurrenceRule(quickAddRecurrenceRule);
+    setTaskTags(quickAddTags);
     setShowTaskCreateModal(true);
   };
 
@@ -988,7 +1147,7 @@ export default function ProjectCenter() {
       const stages = await api.getProjectStages(taskProjId);
       let stageId: string;
       if (stages.length === 0) {
-        const newStage = await api.createProjectStage(taskProjId, { name: "进行中" });
+        const newStage = await api.createProjectStage(taskProjId, { name: "待启动" });
         stageId = newStage.id;
       } else {
         stageId = stages[0].id;
@@ -1018,11 +1177,16 @@ export default function ProjectCenter() {
         remindAt: taskRemindAt || null,
         isRecurring: taskIsRecurring ? 1 : 0,
         recurrenceRule: taskIsRecurring ? JSON.stringify(taskRecurrenceRule) : null,
+        tags: taskTags.map((t) => t.id),
       };
 
       const newTask = await api.createProjectTask(taskProjId, payload);
       toast.success("创建任务成功");
       fetchMyTasks();
+      if (selectedProject && taskProjId === selectedProject.id) {
+        const updatedStages = await api.getProjectStages(taskProjId);
+        setProjectStages(updatedStages);
+      }
 
       if (newTask.remindAt) {
         syncTaskNotification(newTask as any);
@@ -1045,11 +1209,14 @@ export default function ProjectCenter() {
         setTaskRemindAt("");
         setTaskIsRecurring(false);
         setTaskRecurrenceRule({ type: "weekday" });
+        setTaskTags([]);
       } else {
         setShowTaskCreateModal(false);
         setQuickAddTitle(""); // Clear quick add input too
         setQuickAddIsRecurring(false);
         setQuickAddRecurrenceRule({ type: "weekday" });
+        setQuickAddTags([]);
+        setTaskTags([]);
       }
     } catch (err: any) {
       toast.error(err?.message || "创建任务失败");
@@ -1060,7 +1227,9 @@ export default function ProjectCenter() {
   const myTasksCategorized = useMemo(() => {
     const overdue: ProjectTask[] = [];
     const today: ProjectTask[] = [];
+    const notStarted: ProjectTask[] = [];
     const pending: ProjectTask[] = [];
+    const paused: ProjectTask[] = [];
     const completed: ProjectTask[] = [];
 
     const isTaskToday = (dateStr: string | null) => {
@@ -1076,24 +1245,28 @@ export default function ProjectCenter() {
     };
 
     filteredMyTasks.forEach((t) => {
-      if (t.isCompleted === 1) {
+      // 1. Classify into status lists (all tasks go here)
+      if (t.isCompleted === 1 || (t as any).stageName === "已完成") {
         completed.push(t);
+      } else if (t.status === "paused") {
+        paused.push(t);
+      } else if ((t as any).stageName === "待启动" || (t as any).stageName === "待规划") {
+        notStarted.push(t);
       } else {
-        if (t.endDate) {
-          if (isTaskToday(t.endDate)) {
-            today.push(t);
-          } else if (isTaskOverdue(t.endDate)) {
-            overdue.push(t);
-          } else {
-            pending.push(t);
-          }
-        } else {
-          pending.push(t);
+        pending.push(t);
+      }
+
+      // 2. Classify into time-dimension lists (only uncompleted tasks go here)
+      if (t.isCompleted !== 1) {
+        if (isTaskToday(t.endDate)) {
+          today.push(t);
+        } else if (isTaskOverdue(t.endDate)) {
+          overdue.push(t);
         }
       }
     });
 
-    return { overdue, today, pending, completed };
+    return { overdue, today, notStarted, pending, paused, completed };
   }, [filteredMyTasks]);
 
   // Filter projects by group selected in Sidebar
@@ -1421,10 +1594,11 @@ export default function ProjectCenter() {
                         )}
 
                         {/* Details and Actions selectors */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-app-border/40">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <div className="pt-3 border-t border-app-border/20 space-y-3">
+                          {/* Row 1: Selectors (Project, Assignee, Due Date) */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
                             {/* Personal TODO Checkbox + Target Display */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 bg-app-sidebar border border-app-border/60 px-2.5 py-1 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors">
                               <input
                                 type="checkbox"
                                 checked={quickAddIsPersonal}
@@ -1440,15 +1614,15 @@ export default function ProjectCenter() {
                                     }
                                   }
                                 }}
-                                className="w-4 h-4 rounded cursor-pointer accent-accent-primary"
+                                className="w-3.5 h-3.5 rounded cursor-pointer accent-accent-primary"
                               />
                               {quickAddIsPersonal && personalTodoProject ? (
-                                <div className="flex items-center gap-1.5 bg-accent-primary/10 border border-accent-primary/20 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
+                                <div className="flex items-center gap-1">
                                   <Briefcase size={12} className="text-accent-primary" />
-                                  <span className="font-medium text-tx-primary">{personalTodoProject.name}</span>
+                                  <span className="font-semibold text-tx-primary">{personalTodoProject.name}</span>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
+                                <div className="flex items-center gap-1">
                                   <Briefcase size={12} className="text-tx-tertiary" />
                                   <select
                                     value={quickAddProjId}
@@ -1459,7 +1633,7 @@ export default function ProjectCenter() {
                                         setQuickAddIsPersonal(false);
                                       }
                                     }}
-                                    className="sleek-select sleek-select-inline bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
+                                    className="bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-semibold"
                                   >
                                     {projects.filter((p) => p.id !== personalTodoProject?.id).length > 0 ? (
                                       projects.filter((p) => p.id !== personalTodoProject?.id).map((p) => (
@@ -1478,12 +1652,12 @@ export default function ProjectCenter() {
                             </div>
 
                             {/* Assignee selector dropdown */}
-                            <div className="flex items-center gap-1.5 bg-app-sidebar/80 border border-app-border/80 px-2.5 py-1 rounded-lg text-xs text-tx-secondary">
+                            <div className="flex items-center gap-1 bg-app-sidebar border border-app-border/60 px-2.5 py-1 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors">
                               <User size={12} className="text-tx-tertiary" />
                               <select
                                 value={quickAddAssigneeId}
                                 onChange={(e) => setQuickAddAssigneeId(e.target.value)}
-                                className="sleek-select sleek-select-inline bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-medium"
+                                className="bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-semibold"
                               >
                                 <option value={currentUserId}>{t("projects.assigneeMe") || "指派给：我自己"}</option>
                                 {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (
@@ -1495,21 +1669,37 @@ export default function ProjectCenter() {
                             </div>
 
                             {/* Due Date selector picker */}
-                            <SleekDatePicker
-                              value={quickAddDueDate}
-                              onChange={setQuickAddDueDate}
-                              placeholder={t("projects.dueDate") || "截止日期"}
-                              showTime={true}
-                            />
+                            <div className="flex items-center bg-app-sidebar border border-app-border/60 px-2 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors">
+                              <SleekDatePicker
+                                value={quickAddDueDate}
+                                onChange={setQuickAddDueDate}
+                                placeholder={t("projects.dueDate") || "截止日期"}
+                                showTime={true}
+                                className="bg-transparent border-0 shadow-none h-6 text-xs text-tx-secondary font-semibold"
+                              />
+                            </div>
                           </div>
 
-                          <Button
-                            type="submit"
-                            disabled={!quickAddTitle.trim() || (!quickAddIsPersonal && !quickAddProjId)}
-                            className="h-8 text-xs font-semibold px-4 rounded-lg bg-accent-primary hover:bg-accent-primary/95 text-white disabled:opacity-40 disabled:pointer-events-none transition-all"
-                          >
-                            {t("common.add") || "添加"}
-                          </Button>
+                          {/* Row 2: Tag Input & Submission */}
+                          <div className="flex items-center justify-between gap-3 pt-1">
+                            {/* Tag Input */}
+                            <div className="flex-1 max-w-[400px]">
+                              <GenericTagInput
+                                selectedTags={quickAddTags}
+                                onTagsChange={setQuickAddTags}
+                                placeholder="添加标签..."
+                                className="border-0 shadow-none bg-app-sidebar/40 py-0.5"
+                              />
+                            </div>
+
+                            <Button
+                              type="submit"
+                              disabled={!quickAddTitle.trim() || (!quickAddIsPersonal && !quickAddProjId)}
+                              className="h-8 text-xs font-semibold px-4 rounded-xl bg-accent-primary hover:bg-accent-primary/95 text-white disabled:opacity-40 disabled:pointer-events-none transition-all shadow-sm shrink-0"
+                            >
+                              {t("common.add") || "添加"}
+                            </Button>
+                          </div>
                         </div>
 
                         {/* Quick Add Recurrence Configurator */}
@@ -1560,6 +1750,8 @@ export default function ProjectCenter() {
                                       onToggleComplete={handleToggleTaskComplete}
                                       onDelete={handleDeleteProjectTask}
                                       onSelectProject={selectProject}
+                                      onStartTask={handleStartTask}
+                                      onPauseTask={handlePauseTask}
                                     />
                                   ))}
                                   {myTasksCategorized.overdue.length > visibleCounts.overdue && (
@@ -1608,6 +1800,8 @@ export default function ProjectCenter() {
                                         onToggleComplete={handleToggleTaskComplete}
                                         onDelete={handleDeleteProjectTask}
                                         onSelectProject={selectProject}
+                                        onStartTask={handleStartTask}
+                                        onPauseTask={handlePauseTask}
                                       />
                                     ))}
                                     {myTasksCategorized.today.length > visibleCounts.today && (
@@ -1618,6 +1812,57 @@ export default function ProjectCenter() {
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.today.length - visibleCounts.today})</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2.5. NOT STARTED SECTION */}
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                            {/* Section Collapsible Header */}
+                            <div
+                              onClick={() => setExpandedSections(prev => ({ ...prev, notStarted: !prev.notStarted }))}
+                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                            >
+                              <div className="flex items-center gap-2">
+                                {expandedSections.notStarted ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
+                                <span className="text-xs font-bold text-sky-500 uppercase tracking-wider">待启动</span>
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono">
+                                  {myTasksCategorized.notStarted.length}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Section Content */}
+                            {expandedSections.notStarted && (
+                              <div className="divide-y divide-app-border/20 animate-in fade-in duration-200">
+                                {myTasksCategorized.notStarted.length === 0 ? (
+                                  <div className="p-4 text-center text-xs text-tx-tertiary">没有待启动的任务</div>
+                                ) : (
+                                  <>
+                                    {myTasksCategorized.notStarted.slice(0, visibleCounts.notStarted).map((task) => (
+                                      <TaskRow
+                                        key={task.id}
+                                        task={task}
+                                        onToggleComplete={handleToggleTaskComplete}
+                                        onDelete={handleDeleteProjectTask}
+                                        onSelectProject={selectProject}
+                                        onStartTask={handleStartTask}
+                                        onPauseTask={handlePauseTask}
+                                      />
+                                    ))}
+                                    {myTasksCategorized.notStarted.length > visibleCounts.notStarted && (
+                                      <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
+                                        <button
+                                          onClick={() => setVisibleCounts(prev => ({ ...prev, notStarted: prev.notStarted + 15 }))}
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                        >
+                                          <ChevronDown size={12} />
+                                          <span>加载更多 ({myTasksCategorized.notStarted.length - visibleCounts.notStarted})</span>
                                         </button>
                                       </div>
                                     )}
@@ -1657,6 +1902,8 @@ export default function ProjectCenter() {
                                         onToggleComplete={handleToggleTaskComplete}
                                         onDelete={handleDeleteProjectTask}
                                         onSelectProject={selectProject}
+                                        onStartTask={handleStartTask}
+                                        onPauseTask={handlePauseTask}
                                       />
                                     ))}
                                     {myTasksCategorized.pending.length > visibleCounts.pending && (
@@ -1667,6 +1914,57 @@ export default function ProjectCenter() {
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.pending.length - visibleCounts.pending})</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3.5. PAUSED SECTION */}
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                            {/* Section Collapsible Header */}
+                            <div
+                              onClick={() => setExpandedSections(prev => ({ ...prev, paused: !prev.paused }))}
+                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                            >
+                              <div className="flex items-center gap-2">
+                                {expandedSections.paused ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
+                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">已暂停</span>
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/10 text-gray-400 border border-gray-500/20 font-mono">
+                                  {myTasksCategorized.paused.length}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Section Content */}
+                            {expandedSections.paused && (
+                              <div className="divide-y divide-app-border/20 animate-in fade-in duration-200">
+                                {myTasksCategorized.paused.length === 0 ? (
+                                  <div className="p-4 text-center text-xs text-tx-tertiary">没有已暂停的任务</div>
+                                ) : (
+                                  <>
+                                    {myTasksCategorized.paused.slice(0, visibleCounts.paused).map((task) => (
+                                      <TaskRow
+                                        key={task.id}
+                                        task={task}
+                                        onToggleComplete={handleToggleTaskComplete}
+                                        onDelete={handleDeleteProjectTask}
+                                        onSelectProject={selectProject}
+                                        onStartTask={handleStartTask}
+                                        onPauseTask={handlePauseTask}
+                                      />
+                                    ))}
+                                    {myTasksCategorized.paused.length > visibleCounts.paused && (
+                                      <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
+                                        <button
+                                          onClick={() => setVisibleCounts(prev => ({ ...prev, paused: prev.paused + 15 }))}
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                        >
+                                          <ChevronDown size={12} />
+                                          <span>加载更多 ({myTasksCategorized.paused.length - visibleCounts.paused})</span>
                                         </button>
                                       </div>
                                     )}
@@ -1706,6 +2004,8 @@ export default function ProjectCenter() {
                                         onToggleComplete={handleToggleTaskComplete}
                                         onDelete={handleDeleteProjectTask}
                                         onSelectProject={selectProject}
+                                        onStartTask={handleStartTask}
+                                        onPauseTask={handlePauseTask}
                                       />
                                     ))}
                                     {myTasksCategorized.completed.length > visibleCounts.completed && (
@@ -2421,6 +2721,16 @@ export default function ProjectCenter() {
                   onChangeRecurring={setTaskIsRecurring}
                   rule={taskRecurrenceRule}
                   onChangeRule={setTaskRecurrenceRule}
+                />
+              </div>
+
+              {/* Tags Selection */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">任务标签</label>
+                <GenericTagInput
+                  selectedTags={taskTags}
+                  onTagsChange={setTaskTags}
+                  placeholder="添加标签..."
                 />
               </div>
 

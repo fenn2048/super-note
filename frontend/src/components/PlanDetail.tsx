@@ -48,7 +48,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
   const [editParticipants, setEditParticipants] = useState<string[]>([]);
-  const [editMilestones, setEditMilestones] = useState<Array<{ id?: string; name: string; description: string; startDate: string; endDate: string; status: "pending" | "in_progress" | "completed" }>>([]);
+  const [editMilestones, setEditMilestones] = useState<Array<{ id?: string; name: string; description: string; startDate: string; endDate: string; status: "pending" | "in_progress" | "completed" | "paused" }>>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -97,7 +97,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
         setWorkspaceMembers([{
           userId: currentUser.id, workspaceId: "", role: "owner", joinedAt: "", email: "",
           username: currentUser.username,
-
+          displayName: currentUser.displayName || null,
           avatarUrl: currentUser.avatarUrl
         }]);
       }
