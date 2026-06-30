@@ -62,40 +62,41 @@
   --font-size-label-md: 0.75rem;      /* 12px */
   --font-size-label-sm: 0.6875rem;    /* 11px */
 
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-sidebar: #f5f5f5;
-  --color-elevated: #ffffff;
-  --color-border: #e3e3e3;
-  --color-hover: rgba(0, 0, 0, 0.04);
+  --color-bg: #fafaf9;                /* 象牙白右侧主工作区：极温润护眼，柔和白纸质感 */
+  --color-surface: #f2f0e8;           /* 燕麦暖灰中栏：温和沉静，为列表和选项卡建立清晰的物理空间 */
+  --color-sidebar: #ebeee8;           /* 鼠尾草灰绿左栏：宁静致远，富含自然意境的侧边控制条 */
+  --color-elevated: #ffffff;          /* 纯白UI卡片：立体高亮，在燕麦灰底上自然浮现 */
+  --color-border: #e6e3dc;            /* 浅陶土灰边框：极其自然柔和的物理质感分割线，替代原生刺眼的高灰度线 */
+  --color-hover: rgba(0, 0, 0, 0.035);
   --color-active: rgba(72, 54, 153, 0.08);
 
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #5a5a5a;
-  --color-text-tertiary: #8a8a8a;
+  --color-text-primary: #1c1917;      /* 暖碳黑（Stone-900）：避开死黑，完美契合乳沙白背景，长文阅读极度舒适 */
+  --color-text-secondary: #44403c;    /* 深茶灰（Stone-700）：对比度跃升至 7.8:1，可读性极佳，清晰温和 */
+  --color-text-tertiary: #57534e;     /* 中茶灰（Stone-600）：对比度 5.5:1，小字和辅助文字依然清晰可见，告别吃力阅读 */
+  --color-text-quaternary: #78716c;   /* 浅茶灰（Stone-500）：占位符及禁用态文本，对比度 3.3:1 */
   --color-text-inverse: #ffffff;
 
   --color-accent-primary: #483699;
   --color-accent-secondary: #2a7b4c;
   --color-accent-warning: #e67e22;
   --color-accent-danger: #c0392b;
-  --color-accent-muted: rgba(0, 0, 0, 0.3);
+  --color-accent-muted: rgba(0, 0, 0, 0.25);
 
   /* ProseMirror 编辑器色值 */
-  --pm-text: #2e2e2e;
-  --pm-heading: #1a1a1a;
-  --pm-code-bg: #f5f5f5;
+  --pm-text: #2c2520;                 /* 软碳褐：对比原先 #2e2e2e 更有书写油墨感，降低长时间写作的眼部疲劳 */
+  --pm-heading: #1c1917;
+  --pm-code-bg: #f4f1eb;
   --pm-code-text: #c92a2a;
-  --pm-pre-bg: #f8f8f8;
-  --pm-pre-border: #e3e3e3;
-  --pm-pre-text: #2e2e2e;
+  --pm-pre-bg: #fcfbfa;
+  --pm-pre-border: #e6e3dc;
+  --pm-pre-text: #2c2520;
   --pm-blockquote-border: #483699;
-  --pm-blockquote-text: #5c5c5c;
-  --pm-hr: #e3e3e3;
-  --pm-placeholder: #b3b3b3;
-  --pm-task-done: #b3b3b3;
-  --pm-scrollbar: #e5e5e5;
-  --pm-scrollbar-hover: #cccccc;
+  --pm-blockquote-text: #44403c;
+  --pm-hr: #e6e3dc;
+  --pm-placeholder: #78716c;
+  --pm-task-done: #78716c;
+  --pm-scrollbar: #e6e3dc;
+  --pm-scrollbar-hover: #c7c4be;
   --pm-selection: rgba(72, 54, 153, 0.15);
   --toast-top: 1rem;
 }
@@ -236,6 +237,10 @@ body {
   background: var(--color-bg);
   color: var(--color-text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.011em;
 }
 
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */

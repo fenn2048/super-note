@@ -1422,7 +1422,7 @@ export default function ProjectCenter() {
         </div>
       ) : activeFilter.type === "my-tasks" ? (
         /* 2. Global "My Tasks" aggregated board */
-        <div className="flex-1 flex h-full min-h-0 overflow-hidden bg-[#f2f3f5] dark:bg-[#121214] justify-center">
+        <div className="flex-1 flex h-full min-h-0 overflow-hidden bg-app-bg dark:bg-[#121214] justify-center">
           <div className="w-full max-w-5xl flex h-full min-h-0 overflow-hidden">
             {/* 主内容区 */}
             <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
@@ -1506,7 +1506,7 @@ export default function ProjectCenter() {
               )}
 
               {/* Scrollable Container */}
-              <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0 bg-[#f2f3f5] dark:bg-[#121214]">
+              <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0 bg-app-bg dark:bg-[#121214]">
                 <ScrollContainer className="h-full">
                   <div className="flex-1 p-4 md:p-6 space-y-6">
                     {/* 顶部标题 (仅在桌面端展示) */}
@@ -1550,7 +1550,7 @@ export default function ProjectCenter() {
                     {window.innerWidth >= 768 && (
                       <form
                         onSubmit={handleQuickAddTask}
-                        className="bg-app-surface border border-app-border/40 rounded-xl p-4 space-y-3 shadow-sm max-w-[640px] mx-auto"
+                        className="bg-app-elevated border border-app-border/40 rounded-xl p-4 space-y-3 shadow-sm max-w-[640px] mx-auto"
                       >
                         <div className="flex items-center gap-3 relative">
                           <div className="w-6 h-6 rounded-full border border-app-border flex items-center justify-center shrink-0">
@@ -1725,11 +1725,11 @@ export default function ProjectCenter() {
                         <>
                           {/* 1. OVERDUE SECTION */}
                           {myTasksCategorized.overdue.length > 0 && (
-                            <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                            <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-elevated shadow-sm">
                               {/* Section Collapsible Header */}
                               <div
                                 onClick={() => setExpandedSections(prev => ({ ...prev, overdue: !prev.overdue }))}
-                                className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                                className="flex items-center justify-between p-3.5 bg-app-elevated hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
                               >
                                 <div className="flex items-center gap-2">
                                   {expandedSections.overdue ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
@@ -1771,11 +1771,11 @@ export default function ProjectCenter() {
                           )}
 
                           {/* 2. TODAY SECTION */}
-                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-elevated shadow-sm">
                             {/* Section Collapsible Header */}
                             <div
                               onClick={() => setExpandedSections(prev => ({ ...prev, today: !prev.today }))}
-                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                              className="flex items-center justify-between p-3.5 bg-app-elevated hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.today ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
@@ -1822,11 +1822,11 @@ export default function ProjectCenter() {
                           </div>
 
                           {/* 2.5. NOT STARTED SECTION */}
-                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-elevated shadow-sm">
                             {/* Section Collapsible Header */}
                             <div
                               onClick={() => setExpandedSections(prev => ({ ...prev, notStarted: !prev.notStarted }))}
-                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                              className="flex items-center justify-between p-3.5 bg-app-elevated hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.notStarted ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
@@ -1873,11 +1873,11 @@ export default function ProjectCenter() {
                           </div>
 
                           {/* 3. OTHER PENDING SECTION */}
-                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-elevated shadow-sm">
                             {/* Section Collapsible Header */}
                             <div
                               onClick={() => setExpandedSections(prev => ({ ...prev, pending: !prev.pending }))}
-                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                              className="flex items-center justify-between p-3.5 bg-app-elevated hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.pending ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
@@ -1924,11 +1924,11 @@ export default function ProjectCenter() {
                           </div>
 
                           {/* 3.5. PAUSED SECTION */}
-                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-elevated shadow-sm">
                             {/* Section Collapsible Header */}
                             <div
                               onClick={() => setExpandedSections(prev => ({ ...prev, paused: !prev.paused }))}
-                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                              className="flex items-center justify-between p-3.5 bg-app-elevated hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.paused ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
@@ -1975,11 +1975,11 @@ export default function ProjectCenter() {
                           </div>
 
                           {/* 4. COMPLETED SECTION */}
-                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-surface shadow-sm">
+                          <div className="border border-app-border/40 rounded-xl overflow-hidden bg-app-elevated shadow-sm">
                             {/* Section Collapsible Header */}
                             <div
                               onClick={() => setExpandedSections(prev => ({ ...prev, completed: !prev.completed }))}
-                              className="flex items-center justify-between p-3.5 bg-app-surface hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
+                              className="flex items-center justify-between p-3.5 bg-app-elevated hover:bg-app-hover/50 border-b border-app-border/30 cursor-pointer transition-colors select-none"
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.completed ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
@@ -2033,7 +2033,7 @@ export default function ProjectCenter() {
             </div>
 
             {/* 右侧边栏：搜索框 + 标签/分类过滤 */}
-            <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-transparent overflow-y-auto pl-6 pr-4 py-4 gap-5 animate-in fade-in duration-200">
+            <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-app-surface border-l border-app-border/50 overflow-y-auto px-5 py-4 gap-5 animate-in fade-in duration-200">
               {/* 搜索框 */}
               <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />

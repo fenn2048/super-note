@@ -202,6 +202,15 @@ projectsRouter.get("/:id", (c) => {
     return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
   }
 
+  const members = db.prepare(`
+    SELECT pm.userId, pm.role, u.username, u.displayName, u.avatarUrl
+    FROM project_members pm
+    JOIN users u ON pm.userId = u.id
+    WHERE pm.projectId = ?
+  `).all(id);
+
+  (projectWithUserInfo as any).members = members;
+
   return c.json(projectWithUserInfo);
 });
 

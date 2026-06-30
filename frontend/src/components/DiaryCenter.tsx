@@ -3514,7 +3514,7 @@ export default function DiaryCenter() {
   }, [loadTimeline, loadStats]);
 
   return (
-    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-[#f2f3f5] dark:bg-[#121214] justify-center">
+    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-app-bg dark:bg-[#121214] justify-center">
       <div className="w-full max-w-5xl flex h-full min-h-0 overflow-hidden">
         {/* 主内容区 */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -3751,7 +3751,7 @@ export default function DiaryCenter() {
       </div>
 
       {/* 右侧边栏：搜索框 + 热力图 + 标签筛选 */}
-      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-transparent overflow-y-auto pl-6 pr-4 py-4 gap-5">
+      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-app-surface border-l border-app-border/50 overflow-y-auto px-5 py-4 gap-5">
 
         {/* 搜索框 */}
         <div className="relative">
