@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   Plus, Edit2, Trash2, Play, Pause, CheckSquare, Calendar, User, UserPlus,
   Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles, MoveRight,
-  Eye, FileVideo, Image as ImageIcon, Paperclip, Upload, AlertCircle, Link, Compass, Loader2
+  Eye, FileVideo, Image as ImageIcon, Paperclip, Upload, AlertCircle, Link, Compass, Loader2, MessageSquare
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -93,6 +93,11 @@ export default function ProjectKanban({
   const [taskLogs, setTaskLogs] = useState<AuditLog[]>([]);
   const [loadingTaskLogs, setLoadingTaskLogs] = useState(false);
 
+  const [taskComments, setTaskComments] = useState<any[]>([]);
+  const [loadingTaskComments, setLoadingTaskComments] = useState(false);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+
   useEffect(() => {
     if (activeTask?.id) {
       setLoadingTaskLogs(true);
@@ -103,10 +108,39 @@ export default function ProjectKanban({
           setTaskLogs([]);
         })
         .finally(() => setLoadingTaskLogs(false));
+
+      setLoadingTaskComments(true);
+      api.getTaskComments(activeTask.id)
+        .then(setTaskComments)
+        .catch((err) => {
+          console.error("Failed to load task comments:", err);
+          setTaskComments([]);
+        })
+        .finally(() => setLoadingTaskComments(false));
     } else {
       setTaskLogs([]);
+      setTaskComments([]);
     }
   }, [activeTask?.id]);
+
+  const handleAddComment = async () => {
+    if (!activeTask?.id || !newCommentText.trim() || submittingComment) return;
+    setSubmittingComment(true);
+    try {
+      const added = await api.addTaskComment(activeTask.id, newCommentText.trim());
+      setTaskComments((prev) => [...prev, added]);
+      setNewCommentText("");
+      // 刷新修改记录，以便看到刚才发表的评论记录
+      api.getTargetAuditLogs("project_task", activeTask.id)
+        .then(setTaskLogs)
+        .catch(() => {});
+    } catch (err) {
+      console.error("Failed to add comment:", err);
+      alert("发表评论失败，请重试");
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   const handleCloseModal = () => {
     setActiveTask(null);
@@ -579,8 +613,9 @@ export default function ProjectKanban({
                       borderColor: isDark ? customStyles.borderDark : customStyles.borderLight,
                     } : {}}
                     className={cn(
-                      "bg-app-elevated border border-app-border rounded-xl p-3.5 space-y-3 shadow-sm hover:shadow-md transition-all cursor-pointer group/card animate-in fade-in duration-200",
-                      !customStyles && "hover:border-app-border/80"
+                      "bg-app-elevated border border-app-border rounded-xl p-3.5 space-y-3 shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-300 cursor-grab active:cursor-grabbing group/card animate-in fade-in duration-200",
+                      !customStyles && "bg-white/85 dark:bg-zinc-900/85 backdrop-blur-md border-zinc-200/60 dark:border-zinc-800/60",
+                      task.isCompleted === 1 && "opacity-60 saturate-50"
                     )}
                   >
                     {/* Task Tags list */}
@@ -673,16 +708,24 @@ export default function ProjectKanban({
                     <div className="flex items-center justify-between text-[10px] text-tx-tertiary pt-1.5 border-t border-app-border/40 shrink-0">
                       <div className="flex items-center gap-2">
                         {/* Dates */}
-                        {(task.startDate || task.endDate) && (
-                          <div className="flex items-center gap-0.5 font-mono">
-                            <Calendar size={11} />
-                            <span>
-                              {task.endDate
-                                ? new Date(task.endDate).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
-                                : "-"}
-                            </span>
-                          </div>
-                        )}
+                        {(task.startDate || task.endDate) && (() => {
+                          const isOverdue = task.endDate && task.isCompleted !== 1 && new Date(task.endDate).getTime() < Date.now();
+                          return (
+                            <div className={cn(
+                              "flex items-center gap-0.5 font-mono px-1.5 py-0.5 rounded text-[9px] transition-all",
+                              isOverdue
+                                ? "bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse font-semibold"
+                                : "text-tx-tertiary"
+                            )}>
+                              <Calendar size={11} />
+                              <span>
+                                {task.endDate
+                                  ? new Date(task.endDate).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
+                                  : "-"}
+                              </span>
+                            </div>
+                          );
+                        })()}
 
                         {/* Checklist */}
                         {hasChecklist && (
@@ -1049,7 +1092,7 @@ export default function ProjectKanban({
                 </div>
 
                   {/* Timeline dates */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 md:col-span-2">
                     <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 flex-shrink-0">
                       <Calendar size={13} />
                       <span>{t("projects.timeline") || "时间周期"}</span>
@@ -1551,6 +1594,75 @@ export default function ProjectKanban({
                       </select>
                     </div>
                   )}
+                </div>
+
+                {/* Task Comments Section */}
+                <div className="space-y-3 border-t border-app-border/40 pt-4">
+                  <h5 className="text-xs font-bold text-tx-primary tracking-wide flex items-center gap-1.5">
+                    <MessageSquare size={13} className="text-accent-primary" />
+                    <span>任务评论 ({taskComments.length})</span>
+                  </h5>
+
+                  {/* Comments list */}
+                  {loadingTaskComments ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 size={16} className="animate-spin text-accent-primary" />
+                    </div>
+                  ) : taskComments.length === 0 ? (
+                    <div className="text-[11px] text-tx-tertiary italic py-2 px-3 rounded-xl border border-dashed border-app-border/60">
+                      暂无评论，发表第一条评论吧！
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                      {taskComments.map((comment) => (
+                        <div key={comment.id} className="text-[11px] text-tx-secondary space-y-1 bg-app-sidebar/20 p-2.5 rounded-xl border border-app-border/40">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-bold text-tx-primary">
+                              {comment.avatarUrl ? (
+                                <img src={comment.avatarUrl} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-3.5 h-3.5 rounded-full bg-accent-primary/10 flex items-center justify-center text-[7px] font-bold text-accent-primary uppercase">
+                                  {(comment.displayName || comment.username || "?").slice(0, 1)}
+                                </div>
+                              )}
+                              <span>{comment.displayName || comment.username}</span>
+                            </div>
+                            <span className="text-[9px] text-tx-tertiary font-mono">
+                              {format(parseISO(comment.createdAt + (comment.createdAt.endsWith("Z") ? "" : "Z")), "yyyy-MM-dd HH:mm", { locale: dateLocale })}
+                            </span>
+                          </div>
+                          <p className="text-tx-secondary leading-relaxed pl-5 font-medium whitespace-pre-wrap">
+                            {comment.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add comment form */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="写下你的任务评论..."
+                      value={newCommentText}
+                      onChange={(e) => setNewCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAddComment();
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-app-sidebar/40 border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary text-tx-primary placeholder:text-tx-tertiary transition-all"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleAddComment}
+                      disabled={submittingComment || !newCommentText.trim()}
+                      className="text-xs px-3 rounded-xl bg-accent-primary hover:bg-accent-primary/95 text-white shrink-0 font-semibold"
+                    >
+                      {submittingComment ? <Loader2 size={12} className="animate-spin" /> : "评论"}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Task Modification Logs */}

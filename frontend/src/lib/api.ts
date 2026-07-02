@@ -1136,6 +1136,9 @@ export const api = {
   addProjectMember: (projectId: string, memberUserId: string, role?: string) => request<{ message: string }>(`/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ memberUserId, role }) }),
   removeProjectMember: (projectId: string, memberUserId: string) => request<{ message: string }>(`/projects/${projectId}/members/${memberUserId}`, { method: "DELETE" }),
 
+  getTaskComments: (taskId: string) => request<any[]>(`/projects/tasks/${taskId}/comments`),
+  addTaskComment: (taskId: string, content: string) => request<any>(`/projects/tasks/${taskId}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
+
   // Plans API
   getPlans: (workspaceId?: string) => {
     const params = new URLSearchParams();

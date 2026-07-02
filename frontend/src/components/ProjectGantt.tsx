@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
 import { Calendar, CheckCircle2, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ProjectGanttProps {
   stages: ProjectStage[];
@@ -186,15 +187,26 @@ export default function ProjectGantt({ stages, onTaskClick }: ProjectGanttProps)
                       {hasTimeline ? (
                         <div
                           style={barStyle}
-                          className={`absolute h-7 rounded-lg flex items-center justify-between px-2.5 text-[10px] font-bold shadow-sm transition-all border select-none cursor-pointer truncate ${
+                          className={`absolute h-7 rounded-lg flex items-center justify-between px-2.5 text-[10px] font-bold shadow-sm transition-all border select-none cursor-pointer truncate bg-white dark:bg-zinc-900 overflow-hidden ${
                             task.isCompleted === 1
-                              ? "bg-green-500/10 border-green-500/20 text-green-600 line-through"
-                              : "bg-accent-primary/10 border-accent-primary/20 text-accent-primary hover:bg-accent-primary/25"
+                              ? "border-green-500/40 text-green-600 dark:text-green-400"
+                              : "border-accent-primary/30 text-accent-primary"
                           }`}
                           onClick={() => onTaskClick?.(task)}
-                          title={`${task.title} (${task.startDate ? task.startDate.split("T")[0] : ""} ~ ${task.endDate ? task.endDate.split("T")[0] : ""})`}
+                          title={`${task.title} (${task.startDate ? task.startDate.split("T")[0] : ""} ~ ${task.endDate ? task.endDate.split("T")[0] : ""}) - 进度: ${task.progress || 0}%`}
                         >
-                          <span className="truncate">{task.title}</span>
+                          {/* Beautiful dynamic gradient overlay representing task progress */}
+                          <div
+                            className={cn(
+                              "absolute inset-y-0 left-0 -z-10 transition-all duration-500",
+                              task.isCompleted === 1
+                                ? "bg-gradient-to-r from-green-500/20 to-emerald-500/25"
+                                : "bg-gradient-to-r from-indigo-500/20 to-purple-500/25 dark:from-indigo-400/15 dark:to-purple-400/20"
+                            )}
+                            style={{ width: `${task.progress || 0}%` }}
+                          />
+                          <span className="truncate relative z-10">{task.title}</span>
+                          <span className="text-[8px] font-mono shrink-0 ml-1.5 opacity-80 relative z-10">{task.progress || 0}%</span>
                         </div>
                       ) : (
                         <div className="px-4 py-1 text-[10px] text-tx-tertiary italic">

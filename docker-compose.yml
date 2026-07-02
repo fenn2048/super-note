@@ -55,12 +55,18 @@ services:
       - NODE_ENV=production
       - DB_PATH=/app/data/super-note.db
       - PORT=3001
+      - NODE_OPTIONS=--max-old-space-size=768
       # 启用上面的独立备份卷后，**必须**同步设置以下变量，否则备份仍会写到 data 卷：
       #- BACKUP_DIR=/app/backups
       # Ollama 地址（指向 compose 内的 ollama 服务）
       - OLLAMA_URL=http://ollama:11434
       # Redis 数据库连接地址
       - REDIS_URL=redis://redis:6379
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1024M
 
   # ============================================================================
   # Ollama 本地 LLM 服务 — Qwen2.5:1.8b（7×24 常驻）
@@ -91,6 +97,11 @@ services:
         /bin/ollama pull bge-small-zh 2>&1
         echo "Models ready!"
         wait
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 2048M
 
 
   # ============================================================================
@@ -102,6 +113,11 @@ services:
     restart: unless-stopped
     volumes:
       - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   super-note-data:

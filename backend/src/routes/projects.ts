@@ -605,27 +605,47 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   }
 
   // Audit Log Changes
+  const getUserName = (id: string | null) => {
+    if (!id) return "无";
+    const u = db.prepare("SELECT username, displayName FROM users WHERE id = ?").get(id) as { username: string; displayName?: string } | undefined;
+    return u ? (u.displayName || u.username) : "未知";
+  };
+
   if (title !== undefined && title !== task.title) {
-    logAudit(userId, "task", "update_task_title", `修改任务标题为: 「${title}」`, { targetType: "project_task", targetId: taskId });
+    logAudit(userId, "task", "update_task_title", `将任务标题从「${task.title}」修改为「${title}」`, { targetType: "project_task", targetId: taskId });
   }
   if (description !== undefined && description !== task.description) {
-    logAudit(userId, "task", "update_task_desc", "修改了任务描述", { targetType: "project_task", targetId: taskId });
+    logAudit(userId, "task", "update_task_desc", `将任务描述从「${task.description ? (task.description.length > 20 ? task.description.slice(0, 20) + "..." : task.description) : "无"}」修改为「${description ? (description.length > 20 ? description.slice(0, 20) + "..." : description) : "无"}」`, { targetType: "project_task", targetId: taskId });
   }
   if (status !== undefined && status !== task.status) {
-    logAudit(userId, "task", "update_task_status", `修改任务状态为: ${status}`, { targetType: "project_task", targetId: taskId });
+    const statusMap: Record<string, string> = {
+      pending: "待办",
+      in_progress: "进行中",
+      completed: "已完成",
+      suspended: "挂起"
+    };
+    const oldStatusLabel = statusMap[task.status] || task.status || "无";
+    const newStatusLabel = statusMap[status] || status || "无";
+    logAudit(userId, "task", "update_task_status", `将任务状态从「${oldStatusLabel}」修改为「${newStatusLabel}」`, { targetType: "project_task", targetId: taskId });
   }
   if (finalIsCompleted !== undefined && ((finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0) !== task.isCompleted) {
     const isComp = (finalIsCompleted === 1 || finalIsCompleted === true);
     logAudit(userId, "task", isComp ? "complete_task" : "reopen_task", isComp ? "完成了任务" : "重新开启了任务", { targetType: "project_task", targetId: taskId });
   }
   if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
-    logAudit(userId, "task", "update_task_assignee", "更新了任务负责人", { targetType: "project_task", targetId: taskId });
+    const oldAssigneeName = getUserName(task.assigneeId);
+    const newAssigneeName = getUserName(assigneeId);
+    logAudit(userId, "task", "update_task_assignee", `将任务负责人从「${oldAssigneeName}」变更为「${newAssigneeName}」`, { targetType: "project_task", targetId: taskId });
   }
   if (startDate !== undefined && startDate !== task.startDate) {
-    logAudit(userId, "task", "update_task_start_date", `更新了任务开始时间为: ${startDate || "无"}`, { targetType: "project_task", targetId: taskId });
+    const oldStart = task.startDate ? task.startDate.split("T")[0] : "无";
+    const newStart = startDate ? startDate.split("T")[0] : "无";
+    logAudit(userId, "task", "update_task_start_date", `将任务开始时间从「${oldStart}」修改为「${newStart}」`, { targetType: "project_task", targetId: taskId });
   }
   if (endDate !== undefined && endDate !== task.endDate) {
-    logAudit(userId, "task", "update_task_end_date", `更新了任务截止时间为: ${endDate || "无"}`, { targetType: "project_task", targetId: taskId });
+    const oldEnd = task.endDate ? task.endDate.split("T")[0] : "无";
+    const newEnd = endDate ? endDate.split("T")[0] : "无";
+    logAudit(userId, "task", "update_task_end_date", `将任务截止时间从「${oldEnd}」修改为「${newEnd}」`, { targetType: "project_task", targetId: taskId });
   }
 
   const updates: string[] = [];
@@ -846,6 +866,52 @@ projectsRouter.delete("/:id/members/:memberUserId", (c) => {
     .run(id, memberUserId);
 
   return c.json({ message: "成员移除成功" });
+});
+
+// GET /api/projects/tasks/:taskId/comments - 获取任务评论
+projectsRouter.get("/tasks/:taskId/comments", (c) => {
+  const db = getDb();
+  const taskId = c.req.param("taskId");
+  const comments = db.prepare(`
+    SELECT ptc.*, u.username, u.displayName, u.avatarUrl
+      FROM project_task_comments ptc
+      JOIN users u ON ptc.userId = u.id
+     WHERE ptc.taskId = ?
+     ORDER BY ptc.createdAt ASC
+  `).all(taskId) as any[];
+
+  return c.json(comments);
+});
+
+// POST /api/projects/tasks/:taskId/comments - 新增任务评论
+projectsRouter.post("/tasks/:taskId/comments", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const taskId = c.req.param("taskId");
+  const body = await c.req.json();
+  const { content } = body;
+
+  if (!content || !content.trim()) {
+    return c.json({ error: "评论内容不能为空" }, 400);
+  }
+
+  const commentId = uuid();
+  db.prepare(`
+    INSERT INTO project_task_comments (id, taskId, userId, content, createdAt)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `).run(commentId, taskId, userId, content.trim());
+
+  // 写修改审计日志
+  logAudit(userId, "task", "add_task_comment", `发表了任务评论: 「${content.trim().slice(0, 30)}${content.trim().length > 30 ? "..." : ""}」`, { targetType: "project_task", targetId: taskId });
+
+  const newComment = db.prepare(`
+    SELECT ptc.*, u.username, u.displayName, u.avatarUrl
+      FROM project_task_comments ptc
+      JOIN users u ON ptc.userId = u.id
+     WHERE ptc.id = ?
+  `).get(commentId) as any;
+
+  return c.json(newComment);
 });
 
 export default projectsRouter;

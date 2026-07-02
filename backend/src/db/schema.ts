@@ -1254,6 +1254,17 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (dependsOnTaskId) REFERENCES project_tasks(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS project_task_comments (
+      id TEXT PRIMARY KEY,
+      taskId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_task_comments_task ON project_task_comments(taskId);
+
     -- 任务附件删除触发器（支持 tasks 和 project_tasks 两个表的级联删除）
     CREATE TRIGGER IF NOT EXISTS delete_task_attachments_on_task_delete
     AFTER DELETE ON tasks

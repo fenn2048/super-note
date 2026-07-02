@@ -116,7 +116,6 @@ function transformIframesToClickToPlay(html: string): string {
             <path d="M8 5V19L19 12L8 5Z" fill="#ffffff"/>
           </svg>
         </div>
-        <div style="color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 500; margin-top: 72px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 1;">点击播放视频</div>
       `;
       iframe.parentNode?.replaceChild(wrapper, iframe);
     });
@@ -2209,7 +2208,7 @@ function DiaryCard({
                       color: getTagColor(tag),
                     }}
                   >
-                    #{tag.name}
+                    {tag.name}
                   </span>
                 ))}
               </div>

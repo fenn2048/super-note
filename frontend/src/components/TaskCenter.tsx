@@ -5,13 +5,13 @@ import {
   CalendarDays, AlertTriangle, CheckCheck, Inbox, X,
   Trash2, Play, Pause, ImagePlus, Link as LinkIcon, ExternalLink, Loader2,
   User as UserIcon, CheckSquare, Square, ChevronDown, Star, ScanText, Repeat,
-  Compass, AlertCircle
+  Compass, AlertCircle, Briefcase, Check
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { Task, TaskFilter, TaskPriority, TaskStats, Workspace, Tag } from "@/types";
+import { Task, TaskFilter, TaskPriority, TaskStats, Workspace, Tag, ProjectTask } from "@/types";
 import { cn, detectSuMention } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -1384,6 +1384,60 @@ export default function TaskCenter() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const actions = useAppActions();
+  const [activeTab, setActiveTab] = useState<"personal" | "project">("personal");
+  const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [loadingProject, setLoadingProject] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
+  useEffect(() => {
+    api.getMe()
+      .then((u) => setCurrentUserId(u.id))
+      .catch(console.error);
+  }, []);
+
+  const loadProjectTasks = useCallback(async () => {
+    setLoadingProject(true);
+    try {
+      const data = await api.getMyTasks(undefined, "all");
+      setProjectTasks(data);
+    } catch (e) {
+      console.error("Failed to load project tasks:", e);
+    } finally {
+      setLoadingProject(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "project") {
+      loadProjectTasks();
+    }
+  }, [activeTab, loadProjectTasks]);
+
+  const handleToggleProjectTask = async (taskId: string, isCompleted: number) => {
+    const nextCompleted = isCompleted === 1 ? 0 : 1;
+    const progress = nextCompleted === 1 ? 100 : 0;
+    try {
+      await api.updateProjectTask(taskId, {
+        isCompleted: nextCompleted,
+        progress
+      });
+      loadProjectTasks();
+    } catch (err: any) {
+      toast.error(err?.message || "更新项目任务失败");
+    }
+  };
+
+  const handleSelectProjectTask = (task: ProjectTask) => {
+    const filter = { type: "detail", projectId: task.projectId };
+    sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+    actions.setViewMode("projects");
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
+      }, 150);
+    }, 100);
+  };
   const [tagColorPopover, setTagColorPopover] = useState<{
     tagId: string; tagName: string; color: string; x: number; y: number;
   } | null>(null);
@@ -1455,6 +1509,16 @@ export default function TaskCenter() {
     window.addEventListener("super:workspace-changed", onWs);
     return () => window.removeEventListener("super:workspace-changed", onWs);
   }, [loadTasks]);
+
+  // 监听外部触发的刷新事件（例如 Cmd+K 全局快捷新建）
+  useEffect(() => {
+    const onRefreshTasks = () => {
+      loadTasks();
+      loadProjectTasks();
+    };
+    window.addEventListener("super:refresh-tasks", onRefreshTasks);
+    return () => window.removeEventListener("super:refresh-tasks", onRefreshTasks);
+  }, [loadTasks, loadProjectTasks]);
 
   // 监听待办快捷跳转事件，自动打开详情抽屉
   useEffect(() => {
@@ -1810,33 +1874,63 @@ export default function TaskCenter() {
 
       {/* Center: Task List */}
       <div className="flex-1 flex flex-col overflow-hidden bg-app-bg transition-colors">
-        {/* 移动端：水平筛选标签 */}
-        <div className="md:hidden flex items-center gap-1 px-3 py-2 border-b border-app-border overflow-x-auto no-scrollbar bg-app-surface/20">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => { setFilter(f.key); setSelectedTagId(null); setSelectedTask(null); }}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0",
-                filter === f.key && !selectedTagId
-                  ? "bg-accent-primary/15 text-accent-primary"
-                  : "text-tx-secondary bg-app-hover/50 active:bg-app-active"
-              )}
-            >
-              {f.icon}
-              {f.label}
-              <span className={cn(
-                "text-[10px] min-w-[16px] text-center",
-                filter === f.key && !selectedTagId ? "text-accent-primary" : "text-tx-tertiary"
-              )}>
-                {filterCount(f.key)}
-              </span>
-            </button>
-          ))}
+        {/* Tab Switcher at the top of Center panel */}
+        <div className="flex border-b border-app-border bg-app-surface/20 shrink-0 select-none">
+          <button
+            onClick={() => setActiveTab("personal")}
+            className={cn(
+              "flex-1 md:flex-none px-6 py-3 text-xs md:text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2",
+              activeTab === "personal"
+                ? "border-accent-primary text-accent-primary bg-accent-primary/5"
+                : "border-transparent text-tx-secondary hover:text-tx-primary hover:bg-app-hover/30"
+            )}
+          >
+            <ListTodo size={15} />
+            <span>个人待办</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("project")}
+            className={cn(
+              "flex-1 md:flex-none px-6 py-3 text-xs md:text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2",
+              activeTab === "project"
+                ? "border-accent-primary text-accent-primary bg-accent-primary/5"
+                : "border-transparent text-tx-secondary hover:text-tx-primary hover:bg-app-hover/30"
+            )}
+          >
+            <Briefcase size={15} />
+            <span>指派给我的项目任务</span>
+          </button>
         </div>
 
-        {/* 移动端：水平标签筛选 */}
-        {state.tags.length > 0 && (
+        {/* 移动端：水平筛选标签（仅在个人待办页展示） */}
+        {activeTab === "personal" && (
+          <div className="md:hidden flex items-center gap-1 px-3 py-2 border-b border-app-border overflow-x-auto no-scrollbar bg-app-surface/20">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => { setFilter(f.key); setSelectedTagId(null); setSelectedTask(null); }}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0",
+                  filter === f.key && !selectedTagId
+                    ? "bg-accent-primary/15 text-accent-primary"
+                    : "text-tx-secondary bg-app-hover/50 active:bg-app-active"
+                )}
+              >
+                {f.icon}
+                {f.label}
+                <span className={cn(
+                  "text-[10px] min-w-[16px] text-center",
+                  filter === f.key && !selectedTagId ? "text-accent-primary" : "text-tx-tertiary"
+                )}>
+                  {filterCount(f.key)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 移动端：水平标签筛选（仅在个人待办页展示） */}
+        {activeTab === "personal" && state.tags.length > 0 && (
           <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 border-b border-app-border overflow-x-auto no-scrollbar bg-app-surface/5">
             {state.tags.map((tag) => (
               <button
@@ -1913,27 +2007,9 @@ export default function TaskCenter() {
           </div>
         )}
 
-        {/* Quick Add —— 注意 min-w-0：input 粘贴超长 URL 时默认会把 flex 容器撑破 */}
-        <div className="px-4 md:px-6 py-3 border-b border-app-border">
-          <QuickAdd
-            value={newTitle}
-            onChange={setNewTitle}
-            onSubmit={handleCreate}
-            onUploaded={(ids) => { pendingOrphansRef.current = ids; }}
-            inputRef={inputRef}
-            workspaces={workspaces}
-          />
-        </div>
-
-        {viewMode === "calendar" ? (
-          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
-            <TaskCalendar onDateSelect={() => {
-              setViewMode("list");
-            }} />
-          </div>
-        ) : (
+        {activeTab === "personal" ? (
           <>
-            {/* Quick Add */}
+            {/* Quick Add —— 注意 min-w-0：input 粘贴超长 URL 时默认会把 flex 容器撑破 */}
             <div className="px-4 md:px-6 py-3 border-b border-app-border">
               <QuickAdd
                 value={newTitle}
@@ -1945,34 +2021,124 @@ export default function TaskCenter() {
               />
             </div>
 
-            {/* Task List */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-3">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-32 text-tx-tertiary text-sm">
-                  {t('common.loading')}
-                </div>
-              ) : tasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-tx-tertiary">
-                  <CheckCheck size={36} className="mb-3 opacity-40" />
-                  <span className="text-sm">{t('tasks.noTasks')}</span>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <AnimatePresence mode="popLayout">
-                    {tasks.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        onToggle={handleToggle}
-                        onSelect={setSelectedTask}
-                        onDelete={handleDelete}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
+            {viewMode === "calendar" ? (
+              <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
+                <TaskCalendar onDateSelect={() => {
+                  setViewMode("list");
+                }} />
+              </div>
+            ) : (
+              /* Task List */
+              <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-3">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-32 text-tx-tertiary text-sm">
+                    {t('common.loading')}
+                  </div>
+                ) : tasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-tx-tertiary">
+                    <CheckCheck size={36} className="mb-3 opacity-40" />
+                    <span className="text-sm">{t('tasks.noTasks')}</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <AnimatePresence mode="popLayout">
+                      {tasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onToggle={handleToggle}
+                          onSelect={setSelectedTask}
+                          onDelete={handleDelete}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </div>
+            )}
           </>
+        ) : (
+          /* Tab 2: Project Tasks */
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 space-y-3">
+            {loadingProject ? (
+              <div className="flex items-center justify-center h-32 text-tx-tertiary text-sm">
+                <Loader2 className="w-5 h-5 animate-spin text-accent-primary mr-2" />
+                <span>加载中...</span>
+              </div>
+            ) : projectTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-tx-tertiary">
+                <CheckCheck size={36} className="mb-3 opacity-40" />
+                <span className="text-sm">暂无指派给您的项目任务</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {projectTasks.map((task) => {
+                  const isCompleted = task.isCompleted === 1;
+                  const isOverdue = task.endDate && !isCompleted && new Date(task.endDate).getTime() < Date.now();
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => handleSelectProjectTask(task)}
+                      className={cn(
+                        "group flex items-start justify-between gap-4 p-4 rounded-xl border transition-all duration-300 cursor-pointer bg-white/85 dark:bg-zinc-900/85 backdrop-blur-md border-zinc-200/60 dark:border-zinc-800/60 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99]",
+                        isCompleted ? "opacity-60 saturate-50 border-transparent bg-app-hover/50" : ""
+                      )}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {/* Checkbox */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleProjectTask(task.id, task.isCompleted);
+                          }}
+                          className="flex-shrink-0 mt-0.5 transition-transform hover:scale-110 text-tx-tertiary hover:text-accent-primary"
+                        >
+                          {isCompleted ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <Circle className="w-5 h-5 hover:text-green-500 transition-colors" />
+                          )}
+                        </button>
+
+                        {/* Title and project details */}
+                        <div className="min-w-0 flex-1">
+                          <h4 className={cn(
+                            "text-sm font-semibold text-tx-primary leading-snug break-words",
+                            isCompleted ? "line-through text-tx-tertiary" : ""
+                          )}>
+                            {task.title}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-tx-tertiary font-bold mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-app-hover text-tx-secondary">
+                              📁 项目: {(task as any).projectName || "未分类"}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-app-hover text-tx-secondary">
+                              🔖 阶段: {(task as any).stageName || "进行中"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Due date badge with breathing overdue alert */}
+                      {task.endDate && (
+                        <div className={cn(
+                          "flex items-center gap-1 font-mono px-2 py-0.5 rounded text-[10px] transition-all shrink-0 self-center",
+                          isOverdue
+                            ? "bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse font-semibold"
+                            : "bg-app-hover text-tx-secondary border border-app-border/40"
+                        )}>
+                          <Calendar size={11} />
+                          <span>
+                            {new Date(task.endDate).toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

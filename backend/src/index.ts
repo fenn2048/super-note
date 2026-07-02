@@ -113,6 +113,57 @@ try { initWebhookTables(); } catch (e) { console.warn("[init] initWebhookTables 
 try { initAuditTables(); } catch (e) { console.warn("[init] initAuditTables failed:", e); }
 try { initApiTokensTable(getDb()); } catch (e) { console.warn("[init] initApiTokensTable failed:", e); }
 
+// 认证接口加强速率限制（防止恶意爆破登录、恶意大量注册）
+const authRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+app.use("/api/auth/login", async (c, next) => {
+  const ip = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown";
+  const now = Date.now();
+  const windowMs = 60000;
+  const maxAttempts = 15; // 限制登录每分钟最多 15 次
+
+  const entry = authRateLimitMap.get(ip);
+  if (entry && entry.resetAt > now) {
+    if (entry.count >= maxAttempts) {
+      return c.json({ error: "登录过于频繁，请 1 分钟后重试" }, 429);
+    }
+    entry.count++;
+  } else {
+    authRateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
+  }
+
+  if (authRateLimitMap.size > 1000) {
+    for (const [key, val] of authRateLimitMap.entries()) {
+      if (val.resetAt <= now) authRateLimitMap.delete(key);
+    }
+  }
+  await next();
+});
+
+app.use("/api/auth/register", async (c, next) => {
+  const ip = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown";
+  const now = Date.now();
+  const windowMs = 60000;
+  const maxAttempts = 5; // 限制注册每分钟最多 5 次
+
+  const entry = authRateLimitMap.get(ip);
+  if (entry && entry.resetAt > now) {
+    if (entry.count >= maxAttempts) {
+      return c.json({ error: "注册过于频繁，请 1 分钟后重试" }, 429);
+    }
+    entry.count++;
+  } else {
+    authRateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
+  }
+
+  if (authRateLimitMap.size > 1000) {
+    for (const [key, val] of authRateLimitMap.entries()) {
+      if (val.resetAt <= now) authRateLimitMap.delete(key);
+    }
+  }
+  await next();
+});
+
 // 认证路由（无需 JWT）
 app.route("/api/auth", authRouter);
 

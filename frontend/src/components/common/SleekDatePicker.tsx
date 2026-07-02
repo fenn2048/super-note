@@ -27,7 +27,7 @@ interface SleekDatePickerProps {
   placeholder?: string;
   className?: string;
   align?: "left" | "right";
-  variant?: "default" | "mobile-form";
+  variant?: "default" | "mobile-form" | "ghost";
   showTime?: boolean;
 }
 
@@ -242,8 +242,10 @@ export default function SleekDatePicker({
         className={cn(
           variant === "mobile-form"
             ? "flex items-center gap-2 px-3 py-2.5 rounded-xl border border-app-border bg-app-surface text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 w-full min-w-0"
+            : variant === "ghost"
+            ? "flex items-center gap-1.5 text-xs cursor-pointer transition-colors w-full min-w-0"
             : "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-border bg-app-sidebar/80 text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 min-w-[90px]",
-          isOpen && "border-accent-primary ring-1 ring-accent-primary/20"
+          isOpen && variant !== "ghost" && "border-accent-primary ring-1 ring-accent-primary/20"
         )}
       >
         <CalendarIcon size={12} className="text-tx-tertiary shrink-0" />

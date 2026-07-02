@@ -1664,13 +1664,14 @@ export default function ProjectCenter() {
                             </div>
 
                             {/* Due Date selector picker */}
-                            <div className="flex items-center bg-app-sidebar border border-app-border/60 px-2 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors">
+                            <div className="flex items-center bg-app-sidebar border border-app-border/60 px-2.5 py-1 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors">
                               <SleekDatePicker
                                 value={quickAddDueDate}
                                 onChange={setQuickAddDueDate}
                                 placeholder={t("projects.dueDate") || "截止日期"}
                                 showTime={true}
-                                className="bg-transparent border-0 shadow-none h-6 text-xs text-tx-secondary font-semibold"
+                                variant="ghost"
+                                className="w-full"
                               />
                             </div>
                           </div>
@@ -2169,11 +2170,11 @@ export default function ProjectCenter() {
               </div>
             </div>
             {availableProjectTags.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                 <button
                   onClick={() => setSelectedProjectTagId(null)}
                   className={cn(
-                    "w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all border",
+                    "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold transition-all border",
                     !selectedProjectTagId
                       ? "bg-accent-primary text-white border-accent-primary"
                       : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
@@ -2186,15 +2187,15 @@ export default function ProjectCenter() {
                     key={tag.id}
                     onClick={() => setSelectedProjectTagId(tag.id)}
                     className={cn(
-                      "flex w-full items-center gap-2 text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all",
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all",
                       selectedProjectTagId === tag.id
                         ? "bg-accent-primary text-white border-accent-primary"
                         : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
                     )}
                   >
                     <span
-                      className="inline-block rounded-full"
-                      style={{ width: 10, height: 10, backgroundColor: getTagColor(tag) }}
+                      className="inline-block rounded-full shrink-0"
+                      style={{ width: 6, height: 6, backgroundColor: getTagColor(tag) }}
                     />
                     {tag.name}
                   </button>

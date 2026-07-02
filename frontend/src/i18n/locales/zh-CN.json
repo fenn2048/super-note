@@ -116,7 +116,7 @@
     "moveFailed": "移动失败",
     "dropAsChild": "放到此处作为子笔记本",
     "allNotes": "所有笔记",
-    "tasks": "待办事项",
+    "tasks": "个人待办 / 闪念清单",
     "mindMaps": "思维导图",
     "aiChat": "AI 问答",
     "diary": "说说",
@@ -1774,6 +1774,7 @@
   },
   "projects": {
     "title": "项目管理",
+    "allProjects":"所有项目",
     "myProjects": "我的项目",
     "myTasks": "我的任务",
     "noTags": "暂无标签",

@@ -42,6 +42,7 @@ import type { SearchResult } from "@/types";
 import { useSkin } from "@/hooks/useSkin";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -71,6 +72,60 @@ function highlight(text: string, query: string): React.ReactNode {
       {text.slice(i + query.length)}
     </>
   );
+}
+
+function parseNLPTask(query: string) {
+  let title = query.trim();
+  let assignee: string | null = null;
+  let tag: string | null = null;
+  let dateStr: string | null = null;
+
+  // Extract /date (e.g. /今天, /明天, /2026-07-05, /7-5)
+  const dateMatch = title.match(/\/(\S+)/);
+  if (dateMatch) {
+    dateStr = dateMatch[1];
+    title = title.replace(dateMatch[0], "").trim();
+  }
+
+  // Extract #tag
+  const tagMatch = title.match(/#(\S+)/);
+  if (tagMatch) {
+    tag = tagMatch[1];
+    title = title.replace(tagMatch[0], "").trim();
+  }
+
+  // Extract @assignee
+  const assigneeMatch = title.match(/@(\S+)/);
+  if (assigneeMatch) {
+    assignee = assigneeMatch[1];
+    title = title.replace(assigneeMatch[0], "").trim();
+  }
+
+  // Map dateStr to actual Date
+  let dueDate: string | null = null;
+  if (dateStr) {
+    if (dateStr === "今天" || dateStr === "today") {
+      dueDate = new Date().toISOString().slice(0, 10);
+    } else if (dateStr === "明天" || dateStr === "tomorrow") {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      dueDate = d.toISOString().slice(0, 10);
+    } else {
+      try {
+        const parsed = new Date(dateStr);
+        if (!isNaN(parsed.getTime())) {
+          dueDate = parsed.toISOString().slice(0, 10);
+        }
+      } catch (e) {}
+    }
+  }
+
+  return {
+    title: title || "未命名任务",
+    assignee,
+    tag,
+    dueDate
+  };
 }
 
 export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
@@ -248,14 +303,54 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     if (!q) {
       return commands;
     }
+
+    const parsed = parseNLPTask(query);
+    const nlpItem: CommandItem = {
+      id: "nlp-create-task",
+      type: "command" as const,
+      title: `创建待办: "${parsed.title}"`,
+      subtitle: `智能解析 ➔ 📅 截止: ${parsed.dueDate || "无"} | 👤 指派: ${parsed.assignee || "无"} | 🏷️ 标签: ${parsed.tag || "无"}`,
+      icon: ListTodo,
+      handler: async () => {
+        try {
+          let tagIds: string[] = [];
+          if (parsed.tag) {
+            const allTags = await api.getTags();
+            let matchedTag = allTags.find(t => t.name === parsed.tag);
+            if (!matchedTag) {
+              matchedTag = await api.createTag({ name: parsed.tag, color: "#a855f7" });
+              const updatedTags = await api.getTags();
+              actions.setTags(updatedTags);
+            }
+            tagIds.push(matchedTag.id);
+          }
+
+          await api.createTask({
+            title: parsed.title,
+            isCompleted: 0,
+            dueDate: parsed.dueDate,
+            priority: 2,
+            tagIds,
+          } as any);
+
+          toast.success("创建个人待办成功！");
+          window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
+          window.dispatchEvent(new CustomEvent("super:refresh-tasks"));
+          onClose();
+        } catch (err: any) {
+          toast.error(err?.message || "创建待办失败");
+        }
+      }
+    };
+
     const filteredCommands = commands.filter(
       (cmd) =>
         cmd.title.toLowerCase().includes(q) ||
         (cmd.subtitle && cmd.subtitle.toLowerCase().includes(q))
     );
     const noteItems = results.map((r) => ({ ...r, type: "note" as const }));
-    return [...filteredCommands, ...noteItems];
-  }, [query, commands, results]);
+    return [nlpItem, ...filteredCommands, ...noteItems];
+  }, [query, commands, results, actions, onClose]);
 
   // 打开时：清空旧状态、focus 输入框
   useEffect(() => {
