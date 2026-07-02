@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone } from "lucide-react";
+import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import SkinSwitcher from "@/components/SkinSwitcher";
@@ -9,6 +9,7 @@ import SecuritySettings from "@/components/SecuritySettings";
 import TokenManagement from "@/components/TokenManagement";
 import DataManager from "@/components/DataManager";
 import AISettingsPanel from "@/components/AISettingsPanel";
+import AIPromptPanel from "@/components/AIPromptPanel";
 import UserManagement from "@/components/UserManagement";
 import WorkspaceManagement from "@/components/WorkspaceManagement";
 import ManualPanel from "@/components/ManualPanel";
@@ -20,7 +21,7 @@ import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
 import { registerPlugin } from "@capacitor/core";
 
-export type TabId = "appearance" | "switches" | "ai" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about" | "manual";
+export type TabId = "appearance" | "switches" | "ai" | "prompts" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about" | "manual";
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -1407,6 +1408,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
     { id: "manual" as const, label: t('settings.userManual'), icon: BookOpen },
     { id: "ai" as const, label: t('settings.ai'), icon: Bot },
+    { id: "prompts" as const, label: t('settings.prompts', { defaultValue: 'AI 提示词' }), icon: SlidersHorizontal },
     // 【个人访问令牌】家庭场景用不到，仅管理员可见
     ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
@@ -1573,6 +1575,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                   {activeTab === "switches" && <SwitchesPanel />}
                   {activeTab === "manual" && <ManualPanel />}
                   {activeTab === "ai" && <AISettingsPanel />}
+                  {activeTab === "prompts" && <AIPromptPanel />}
                   {activeTab === "security" && <SecuritySettings />}
                   {activeTab === "tokens" && <TokenManagement />}
                   {activeTab === "users" && isAdmin && <UserManagement currentUserId={currentUser?.id ?? null} />}
@@ -1655,6 +1658,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                       {activeTab === "switches" && <SwitchesPanel />}
                       {activeTab === "manual" && <ManualPanel />}
                       {activeTab === "ai" && <AISettingsPanel />}
+                      {activeTab === "prompts" && <AIPromptPanel />}
                       {activeTab === "security" && <SecuritySettings />}
                       {activeTab === "tokens" && <TokenManagement />}
                       {activeTab === "users" && isAdmin && <UserManagement currentUserId={currentUser?.id ?? null} />}

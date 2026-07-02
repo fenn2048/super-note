@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { redis } from "./redis";
 import { getDb } from "../db/schema";
-import { callLLM, extractKeywords } from "../routes/ai";
+import { callLLM, extractKeywords, getAISettings, AI_DEFAULTS } from "../routes/ai";
 import { ensureSuUser, sendAiNotification, rowToDiary } from "../routes/diary";
 
 const SU_USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -117,9 +117,10 @@ export async function startAiTaskWorker() {
           }
 
           // 2. Call LLM
+          const settings = getAISettings();
           const systemPrompt = mode === "post"
-            ? `你是一位知识渊博的专家助手，基于用户的笔记、说说和项目信息回答问题。请给出简明扼要、专业的回答，不要超过 500 字。直接回答用户问题，不要添加无关信息。`
-            : `你是一位专业分析助手，基于当前说说及其评论内容回答问题。请给出简明扼要、有洞察力的分析。不要超过 500 字。`;
+            ? (settings.ai_prompt_diary_worker_post || AI_DEFAULTS.ai_prompt_diary_worker_post || "")
+            : (settings.ai_prompt_diary_worker_comment || AI_DEFAULTS.ai_prompt_diary_worker_comment || "");
 
           const answer = await callLLM(systemPrompt, question, context);
 

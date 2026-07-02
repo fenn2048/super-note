@@ -73,9 +73,39 @@ export interface AISettings {
   ai_ollama_num_threads?: string;
   ai_temperature?: string;   // Temperature
   ai_top_p?: string;         // Top P
+
+  // 自定义提示词
+  ai_prompt_writing_system?: string;
+  ai_prompt_writing_continue?: string;
+  ai_prompt_writing_rewrite?: string;
+  ai_prompt_writing_polish?: string;
+  ai_prompt_writing_shorten?: string;
+  ai_prompt_writing_expand?: string;
+  ai_prompt_writing_translate_en?: string;
+  ai_prompt_writing_translate_zh?: string;
+  ai_prompt_writing_summarize?: string;
+  ai_prompt_writing_explain?: string;
+  ai_prompt_writing_fix_grammar?: string;
+  ai_prompt_writing_format_markdown?: string;
+  ai_prompt_writing_format_code?: string;
+  ai_prompt_writing_title?: string;
+  ai_prompt_writing_tags?: string;
+  ai_prompt_rag_with_notes?: string;
+  ai_prompt_rag_without_notes?: string;
+  ai_prompt_clipper_organize_zh?: string;
+  ai_prompt_clipper_organize_en?: string;
+  ai_prompt_url_import_note?: string;
+  ai_prompt_url_import_text?: string;
+  ai_prompt_url_import_system?: string;
+  ai_prompt_format_file_attachment_system?: string;
+  ai_prompt_format_text_attachment_system?: string;
+  ai_prompt_format_diary?: string;
+  ai_prompt_suggest_notebook?: string;
+  ai_prompt_diary_worker_post?: string;
+  ai_prompt_diary_worker_comment?: string;
 }
 
-const AI_DEFAULTS: AISettings = {
+export const AI_DEFAULTS: AISettings = {
   ai_provider: "openai",
   ai_api_url: "https://api.openai.com/v1",
   ai_api_key: "",
@@ -88,6 +118,42 @@ const AI_DEFAULTS: AISettings = {
   ai_ollama_num_threads: "4",
   ai_temperature: "",
   ai_top_p: "",
+
+  ai_prompt_writing_system: "你是一个专业的写作助手，帮助用户优化笔记内容。请直接输出结果，不要添加额外的解释或前缀。",
+  ai_prompt_writing_continue: "请根据上下文，自然流畅地续写以下内容。不要重复已有内容，直接输出续写部分：",
+  ai_prompt_writing_rewrite: "请用不同的表达方式改写以下内容，保持原意不变：",
+  ai_prompt_writing_polish: "请对以下内容进行润色，使其更加专业流畅，保持原意：",
+  ai_prompt_writing_shorten: "请将以下内容精简压缩，保留核心要点，去除冗余：",
+  ai_prompt_writing_expand: "请对以下内容进行扩展，增加更多细节和解释，使其更充实：",
+  ai_prompt_writing_translate_en: "请将以下内容翻译为英文，保持原意和风格：",
+  ai_prompt_writing_translate_zh: "请将以下内容翻译为中文，保持原意和风格：",
+  ai_prompt_writing_summarize: "请为以下内容生成一个简洁的摘要（100字以内）：",
+  ai_prompt_writing_explain: "请用通俗易懂的语言解释以下内容：",
+  ai_prompt_writing_fix_grammar: "请修正以下内容中的语法和拼写错误，只返回修正后的文本：",
+  ai_prompt_writing_format_markdown: "请将以下内容按照规范的 Markdown 格式重新排版，合理使用标题、列表、代码块、表格、加粗、引用等格式元素，保持原意不变，使内容结构更清晰：",
+  ai_prompt_writing_format_code: "请识别以下内容中的代码部分，用正确的编程语言标记包裹在代码块中（如 ```python），保持代码缩进和格式正确。如果内容本身就是纯代码，直接用代码块包裹并标注语言：",
+  ai_prompt_writing_title: "请根据以下笔记内容，生成一个简洁准确的标题（10字以内），只返回标题文本，不要加引号或其他标点：",
+  ai_prompt_writing_tags: "请根据以下笔记内容，推荐3-5个标签关键词。每个标签用逗号分隔，只返回标签文本，不要加#号：",
+
+  ai_prompt_rag_with_notes: "你是一个智能知识库助手。请基于用户的知识库笔记内容来回答问题。如果笔记中包含相关信息，请引用并标明来源笔记标题。如果笔记中没有相关信息，可以基于你的知识回答，但请说明这不是来自知识库的内容。\n\n以下是与问题相关的笔记内容：\n\n${contextBlock}",
+  ai_prompt_rag_without_notes: "你是一个智能知识库助手。用户的知识库中暂未找到与问题相关的内容。请基于你的知识回答问题，并告知用户这些信息不是来自其知识库。",
+
+  ai_prompt_clipper_organize_zh: "你是一位资深的网页剪藏助手，专门帮用户把杂乱的网页正文整理成可读、可检索、可归档的笔记素材。\n\n请严格按用户要求的字段输出**纯 JSON**（不要包裹在 markdown 代码块里，不要任何前后缀解释）。\n\n输出 JSON 的字段要求：\n{\n${schemaFields}\n}\n\n通用规则：\n1. 字段值用简体中文。\n2. 摘要保持客观，不复制原文连续大段，不臆造信息。\n3. 标签用名词短语（如\"前端工程\"、\"产品设计\"），不要用句子，不要带 # 号。\n4. 大纲要反映原文真实结构，不是凭空想象的目录。\n5. 如果原文质量太低（广告/导航文本/乱码）以致无法完成任务，对应字段输出空字符串或空数组，但 JSON 结构保持完整。\n6. 不要输出 JSON 之外的任何字符。",
+  ai_prompt_clipper_organize_en: "You are a web clipper assistant. Output strict JSON (no markdown code fences, no explanation) with the following fields:\n\n{\n${schemaFields}\n}\n\nRules: be concise, neutral, faithful to source. If source is unusable, return empty string/array for that field but keep JSON structure intact.",
+
+  ai_prompt_url_import_note: "请将以下文档内容整理为结构化的笔记格式（Markdown），合理使用标题层级、列表、表格、代码块等元素，保留原始信息不丢失，使内容清晰易读：",
+  ai_prompt_url_import_text: "请将以下文档内容转换为规范的 Markdown 格式，保持原始结构和内容不变，合理使用标题、列表、表格、代码块、引用等格式元素：",
+  ai_prompt_url_import_system: "你是一个专业的文档格式化助手。请直接输出格式化后的 Markdown 内容，不要添加额外的解释、前缀或总结。",
+
+  ai_prompt_format_file_attachment_system: "你是一个专业的文档格式化助手。请将内容转换为规范的 Markdown 格式，合理使用标题层级、列表、表格、代码块、引用等元素。保持原始图片链接（![...](...)）不变。保持代码块的语言标记正确。保持内嵌表格格式完整。直接输出结果，不要添加额外解释。",
+  ai_prompt_format_text_attachment_system: "你是一个文档格式化助手。请将文档内容整理为结构清晰的 Markdown 笔记格式，保留原始信息。直接输出结果。",
+
+  ai_prompt_format_diary: "你是一个说说写作和内容整理助手。请对用户输入的“说说”进行排版、梳理和优化整理，要求：\n1. 语言条理清晰，层次分明，逻辑连贯。\n2. 保持用户表达的原意，不要大幅删改事实内容。\n3. 优化错别字、标点符号，并适当使用段落、换行或列表以增加可读性。\n4. 不要返回任何前言、后记或解释旁白，必须直接返回整理优化后的内容主体。",
+
+  ai_prompt_suggest_notebook: "你是一个专业的笔记归类助手。用户会提供一条笔记的标题与摘要，以及可选的目标笔记本列表。\n\n任务：根据笔记标题 and 摘要，从候选笔记本列表中推荐 1-3 个最相关的笔记本。按照相关性从高到低排序，以 JSON 格式输出建议，不需要任何解释前缀或后缀。输出格式必须是一个 JSON 对象，包含 \"suggestions\" 字段，字段值是一个数组，每个元素包含 \"notebookId\"（字符串）和 \"confidence\"（0-1 之间的浮点数，代表推荐信心度）。\n\n规则：\n1) 仅从提供的“候选笔记本列表”中选择 ID。不可捏造不存在的 ID；\n2) 如果候选列表为空，或者没有一个笔记本适合此笔记，返回空列表 {\"suggestions\":[]}；\n3) 按 confidence 从高到低排序；\n4) 如果没有任何合适的笔记本，返回 {\"suggestions\":[]}。",
+
+  ai_prompt_diary_worker_post: "你是一位知识渊博的专家助手，基于用户的笔记、说说和项目信息回答问题。请给出简明扼要、专业的回答，不要超过 500 字。直接回答用户问题，不要添加无关信息。",
+  ai_prompt_diary_worker_comment: "你是一位专业分析助手，基于当前说说及其评论内容回答问题。请给出简明扼要、有洞察力的分析。不要超过 500 字。",
 };
 
 // 不需要 API Key 的 Provider
@@ -96,7 +162,7 @@ const NO_KEY_PROVIDERS = ["ollama"];
 // Docker 环境下 Ollama 使用内部 URL
 const OLLAMA_DOCKER_URL = process.env.OLLAMA_URL || "";
 
-function getAISettings(): AISettings {
+export function getAISettings(): AISettings {
   const db = getDb();
   const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'ai_%'").all() as { key: string; value: string }[];
   const result: AISettings = { ...AI_DEFAULTS };
@@ -308,6 +374,15 @@ ai.put("/settings", async (c) => {
     if (body.ai_top_p !== undefined) {
       upsert.run("ai_top_p", body.ai_top_p);
     }
+    // 自动保存所有以 ai_prompt_ 开头的提示词参数
+    for (const key of Object.keys(body)) {
+      if (key.startsWith("ai_prompt_")) {
+        const val = (body as any)[key];
+        if (val !== undefined) {
+          upsert.run(key, typeof val === "string" ? val : "");
+        }
+      }
+    }
   });
   tx();
 
@@ -453,7 +528,7 @@ ai.get("/models", async (c) => {
 
 type AIAction = "continue" | "rewrite" | "polish" | "shorten" | "expand" | "translate_en" | "translate_zh" | "summarize" | "explain" | "fix_grammar" | "title" | "tags" | "format_markdown" | "format_code" | "custom";
 
-const ACTION_PROMPTS: Record<AIAction, string> = {
+const ACTION_PROMPTS_FALLBACK: Record<AIAction, string> = {
   continue: "请根据上下文，自然流畅地续写以下内容。不要重复已有内容，直接输出续写部分：",
   rewrite: "请用不同的表达方式改写以下内容，保持原意不变：",
   polish: "请对以下内容进行润色，使其更加专业流畅，保持原意：",
@@ -464,7 +539,7 @@ const ACTION_PROMPTS: Record<AIAction, string> = {
   summarize: "请为以下内容生成一个简洁的摘要（100字以内）：",
   explain: "请用通俗易懂的语言解释以下内容：",
   fix_grammar: "请修正以下内容中的语法和拼写错误，只返回修正后的文本：",
-  format_markdown: "请将以下内容按照规范的 Markdown 格式重新排版，合理使用标题、列表、代码块、表格、加粗、引用等格式元素，保持原意不变，使内容结构更清晰：",
+  format_markdown: "请将以下内容按照规范的 Markdown 格式重新排版，合理使用标题、列表、代码块、表格、加旧、引用等格式元素，保持原意不变，使内容结构更清晰：",
   format_code: "请识别以下内容中的代码部分，用正确的编程语言标记包裹在代码块中（如 ```python），保持代码缩进和格式正确。如果内容本身就是纯代码，直接用代码块包裹并标注语言：",
   custom: "",
   title: "请根据以下笔记内容，生成一个简洁准确的标题（10字以内），只返回标题文本，不要加引号或其他标点：",
@@ -492,6 +567,24 @@ ai.post("/chat", async (c) => {
     return c.json({ error: "参数不完整" }, 400);
   }
 
+  const promptKeyMap: Record<AIAction, keyof AISettings> = {
+    continue: "ai_prompt_writing_continue",
+    rewrite: "ai_prompt_writing_rewrite",
+    polish: "ai_prompt_writing_polish",
+    shorten: "ai_prompt_writing_shorten",
+    expand: "ai_prompt_writing_expand",
+    translate_en: "ai_prompt_writing_translate_en",
+    translate_zh: "ai_prompt_writing_translate_zh",
+    summarize: "ai_prompt_writing_summarize",
+    explain: "ai_prompt_writing_explain",
+    fix_grammar: "ai_prompt_writing_fix_grammar",
+    format_markdown: "ai_prompt_writing_format_markdown",
+    format_code: "ai_prompt_writing_format_code",
+    title: "ai_prompt_writing_title",
+    tags: "ai_prompt_writing_tags",
+    custom: "ai_prompt_writing_system", // custom doesn't use static prompt
+  };
+
   // 自定义指令：使用用户传入的 prompt
   let systemPrompt: string;
   if (action === "custom") {
@@ -500,14 +593,17 @@ ai.post("/chat", async (c) => {
     }
     systemPrompt = customPrompt.trim() + "：";
   } else {
-    systemPrompt = ACTION_PROMPTS[action];
+    const key = promptKeyMap[action];
+    systemPrompt = (settings[key] as string) || (AI_DEFAULTS[key] as string) || ACTION_PROMPTS_FALLBACK[action];
     if (!systemPrompt) {
       return c.json({ error: "不支持的操作类型" }, 400);
     }
   }
 
+  const writingSystemPrompt = settings.ai_prompt_writing_system || AI_DEFAULTS.ai_prompt_writing_system || "你是一个专业的写作助手，帮助用户优化笔记内容。请直接输出结果，不要添加额外的解释或前缀。";
+
   const messages: { role: string; content: string }[] = [
-    { role: "system", content: "你是一个专业的写作助手，帮助用户优化笔记内容。请直接输出结果，不要添加额外的解释或前缀。" },
+    { role: "system", content: writingSystemPrompt },
   ];
 
   if (context) {
@@ -847,9 +943,12 @@ ai.post("/ask", async (c) => {
     }).join("\n\n---\n\n");
   }
 
+  const dbPromptWithNotes = settings.ai_prompt_rag_with_notes || AI_DEFAULTS.ai_prompt_rag_with_notes || "";
+  const dbPromptWithoutNotes = settings.ai_prompt_rag_without_notes || AI_DEFAULTS.ai_prompt_rag_without_notes || "";
+
   const systemPrompt = relatedNotes.length > 0
-    ? `你是一个智能知识库助手。请基于用户的知识库笔记内容来回答问题。如果笔记中包含相关信息，请引用并标明来源笔记标题。如果笔记中没有相关信息，可以基于你的知识回答，但请说明这不是来自知识库的内容。\n\n以下是与问题相关的笔记内容：\n\n${contextBlock}`
-    : "你是一个智能知识库助手。用户的知识库中暂未找到与问题相关的内容。请基于你的知识回答问题，并告知用户这些信息不是来自其知识库。";
+    ? dbPromptWithNotes.replace("${contextBlock}", contextBlock)
+    : dbPromptWithoutNotes;
 
   const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
@@ -1032,12 +1131,14 @@ ai.post("/parse-document", async (c) => {
     }
 
     // 使用 AI 将内容转换为规范的 Markdown 格式
-    const aiPrompt = formatMode === "note"
-      ? "请将以下文档内容整理为结构化的笔记格式（Markdown），合理使用标题层级、列表、表格、代码块等元素，保留原始信息不丢失，使内容清晰易读："
-      : "请将以下文档内容转换为规范的 Markdown 格式，保持原始结构和内容不变，合理使用标题、列表、表格、代码块、引用等格式元素：";
+    const promptUrlImportNote = settings.ai_prompt_url_import_note || AI_DEFAULTS.ai_prompt_url_import_note || "";
+    const promptUrlImportText = settings.ai_prompt_url_import_text || AI_DEFAULTS.ai_prompt_url_import_text || "";
+    const promptUrlImportSystem = settings.ai_prompt_url_import_system || AI_DEFAULTS.ai_prompt_url_import_system || "";
+
+    const aiPrompt = formatMode === "note" ? promptUrlImportNote : promptUrlImportText;
 
     const messages = [
-      { role: "system", content: "你是一个专业的文档格式化助手。请直接输出格式化后的 Markdown 内容，不要添加额外的解释、前缀或总结。" },
+      { role: "system", content: promptUrlImportSystem },
       { role: "user", content: `${aiPrompt}\n\n${rawText.slice(0, 8000)}` },
     ];
 
@@ -1257,30 +1358,20 @@ ai.post("/clip-enhance", async (c) => {
     );
   }
 
-  const systemPrompt = isChinese
-    ? `你是一位资深的网页剪藏助手，专门帮用户把杂乱的网页正文整理成可读、可检索、可归档的笔记素材。
+  const rawPromptZh = settings.ai_prompt_clipper_organize_zh || AI_DEFAULTS.ai_prompt_clipper_organize_zh || "";
+  const rawPromptEn = settings.ai_prompt_clipper_organize_en || AI_DEFAULTS.ai_prompt_clipper_organize_en || "";
 
-请严格按用户要求的字段输出**纯 JSON**（不要包裹在 markdown 代码块里，不要任何前后缀解释）。
+  let systemPrompt = isChinese
+    ? rawPromptZh.replace("${schemaFields}", schemaFields.join(",\n"))
+    : rawPromptEn.replace("${schemaFields}", schemaFields.join(",\n"));
 
-输出 JSON 的字段要求：
-{
-${schemaFields.join(",\n")}
-}
-
-通用规则：
-1. 字段值用简体中文。
-2. 摘要保持客观，不复制原文连续大段，不臆造信息。
-3. 标签用名词短语（如"前端工程"、"产品设计"），不要用句子，不要带 # 号。
-4. 大纲要反映原文真实结构，不是凭空想象的目录。
-5. 如果原文质量太低（广告/导航文本/乱码）以致无法完成任务，对应字段输出空字符串或空数组，但 JSON 结构保持完整。
-6. 不要输出 JSON 之外的任何字符。${body.customInstruction ? `\n\n补充指令：${body.customInstruction}` : ""}`
-    : `You are a web clipper assistant. Output strict JSON (no markdown code fences, no explanation) with the following fields:
-
-{
-${schemaFields.join(",\n")}
-}
-
-Rules: be concise, neutral, faithful to source. If source is unusable, return empty string/array for that field but keep JSON structure intact.${body.customInstruction ? `\n\nAdditional: ${body.customInstruction}` : ""}`;
+  if (body.customInstruction) {
+    if (isChinese) {
+      systemPrompt += `\n\n补充指令：${body.customInstruction}`;
+    } else {
+      systemPrompt += `\n\nAdditional: ${body.customInstruction}`;
+    }
+  }
 
   const ctxLines: string[] = [];
   if (body.title) ctxLines.push(`标题：${body.title}`);
@@ -1466,8 +1557,9 @@ ai.post("/batch-format", async (c) => {
         continue;
       }
 
+      const formatFileAttachmentSystemPrompt = settings.ai_prompt_format_file_attachment_system || AI_DEFAULTS.ai_prompt_format_file_attachment_system || "";
       const batchMessages = [
-        { role: "system", content: "你是一个专业的文档格式化助手。请将内容转换为规范的 Markdown 格式，合理使用标题层级、列表、表格、代码块、引用等元素。保持原始图片链接（![...](...)）不变。保持代码块的语言标记正确。保持内嵌表格格式完整。直接输出结果，不要添加额外解释。" },
+        { role: "system", content: formatFileAttachmentSystemPrompt },
         { role: "user", content: `请将以下笔记内容格式化为规范的 Markdown：\n\n${note.contentText.slice(0, 6000)}` },
       ];
       const { url, headers, body } = prepareAiRequest(settings, batchMessages, {
@@ -1651,8 +1743,9 @@ ai.post("/import-to-knowledge", async (c) => {
         let finalContent = rawText;
         if (settings.ai_api_url && (NO_KEY_PROVIDERS.includes(settings.ai_provider) || settings.ai_api_key)) {
           try {
+            const formatTextAttachmentSystemPrompt = settings.ai_prompt_format_text_attachment_system || AI_DEFAULTS.ai_prompt_format_text_attachment_system || "";
             const importMessages = [
-              { role: "system", content: "你是一个文档格式化助手。请将文档内容整理为结构清晰的 Markdown 笔记格式，保留原始信息。直接输出结果。" },
+              { role: "system", content: formatTextAttachmentSystemPrompt },
               { role: "user", content: `请格式化以下文档内容：\n\n${rawText.slice(0, 6000)}` },
             ];
             const { url, headers, body } = prepareAiRequest(settings, importMessages, {
@@ -2519,16 +2612,7 @@ ai.post("/classify", async (c) => {
   // 正文截断 2000 字符足够 LLM 判断主题；大文本喂太多反而稀释信号。
   const noteSnippet = noteText.slice(0, 2000);
 
-  const systemPrompt =
-    "你是一个专业的笔记归类助手。用户会提供一条笔记的标题与摘要，以及可选的目标笔记本列表。\n" +
-    "请你从笔记本列表中挑选 1-3 个最合适的笔记本作为归类建议。\n" +
-    "必须严格按下面的 JSON 格式返回，不要任何其他解释文字：\n" +
-    `{"suggestions":[{"notebookId":"<id>","confidence":0.0-1.0,"reason":"20字以内的原因"}]}\n` +
-    "要求：\n" +
-    "1) notebookId 必须来自给定列表，不可编造；\n" +
-    "2) confidence 是你对该归类的把握程度，0 到 1 之间的小数；\n" +
-    "3) 按 confidence 从高到低排序；\n" +
-    "4) 如果没有任何合适的笔记本，返回 {\"suggestions\":[]}。";
+  const systemPrompt = settings.ai_prompt_suggest_notebook || AI_DEFAULTS.ai_prompt_suggest_notebook || "";
 
   const userMessage =
     `候选笔记本列表：\n${notebookLines}\n\n` +
@@ -2618,11 +2702,8 @@ ai.post("/format-diary", async (c) => {
     return c.json({ error: "内容不能为空" }, 400);
   }
 
-  const systemPrompt = `你是一个说说写作和内容整理助手。请对用户输入的“说说”进行排版、梳理和优化整理，要求：
-1. 语言条理清晰，层次分明，逻辑连贯。
-2. 保持用户表达的原意，不要大幅删改事实内容。
-3. 优化错别字、标点符号，并适当使用段落、换行或列表以增加可读性。
-4. 不要返回任何前言、后记或解释旁白，必须直接返回整理优化后的内容主体。`;
+  const settings = getAISettings();
+  const systemPrompt = settings.ai_prompt_format_diary || AI_DEFAULTS.ai_prompt_format_diary || "";
 
   try {
     const formatted = await callLLM(systemPrompt, content);
