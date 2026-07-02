@@ -1,24 +1,17 @@
 {
   "name": "super-note",
-  "version": "1.1.28",
+  "version": "1.1.32",
   "description": "Super Note - A modern note-taking application",
   "author": "Super",
   "private": true,
-  "main": "electron/main.js",
   "scripts": {
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npx vite",
-    "install:all": "cd backend && npm install && cd ../frontend && npm install && cd .. && npm run rebuild:native",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
     "fetch:node": "node scripts/fetch-node.mjs",
     "fetch:node:all": "node scripts/fetch-node.mjs --all",
-    "rebuild:native": "node scripts/rebuild-native.mjs",
     "build:icon": "node scripts/build-icon.mjs",
     "build:mobile-icons": "node scripts/sync-mobile-icons.mjs",
-    "electron:dev": "npm run build:all && electron .",
-    "electron:build": "npm run rebuild:native && npm run build:all && electron-builder --config electron/builder.config.js",
-    "electron:build:safe": "node scripts/safe-build.mjs",
-    "electron:build:lite": "node scripts/build-lite.mjs",
-    "electron:build:lite:safe": "node scripts/build-lite.mjs --safe",
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npm run build",
     "build:all": "npm run build:backend && npm run build:frontend",
@@ -33,10 +26,7 @@
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^8.2.0",
-    "@electron/rebuild": "^3.7.0",
     "archiver": "^7.0.1",
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8",
     "jszip": "^3.10.1",
     "sharp": "^0.34.5"
   },
@@ -48,7 +38,6 @@
     "@capacitor/status-bar": "^8.0.1",
     "@mediapipe/face_mesh": "^0.4.1633559619",
     "@mediapipe/tasks-vision": "^0.10.35",
-    "bonjour-service": "^1.2.1",
-    "electron-updater": "^6.3.9"
+    "bonjour-service": "^1.2.1"
   }
 }

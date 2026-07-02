@@ -99,6 +99,17 @@ module.exports = {
         'sys-xxl': 'var(--space-xxl)',
       },
       fontSize: {
+        // 全局字号优化：重新定义默认字号映射，放大 6% - 8% 以解决项目整体字号偏小的问题
+        'xs': ['0.8rem', { lineHeight: '1.25rem' }],
+        'sm': ['0.925rem', { lineHeight: '1.5rem' }],
+        'base': ['1.0625rem', { lineHeight: '1.65rem' }],
+        'lg': ['1.175rem', { lineHeight: '1.75rem' }],
+        'xl': ['1.3rem', { lineHeight: '1.85rem' }],
+        '2xl': ['1.55rem', { lineHeight: '2.1rem' }],
+        '3xl': ['1.95rem', { lineHeight: '2.4rem' }],
+        '4xl': ['2.4rem', { lineHeight: '2.8rem' }],
+
+        // 原有系统级预设字号
         'sys-display-lg': 'var(--font-size-display-lg)',
         'sys-display-md': 'var(--font-size-display-md)',
         'sys-display-sm': 'var(--font-size-display-sm)',

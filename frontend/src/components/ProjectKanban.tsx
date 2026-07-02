@@ -10,13 +10,14 @@ import {
 import { format, parseISO } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import GenericTagInput from "@/components/GenericTagInput";
+import { AiFormatHelper } from "@/components/AiFormatHelper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/lib/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
-import { cn, detectSuMention } from "@/lib/utils";
+import { cn, detectSuMention, getTagColor } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -45,6 +46,7 @@ interface ProjectKanbanProps {
   onToggleTaskComplete?: (taskId: string, currentCompleted: number) => void;
   initialActiveTaskId?: string | null;
   onClearActiveTaskId?: () => void;
+  wsMembers?: any[];
 }
 
 export default function ProjectKanban({
@@ -54,10 +56,13 @@ export default function ProjectKanban({
   onTaskClick,
   onToggleTaskComplete,
   initialActiveTaskId,
-  onClearActiveTaskId
+  onClearActiveTaskId,
+  wsMembers = []
 }: ProjectKanbanProps) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === "zh-CN" ? zhCN : enUS;
+
+  const membersList = wsMembers && wsMembers.length > 0 ? wsMembers : (project.members || []);
   const [newStageName, setNewStageName] = useState("");
   const [addingStage, setAddingStage] = useState(false);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
@@ -72,6 +77,7 @@ export default function ProjectKanban({
 
   // Task Detail Modal State
   const [activeTask, setActiveTask] = useState<ProjectTask | null>(null);
+  const activeAssignee = activeTask ? membersList.find((m) => m.userId === activeTask.assigneeId) : null;
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
@@ -584,9 +590,9 @@ export default function ProjectKanban({
                           <span
                             key={tag.id}
                             style={{
-                              backgroundColor: `${tag.color}15`,
-                              borderColor: `${tag.color}35`,
-                              color: tag.color,
+                              backgroundColor: `${getTagColor(tag)}15`,
+                              borderColor: `${getTagColor(tag)}35`,
+                              color: getTagColor(tag),
                             }}
                             className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase border tracking-wider shrink-0"
                           >
@@ -881,14 +887,22 @@ export default function ProjectKanban({
             <div className="flex-1 overflow-y-auto min-h-0 px-6 pt-3.5 pb-6 space-y-5">
               {/* Task Title and Color Selection */}
               <div className="flex items-center justify-between gap-4">
-                <Input
-                  value={activeTask.title}
-                  onChange={(e) =>
-                    setActiveTask((prev) => (prev ? { ...prev, title: e.target.value } : null))
-                  }
-                  className="text-base font-bold bg-transparent border-none p-0 focus-visible:ring-0 focus-visible:border-none focus-visible:outline-none placeholder:text-tx-tertiary flex-1"
-                  placeholder={t("projects.taskTitlePlaceholder") || "任务标题"}
-                />
+                <div className="flex-1">
+                  <Input
+                    value={activeTask.title}
+                    onChange={(e) =>
+                      setActiveTask((prev) => (prev ? { ...prev, title: e.target.value } : null))
+                    }
+                    className="text-base font-bold bg-transparent border-none p-0 focus-visible:ring-0 focus-visible:border-none focus-visible:outline-none placeholder:text-tx-tertiary w-full"
+                    placeholder={t("projects.taskTitlePlaceholder") || "任务标题"}
+                  />
+                  <AiFormatHelper
+                    value={activeTask.title}
+                    onChange={(val) =>
+                      setActiveTask((prev) => (prev ? { ...prev, title: val } : null))
+                    }
+                  />
+                </div>
                 {/* Title Color Picker Dropdown */}
                 <div className="relative shrink-0">
                   <button
@@ -970,19 +984,19 @@ export default function ProjectKanban({
                   >
                     {activeTask.assigneeId ? (
                       <>
-                        {activeTask.assigneeAvatarUrl ? (
+                        {activeTask.assigneeAvatarUrl || activeAssignee?.avatarUrl ? (
                           <img
-                            src={activeTask.assigneeAvatarUrl}
+                            src={activeTask.assigneeAvatarUrl || activeAssignee?.avatarUrl || ""}
                             alt=""
                             className="w-4 h-4 rounded-full border border-app-border object-cover"
                           />
                         ) : (
                           <div className="w-4 h-4 rounded-full bg-accent-primary/10 border border-app-border flex items-center justify-center text-[8px] font-bold text-accent-primary uppercase">
-                            {(activeTask.assigneeDisplayName || activeTask.assigneeName || "").slice(0, 1)}
+                            {((activeAssignee?.displayName || activeAssignee?.username || activeTask.assigneeDisplayName || activeTask.assigneeName || "?").slice(0, 1))}
                           </div>
                         )}
                         <span className="truncate">
-                          {activeTask.assigneeDisplayName || activeTask.assigneeName}
+                          {activeAssignee?.displayName || activeAssignee?.username || activeTask.assigneeDisplayName || activeTask.assigneeName}
                         </span>
                       </>
                     ) : (
@@ -1000,7 +1014,7 @@ export default function ProjectKanban({
                       >
                         {t("projects.clearAssignee") || "取消指派"}
                       </button>
-                      {project.members?.map((m) => {
+                      {membersList.map((m) => {
                         const isAssignee = activeTask.assigneeId === m.userId;
                         return (
                           <button
@@ -1021,7 +1035,7 @@ export default function ProjectKanban({
                                 <img src={m.avatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
                               ) : (
                                 <div className="w-4 h-4 rounded-full bg-accent-primary/10 flex items-center justify-center text-[8px] font-bold text-accent-primary uppercase">
-                                  {(m.displayName || m.username).slice(0, 1)}
+                                  {(m.displayName || m.username || "?").slice(0, 1)}
                                 </div>
                               )}
                               <span className="truncate">{m.displayName || m.username}</span>
@@ -1117,8 +1131,8 @@ export default function ProjectKanban({
                     {/* Participants Dropdown */}
                     {showParticipantDropdown && (
                       <div className="absolute top-8 left-20 bg-app-elevated border border-app-border rounded-xl shadow-xl z-20 max-h-48 overflow-y-auto p-1.5 space-y-0.5 w-56">
-                        {project.members
-                          ?.filter((m) => m.userId !== activeTask.assigneeId)
+                        {membersList
+                          .filter((m) => m.userId !== activeTask.assigneeId)
                           .map((m) => {
                             const isPart = activeTask.participants?.some((p) => p.userId === m.userId);
                             return (
@@ -1140,7 +1154,7 @@ export default function ProjectKanban({
                                     <img src={m.avatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
                                   ) : (
                                     <div className="w-4 h-4 rounded-full bg-accent-primary/10 flex items-center justify-center text-[8px] font-bold text-accent-primary uppercase">
-                                      {(m.displayName || m.username).slice(0, 1)}
+                                      {(m.displayName || m.username || "?").slice(0, 1)}
                                     </div>
                                   )}
                                   <span className="truncate">{m.displayName || m.username}</span>
@@ -1246,14 +1260,22 @@ export default function ProjectKanban({
                     </div>
                   </div>
                   {descriptionMode === "edit" ? (
-                    <Textarea
-                      value={activeTask.description || ""}
-                      onChange={(e) =>
-                        setActiveTask((prev) => (prev ? { ...prev, description: e.target.value } : null))
-                      }
-                      className="text-xs leading-relaxed min-h-[120px] font-mono bg-app-sidebar/20 border-app-border rounded-xl"
-                      placeholder={t("projects.taskDescPlaceholder") || "支持 Markdown 和 HTML/CSS 格式…"}
-                    />
+                    <div className="w-full">
+                      <Textarea
+                        value={activeTask.description || ""}
+                        onChange={(e) =>
+                          setActiveTask((prev) => (prev ? { ...prev, description: e.target.value } : null))
+                        }
+                        className="text-xs leading-relaxed min-h-[120px] font-mono bg-app-sidebar/20 border-app-border rounded-xl w-full"
+                        placeholder={t("projects.taskDescPlaceholder") || "支持 Markdown 和 HTML/CSS 格式…"}
+                      />
+                      <AiFormatHelper
+                        value={activeTask.description || ""}
+                        onChange={(val) =>
+                          setActiveTask((prev) => (prev ? { ...prev, description: val } : null))
+                        }
+                      />
+                    </div>
                   ) : (
                     <div
                       className={cn(

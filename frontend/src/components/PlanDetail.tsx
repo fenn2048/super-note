@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AiFormatHelper } from "@/components/AiFormatHelper";
 
 import { toast } from "@/lib/toast";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -703,6 +704,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                   className="h-10 text-xs border-app-border w-full rounded-xl"
                   required
                 />
+                <AiFormatHelper value={editName} onChange={setEditName} />
               </div>
 
               {/* Background & Goal */}
@@ -715,6 +717,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                     placeholder={t("plans.backgroundPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
+                  <AiFormatHelper value={editBackground} onChange={setEditBackground} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.goal")}</label>
@@ -724,6 +727,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                     placeholder={t("plans.goalPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
+                  <AiFormatHelper value={editGoal} onChange={setEditGoal} />
                 </div>
               </div>
 
@@ -808,6 +812,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                           className="h-8 text-xs border-app-border w-full rounded-lg"
                           required
                         />
+                        <AiFormatHelper value={ms.name} onChange={(val) => handleEditMilestoneChange(index, "name", val)} />
                       </div>
 
                       <div className="space-y-2">
@@ -818,6 +823,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                           placeholder={t("plans.descriptionPlaceholder")}
                           className="min-h-[50px] text-xs border-app-border w-full rounded-lg"
                         />
+                        <AiFormatHelper value={ms.description} onChange={(val) => handleEditMilestoneChange(index, "description", val)} />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -854,6 +860,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                   placeholder={t("plans.detailsPlaceholder")}
                   className="min-h-[160px] text-xs border-app-border w-full rounded-xl font-mono leading-relaxed"
                 />
+                <AiFormatHelper value={editDetails} onChange={setEditDetails} />
               </div>
 
               {/* Buttons */}

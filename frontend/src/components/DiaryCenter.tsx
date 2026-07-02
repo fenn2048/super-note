@@ -31,19 +31,20 @@ import {
   Video,
   Menu,
   ScanText,
+  RotateCcw,
 } from "lucide-react";
-import { api, getCurrentWorkspace } from "@/lib/api";
+import { api, getCurrentWorkspace, getBaseUrl } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
+import { toast } from "@/lib/toast";
 import { Diary, DiaryStats, Tag, DiaryComment, User } from "@/types";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
-import { cn, detectSuMention } from "@/lib/utils";
+import { cn, detectSuMention, getTagColor } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
 import { registerPlugin } from "@capacitor/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/lib/toast";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -63,31 +64,80 @@ marked.setOptions({
 });
 
 /**
- * 检测文本是否包含 Markdown 语法
+ * 检测文本是否包含 Markdown 语法或 HTML 标签
  */
 function hasMarkdownSyntax(text: string): boolean {
-  return /(\*\*.*\*\*|#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|!\[.*\]\(|\[.*\]\(|`{1,3}|^>\s)/m.test(text);
+  return /(\*\*.*\*\*|#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|!\[.*\]\(|\[.*\]\(|`{1,3}|^>\s|<[a-zA-Z0-9]+[^>]*>)/m.test(text);
 }
 
 /**
- * 渲染说说内容：自动检测 Markdown 语法，有则渲染为 MD，无则显示纯文本。
- * 说说定位是"朋友圈风格"短内容，纯文本展示比强制 MD 渲染更自然。
+ * 将 HTML 中的 iframe 转换为默认不播放、点击后才加载播放的占位框
+ */
+function transformIframesToClickToPlay(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const iframes = doc.querySelectorAll("iframe");
+    if (iframes.length === 0) return html;
+
+    iframes.forEach((iframe) => {
+      const src = iframe.getAttribute("src") || "";
+      const attrs: Record<string, string> = {};
+      for (let i = 0; i < iframe.attributes.length; i++) {
+        const attr = iframe.attributes[i];
+        attrs[attr.name] = attr.value;
+      }
+
+      const wrapper = doc.createElement("div");
+      wrapper.className = "iframe-placeholder-wrapper my-4";
+      wrapper.setAttribute("data-src", src);
+      wrapper.setAttribute("data-attrs", JSON.stringify(attrs));
+
+      // 占位框的行内样式
+      wrapper.style.position = "relative";
+      wrapper.style.cursor = "pointer";
+      wrapper.style.width = "100%";
+      wrapper.style.maxWidth = "640px";
+      wrapper.style.aspectRatio = "16/9";
+      wrapper.style.backgroundColor = "#0f172a";
+      wrapper.style.borderRadius = "12px";
+      wrapper.style.display = "flex";
+      wrapper.style.flexDirection = "column";
+      wrapper.style.alignItems = "center";
+      wrapper.style.justifyContent = "center";
+      wrapper.style.overflow = "hidden";
+      wrapper.style.border = "1px solid rgba(255,255,255,0.1)";
+      wrapper.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.3)";
+
+      wrapper.innerHTML = `
+        <div class="play-button" style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.8); transition: transform 0.2s ease, background-color 0.2s ease; position: absolute; z-index: 2; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform: translateX(1.5px);">
+            <path d="M8 5V19L19 12L8 5Z" fill="#ffffff"/>
+          </svg>
+        </div>
+        <div style="color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 500; margin-top: 72px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 1;">点击播放视频</div>
+      `;
+      iframe.parentNode?.replaceChild(wrapper, iframe);
+    });
+    return doc.body.innerHTML;
+  } catch (err) {
+    console.error("Failed to parse iframe HTML:", err);
+    return html;
+  }
+}
+
+/**
+ * 渲染说说内容：自动检测 Markdown/HTML 语法，有则渲染为 MD，无则显示纯文本。
  */
 export function renderDiaryContent(text: string): string {
   if (!text) return "";
-  if (hasMarkdownSyntax(text)) {
-    const rawHtml = marked.parse(text) as string;
-    return DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ["iframe"],
-      ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "sandbox", "src", "width", "height", "style"],
-    });
-  }
-  // 纯文本：转义 HTML 后直接显示，保留换行
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return escaped.replace(/\n/g, "<br>");
+  const rawHtml = marked.parse(text) as string;
+  const sanitized = DOMPurify.sanitize(rawHtml, {
+    ADD_TAGS: ["iframe"],
+    ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "sandbox", "src", "width", "height", "style"],
+  });
+  return transformIframesToClickToPlay(sanitized);
 }
 
 // 心情选项
@@ -172,6 +222,32 @@ interface PendingImage {
   type?: "image" | "video";
 }
 
+const subscribeToAiTaskSSE = (taskId: string, onComplete: (result: any) => void) => {
+  const token = localStorage.getItem("super-token") || "";
+  const baseUrl = getBaseUrl();
+  const eventSource = new EventSource(`${baseUrl}/ai/tasks/${taskId}/stream?token=${encodeURIComponent(token)}`);
+
+  eventSource.addEventListener("completed", (event: any) => {
+    try {
+      const data = JSON.parse(event.data);
+      eventSource.close();
+      onComplete(data);
+    } catch (err) {
+      console.error("Failed to parse AI task SSE data:", err);
+    }
+  });
+
+  eventSource.addEventListener("failed", (event: any) => {
+    eventSource.close();
+    toast.error(event.data || "AI 助手生成回复失败");
+  });
+
+  eventSource.onerror = (err) => {
+    console.error("SSE Connection error:", err);
+    eventSource.close();
+  };
+};
+
 // ============================================================
 // 发布框
 // ============================================================
@@ -201,6 +277,35 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [composeTags, setComposeTags] = useState<Tag[]>([]);
   const [showOCRModal, setShowOCRModal] = useState(false);
+  const [formatting, setFormatting] = useState(false);
+  const [originalTextBeforeAI, setOriginalTextBeforeAI] = useState("");
+  const [showUndoButton, setShowUndoButton] = useState(false);
+
+  const handleAIFormat = async () => {
+    if (!text.trim()) {
+      toast.error("请输入说说内容后再进行整理");
+      return;
+    }
+    setFormatting(true);
+    setOriginalTextBeforeAI(text);
+    try {
+      const formatted = await api.formatDiaryText(text);
+      setText(formatted);
+      setShowUndoButton(true);
+      toast.success("AI 整理完成");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "AI 整理失败");
+    } finally {
+      setFormatting(false);
+    }
+  };
+
+  const handleUndoAIFormat = () => {
+    setText(originalTextBeforeAI);
+    setShowUndoButton(false);
+    toast.success("已恢复原文");
+  };
 
   // @提及选择器状态
   const [cursorPos, setCursorPos] = useState(0);
@@ -701,7 +806,16 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
 
       // 后台异步执行，不阻塞发布按钮
       api.diaryAiAsk({ mode: "post", question: su.cleanText })
-        .then(() => onPost())
+        .then((res: any) => {
+          if (res && res.taskId) {
+            subscribeToAiTaskSSE(res.taskId, () => {
+              onPost();
+              toast.success("AI 助手说说发布成功");
+            });
+          } else {
+            onPost();
+          }
+        })
         .catch((err) => {
           console.error("AI ask failed:", err);
           toast.error(err?.message || "AI 助手请求失败");
@@ -770,6 +884,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
             setText(e.target.value);
             setCursorPos(e.target.selectionStart);
             autoResize();
+            if (showUndoButton) setShowUndoButton(false);
           }}
           onSelect={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
           onClick={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
@@ -1087,6 +1202,35 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               <span>OCR</span>
             </button>
 
+            {/* AI 整理 / 撤销 按钮 */}
+            {showUndoButton ? (
+              <button
+                type="button"
+                onClick={handleUndoAIFormat}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20 transition-all font-semibold"
+                title="恢复到 AI 整理前的原始内容"
+              >
+                <RotateCcw size={14} className="text-amber-500" />
+                <span>撤销</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAIFormat}
+                disabled={!text.trim() || formatting}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all font-semibold",
+                  text.trim() && !formatting
+                    ? "text-accent-primary hover:bg-accent-primary/10 active:bg-accent-primary/20"
+                    : "text-tx-tertiary/50 cursor-not-allowed"
+                )}
+                title="使用 AI 自动整理排版"
+              >
+                <Sparkles size={14} className={text.trim() && !formatting ? "text-accent-primary animate-pulse" : "text-tx-tertiary/50"} />
+                <span>AI 整理</span>
+              </button>
+            )}
+
             <input
               ref={fileInputRef}
               type="file"
@@ -1230,6 +1374,17 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                 <span>发布</span>
               )}
             </button>
+          </div>
+        </div>
+      )}
+      {formatting && (
+        <div className="fixed inset-0 bg-background/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center gap-3 animate-in fade-in duration-200">
+          <div className="bg-app-elevated border border-app-border rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-3.5 max-w-xs text-center">
+            <Loader2 size={32} className="animate-spin text-accent-primary" />
+            <div>
+              <p className="text-sm font-semibold text-tx-primary">AI 正在整理中...</p>
+              <p className="text-xs text-tx-tertiary mt-1">智能梳理并总结您输入的内容</p>
+            </div>
           </div>
         </div>
       )}
@@ -1445,12 +1600,8 @@ function VoicePlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [transcribing, setTranscribing] = useState(false);
-  const [pressProgress, setPressProgress] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const progressIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startTimeRef = useRef<number>(0);
 
   const voice = item.voice!;
   const audioUrl = api.diaryImages.urlFor(voice.id);
@@ -1538,61 +1689,6 @@ function VoicePlayer({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const handleTranscribe = async () => {
-    if (voice.text) return; // Already transcribed
-    setTranscribing(true);
-    try {
-      const res = await api.transcribeDiaryVoice(item.id, voice.id);
-      onUpdate({
-        ...item,
-        voice: {
-          ...voice,
-          text: res.text,
-        },
-      });
-      toast.success("转文字成功");
-    } catch (e: unknown) {
-      console.error("Transcribe failed:", e);
-      toast.error(e instanceof Error ? e.message : "语音转文字失败");
-    } finally {
-      setTranscribing(false);
-    }
-  };
-
-  const handleStartPress = (e: React.MouseEvent | React.TouchEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("input")) return;
-    
-    // Reset progress
-    setPressProgress(0);
-    startTimeRef.current = Date.now();
-
-    // Set interval to update progress
-    const durationTime = 800; // 800ms
-    progressIntervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTimeRef.current;
-      const progress = Math.min((elapsed / durationTime) * 100, 100);
-      setPressProgress(progress);
-
-      if (progress >= 100) {
-        if (progressIntervalRef.current !== null) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
-        setPressProgress(0);
-        handleTranscribe();
-      }
-    }, 16); // ~60fps
-  };
-
-  const handleEndPress = () => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-    setPressProgress(0);
-  };
-
   return (
     <div className="flex flex-col gap-2 w-full mt-3">
       {/* Equalizer animation style */}
@@ -1617,22 +1713,8 @@ function VoicePlayer({
 
       {/* 播放器面板 */}
       <div
-        onMouseDown={handleStartPress}
-        onMouseUp={handleEndPress}
-        onMouseLeave={handleEndPress}
-        onTouchStart={handleStartPress}
-        onTouchEnd={handleEndPress}
         className="relative overflow-hidden flex items-center gap-3 p-3 rounded-lg bg-accent-primary/5 border border-accent-primary/10 select-none hover:bg-accent-primary/10 transition-colors duration-200"
-        title="长按此区域语音转文字"
       >
-        {/* 长按转文字进度遮罩层 */}
-        {pressProgress > 0 && (
-          <div 
-            className="absolute inset-y-0 left-0 bg-accent-primary/15 pointer-events-none transition-all duration-[16ms]"
-            style={{ width: `${pressProgress}%` }}
-          />
-        )}
-
         {/* 播放/暂停按钮 */}
         <button
           onClick={togglePlay}
@@ -1697,37 +1779,6 @@ function VoicePlayer({
           {playbackRate}x
         </button>
       </div>
-
-      {/* 转文字状态 / 结果 */}
-      {transcribing && (
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-app-hover/30 border border-app-border/40 text-xs text-tx-tertiary">
-          <Loader2 size={12} className="animate-spin text-accent-primary" />
-          <span>正在转写文字...</span>
-        </div>
-      )}
-
-      {voice.text && (
-        <div className="p-3 rounded-lg bg-app-hover/30 border border-app-border/40 relative group/trans">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-accent-primary font-medium flex items-center gap-1 bg-accent-primary/5 px-2 py-0.5 rounded-full select-none">
-              <Sparkles size={10} /> SenseVoice 转写文本
-            </span>
-          </div>
-          <p className="text-xs text-tx-secondary leading-relaxed select-text font-normal pr-8 break-words">
-            {voice.text}
-          </p>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(voice.text || "");
-              toast.success("已复制到剪贴板");
-            }}
-            className="absolute top-2.5 right-2.5 w-5 h-5 rounded hover:bg-app-hover text-tx-tertiary hover:text-tx-secondary flex items-center justify-center transition-colors opacity-0 group-hover/trans:opacity-100"
-            title="复制文本"
-          >
-            <Copy size={12} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -1910,11 +1961,15 @@ function DiaryCard({
       haptic.light();
       
       api.diaryAiAsk({ mode: "comment", diaryId: item.id, question: su.cleanText })
-        .then((result) => {
-          if (mountRef.current && result.mode === "comment") {
-            setComments((prev) => [...prev, result.comment]);
-            onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
-            toast.success("AI 助手已回复");
+        .then((result: any) => {
+          if (result && result.taskId) {
+            subscribeToAiTaskSSE(result.taskId, (resData) => {
+              if (mountRef.current && resData.mode === "comment") {
+                setComments((prev) => [...prev, resData.comment]);
+                onUpdate({ ...item, commentCount: (item.commentCount || 0) + 1 });
+                toast.success("AI 助手已回复");
+              }
+            });
           }
         })
         .catch((err) => {
@@ -2098,6 +2153,35 @@ function DiaryCard({
             {item.contentText && (
               <div
                 className="diary-rendered-content prose prose-sm dark:prose-invert max-w-none text-sm text-tx-primary leading-relaxed break-words"
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  const placeholder = target.closest(".iframe-placeholder-wrapper") as HTMLDivElement | null;
+                  if (placeholder) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const src = placeholder.getAttribute("data-src") || "";
+                    const iframe = document.createElement("iframe");
+                    iframe.src = src;
+                    iframe.style.width = "100%";
+                    iframe.style.height = "100%";
+                    iframe.style.border = "none";
+                    iframe.setAttribute("allowfullscreen", "true");
+                    try {
+                      const attrsStr = placeholder.getAttribute("data-attrs") || "{}";
+                      const attrs = JSON.parse(attrsStr);
+                      Object.keys(attrs).forEach((key) => {
+                        if (key !== "src" && key !== "style") {
+                          iframe.setAttribute(key, attrs[key]);
+                        }
+                      });
+                    } catch (err) {
+                      console.error(err);
+                    }
+                    placeholder.innerHTML = "";
+                    placeholder.appendChild(iframe);
+                    placeholder.style.cursor = "default";
+                  }
+                }}
                 dangerouslySetInnerHTML={{ __html: renderDiaryContent(item.contentText) }}
               />
             )}
@@ -2120,9 +2204,9 @@ function DiaryCard({
                     key={tag.id}
                     className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
                     style={{
-                      backgroundColor: tag.color + "15",
-                      borderColor: tag.color + "30",
-                      color: tag.color,
+                      backgroundColor: getTagColor(tag) + "15",
+                      borderColor: getTagColor(tag) + "30",
+                      color: getTagColor(tag),
                     }}
                   >
                     #{tag.name}
@@ -2292,7 +2376,7 @@ function DiaryCard({
                               </span>
                               <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
                             </div>
-                            <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
+                            <p className="diary-comment-text text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
                             
                             {/* Action Buttons */}
                             <div className="flex items-center gap-3 mt-1.5 text-[10px] text-tx-tertiary">
@@ -2367,7 +2451,7 @@ function DiaryCard({
                                       )}
                                       <span className="text-[10px] text-tx-tertiary ml-auto shrink-0">{timeAgo(reply.createdAt, t)}</span>
                                     </div>
-                                    <p className="text-tx-secondary mt-1 whitespace-pre-wrap break-words">{reply.content}</p>
+                                    <p className="diary-comment-text text-tx-secondary mt-1 whitespace-pre-wrap break-words">{reply.content}</p>
                                     
                                     {/* Actions */}
                                     <div className="flex items-center gap-3 mt-1.5 text-[10px] text-tx-tertiary">
@@ -3413,8 +3497,6 @@ export default function DiaryCenter() {
   useEffect(() => {
     loadTimeline(true);
     loadStats();
-    // Pre-warm SenseVoice container (non-blocking)
-    api.prewarmDiaryVoice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3680,13 +3762,21 @@ export default function DiaryCenter() {
                       <div className="space-y-3">
                         <AnimatePresence mode="popLayout">
                           {pinnedItems.map((item) => (
-                            <DiaryCard
+                            <motion.div
+                              layout
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              transition={{ duration: 0.2 }}
                               key={item.id}
-                              item={item}
-                              onDelete={handleDelete}
-                              onUpdate={handleUpdate}
-                              isHighlighted={highlightedId === item.id}
-                            />
+                            >
+                              <DiaryCard
+                                item={item}
+                                onDelete={handleDelete}
+                                onUpdate={handleUpdate}
+                                isHighlighted={highlightedId === item.id}
+                              />
+                            </motion.div>
                           ))}
                         </AnimatePresence>
                       </div>
@@ -3713,13 +3803,22 @@ export default function DiaryCenter() {
                       <div className="space-y-3">
                         <AnimatePresence mode="popLayout">
                           {dayItems.map((item) => (
-                            <DiaryCard
+                            <motion.div
+                              layout
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              transition={{ duration: 0.2 }}
                               key={item.id}
-                              item={item}
-                              onDelete={handleDelete}
-                              onUpdate={handleUpdate}
-                              isHighlighted={highlightedId === item.id}
-                            />
+                            >
+                              <DiaryCard
+                                key={item.id}
+                                item={item}
+                                onDelete={handleDelete}
+                                onUpdate={handleUpdate}
+                                isHighlighted={highlightedId === item.id}
+                              />
+                            </motion.div>
                           ))}
                         </AnimatePresence>
                       </div>
@@ -3892,8 +3991,8 @@ export default function DiaryCenter() {
                     : "text-tx-secondary hover:bg-app-hover"
                 )}
               >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                <span className="truncate">#{tag.name}</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: getTagColor(tag) }} />
+                <span className="truncate">{tag.name}</span>
               </button>
             ))}
           </div>

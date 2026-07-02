@@ -294,8 +294,13 @@ projectsRouter.get("/:id/stages", (c) => {
   const db = getDb();
   const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
 
-  // Fetch all tasks for this project and populate metadata
-  const tasks = db.prepare("SELECT * FROM project_tasks WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
+  const tasks = db.prepare(`
+    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl
+    FROM project_tasks pt
+    LEFT JOIN users u ON pt.assigneeId = u.id
+    WHERE pt.projectId = ?
+    ORDER BY pt.sortOrder ASC
+  `).all(id) as any[];
 
   for (const t of tasks) {
     t.participants = db.prepare(`
@@ -423,7 +428,13 @@ projectsRouter.get("/:id/tasks", (c) => {
   if (!canRead) return c.json({ error: "无权查看该项目任务", code: "FORBIDDEN" }, 403);
 
   const db = getDb();
-  const tasks = db.prepare("SELECT * FROM project_tasks WHERE projectId = ? ORDER BY sortOrder ASC").all(id) as any[];
+  const tasks = db.prepare(`
+    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl
+    FROM project_tasks pt
+    LEFT JOIN users u ON pt.assigneeId = u.id
+    WHERE pt.projectId = ?
+    ORDER BY pt.sortOrder ASC
+  `).all(id) as any[];
 
   for (const t of tasks) {
     t.participants = db.prepare(`
@@ -454,7 +465,12 @@ projectsRouter.get("/:id/tasks", (c) => {
 });
 
 function getFullProjectTask(db: any, taskId: string) {
-  const t = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId) as any;
+  const t = db.prepare(`
+    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl
+    FROM project_tasks pt
+    LEFT JOIN users u ON pt.assigneeId = u.id
+    WHERE pt.id = ?
+  `).get(taskId) as any;
   if (!t) return null;
 
   t.participants = db.prepare(`

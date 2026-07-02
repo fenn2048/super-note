@@ -201,7 +201,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   const [showPhotoCamera, setShowPhotoCamera] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [tempAudioBlob, setTempAudioBlob] = useState<Blob | null>(null);
-  const [enableTranscription, setEnableTranscription] = useState(true);
   const [history, setHistory] = useState<string[]>([]);
   const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
 
@@ -249,18 +248,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   // Heartbeat/flash recording status
   const [recordBlink, setRecordBlink] = useState(false);
 
-  // Live Audio Transcription States & Refs
-  const [transcriptionText, setTranscriptionText] = useState("");
-  const recognitionRef = useRef<any>(null);
-  const transcriptionScrollRef = useRef<HTMLDivElement>(null);
-  const accumulatedTranscriptRef = useRef("");
-  const currentSessionFinalRef = useRef("");
 
-  useEffect(() => {
-    if (transcriptionScrollRef.current) {
-      transcriptionScrollRef.current.scrollTop = transcriptionScrollRef.current.scrollHeight;
-    }
-  }, [transcriptionText]);
 
   useEffect(() => {
     if (isOpen) {
@@ -532,152 +520,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     }
   };
 
-  const startSpeechRecognition = () => {
-    if (!enableTranscription) return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn("Speech recognition not supported in this browser.");
-      toast.warning("当前设备环境不支持 Web 语音转文字，请尝试安装/设置 Google 应用语音服务");
-      return;
-    }
 
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "zh-CN";
-
-    recognition.onstart = () => {
-      console.log("[webkitSpeechRecognition] onstart: Speech recognition started");
-    };
-    recognition.onaudiostart = () => {
-      console.log("[webkitSpeechRecognition] onaudiostart: Audio capture started");
-    };
-    recognition.onsoundstart = () => {
-      console.log("[webkitSpeechRecognition] onsoundstart: Sound detected");
-    };
-    recognition.onspeechstart = () => {
-      console.log("[webkitSpeechRecognition] onspeechstart: Speech detected");
-    };
-    recognition.onspeechend = () => {
-      console.log("[webkitSpeechRecognition] onspeechend: Speech ended");
-    };
-    recognition.onsoundend = () => {
-      console.log("[webkitSpeechRecognition] onsoundend: Sound ended");
-    };
-    recognition.onaudioend = () => {
-      console.log("[webkitSpeechRecognition] onaudioend: Audio capture ended");
-    };
-
-    recognition.onresult = (event: any) => {
-      const finalParts: string[] = [];
-      let interimTranscript = "";
-      for (let i = 0; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          const phrase = event.results[i][0].transcript.trim();
-          if (phrase) {
-            finalParts.push(phrase);
-          }
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-
-      let finalTranscript = "";
-      if (finalParts.length > 0) {
-        finalTranscript = finalParts.map((part, index) => {
-          const cleaned = part.trim();
-          if (index < finalParts.length - 1) {
-            if (!/[。？！，、；：]/.test(cleaned.slice(-1))) {
-              return cleaned + "，";
-            }
-          }
-          return cleaned;
-        }).join("");
-
-        if (interimTranscript) {
-          if (!/[。？！，、；：]/.test(finalTranscript.slice(-1))) {
-            finalTranscript += "，";
-          }
-        } else {
-          if (!/[。？！，、；：]/.test(finalTranscript.slice(-1))) {
-            finalTranscript += "。";
-          }
-        }
-      }
-
-      currentSessionFinalRef.current = finalTranscript;
-      setTranscriptionText(accumulatedTranscriptRef.current + finalTranscript + interimTranscript);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("[webkitSpeechRecognition] onerror:", event.error);
-      const errMsg = `语音识别错误: ${event.error}`;
-      toast.error(errMsg);
-      setTranscriptionText((prev) => {
-        const spacer = prev ? "\n" : "";
-        return prev + spacer + `[系统提示: ${errMsg}]`;
-      });
-      // Stop recognition on fatal errors to avoid infinite restart loop
-      if (
-        event.error === "not-allowed" ||
-        event.error === "service-not-allowed" ||
-        event.error === "language-not-supported"
-      ) {
-        stopSpeechRecognition();
-      }
-    };
-
-    recognition.onend = () => {
-      console.log("[webkitSpeechRecognition] onend: Session ended");
-      accumulatedTranscriptRef.current += currentSessionFinalRef.current;
-      currentSessionFinalRef.current = "";
-      
-      if (recognitionRef.current === recognition) {
-        try {
-          startSpeechRecognition();
-        } catch (e) {
-          console.error("Failed to restart speech recognition on end:", e);
-        }
-      }
-    };
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch (e) {
-      console.error("Failed to start speech recognition:", e);
-    }
-  };
-
-  const stopSpeechRecognition = () => {
-    if (recognitionRef.current) {
-      const rec = recognitionRef.current;
-      recognitionRef.current = null;
-      try {
-        rec.stop();
-      } catch (e) {
-        console.error("Failed to stop speech recognition:", e);
-      }
-    }
-  };
-
-  const handleCopyTranscription = () => {
-    if (!transcriptionText) return;
-    navigator.clipboard.writeText(transcriptionText)
-      .then(() => {
-        toast.success("已复制到剪贴板");
-      })
-      .catch((err) => {
-        console.error("Copy failed:", err);
-        toast.error("复制失败");
-      });
-  };
 
   const startRecordingProcess = async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -767,10 +610,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       mediaRecorder.start(200);
       haptic.light();
       setRecording(true);
-      setTranscriptionText("");
-      accumulatedTranscriptRef.current = "";
-      currentSessionFinalRef.current = "";
-      startSpeechRecognition();
     } catch (err) {
       console.error("Failed to start recording:", err);
       toast.error("无法访问录音设备");
@@ -780,16 +619,10 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   useEffect(() => {
     if (showVoiceRecorder) {
-      // Eagerly pre-warm SenseVoice container (non-blocking)
-      api.prewarmDiaryVoice();
       setRecordDuration(0);
       setIsPaused(false);
-      setTranscriptionText("");
-      accumulatedTranscriptRef.current = "";
-      currentSessionFinalRef.current = "";
       startRecordingProcess();
     } else {
-      stopSpeechRecognition();
       setRecording(false);
       setIsPaused(false);
       setTempAudioBlob(null);
@@ -833,20 +666,14 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       if (isPaused) {
         recorder.resume();
         setIsPaused(false);
-        startSpeechRecognition();
       } else {
         recorder.pause();
         setIsPaused(true);
-        stopSpeechRecognition();
       }
     }
   };
 
   const handleCancelVoiceRecord = () => {
-    stopSpeechRecognition();
-    setTranscriptionText("");
-    accumulatedTranscriptRef.current = "";
-    currentSessionFinalRef.current = "";
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
       animationFrameIdRef.current = null;
@@ -865,14 +692,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   };
 
   const handleFinishVoiceRecord = async () => {
-    stopSpeechRecognition();
-    if (enableTranscription && transcriptionText.trim()) {
-      setText((prev) => {
-        const spacer = prev ? "\n" : "";
-        return prev + spacer + transcriptionText.trim();
-      });
-    }
-
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
       animationFrameIdRef.current = null;
@@ -897,26 +716,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           duration: duration || 1,
         });
         toast.success("录音生成成功");
-
-        // Fallback: If local speech recognition did not produce any text, but transcription is enabled,
-        // we request backend SenseVoice transcription immediately!
-        if (enableTranscription && !transcriptionText.trim()) {
-          toast.info("正在进行语音转文字...", 2000);
-          try {
-            const transcribeRes = await api.transcribeDiaryVoice(undefined, uploadRes.id);
-            if (transcribeRes && transcribeRes.text) {
-              setTranscriptionText(transcribeRes.text);
-              setText((prev) => {
-                const spacer = prev ? "\n" : "";
-                return prev + spacer + transcribeRes.text.trim();
-              });
-              toast.success("语音转文字成功");
-            }
-          } catch (transcribeErr) {
-            console.error("Backend voice transcription failed:", transcribeErr);
-            toast.error("语音转文字失败");
-          }
-        }
       } catch (e) {
         console.error("Voice upload failed:", e);
         toast.error("录音上传失败");
@@ -1103,18 +902,7 @@ const handleEmojiSelect = (emoji: string) => {
     }, 50);
   };
 
-  const handleToggleTranscription = () => {
-    haptic.light();
-    const nextVal = !enableTranscription;
-    setEnableTranscription(nextVal);
-    if (nextVal) {
-      if (recording && !isPaused) {
-        startSpeechRecognition();
-      }
-    } else {
-      stopSpeechRecognition();
-    }
-  };
+
 
   // Handle text selection change via standard selection API (for long press)
   const handleTextareaSelectionChange = () => {
@@ -2049,41 +1837,12 @@ const handleEmojiSelect = (emoji: string) => {
               <X size={20} />
             </button>
             <span className="text-sm font-semibold tracking-wider text-white/90">录音说说</span>
-            <button
-              onClick={handleToggleTranscription}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 shadow-sm",
-                enableTranscription
-                  ? "bg-[#6366f1]/25 border-[#6366f1]/40 text-indigo-200"
-                  : "bg-white/5 border-white/10 text-white/40 hover:text-white/60 hover:bg-white/10"
-              )}
-            >
-              {enableTranscription ? "转文字: 开" : "转文字: 关"}
-            </button>
+            <div className="w-9" /> {/* Spacer to balance the X button */}
           </div>
 
           {/* 中间麦克风 (Area 1 - Waveform + Mic status) */}
           <div className="flex-1 flex flex-col items-center justify-center space-y-8 min-h-0 mt-4">
-            {/* Live Transcription Box */}
-            <div className="relative w-full max-w-sm md:max-w-md flex-1 min-h-[260px] max-h-[45vh] bg-white/[0.03] border border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 flex flex-col overflow-hidden shadow-2xl">
-              <div 
-                ref={transcriptionScrollRef}
-                className="flex-1 overflow-y-auto pr-2 space-y-1.5 scroll-smooth"
-              >
-                {transcriptionText ? (
-                  <p className="text-sm font-semibold text-white/95 leading-relaxed whitespace-pre-wrap text-left">
-                    {transcriptionText}
-                  </p>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-2 text-white/30">
-                    <Mic className="text-white/20 animate-pulse" size={22} />
-                    <p className="text-xs text-white/40 italic text-center">
-                      {recording && !isPaused ? "开始说话，实时转文字将在此处显示..." : "等待说话..."}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+
 
             <div className="relative flex items-center justify-center">
               {recording && !isPaused && (

@@ -3,7 +3,7 @@ import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Circle, Calendar, User, Tag, FileText, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, getTagColor } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
 interface ProjectListProps {
@@ -227,9 +227,9 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete,
                                   <span
                                     key={tag.id}
                                     style={{
-                                      backgroundColor: `${tag.color}15`,
-                                      borderColor: `${tag.color}35`,
-                                      color: tag.color,
+                                      backgroundColor: `${getTagColor(tag)}15`,
+                                      borderColor: `${getTagColor(tag)}35`,
+                                      color: getTagColor(tag),
                                     }}
                                     className="px-1.5 py-0.5 rounded border text-[9px] font-bold tracking-wide uppercase shrink-0"
                                   >

@@ -37,7 +37,7 @@ import {
   requireWorkspaceFeature,
 } from "../middleware/acl";
 import { createMentions, broadcastToWorkspace } from "../lib/mentions";
-import { ensureRunning, resetIdleTimer } from "../services/sensevoice-manager";
+
 
 const diary = new Hono();
 
@@ -121,7 +121,7 @@ interface DiaryRow {
   trigger_user_id?: string | null;
 }
 
-function rowToDiary(row: DiaryRow) {
+export function rowToDiary(row: DiaryRow) {
   let images: string[] = [];
   try {
     const parsed = JSON.parse(row.images || "[]");
@@ -1131,147 +1131,7 @@ function sweepOrphanDiaryImages(): number {
 setTimeout(sweepOrphanDiaryImages, 30_000);
 setInterval(sweepOrphanDiaryImages, 6 * 60 * 60 * 1000);
 
-/**
- * 预热语音服务 (Pre-warm Speech Service)
- *   POST /api/diary/prewarm
- */
-diary.post("/prewarm", async (c) => {
-  try {
-    // 异步拉起容器，不阻塞请求返回
-    ensureRunning().catch((e) => console.warn("[sensevoice] Pre-warm failed:", e));
-    return c.json({ status: "warming" });
-  } catch (e: any) {
-    return c.json({ error: e?.message || e }, 500);
-  }
-});
 
-/**
- * 语音消息转文字 (Speech-to-Text)
- *   POST /api/diary/transcribe
- *   body: { diaryId: string, voiceId: string }
- */
-diary.post("/transcribe", async (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON" }, 400);
-  }
-  const { diaryId, voiceId } = body;
-  if (!voiceId) {
-    return c.json({ error: "voiceId required" }, 400);
-  }
-
-  let absPath = "";
-  let attachRow: any;
-  let diaryRow: any;
-
-  if (diaryId) {
-    // 1) 校验说说权限
-    diaryRow = db
-      .prepare("SELECT * FROM diaries WHERE id = ?")
-      .get(diaryId) as DiaryRow | undefined;
-    if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
-
-    if (!canManageResource(diaryRow.userId, diaryRow.workspaceId, userId)) {
-      // 允许同一个工作区的成员读取（转文字）
-      const wsRole = diaryRow.workspaceId ? getUserWorkspaceRole(diaryRow.workspaceId, userId) : null;
-      if (!wsRole && diaryRow.userId !== userId && diaryRow.visibility !== "PUBLIC") {
-        return c.json({ error: "无权访问该说说", code: "FORBIDDEN" }, 403);
-      }
-    }
-
-    // 2) 如果已经转过文字，直接返回
-    if (diaryRow.voice) {
-      try {
-        const parsed = JSON.parse(diaryRow.voice);
-        if (parsed && parsed.text) {
-          return c.json({ text: parsed.text });
-        }
-      } catch {}
-    }
-
-    // 3) 查找语音附件
-    attachRow = db
-      .prepare("SELECT path FROM diary_attachments WHERE id = ? AND diaryId = ?")
-      .get(voiceId, diaryId) as { path: string } | undefined;
-    if (!attachRow) {
-      return c.json({ error: "语音附件不存在" }, 404);
-    }
-  } else {
-    // 没有 diaryId，直接从悬空附件找，只能由上传该附件的用户访问
-    attachRow = db
-      .prepare("SELECT * FROM diary_attachments WHERE id = ?")
-      .get(voiceId) as any;
-    if (!attachRow) {
-      return c.json({ error: "语音附件不存在" }, 404);
-    }
-    if (attachRow.userId !== userId) {
-      return c.json({ error: "无权访问该语音附件", code: "FORBIDDEN" }, 403);
-    }
-  }
-
-  absPath = path.join(getAttachmentsDir(), attachRow.path);
-  if (!fs.existsSync(absPath)) {
-    return c.json({ error: "语音文件不存在" }, 404);
-  }
-
-  // 4) 确保 SenseVoice 服务在线（按需启动容器，~330MB 用完即释放）
-  try {
-    await ensureRunning();
-  } catch (e: any) {
-    return c.json({ error: `语音服务启动失败: ${e?.message || e}` }, 503);
-  }
-
-  // 5) 请求 SenseVoice FastAPI 接口
-  try {
-    const fileBuffer = fs.readFileSync(absPath);
-    const blob = new Blob([fileBuffer]);
-    const formData = new FormData();
-    formData.append("file", blob, path.basename(attachRow.path));
-    formData.append("model", "whisper-1");
-    formData.append("language", "zh");
-
-    const response = await fetch("http://super-note-sensevoice:8000/v1/audio/transcriptions", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return c.json({ error: `SenseVoice error: ${response.status} ${errText}` }, 502);
-    }
-
-    const resJson = await response.json() as { text: string };
-    const text = resJson.text || "";
-
-    // 6) 更新 diaries 的 voice 字段以缓存转写出的文字
-    if (diaryId && diaryRow) {
-      let voiceObj: any = {};
-      if (diaryRow.voice) {
-        try {
-          voiceObj = JSON.parse(diaryRow.voice);
-        } catch {}
-      }
-      voiceObj.text = text;
-
-      db.prepare("UPDATE diaries SET voice = ? WHERE id = ?").run(
-        JSON.stringify(voiceObj),
-        diaryId,
-      );
-    }
-
-    try { resetIdleTimer(); } catch {}
-
-    return c.json({ text });
-  } catch (err: any) {
-    console.error("Transcription error:", err);
-    return c.json({ error: `转文字失败: ${err?.message || err}` }, 500);
-  }
-});
 
 // ===================== 说说评论功能 =====================
 
@@ -1376,7 +1236,7 @@ import { extractKeywords, callLLM } from "./ai";
 
 const SU_USER_ID = "00000000-0000-0000-0000-000000000001";
 
-function ensureSuUser(db: any) {
+export function ensureSuUser(db: any) {
   const exists = db.prepare("SELECT id FROM users WHERE id = ?").get(SU_USER_ID);
   if (exists) return;
   const hash = crypto.createHash("sha256").update(crypto.randomUUID()).digest("hex");
@@ -1412,136 +1272,29 @@ diary.post("/ai-ask", async (c) => {
     }
   }
 
-  // 1. 收集上下文
-  let context = "";
-  if (mode === "post") {
-    // 发布框模式：RAG 检索笔记、说说、项目
-    const keywords = extractKeywords(question);
-    let notes: { id: string; title: string; snippet: string }[] = [];
+  // 1. Enqueue to Redis Stream
+  const taskId = crypto.randomUUID();
+  const payload = {
+    taskId,
+    userId,
+    mode,
+    diaryId: diaryId || "",
+    question,
+    workspaceId: workspaceId || "personal",
+  };
 
-    if (keywords.length > 0) {
-      const likeClauses = keywords.slice(0, 5).map(() => "(contentText LIKE ? OR title LIKE ?)").join(" OR ");
-      const likeParams = keywords.slice(0, 5).flatMap(k => [`%${k}%`, `%${k}%`]);
-      try {
-        notes = db.prepare(`
-          SELECT id, title, substr(contentText, 1, 500) AS snippet FROM notes
-          WHERE userId = ? AND isTrashed = 0 AND (${likeClauses})
-          ORDER BY updatedAt DESC LIMIT 5
-        `).all(userId, ...likeParams) as any[];
-      } catch {}
-    }
-
-    let diaries: { contentText: string }[] = [];
-    if (keywords.length > 0) {
-      const dLikeClauses = keywords.slice(0, 5).map(() => "(contentText LIKE ?)").join(" OR ");
-      const dLikeParams = keywords.slice(0, 5).flatMap(k => [`%${k}%`]);
-      try {
-        diaries = db.prepare(`
-          SELECT contentText FROM diaries
-          WHERE userId = ? AND (${dLikeClauses})
-          ORDER BY createdAt DESC LIMIT 5
-        `).all(userId, ...dLikeParams) as any[];
-      } catch {}
-    }
-
-    let projects: { name: string; description: string }[] = [];
-    try {
-      projects = db.prepare(`
-        SELECT p.name, p.description FROM projects p
-        LEFT JOIN project_members pm ON pm.projectId = p.id
-        WHERE (p.ownerId = ? OR pm.userId = ?) AND p.isArchived = 0
-        ORDER BY p.updatedAt DESC LIMIT 10
-      `).all(userId, userId) as any[];
-    } catch {}
-
-    const parts: string[] = [];
-    if (notes.length > 0) {
-      parts.push("【相关笔记】\n" + notes.map(n => `- ${n.title}: ${n.snippet}`).join("\n"));
-    }
-    if (diaries.length > 0) {
-      parts.push("【相关说说】\n" + diaries.map(d => `- ${d.contentText.slice(0, 200)}`).join("\n"));
-    }
-    if (projects.length > 0) {
-      parts.push("【项目列表】\n" + projects.map(p => `- ${p.name}: ${(p.description || "无描述").slice(0, 200)}`).join("\n"));
-    }
-    context = parts.join("\n\n");
-  } else {
-    // 评论区模式：仅取当前说说 + 已有评论
-    const diaryRow = db.prepare("SELECT userId, workspaceId, visibility, contentText FROM diaries WHERE id = ?").get(diaryId) as { userId: string; workspaceId: string | null; visibility: string; contentText: string } | undefined;
-    if (!diaryRow) return c.json({ error: "说说不存在" }, 404);
-
-    // 检查说说读权限
-    const hasAccess = diaryRow.workspaceId 
-      ? !!getUserWorkspaceRole(diaryRow.workspaceId, userId)
-      : (diaryRow.userId === userId || diaryRow.visibility === "PUBLIC");
-    if (!hasAccess) {
-      return c.json({ error: "无权评论该说说", code: "FORBIDDEN" }, 403);
-    }
-
-    const comments = db.prepare(`
-      SELECT dc.content, COALESCE(u.displayName, u.username) AS username
-      FROM diary_comments dc
-      JOIN users u ON u.id = dc.userId
-      WHERE dc.diaryId = ? ORDER BY dc.createdAt ASC LIMIT 20
-    `).all(diaryId) as { content: string; username: string }[];
-
-    const commentText = comments.map(c => `@${c.username}: ${c.content}`).join("\n");
-    context = `【说说原文】\n${diaryRow.contentText}\n\n【已有评论】\n${commentText || "暂无评论"}`;
-  }
-
-  // 2. 调用 LLM
-  const systemPrompt = mode === "post"
-    ? `你是一位知识渊博的专家助手，基于用户的笔记、说说和项目信息回答问题。请给出简明扼要、专业的回答，不要超过 500 字。直接回答用户问题，不要添加无关信息。`
-    : `你是一位专业分析助手，基于当前说说及其评论内容回答问题。请给出简明扼要、有洞察力的分析。不要超过 500 字。`;
-
-  let answer: string;
   try {
-    answer = await callLLM(systemPrompt, question, context);
+    const { redis } = require("../services/redis");
+    await redis.xadd("ai:tasks:stream", "*", "payload", JSON.stringify(payload));
   } catch (err: any) {
-    return c.json({ error: err.message || "AI 请求失败" }, 502);
+    console.error("Failed to enqueue AI task to Redis stream:", err);
+    return c.json({ error: "服务不可用，加入任务队列失败" }, 503);
   }
 
-  // 3. 根据 mode 创建内容
-  if (mode === "post") {
-    const newDiaryId = crypto.randomUUID();
-    const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-
-    db.prepare(`
-      INSERT INTO diaries (id, userId, workspaceId, contentText, mood, images, visibility, voice, createdAt, trigger_user_id)
-      VALUES (?, ?, ?, ?, '', '[]', 'PUBLIC', NULL, ?, ?)
-    `).run(newDiaryId, SU_USER_ID, workspaceId, answer, now, userId);
-
-    const created = db.prepare(`
-      SELECT d.*, COALESCE(u.displayName, u.username) AS creatorName, u.avatarUrl AS creatorAvatarUrl
-      FROM diaries d
-      JOIN users u ON u.id = d.userId
-      WHERE d.id = ?
-    `).get(newDiaryId) as any;
-
-    sendAiNotification(db, userId, newDiaryId, answer, "post");
-
-    return c.json({ mode: "post", diary: rowToDiary(created) });
-  } else {
-    const commentId = crypto.randomUUID();
-    db.prepare(`
-      INSERT INTO diary_comments (id, diaryId, userId, content, createdAt, updatedAt, trigger_user_id)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), ?)
-    `).run(commentId, diaryId!, SU_USER_ID, answer.trim(), userId);
-
-    const newComment = db.prepare(`
-      SELECT dc.*, COALESCE(u.displayName, u.username) AS username, u.avatarUrl
-      FROM diary_comments dc
-      JOIN users u ON u.id = dc.userId
-      WHERE dc.id = ?
-    `).get(commentId);
-
-    sendAiNotification(db, userId, diaryId!, answer, "comment");
-
-    return c.json({ mode: "comment", comment: newComment }, 201);
-  }
+  return c.json({ status: "queued", taskId }, 202);
 });
 
-function sendAiNotification(
+export function sendAiNotification(
   db: any,
   targetUserId: string,
   diaryId: string,

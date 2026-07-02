@@ -144,8 +144,7 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && npm config set fetch-timeout 600000
 
 # tini 提供 PID 1 信号转发，15KB，避免容器 kill 时僵尸进程
-# docker-cli 用于按需启停 SenseVoice 容器
-RUN apk add --no-cache tini docker-cli
+RUN apk add --no-cache tini
 
 # 运行时依赖（production only）：直接复制构建阶段已编译的 node_modules
 # 避免在无缓存环境下重新编译 better-sqlite3 等原生模块

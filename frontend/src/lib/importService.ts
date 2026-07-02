@@ -1701,33 +1701,7 @@ export async function importMemos(
         failedItems.push({ name: `说说 #${i + 1} (${excerpt})`, reason: err?.message || "发布说说失败" });
       }
 
-      // 对该说说的语音文件进行转写
-      if (postedDiary && postedDiary.id && voiceResources.length > 0) {
-        for (const voice of voiceResources) {
-          const item: { name: string; status: "transcribing" | "success" | "failed" } = {
-            name: voice.filename,
-            status: "transcribing",
-          };
-          transcribingItems.push(item);
-          onProgress({
-            phase: "uploading",
-            current: i,
-            total: memosList.length,
-            message: `正在转写语音附件 ${voice.filename}...`,
-            failedItems,
-            transcribingItems,
-          });
 
-          try {
-            await api.transcribeDiaryVoice(postedDiary.id, voice.uploadResId);
-            item.status = "success";
-          } catch (err: any) {
-            console.warn(`Memos voice transcription failed: ${voice.filename}`, err);
-            item.status = "failed";
-            failedItems.push({ name: `转写语音 ${voice.filename}`, reason: err?.message || "转写失败" });
-          }
-        }
-      }
 
       onProgress({
         phase: "uploading",

@@ -25,6 +25,7 @@ import { toast } from "@/lib/toast";
 import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from "@/types";
 import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import { renderDiaryContent } from "./DiaryCenter";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -80,14 +81,51 @@ function DiaryEntry({ item, onClick }: { item: Diary; onClick: () => void }) {
 
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        const placeholder = target.closest(".iframe-placeholder-wrapper") as HTMLDivElement | null;
+        if (placeholder) {
+          e.preventDefault();
+          e.stopPropagation();
+          const src = placeholder.getAttribute("data-src") || "";
+          const iframe = document.createElement("iframe");
+          iframe.src = src;
+          iframe.style.width = "100%";
+          iframe.style.height = "100%";
+          iframe.style.border = "none";
+          iframe.setAttribute("allowfullscreen", "true");
+          try {
+            const attrsStr = placeholder.getAttribute("data-attrs") || "{}";
+            const attrs = JSON.parse(attrsStr);
+            Object.keys(attrs).forEach((key) => {
+              if (key !== "src" && key !== "style") {
+                iframe.setAttribute(key, attrs[key]);
+              }
+            });
+          } catch (err) {
+            console.error(err);
+          }
+          placeholder.innerHTML = "";
+          placeholder.appendChild(iframe);
+          placeholder.style.cursor = "default";
+        } else {
+          onClick();
+        }
+      }}
       className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-app-border/30 last:border-0 hover:bg-app-hover/30 transition-colors cursor-pointer"
     >
       <div className="text-base leading-none mt-0.5 shrink-0">{emoji || "📝"}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-tx-primary leading-relaxed line-clamp-2 break-words">
-          {item.contentText || (hasVoice ? <span className="text-tx-tertiary">[语音]</span> : item.images?.length ? <span className="text-tx-tertiary">[图片]</span> : "")}
-        </p>
+        {item.contentText ? (
+          <div
+            className="diary-rendered-content prose prose-sm dark:prose-invert max-w-none text-xs text-tx-primary leading-relaxed break-words line-clamp-3 overflow-hidden"
+            dangerouslySetInnerHTML={{ __html: renderDiaryContent(item.contentText) }}
+          />
+        ) : (
+          <p className="text-xs text-tx-primary leading-relaxed line-clamp-2 break-words">
+            {hasVoice ? <span className="text-tx-tertiary">[语音]</span> : item.images?.length ? <span className="text-tx-tertiary">[图片]</span> : ""}
+          </p>
+        )}
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[10px] text-tx-tertiary">{date}</span>
           {item.creatorName && (

@@ -1651,20 +1651,7 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  transcribeDiaryVoice: (diaryId: string | undefined, voiceId: string) => {
-    return request<{ text: string }>("/diary/transcribe", {
-      method: "POST",
-      body: JSON.stringify({ diaryId, voiceId }),
-    });
-  },
-  prewarmDiaryVoice: () => {
-    return request<{ status: string }>("/diary/prewarm", {
-      method: "POST",
-    }).catch((err) => {
-      console.warn("Prewarm speech recognition service failed:", err);
-      return { status: "error" };
-    });
-  },
+
   getDiaryStats: (range?: { from?: string; to?: string }) => {
     const params = new URLSearchParams();
     if (range?.from) params.set("from", range.from);
@@ -2007,6 +1994,24 @@ export const api = {
     request<{ success: boolean; message?: string; error?: string }>("/ai/test", { method: "POST" }),
   getAIModels: () =>
     request<{ models: { id: string; name: string }[] }>("/ai/models"),
+  formatDiaryText: async (content: string): Promise<string> => {
+    const token = getToken();
+    const res = await fetch(`${getBaseUrl()}/ai/format-diary`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `AI 整理失败: ${res.status}`);
+    }
+    const data = await res.json();
+    return data.result;
+  },
+
   aiChat: async (action: string, text: string, context?: string, onChunk?: (chunk: string) => void, customPrompt?: string, think?: boolean): Promise<string> => {
     const token = getToken();
     const res = await fetch(`${getBaseUrl()}/ai/chat`, {

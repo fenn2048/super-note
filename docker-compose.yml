@@ -24,10 +24,7 @@ services:
       - "3001:3001"
     volumes:
       - ./super-note-data:/app/data
-      # 挂载 Docker 套接字，供按需启停 SenseVoice 容器
-      - /var/run/docker.sock:/var/run/docker.sock
-      # SenseVoice 构建上下文，按需构建/启动时使用
-      - ./sensevoice:/app/sensevoice:ro
+
       # ===========================================================================
       # 【强烈建议】把备份目录挂载到与数据卷**不同的物理介质**上！
       #
@@ -62,6 +59,8 @@ services:
       #- BACKUP_DIR=/app/backups
       # Ollama 地址（指向 compose 内的 ollama 服务）
       - OLLAMA_URL=http://ollama:11434
+      # Redis 数据库连接地址
+      - REDIS_URL=redis://redis:6379
 
   # ============================================================================
   # Ollama 本地 LLM 服务 — Qwen2.5:1.8b（7×24 常驻）
@@ -93,27 +92,16 @@ services:
         echo "Models ready!"
         wait
 
+
   # ============================================================================
-  # SenseVoice 语音转文字服务 — 按需启动，用完即毁
-  #
-  # 不由 compose 管理生命周期，由 super-note 后端通过 Docker API 按需启停：
-  #   1. 收到转写请求 → 检查 sensevoice:8000 是否在线
-  #   2. 不在线 → 启动 sensevoice 容器 → 等待就绪 → 调用转写
-  #   3. 空闲超过 5 分钟 → 自动关闭容器，释放约 330MB 内存
-  # 容器名固定为 super-note-sensevoice，后端通过容器名精确管理。
+  # Redis 本地队列与广播服务（7×24 常驻）
   # ----------------------------------------------------------------------------
-  # 定义保留，供后端按需启动时使用（restart: "no" 防止随 compose 自动拉起）
-  sensevoice:
-    profiles: ["manual"]
-    build:
-      context: ./sensevoice
-      dockerfile: Dockerfile
-    image: super-note-sensevoice:latest
-    container_name: super-note-sensevoice
-    restart: "no"
-    network_mode: "bridge"
+  redis:
+    image: docker.m.daocloud.io/redis:7-alpine
+    container_name: super-note-redis
+    restart: unless-stopped
     volumes:
-      - sensevoice-model-cache:/app/modelscope_cache
+      - redis-data:/data
 
 volumes:
   super-note-data:
@@ -121,7 +109,8 @@ volumes:
   # 启用独立备份卷时取消下方注释（与上面 volumes 段对应）：
   # super-note-backup:
   #   driver: local
-  sensevoice-model-cache:
-    driver: local
+
   ollama-data:
+    driver: local
+  redis-data:
     driver: local

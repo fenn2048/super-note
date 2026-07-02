@@ -22,6 +22,7 @@ const HEARTBEAT_INTERVAL_MS = 25_000; // 略短于后端 30s，保证活跃
 
 class RealtimeClient {
   private ws: WebSocket | null = null;
+  private sse: EventSource | null = null;
   private listeners = new Map<string, Set<Listener>>();
   private subscribedRooms = new Set<string>();
   private pendingSubs = new Set<string>();
@@ -67,6 +68,7 @@ class RealtimeClient {
   }
 
   connect() {
+    this.connectSSE();
     if (this.connecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) return;
     const url = this.resolveWsUrl();
     if (!url) return;
@@ -118,23 +120,8 @@ class RealtimeClient {
           }
         }
         // 服务器强制踢下线（账号被禁用/删除、密码被重置、会话被吊销）
-        // 立即清本地 token 并刷新；emit 出去以便业务层可选择展示 toast。
         if (msg.type === "force-logout") {
-          this.emit("force-logout", msg);
-          this.manualClosed = true;
-          try { this.ws?.close(); } catch {}
-          if (typeof window !== "undefined") {
-            // L10: 广播给其他 tab 一起下线（这里避免 import api.ts 产生循环依赖，手动内联 broadcast）
-            try {
-              localStorage.removeItem("super-token");
-              localStorage.setItem("super-logout-broadcast", `${Date.now()}|force-logout`);
-              localStorage.removeItem("super-logout-broadcast");
-            } catch {}
-            // 给 UI 一点时间显示 toast（业务层订阅 force-logout 可展示原因）
-            setTimeout(() => {
-              try { window.location.reload(); } catch {}
-            }, 300);
-          }
+          this.handleForceLogout(msg);
           return;
         }
         this.emit(msg.type, msg);
@@ -168,8 +155,89 @@ class RealtimeClient {
       try { this.ws.close(); } catch {}
       this.ws = null;
     }
+    if (this.sse) {
+      try { this.sse.close(); } catch {}
+      this.sse = null;
+    }
     this.subscribedRooms.clear();
     this.pendingSubs.clear();
+  }
+
+  private resolveSseUrl(): string | null {
+    const token = localStorage.getItem("super-token");
+    if (!token) return null;
+
+    const serverUrl = localStorage.getItem("super-server-url");
+    let origin: string;
+    if (serverUrl) {
+      origin = serverUrl.replace(/\/+$/, "");
+    } else if (typeof window !== "undefined") {
+      origin = window.location.origin;
+    } else {
+      return null;
+    }
+    const apiBase = origin.includes("/api") ? origin : `${origin}/api`;
+    return `${apiBase}/events/stream?token=${encodeURIComponent(token)}`;
+  }
+
+  private connectSSE() {
+    if (this.sse) return;
+    const url = this.resolveSseUrl();
+    if (!url) return;
+
+    try {
+      const sse = new EventSource(url);
+      this.sse = sse;
+
+      // Handle all general notifications dynamically
+      const sseEvents = [
+        "note:list-updated",
+        "note:updated",
+        "note:deleted",
+        "workspace:updated",
+        "force-logout",
+        "diary:ai-reply"
+      ];
+
+      for (const eventName of sseEvents) {
+        sse.addEventListener(eventName, (ev: MessageEvent) => {
+          try {
+            const data = JSON.parse(ev.data);
+            this.emit(eventName, data);
+
+            // Handle force-logout immediately in SSE as well
+            if (eventName === "force-logout") {
+              this.handleForceLogout(data);
+            }
+          } catch (e) {
+            console.error("Failed to parse SSE event:", eventName, e);
+          }
+        });
+      }
+
+      sse.onerror = () => {
+        console.warn("[SSE] connection closed or errored. EventSource will reconnect.");
+      };
+    } catch (err) {
+      console.error("[SSE] failed to initialize:", err);
+    }
+  }
+
+  private handleForceLogout(msg: any) {
+    this.emit("force-logout", msg);
+    this.manualClosed = true;
+    try { this.ws?.close(); } catch {}
+    try { this.sse?.close(); this.sse = null; } catch {}
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("super-token");
+        localStorage.setItem("super-logout-broadcast", `${Date.now()}|force-logout`);
+        localStorage.removeItem("super-logout-broadcast");
+      } catch {}
+      setTimeout(() => {
+        try { window.location.reload(); } catch {}
+      }, 300);
+    }
   }
 
   private scheduleReconnect() {

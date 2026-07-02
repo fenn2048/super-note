@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/lib/toast";
 import PlanDetail from "./PlanDetail";
+import { AiFormatHelper } from "@/components/AiFormatHelper";
 
 const PRESET_COVERS = [
   "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
@@ -375,6 +376,7 @@ export default function PlanCenter() {
                   className="h-10 text-xs border-app-border w-full rounded-xl"
                   required
                 />
+                <AiFormatHelper value={planName} onChange={setPlanName} />
               </div>
 
               {/* Background & Goal */}
@@ -387,6 +389,7 @@ export default function PlanCenter() {
                     placeholder={t("plans.backgroundPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
+                  <AiFormatHelper value={background} onChange={setBackground} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.goal")}</label>
@@ -396,6 +399,7 @@ export default function PlanCenter() {
                     placeholder={t("plans.goalPlaceholder")}
                     className="min-h-[80px] text-xs border-app-border w-full rounded-xl"
                   />
+                  <AiFormatHelper value={goal} onChange={setGoal} />
                 </div>
               </div>
 
@@ -480,6 +484,7 @@ export default function PlanCenter() {
                           className="h-8 text-xs border-app-border w-full rounded-lg"
                           required
                         />
+                        <AiFormatHelper value={ms.name} onChange={(val) => handleMilestoneChange(index, "name", val)} />
                       </div>
 
                       <div className="space-y-2">
@@ -490,6 +495,7 @@ export default function PlanCenter() {
                           placeholder={t("plans.descriptionPlaceholder")}
                           className="min-h-[50px] text-xs border-app-border w-full rounded-lg"
                         />
+                        <AiFormatHelper value={ms.description} onChange={(val) => handleMilestoneChange(index, "description", val)} />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -526,6 +532,7 @@ export default function PlanCenter() {
                   placeholder={t("plans.detailsPlaceholder")}
                   className="min-h-[160px] text-xs border-app-border w-full rounded-xl font-mono leading-relaxed"
                 />
+                <AiFormatHelper value={details} onChange={setDetails} />
               </div>
 
               {/* Buttons */}

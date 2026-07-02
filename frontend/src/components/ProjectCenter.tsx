@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plan, Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { cn, detectSuMention } from "@/lib/utils";
+import { cn, detectSuMention, getTagColor } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import {
@@ -25,6 +25,7 @@ import SleekDatePicker from "@/components/common/SleekDatePicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
+import { AiFormatHelper } from "@/components/AiFormatHelper";
 
 // Import sub-views
 import ProjectOverview from "./ProjectOverview";
@@ -180,11 +181,22 @@ function TaskRow({
   onPauseTask?: (task: ProjectTask) => void;
 }) {
   return (
-    <div className="group flex items-center justify-between p-3.5 hover:bg-app-hover/20 transition-all gap-4">
+    <div
+      onClick={() => {
+        onSelectProject(task.projectId);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
+        }, 100);
+      }}
+      className="group flex items-center justify-between p-3.5 hover:bg-app-hover/20 transition-all gap-4 cursor-pointer"
+    >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Checkbox button */}
         <button
-          onClick={() => onToggleComplete(task.id, task.isCompleted)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleComplete(task.id, task.isCompleted);
+          }}
           className="text-tx-tertiary hover:text-accent-primary transition-colors focus:outline-none shrink-0"
         >
           {task.isCompleted === 1 ? (
@@ -197,13 +209,7 @@ function TaskRow({
         {/* Title and Subtitle */}
         <div className="min-w-0 flex-1">
           <div
-            onClick={() => {
-              onSelectProject(task.projectId);
-              setTimeout(() => {
-                window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
-              }, 100);
-            }}
-            className={`font-semibold text-tx-secondary cursor-pointer hover:text-accent-primary transition-colors text-sm truncate ${
+            className={`font-semibold text-tx-secondary text-sm truncate ${
               task.isCompleted === 1 ? "line-through opacity-50 text-tx-tertiary" : ""
             }`}
           >
@@ -282,7 +288,7 @@ function TaskRow({
         {task.endDate && <DateBadge dateStr={task.endDate} />}
 
         {/* Assignee Avatar */}
-        {task.assigneeId ? (
+        {task.assigneeId && (task.assigneeDisplayName || task.assigneeName) ? (
           task.assigneeAvatarUrl ? (
             <img
               src={task.assigneeAvatarUrl}
@@ -295,22 +301,10 @@ function TaskRow({
               className="w-6 h-6 rounded-full bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center text-[10px] font-bold text-accent-primary shrink-0 font-mono"
               title={task.assigneeDisplayName || task.assigneeName}
             >
-              {(task.assigneeDisplayName || task.assigneeName || "?").slice(0, 1).toUpperCase()}
+              {(task.assigneeDisplayName || task.assigneeName || "").slice(0, 1).toUpperCase()}
             </div>
           )
         ) : null}
-
-        {/* Edit button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
-          }}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-primary transition-all shrink-0"
-          title="编辑任务"
-        >
-          <Edit2 size={14} />
-        </button>
 
         {/* Trash can button */}
         <button
@@ -1383,6 +1377,7 @@ export default function ProjectCenter() {
               <ProjectKanban
                 project={selectedProject}
                 stages={projectStages}
+                wsMembers={wsMembers}
                 onRefresh={async () => {
                   const stages = await api.getProjectStages(selectedProject.id);
                   setProjectStages(stages);
@@ -2134,7 +2129,7 @@ export default function ProjectCenter() {
                     >
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: tag.color }}
+                        style={{ backgroundColor: getTagColor(tag) }}
                       />
                       <span className="truncate">{tag.name}</span>
                     </button>
@@ -2199,7 +2194,7 @@ export default function ProjectCenter() {
                   >
                     <span
                       className="inline-block rounded-full"
-                      style={{ width: 10, height: 10, backgroundColor: tag.color }}
+                      style={{ width: 10, height: 10, backgroundColor: getTagColor(tag) }}
                     />
                     {tag.name}
                   </button>
@@ -2601,6 +2596,7 @@ export default function ProjectCenter() {
                   required
                   autoFocus
                 />
+                <AiFormatHelper value={taskTitle} onChange={setTaskTitle} />
                 {titleMention && (
                   <div className="relative z-50">
                     <MentionPicker
@@ -2748,6 +2744,7 @@ export default function ProjectCenter() {
                   placeholder="输入任务描述信息（支持Markdown及@提及）…"
                   className="text-xs leading-relaxed min-h-[120px] border-app-border rounded-xl w-full p-3"
                 />
+                <AiFormatHelper value={taskDescription} onChange={setTaskDescription} />
                 {descMention && (
                   <div className="relative z-50">
                     <MentionPicker

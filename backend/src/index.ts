@@ -55,6 +55,10 @@ import { initWebhookTables } from "./services/webhook";
 import { initAuditTables } from "./services/audit";
 import { startEmbeddingWorker, stopEmbeddingWorker } from "./services/embedding-worker";
 import { initVecStore, reindexAllVectors, isVecAvailable } from "./services/vec-store";
+import { streamSSE } from "hono/streaming";
+import { createSubClient } from "./services/redis";
+
+import { startAiTaskWorker, stopAiTaskWorker } from "./services/ai-worker";
 
 const app = new Hono();
 
@@ -306,7 +310,11 @@ app.use("/api/*", async (c, next) => {
     return;
   }
 
-  const authHeader = c.req.header("Authorization");
+  let authHeader = c.req.header("Authorization");
+  const tokenQuery = c.req.query("token");
+  if (!authHeader && tokenQuery) {
+    authHeader = `Bearer ${tokenQuery}`;
+  }
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return c.json({ error: "未授权，请先登录", code: "UNAUTHENTICATED" }, 401);
@@ -428,6 +436,47 @@ app.route("/api/fonts", fontsRouter);
 app.route("/api/attachments", attachmentsRouter);
 app.route("/api/task-attachments", taskAttachmentsRouter);
 app.route("/api/files", filesRouter);
+
+app.get("/api/events/stream", async (c) => {
+  const userId = c.req.header("X-User-Id");
+  if (!userId) {
+    return c.json({ error: "未授权" }, 401);
+  }
+
+  const sub = createSubClient();
+
+  return streamSSE(c, async (stream) => {
+    stream.onAbort(() => {
+      sub.disconnect();
+      console.log(`[SSE] Global connection closed for user: ${userId}`);
+    });
+
+    const channel = `user:events:${userId}`;
+    await sub.subscribe(channel);
+
+    sub.on("message", async (chan, message) => {
+      if (chan === channel) {
+        const data = JSON.parse(message);
+        await stream.writeSSE({
+          event: data.type,
+          data: message,
+        });
+      }
+    });
+
+    // Send initial connection event
+    await stream.writeSSE({
+      event: "connected",
+      data: JSON.stringify({ status: "ok" }),
+    });
+
+    // Keepalive ping loop
+    while (sub.status !== "end") {
+      await stream.writeSSE({ event: "ping", data: "ping" });
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+    }
+  });
+});
 
 // 获取当前登录用户信息
 app.get("/api/me", (c) => {
@@ -593,12 +642,11 @@ try {
 }
 
 try {
-  // Pre-warm SenseVoice container eagerly on boot (non-blocking)
-  const { ensureRunning: warmSenseVoice } = require("./services/sensevoice-manager");
-  warmSenseVoice().catch((err: any) => console.warn("[init] Pre-warming SenseVoice failed:", err));
+  startAiTaskWorker();
 } catch (e) {
-  console.warn("[init] Eager SenseVoice pre-warming failed to initialize:", e);
+  console.warn("[init] startAiTaskWorker failed:", e);
 }
+
 
 console.log(`🚀 ark-notes API running on http://localhost:${port}`);
 console.log(`📖 OpenAPI 文档: http://localhost:${port}/api/openapi.json`);
@@ -626,6 +674,7 @@ async function gracefulShutdown(signal: string) {
   } finally {
     // 停掉 embedding worker 的轮询定时器，避免 process.exit 之前还在发起 fetch
     try { stopEmbeddingWorker(); } catch { /* ignore */ }
+    try { stopAiTaskWorker(); } catch { /* ignore */ }
     // 关停 DB 连接：内部会先 wal_checkpoint(TRUNCATE)，把 -wal 中的事务全部
     // 写回主 .db 文件。这样无论用户接下来是 cp 冷备、docker volume snapshot
     // 还是直接关机，拿到的 .db 都是完整的一致快照，不会丢最近事务。

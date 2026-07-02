@@ -12,6 +12,7 @@ import {
   reindexAllVectors,
 } from "../services/vec-store";
 import { getUserWorkspaceRole } from "../middleware/acl";
+import { createSubClient } from "../services/redis";
 
 const ai = new Hono();
 
@@ -2609,6 +2610,71 @@ ai.post("/classify", async (c) => {
     }
     return c.json({ error: `AI 请求失败：${msg.slice(0, 200)}` }, 502);
   }
+});
+
+ai.post("/format-diary", async (c) => {
+  const { content } = await c.req.json() as { content: string };
+  if (!content || !content.trim()) {
+    return c.json({ error: "内容不能为空" }, 400);
+  }
+
+  const systemPrompt = `你是一个说说写作和内容整理助手。请对用户输入的“说说”进行排版、梳理和优化整理，要求：
+1. 语言条理清晰，层次分明，逻辑连贯。
+2. 保持用户表达的原意，不要大幅删改事实内容。
+3. 优化错别字、标点符号，并适当使用段落、换行或列表以增加可读性。
+4. 不要返回任何前言、后记或解释旁白，必须直接返回整理优化后的内容主体。`;
+
+  try {
+    const formatted = await callLLM(systemPrompt, content);
+    return c.json({ result: formatted.trim() });
+  } catch (err: any) {
+    return c.json({ error: err.message || "AI 整理失败" }, 500);
+  }
+});
+
+ai.get("/tasks/:taskId/stream", async (c) => {
+  const taskId = c.req.param("taskId");
+  const sub = createSubClient();
+
+  return streamSSE(c, async (stream) => {
+    stream.onAbort(() => {
+      sub.disconnect();
+      console.log(`[SSE] AI task stream closed for task: ${taskId}`);
+    });
+
+    const channel = `ai:task:complete:${taskId}`;
+    await sub.subscribe(channel);
+
+    sub.on("message", async (chan, message) => {
+      if (chan === channel) {
+        const data = JSON.parse(message);
+        if (data.status === "completed") {
+          await stream.writeSSE({
+            event: "completed",
+            data: JSON.stringify(data.result),
+          });
+        } else if (data.status === "failed") {
+          await stream.writeSSE({
+            event: "failed",
+            data: data.error || "AI 处理失败",
+          });
+        }
+        sub.disconnect();
+      }
+    });
+
+    // Send initial ping to confirm connection
+    await stream.writeSSE({
+      event: "connected",
+      data: JSON.stringify({ status: "ok" }),
+    });
+
+    // Keepalive ping loop
+    while (sub.status !== "end") {
+      await stream.writeSSE({ event: "ping", data: "ping" });
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  });
 });
 
 export default ai;

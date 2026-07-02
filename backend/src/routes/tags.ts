@@ -124,9 +124,14 @@ app.post("/", async (c) => {
 
   const id = uuid();
   try {
+    const defaultColors = [
+      "#ef4444", "#f97316", "#eab308", "#22c55e", "#10b981", "#14b8a6",
+      "#06b6d4", "#3b82f6", "#6366f1", "#a855f7", "#ec4899", "#f43f5e"
+    ];
+    const randomColor = defaultColors[Math.floor(Math.random() * defaultColors.length)];
     db.prepare(
       `INSERT INTO tags (id, userId, workspaceId, name, color) VALUES (?, ?, ?, ?, ?)`,
-    ).run(id, userId, ws, body.name, body.color || "#58a6ff");
+    ).run(id, userId, ws, body.name, body.color || randomColor);
   } catch (err: any) {
     // UNIQUE(userId, name) 冲突 → 当前账号已有同名标签（可能在其他空间）
     if (String(err?.message || err).includes("UNIQUE")) {

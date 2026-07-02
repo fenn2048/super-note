@@ -23,6 +23,7 @@ import {
   getUserAccessibleWorkspaceIds,
   resolveNotePermission,
 } from "../middleware/acl";
+import { redis } from "./redis";
 import { yJoin, yLeave, yApplyUpdate, yFlushAll, yEncodeDiffSinceStateVector } from "./yjs";
 
 // ---------------- 类型 ----------------
@@ -649,16 +650,17 @@ export function broadcastWorkspaceUpdated(
   });
 }
 
-/**
- * 向指定用户的所有 WebSocket 连接广播消息。
- * 用于不依赖房间订阅的场景（如导入笔记后通知前端刷新列表）。
- */
 export function broadcastToUser(userId: string, msg: ServerMessage) {
+  // 1. 本机在线连接广播
   for (const [, client] of clients.entries()) {
     if (client.info.userId === userId) {
       send(client.ws, msg);
     }
   }
+  // 2. 跨机 Redis 广播，发送给订阅了该用户 SSE 通道的其他节点
+  redis.publish(`user:events:${userId}`, JSON.stringify(msg)).catch((err) => {
+    console.error(`[Redis publish] broadcastToUser failed:`, err);
+  });
 }
 
 /** 调试：返回当前 Hub 状态 */
@@ -687,6 +689,7 @@ export function disconnectUser(
   userId: string,
   reason: "account_disabled" | "account_deleted" | "password_reset" | "session_revoked",
 ) {
+  // 1. 本地客户端下线
   for (const [cid, client] of clients.entries()) {
     if (client.info.userId !== userId) continue;
     try {
@@ -697,6 +700,8 @@ export function disconnectUser(
     } catch {}
     cleanupClient(cid);
   }
+  // 2. 广播下线消息到 Redis
+  redis.publish(`user:events:${userId}`, JSON.stringify({ type: "force-logout", reason })).catch(() => {});
 }
 
 /** 进程关闭钩子：flush Y.js 到磁盘（异步，caller 应 await） */

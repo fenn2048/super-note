@@ -109,6 +109,7 @@ html.font-lxgw textarea,
 html.font-lxgw select,
 html.font-lxgw button {
   font-family: "LXGW WenKai Screen", 'Inter', 'system-ui', '-apple-system', sans-serif !important;
+  font-weight: 480; /* 全局提升默认字重，使纤细的霞鹜文楷字体在非粗体下也清晰可见 */
 }
 html.font-lxgw,
 html.font-lxgw * {
@@ -118,7 +119,7 @@ html.font-lxgw {
   --editor-font-family: "LXGW WenKai Screen", sans-serif !important;
 }
 
-/* 优化霞鹜文楷字体下的粗体文字：限制 font-weight 粗度为 550（中等偏粗）以防止笔画粘连模糊，并微调透明度使视觉重量更柔和 */
+/* 优化霞鹜文楷字体下的粗体文字：解除 550 粗度上限，加粗至 650 并恢复 full 不透明度以增强可读性与美感 */
 html.font-lxgw h1,
 html.font-lxgw h2,
 html.font-lxgw h3,
@@ -129,8 +130,8 @@ html.font-lxgw strong,
 html.font-lxgw b,
 html.font-lxgw .font-bold,
 html.font-lxgw .font-semibold {
-  font-weight: 550 !important;
-  opacity: 0.92 !important;
+  font-weight: 650 !important;
+  opacity: 1 !important;
 }
 
 /* ===== Dark Theme (默认：Obsidian Dark - 优化为高档深蓝灰) ===== */
@@ -2409,6 +2410,23 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   border-color: var(--color-border);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
+
+/* 说说及说说评论行间距优化 */
+.diary-rendered-content,
+.diary-rendered-content p,
+.diary-rendered-content li {
+  line-height: 1.8 !important;
+}
+.diary-comment-text {
+  line-height: 1.75 !important;
+}
+
+/* iframe 视频点击播放占位框 hover 效果 */
+.iframe-placeholder-wrapper:hover .play-button {
+  transform: scale(1.1) !important;
+  background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
 
 /* ===== 编辑器媒体渲染响应式适配 ===== */
 .ProseMirror iframe,

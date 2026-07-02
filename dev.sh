@@ -33,6 +33,26 @@ cleanup() {
 # 捕获退出信号，确保退出时清理后台进程
 trap cleanup SIGINT SIGTERM EXIT
 
+# 检查 Redis 状态，若未运行则自动尝试启动
+if ! nc -z 127.0.0.1 6379 >/dev/null 2>&1; then
+  echo "⚠️  检测到 Redis (port 6379) 未运行，正在尝试启动本地 Redis 服务..."
+  if command -v brew &>/dev/null && brew services list | grep -q "redis"; then
+    brew services start redis
+    sleep 1.5
+  elif command -v redis-server &>/dev/null; then
+    redis-server --daemonize yes
+    sleep 1.5
+  fi
+
+  # 再次确认 Redis 是否成功启动
+  if ! nc -z 127.0.0.1 6379 >/dev/null 2>&1; then
+    echo "❌ 无法自动启动 Redis 服务，请确保已安装并手动运行 redis-server (port 6379)。"
+    exit 1
+  else
+    echo "✅ Redis 服务已成功启动！"
+  fi
+fi
+
 # 检查并释放占用端口 3001 和 5173 的旧进程，防止 EADDRINUSE 报错
 for port in 3001 5173; do
   PID=$(lsof -t -i:$port 2>/dev/null)

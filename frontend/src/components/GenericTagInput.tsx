@@ -6,6 +6,7 @@ import { useApp, useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
 import { Tag } from "@/types";
 import TagColorPicker from "@/components/TagColorPicker";
+import { getTagColor } from "@/lib/utils";
 
 interface TagLike {
   id: string;
@@ -173,6 +174,7 @@ export default function GenericTagInput<T extends TagLike>({
               />
               <span>{tag.name}</span>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeTag(tag.id);
@@ -213,6 +215,7 @@ export default function GenericTagInput<T extends TagLike>({
             {suggestions.map((tag, i) => (
               <button
                 key={tag.id}
+                type="button"
                 onClick={() => addTag(tag.name)}
                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
                   i === highlightedIndex
@@ -222,7 +225,7 @@ export default function GenericTagInput<T extends TagLike>({
               >
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: tag.color }}
+                  style={{ backgroundColor: getTagColor(tag) }}
                 />
                 <span className="flex-1 truncate">{tag.name}</span>
                 {tag.noteCount !== undefined && (
@@ -234,6 +237,7 @@ export default function GenericTagInput<T extends TagLike>({
             {/* 如果没有精确匹配，显示"创建新标签"选项 */}
             {!hasExactMatch && inputValue.trim() && (
               <button
+                type="button"
                 onClick={() => addTag(inputValue)}
                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 border-t border-app-border ${
                   suggestions.length === 0 || highlightedIndex === suggestions.length
