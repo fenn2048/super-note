@@ -1,6 +1,7 @@
 import { Play, Pause } from "lucide-react";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+
 import { Plan, Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
@@ -26,6 +27,8 @@ import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/Recu
 import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
 import { AiFormatHelper } from "@/components/AiFormatHelper";
+import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+
 
 // Import sub-views
 import ProjectOverview from "./ProjectOverview";
@@ -371,6 +374,10 @@ export default function ProjectCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
   const actions = useAppActions();
+
+  const projDescRef = useRef<HTMLTextAreaElement>(null);
+  const taskDescRef = useRef<HTMLTextAreaElement>(null);
+
 
   const [showMobileMyTasksSearch, setShowMobileMyTasksSearch] = useState(false);
   const [showMobileRoleSelector, setShowMobileRoleSelector] = useState(false);
@@ -2395,16 +2402,22 @@ export default function ProjectCenter() {
                 />
               </div>
 
-              {/* Description */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.description") || "任务描述"}</label>
+                <TextareaFormatToolbar
+                  textareaRef={projDescRef}
+                  value={projDesc}
+                  onChange={setProjDesc}
+                />
                 <Textarea
+                  ref={projDescRef}
                   value={projDesc}
                   onChange={(e) => setProjDesc(e.target.value)}
                   placeholder={t("projects.projDescPlaceholder") || "输入任务描述信息…"}
                   className="text-xs leading-relaxed min-h-[80px] border-app-border rounded-xl"
                 />
               </div>
+
 
               {/* Cover selector */}
               <div className="space-y-2">
@@ -2734,7 +2747,13 @@ export default function ProjectCenter() {
               {/* Description */}
               <div className="space-y-2.5 relative">
                 <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">详细描述</label>
+                <TextareaFormatToolbar
+                  textareaRef={taskDescRef}
+                  value={taskDescription}
+                  onChange={setTaskDescription}
+                />
                 <Textarea
+                  ref={taskDescRef}
                   value={taskDescription}
                   onChange={(e) => {
                     setTaskDescription(e.target.value);
@@ -2746,6 +2765,7 @@ export default function ProjectCenter() {
                   className="text-xs leading-relaxed min-h-[120px] border-app-border rounded-xl w-full p-3"
                 />
                 <AiFormatHelper value={taskDescription} onChange={setTaskDescription} />
+
                 {descMention && (
                   <div className="relative z-50">
                     <MentionPicker

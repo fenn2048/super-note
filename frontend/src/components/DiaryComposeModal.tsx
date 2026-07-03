@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { EmojiPicker } from "./EmojiPicker";
-import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video, AtSign, MoreHorizontal, ScanText } from "lucide-react";
+import { ChevronDown, Smile, Tag as TagIcon, Globe, Lock, Mic, Play, Pause, Trash2, X, Send, Loader2, Camera, Check, Undo, Image as ImageIcon, Video, AtSign, MoreHorizontal, ScanText, RotateCcw, Sparkles } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -14,6 +14,8 @@ import { registerPlugin } from "@capacitor/core";
 import { haptic } from "@/hooks/useCapacitor";
 import { WorkspaceMember } from "@/types";
 import RecordingPanel from "@/components/RecordingPanel";
+import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+
 
 interface DiaryComposeModalProps {
   isOpen: boolean;
@@ -41,6 +43,14 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   const [showMoreOptionsSheet, setShowMoreOptionsSheet] = useState(false);
   const [menuPlacement, setMenuPlacement] = useState<"top" | "bottom">("top");
 
+  const [showFormatToolbar, setShowFormatToolbar] = useState(false);
+  const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
+  const mediaMenuRef = useRef<HTMLDivElement>(null);
+  const [formatting, setFormatting] = useState(false);
+  const [originalTextBeforeAI, setOriginalTextBeforeAI] = useState("");
+  const [showUndoButton, setShowUndoButton] = useState(false);
+
+
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [me, setMe] = useState<any>(null);
   const [memberSearchQuery, setMemberSearchQuery] = useState("");
@@ -48,6 +58,22 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (mediaMenuRef.current && !mediaMenuRef.current.contains(target)) {
+        setIsMediaMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, []);
+
+  useEffect(() => {
+
     if (!showMemberSelector) return;
 
     const loadData = async () => {
@@ -859,6 +885,33 @@ const handleEmojiSelect = (emoji: string) => {
     }
   };
 
+  const handleAIFormat = async () => {
+    if (!text.trim()) {
+      toast.error("请输入说说内容后再进行整理");
+      return;
+    }
+    setFormatting(true);
+    setOriginalTextBeforeAI(text);
+    try {
+      const formatted = await api.formatDiaryText(text);
+      setText(formatted);
+      setShowUndoButton(true);
+      toast.success("AI 整理完成");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "AI 整理失败");
+    } finally {
+      setFormatting(false);
+    }
+  };
+
+  const handleUndoAIFormat = () => {
+    setText(originalTextBeforeAI);
+    setShowUndoButton(false);
+    toast.success("已恢复原文");
+  };
+
+
   // ----------------- Custom text selection controls -----------------
   const pushHistory = (currentText: string) => {
     setHistory((prev) => {
@@ -1099,8 +1152,17 @@ const handleEmojiSelect = (emoji: string) => {
 
       {/* 编辑区域 */}
       <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4 pb-20">
+        {showFormatToolbar && (
+          <TextareaFormatToolbar
+            textareaRef={textareaRef}
+            value={text}
+            onChange={setText}
+          />
+        )}
         <textarea
+
           ref={textareaRef}
+
           value={text}
           inputMode={textareaInputMode}
           onChange={(e) => setText(e.target.value)}
@@ -1465,7 +1527,7 @@ const handleEmojiSelect = (emoji: string) => {
           )}
         </div>
 
-        {/* 右侧：标签、语音、@、... 更多功能 */}
+        {/* 右侧：标签、@、媒体、格式A、AI整理 */}
         <div className="flex items-center gap-1">
           {/* 标签按钮 */}
           <button
@@ -1482,28 +1544,6 @@ const handleEmojiSelect = (emoji: string) => {
             <TagIcon size={18} />
           </button>
 
-          {/* 录音按钮 */}
-          <button
-            type="button"
-            onClick={handleMicButtonClick}
-            disabled={voiceUploading || !!pendingVoice}
-            className={cn(
-              "p-2.5 rounded-xl transition-all duration-200",
-              recording
-                ? "bg-red-500 text-white animate-pulse"
-                : pendingVoice
-                  ? "bg-emerald-500/10 text-emerald-500"
-                  : "text-tx-secondary hover:bg-app-hover"
-            )}
-            title={recording ? "停止录音" : "点击录音"}
-          >
-            {recording && recordBlink ? (
-              <span className="w-4 h-4 rounded-full bg-white block" />
-            ) : (
-              <Mic size={18} />
-            )}
-          </button>
-
           {/* @ 提醒谁看 */}
           <button
             type="button"
@@ -1514,27 +1554,126 @@ const handleEmojiSelect = (emoji: string) => {
             <AtSign size={18} />
           </button>
 
-          
-          {/* 提取文字 (OCR) */}
+          {/* 媒体按钮及其浮层 */}
+          <div className="relative" ref={mediaMenuRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsMediaMenuOpen(!isMediaMenuOpen);
+              }}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors font-medium border border-app-border bg-app-surface",
+                isMediaMenuOpen ? "bg-accent-primary/15 text-accent-primary border-accent-primary/20" : "text-tx-secondary"
+              )}
+              title="媒体"
+            >
+              <ImageIcon size={16} />
+              <span>媒体</span>
+            </button>
+            <AnimatePresence>
+              {isMediaMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute bottom-11 right-0 bg-app-elevated border border-app-border shadow-lg rounded-xl p-1 z-50 w-32 flex flex-col"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMediaMenuOpen(false);
+                      imageInputRef.current?.click();
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                  >
+                    <ImageIcon size={14} className="text-tx-secondary" />
+                    <span>图片</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMediaMenuOpen(false);
+                      setShowCamera(true);
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                  >
+                    <Video size={14} className="text-tx-secondary" />
+                    <span>视频</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMediaMenuOpen(false);
+                      handleMicButtonClick();
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                  >
+                    <Mic size={14} className="text-tx-secondary" />
+                    <span>语音</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMediaMenuOpen(false);
+                      setShowOCRModal(true);
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                  >
+                    <ScanText size={14} className="text-tx-secondary" />
+                    <span>OCR</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 格式 A 按钮 */}
           <button
             type="button"
-            onClick={() => setShowOCRModal(true)}
-            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover"
-            title="提取图片文字"
+            onClick={() => setShowFormatToolbar(!showFormatToolbar)}
+            className={cn(
+              "p-2.5 w-10 h-10 flex items-center justify-center rounded-xl transition-colors font-bold text-sm",
+              showFormatToolbar ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover"
+            )}
+            title="排版格式"
           >
-            <ScanText size={18} />
+            A
           </button>
 
-          {/* ... 更多功能 */}
-          <button
-            type="button"
-            onClick={() => setShowMoreOptionsSheet(true)}
-            className="p-2.5 rounded-xl text-tx-secondary hover:bg-app-hover"
-            title="更多功能"
-          >
-            <MoreHorizontal size={18} />
-          </button>
+          {/* AI 整理 */}
+          {showUndoButton ? (
+            <button
+              type="button"
+              onClick={handleUndoAIFormat}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20 transition-all font-semibold"
+              title="撤销 AI 整理"
+            >
+              <RotateCcw size={14} className="text-amber-500" />
+              <span>撤销</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAIFormat}
+              disabled={!text.trim() || formatting}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs transition-all font-semibold",
+                text.trim() && !formatting
+                  ? "bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20"
+                  : "text-tx-tertiary bg-app-subtle cursor-not-allowed opacity-50",
+              )}
+              title="AI 整理"
+            >
+              {formatting ? (
+                <Loader2 size={14} className="animate-spin text-accent-primary" />
+              ) : (
+                <Sparkles size={14} className={text.trim() ? "text-accent-primary" : "text-tx-tertiary"} />
+              )}
+              <span>AI整理</span>
+            </button>
+          )}
         </div>
+
       </div>
 
       

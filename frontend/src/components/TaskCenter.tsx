@@ -24,6 +24,8 @@ import OCRModal from "@/components/OCRModal";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { syncTaskNotification, syncAllTaskNotifications } from "@/hooks/useCapacitor";
+import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+
 
 /* ===========================================================================
  * 任务标题富文本协议
@@ -651,8 +653,17 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
         {/* 标题 */}
         <div>
           <label className="text-xs text-tx-tertiary uppercase tracking-wider mb-1.5 block">{t('tasks.taskTitle')}</label>
+          <TextareaFormatToolbar
+            textareaRef={titleRef}
+            value={title}
+            onChange={(newVal) => {
+              setTitle(newVal);
+              onUpdate(task.id, { title: newVal });
+            }}
+          />
           <textarea
             ref={titleRef}
+
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);

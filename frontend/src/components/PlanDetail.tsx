@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Plan, Project, AuditLog, User, WorkspaceMember } from "@/types";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AiFormatHelper } from "@/components/AiFormatHelper";
+import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+
 
 import { toast } from "@/lib/toast";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -53,9 +55,14 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
+  const bgTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const goalTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const detailsTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => {
     api.getMe().then(setCurrentUser).catch(() => setCurrentUser(null));
   }, []);
+
 
   // Load plan and details
   const loadPlanDetail = useCallback(async () => {
@@ -711,7 +718,13 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.background")}</label>
+                  <TextareaFormatToolbar
+                    textareaRef={bgTextareaRef}
+                    value={editBackground}
+                    onChange={setEditBackground}
+                  />
                   <Textarea
+                    ref={bgTextareaRef}
                     value={editBackground}
                     onChange={(e) => setEditBackground(e.target.value)}
                     placeholder={t("plans.backgroundPlaceholder")}
@@ -721,7 +734,13 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.goal")}</label>
+                  <TextareaFormatToolbar
+                    textareaRef={goalTextareaRef}
+                    value={editGoal}
+                    onChange={setEditGoal}
+                  />
                   <Textarea
+                    ref={goalTextareaRef}
                     value={editGoal}
                     onChange={(e) => setEditGoal(e.target.value)}
                     placeholder={t("plans.goalPlaceholder")}
@@ -729,6 +748,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                   />
                   <AiFormatHelper value={editGoal} onChange={setEditGoal} />
                 </div>
+
               </div>
 
               {/* Start & End Dates */}
@@ -854,7 +874,13 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               {/* Markdown Details */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">{t("plans.details")}</label>
+                <TextareaFormatToolbar
+                  textareaRef={detailsTextareaRef}
+                  value={editDetails}
+                  onChange={setEditDetails}
+                />
                 <Textarea
+                  ref={detailsTextareaRef}
                   value={editDetails}
                   onChange={(e) => setEditDetails(e.target.value)}
                   placeholder={t("plans.detailsPlaceholder")}
@@ -862,6 +888,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                 />
                 <AiFormatHelper value={editDetails} onChange={setEditDetails} />
               </div>
+
 
               {/* Buttons */}
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-app-border">

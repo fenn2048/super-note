@@ -14,7 +14,9 @@ import { AiFormatHelper } from "@/components/AiFormatHelper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import { toast } from "@/lib/toast";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import { cn, detectSuMention, getTagColor } from "@/lib/utils";
@@ -61,6 +63,8 @@ export default function ProjectKanban({
 }: ProjectKanbanProps) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === "zh-CN" ? zhCN : enUS;
+  const taskDescRef = useRef<HTMLTextAreaElement>(null);
+
 
   const membersList = wsMembers && wsMembers.length > 0 ? wsMembers : (project.members || []);
   const [newStageName, setNewStageName] = useState("");
@@ -1304,7 +1308,15 @@ export default function ProjectKanban({
                   </div>
                   {descriptionMode === "edit" ? (
                     <div className="w-full">
+                      <TextareaFormatToolbar
+                        textareaRef={taskDescRef}
+                        value={activeTask.description || ""}
+                        onChange={(val) =>
+                          setActiveTask((prev) => (prev ? { ...prev, description: val } : null))
+                        }
+                      />
                       <Textarea
+                        ref={taskDescRef}
                         value={activeTask.description || ""}
                         onChange={(e) =>
                           setActiveTask((prev) => (prev ? { ...prev, description: e.target.value } : null))
@@ -1312,6 +1324,7 @@ export default function ProjectKanban({
                         className="text-xs leading-relaxed min-h-[120px] font-mono bg-app-sidebar/20 border-app-border rounded-xl w-full"
                         placeholder={t("projects.taskDescPlaceholder") || "支持 Markdown 和 HTML/CSS 格式…"}
                       />
+
                       <AiFormatHelper
                         value={activeTask.description || ""}
                         onChange={(val) =>

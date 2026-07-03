@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useApp, useAppActions } from "@/store/AppContext";
+import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import TagColorPopover from "@/components/TagColorPopover";
 import GenericTagInput from "@/components/GenericTagInput";
 import DiaryCalendar from "@/components/DiaryCalendar";
@@ -279,6 +280,9 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   const [formatting, setFormatting] = useState(false);
   const [originalTextBeforeAI, setOriginalTextBeforeAI] = useState("");
   const [showUndoButton, setShowUndoButton] = useState(false);
+  const [showFormatToolbar, setShowFormatToolbar] = useState(false);
+  const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
+  const mediaMenuRef = useRef<HTMLDivElement>(null);
 
   const handleAIFormat = async () => {
     if (!text.trim()) {
@@ -563,6 +567,22 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // 点击外部关闭媒体选择菜单
+  useEffect(() => {
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (mediaMenuRef.current && !mediaMenuRef.current.contains(target)) {
+        setIsMediaMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, []);
 
   // 点击外部关闭可见性选择菜单
@@ -876,6 +896,13 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
     >
       {/* 输入区域 */}
       <div className="relative border border-app-border/80 bg-app-bg rounded-lg p-2.5 transition-all mb-3 focus-within:border-accent-primary/40 focus-within:ring-1 focus-within:ring-accent-primary/10">
+        {showFormatToolbar && (
+          <TextareaFormatToolbar
+            textareaRef={textareaRef}
+            value={text}
+            onChange={setText}
+          />
+        )}
         <textarea
           ref={textareaRef}
           value={text}
@@ -1077,131 +1104,95 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       {/* 底部操作栏 - 录音时隐藏 */}
       {!recording && (
         <div className="flex items-center justify-between pt-1 gap-3 flex-wrap">
-          {/* 左侧：心情 + 图片 + 视频 + 语音 */}
+          {/* 左侧：媒体 + 格式 A + AI整理 */}
           <div className="flex items-center gap-1.5">
-            {/* 心情选择 */}
-            <div className="relative" ref={moodRef}>
+            {/* 媒体按钮及其浮层 */}
+            <div className="relative" ref={mediaMenuRef}>
               <button
                 type="button"
-                onClick={() => setShowMoods(!showMoods)}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-all"
-                title={t("diary.selectMood") || "选择表情"}
-              >
-                {selectedMoodEmoji ? (
-                  <span className="text-xs">{selectedMoodEmoji}</span>
-                ) : (
-                  <Smile size={14} className="text-tx-secondary" />
+                onClick={() => {
+                  setIsMediaMenuOpen(!isMediaMenuOpen);
+                }}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-all border border-app-border bg-app-surface font-medium",
+                  isMediaMenuOpen ? "bg-accent-primary/15 text-accent-primary border-accent-primary/20" : "text-tx-secondary"
                 )}
-                <span>表情</span>
+                title="选择媒体文件"
+              >
+                <Image size={14} className="text-tx-secondary" />
+                <span>媒体</span>
               </button>
               <AnimatePresence>
-                {showMoods && (
+                {isMediaMenuOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute bottom-10 left-0 bg-app-surface border border-app-border shadow-lg rounded-xl p-2 grid grid-cols-6 gap-1 z-50 w-64"
+                    className="absolute bottom-7 left-0 bg-app-surface border border-app-border shadow-lg rounded-xl p-1 z-50 w-32 flex flex-col"
                   >
-                    {MOODS.map(({ value, emoji }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => {
-                          setMood(value);
-                          setShowMoods(false);
-                        }}
-                        className={cn(
-                          "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-all",
-                          mood === value
-                            ? "bg-accent-primary/15 scale-110 ring-1 ring-accent-primary/30"
-                            : "hover:bg-app-hover hover:scale-110",
-                        )}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMediaMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                    >
+                      <Image size={14} className="text-tx-secondary" />
+                      <span>图片</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMediaMenuOpen(false);
+                        videoInputRef.current?.click();
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                    >
+                      <Video size={14} className="text-tx-secondary" />
+                      <span>视频</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMediaMenuOpen(false);
+                        startRecording();
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                    >
+                      <Mic size={14} className="text-tx-secondary" />
+                      <span>语音</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMediaMenuOpen(false);
+                        setShowOCRModal(true);
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
+                    >
+                      <ScanText size={14} className="text-tx-secondary" />
+                      <span>OCR</span>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* 图片按钮 */}
+            {/* 格式 A 按钮 */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={remainingSlots <= 0}
+              onClick={() => setShowFormatToolbar(!showFormatToolbar)}
               className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all",
-                remainingSlots <= 0
-                  ? "text-tx-tertiary/50 cursor-not-allowed"
-                  : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
+                "w-7 h-7 flex items-center justify-center rounded-md transition-colors font-bold text-xs",
+                showFormatToolbar ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover"
               )}
-              title={
-                remainingSlots <= 0
-                  ? t("diary.imageLimitReached").replace("{{n}}", String(MAX_IMAGES_PER_DIARY))
-                  : t("diary.addImage")
-              }
+              title="排版格式"
             >
-              <Image size={14} className="text-tx-secondary" />
-              <span>图片</span>
-              {pendingImages.filter(img => img.type !== "video").length > 0 && (
-                <span className="text-[10px] text-tx-tertiary font-medium tabular-nums ml-0.5">
-                  ({pendingImages.filter(img => img.type !== "video").length})
-                </span>
-              )}
+              A
             </button>
 
-            {/* 视频按钮 */}
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              disabled={remainingSlots <= 0}
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all",
-                remainingSlots <= 0
-                  ? "text-tx-tertiary/50 cursor-not-allowed"
-                  : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
-              )}
-              title="选择视频"
-            >
-              <Video size={14} className="text-tx-secondary" />
-              <span>视频</span>
-              {pendingImages.filter(img => img.type === "video").length > 0 && (
-                <span className="text-[10px] text-tx-tertiary font-medium tabular-nums ml-0.5">
-                  ({pendingImages.filter(img => img.type === "video").length})
-                </span>
-              )}
-            </button>
-
-            {/* 语音按钮 */}
-            <button
-              type="button"
-              onClick={startRecording}
-              disabled={recording || pendingVoice !== null}
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all",
-                (recording || pendingVoice !== null)
-                  ? "text-tx-tertiary/50 cursor-not-allowed"
-                  : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
-              )}
-              title={pendingVoice !== null ? "每条说说只能录制一段语音" : "录制语音"}
-            >
-              <Mic size={14} className="text-tx-secondary" />
-              <span>语音</span>
-            </button>
-
-            {/* OCR 按钮 */}
-            <button
-              type="button"
-              onClick={() => setShowOCRModal(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-all"
-              title="提取图片文字"
-            >
-              <ScanText size={14} className="text-tx-secondary" />
-              <span>OCR</span>
-            </button>
-
-            {/* AI 整理 / 撤销 按钮 */}
+            {/* AI 整理 */}
             {showUndoButton ? (
               <button
                 type="button"
