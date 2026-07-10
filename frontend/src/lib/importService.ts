@@ -1971,3 +1971,34 @@ function formatSqlDatetime(unixTs: number): string {
   const seconds = pad(d.getUTCSeconds());
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
+
+export function pickMarkdownFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".md,.markdown,.txt";
+    input.style.display = "none";
+    document.body.appendChild(input);
+
+    let settled = false;
+    const cleanup = () => {
+      if (input.parentNode) input.parentNode.removeChild(input);
+    };
+
+    input.onchange = () => {
+      settled = true;
+      const f = input.files && input.files[0];
+      cleanup();
+      resolve(f || null);
+    };
+
+    input.oncancel = () => {
+      if (settled) return;
+      cleanup();
+      resolve(null);
+    };
+
+    input.click();
+  });
+}
+

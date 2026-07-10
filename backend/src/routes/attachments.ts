@@ -47,9 +47,9 @@ import { v4 as uuid } from "uuid";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { resolveNotePermission, hasPermission } from "../middleware/acl";
+import { resolveNotePermission, hasPermission, getUserWorkspaceRole } from "../middleware/acl";
 import { enqueueAttachment } from "../services/embedding-worker";
-import { verifySudoFromRequest } from "../lib/auth-security";
+import { verifySudoFromRequest, getAuthUserId } from "../lib/auth-security";
 import { extractAttachmentIdsFromContent, syncReferences } from "../lib/attachmentRefs";
 import {
   parseThumbnailWidth,
@@ -385,9 +385,55 @@ export async function handleDownloadAttachment(c: Context): Promise<Response> {
   const id = c.req.param("id");
   const db = getDb();
   const row = db
-    .prepare("SELECT id, mimeType, path, filename FROM attachments WHERE id = ?")
-    .get(id) as { id: string; mimeType: string; path: string; filename: string } | undefined;
+    .prepare("SELECT id, mimeType, path, filename, noteId, userId, uploadSource FROM attachments WHERE id = ?")
+    .get(id) as { id: string; mimeType: string; path: string; filename: string; noteId: string; userId: string; uploadSource?: string } | undefined;
   if (!row) return c.json({ error: "附件不存在" }, 404);
+
+  // 权限校验：
+  const isBookOrCover = row.uploadSource === "book" || row.uploadSource === "book_cover";
+  if (isBookOrCover) {
+    const actorId = getAuthUserId(c);
+    if (!actorId) {
+      return c.json({ error: "未授权，请先登录", code: "UNAUTHENTICATED" }, 401);
+    }
+    
+    // 查询该附件或封面关联的书籍记录
+    const book = db.prepare(`
+      SELECT * FROM books 
+      WHERE attachmentId = ? 
+         OR (metadata LIKE '%' || ? || '%')
+    `).get(row.id, row.id) as any;
+
+    if (!book) {
+      return c.json({ error: "书籍不存在" }, 404);
+    }
+
+    if (book.visibility === "PRIVATE") {
+      if (book.userId !== actorId) {
+        return c.json({ error: "无权访问此私有书籍", code: "FORBIDDEN" }, 403);
+      }
+    } else if (book.visibility === "WORKSPACE") {
+      if (book.workspaceId) {
+        const role = getUserWorkspaceRole(book.workspaceId, actorId);
+        if (!role) {
+          return c.json({ error: "无权访问此工作区书籍", code: "FORBIDDEN" }, 403);
+        }
+      }
+    }
+  } else {
+    // 权限校验：如果笔记已公开分享，则允许免登录访问；否则必须校验登录态和笔记读权限。
+    const isShared = db.prepare("SELECT id FROM shares WHERE noteId = ?").get(row.noteId);
+    if (!isShared) {
+      const actorId = getAuthUserId(c);
+      if (!actorId) {
+        return c.json({ error: "未授权，请先登录", code: "UNAUTHENTICATED" }, 401);
+      }
+      const { permission } = resolveNotePermission(row.noteId, actorId);
+      if (!permission) {
+        return c.json({ error: "无权访问该附件", code: "FORBIDDEN" }, 403);
+      }
+    }
+  }
 
   const absPath = path.join(ATTACHMENTS_DIR, row.path);
   if (!fs.existsSync(absPath)) {
@@ -420,7 +466,7 @@ export async function handleDownloadAttachment(c: Context): Promise<Response> {
       return c.body(toResponseBody(thumb.buffer), 200, {
         "Content-Type": thumb.mimeType,
         // 缩略图与原图一样 immutable（webp 内容由 (id, w) 唯一决定）
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": "private, no-cache",
         // 让前端 / 代理可以观察到这张响应是缩略图
         "X-Thumbnail-Width": String(requestedWidth),
       });
@@ -434,7 +480,7 @@ export async function handleDownloadAttachment(c: Context): Promise<Response> {
     // uuid 文件名不可变，可以长缓存
     // Phase 5: 为附件下载添加严格 CSP，防止 SVG/HTML 等类型导致 XSS
     "Content-Security-Policy": "default-src 'none'; sandbox;",
-    "Cache-Control": "public, max-age=31536000, immutable",
+    "Cache-Control": "private, no-cache",
   };
   // 非图片（或显式 ?download=1）：带 Content-Disposition，浏览器点击会按原名下载。
   // 图片默认 inline，由 <img> 直接渲染。

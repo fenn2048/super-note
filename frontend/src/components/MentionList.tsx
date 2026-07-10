@@ -121,9 +121,16 @@ export default function MentionList() {
     try {
       switch (item.sourceType) {
         case "note":
-          await api.getNote(item.sourceId); // 权限验证
-          actions.setViewMode("all");
-          window.dispatchEvent(new CustomEvent("super:open-note", { detail: item.sourceId }));
+          try {
+            const { bookHash } = await api.books.getNoteInfo(item.sourceId);
+            window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+            localStorage.setItem("super-target-book-note-id", item.sourceId);
+            window.dispatchEvent(new CustomEvent("super:goto-book-note", { detail: { noteId: item.sourceId } }));
+          } catch {
+            await api.getNote(item.sourceId); // 权限验证
+            actions.setViewMode("all");
+            window.dispatchEvent(new CustomEvent("super:open-note", { detail: item.sourceId }));
+          }
           break;
         case "diary":
           actions.setViewMode("diary");

@@ -340,7 +340,7 @@ app.post("/", async (c) => {
 
   const db = getDb();
 
-  // 确定目标笔记本：未指定 → "剪藏笔记本"
+  // 确定目标笔记本：未指定 → "剪藏笔记"
   let targetNotebookId = notebookId;
   if (!targetNotebookId) {
     if (!workspaceId) {
@@ -348,13 +348,13 @@ app.post("/", async (c) => {
     }
     const exist = db
       .prepare("SELECT id FROM notebooks WHERE workspaceId = ? AND name = ? AND isDeleted = 0")
-      .get(workspaceId, "剪藏笔记本") as { id: string } | undefined;
+      .get(workspaceId, "剪藏笔记") as { id: string } | undefined;
     if (exist) {
       targetNotebookId = exist.id;
     } else {
       targetNotebookId = uuid();
       db.prepare("INSERT INTO notebooks (id, userId, workspaceId, name, icon, visibility) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(targetNotebookId, userId, workspaceId, "剪藏笔记本", "📓", "PRIVATE");
+        .run(targetNotebookId, userId, workspaceId, "剪藏笔记", "📓", "PRIVATE");
     }
   }
 

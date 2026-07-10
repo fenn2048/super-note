@@ -23,8 +23,14 @@ import {
   getAllTags,
   getNote as localGetNote,
   isReady as localStoreReady,
+  getAllBooks,
+  getAllBookGroups,
+  getBookConfig,
+  getBookNotes,
+  getBook,
+  getBookFile
 } from "@/lib/localStore";
-import type { Note, NoteListItem, Notebook, Tag } from "@/types";
+import type { Note, NoteListItem, Notebook, Tag, Book, BookGroup, BookConfig, BookNote } from "@/types";
 
 /** 全局离线状态 —— 任意一次 fallback 命中即标 true，online 事件复位 */
 let offlineHit = false;
@@ -113,5 +119,41 @@ export function readNote(id: string, online: () => Promise<Note>): Promise<Note>
     if (!n) throw new Error("笔记不在本地缓存中");
     if (!n.content) throw new Error("该笔记的正文未缓存，离线时无法打开");
     return n;
+  });
+}
+
+export function readBooks(online: () => Promise<Book[]>): Promise<Book[]> {
+  return withFallback(online, () => getAllBooks());
+}
+
+export function readBookGroups(online: () => Promise<BookGroup[]>): Promise<BookGroup[]> {
+  return withFallback(online, () => getAllBookGroups());
+}
+
+export function readBookDetail(bookHash: string, online: () => Promise<Book>): Promise<Book> {
+  return withFallback(online, async () => {
+    const b = await getBook(bookHash);
+    if (!b) throw new Error("书籍元数据不在本地缓存中");
+    return b;
+  });
+}
+
+export function readBookConfig(bookHash: string, online: () => Promise<BookConfig>): Promise<BookConfig> {
+  return withFallback(online, async () => {
+    const c = await getBookConfig(bookHash);
+    if (!c) throw new Error("书籍偏好设置不在本地缓存中");
+    return c;
+  });
+}
+
+export function readBookNotes(bookHash: string, online: () => Promise<BookNote[]>): Promise<BookNote[]> {
+  return withFallback(online, () => getBookNotes(bookHash));
+}
+
+export function readBookFile(bookHash: string, online: () => Promise<Blob>): Promise<Blob> {
+  return withFallback(online, async () => {
+    const blob = await getBookFile(bookHash);
+    if (!blob) throw new Error("书籍离线文件尚未缓存，离线时无法打开");
+    return blob;
   });
 }

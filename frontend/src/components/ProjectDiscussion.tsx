@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import { useAppActions } from "@/store/AppContext";
 import {
-  Send, Smile, Image as ImageIcon, Link2, X, MessageSquare,
+  Send, Smile, Image as ImageIcon, Link2, Link, X, MessageSquare,
   Bookmark, Briefcase, FileText, CheckCircle2, Circle, Loader2, Check, AlertTriangle,
   Sparkles, ArrowRight, Brain
 } from "lucide-react";
@@ -35,6 +35,51 @@ interface AISuggestion {
 
 const AI_AVATAR = "🤖";
 const AI_NAME = "AI 助手";
+
+export function renderTextWithLinks(text: string) {
+  if (!text) return "";
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    if (match[1] && match[2]) {
+      parts.push(
+        <a 
+          key={match.index} 
+          href={match[2]} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {match[1]}
+        </a>
+      );
+    } else if (match[3]) {
+      parts.push(
+        <a 
+          key={match.index} 
+          href={match[3]} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {match[3]}
+        </a>
+      );
+    }
+    lastIndex = linkRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
+}
 
 export default function ProjectDiscussionView({ project, tasks }: ProjectDiscussionProps) {
   const { t } = useTranslation();
@@ -68,6 +113,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLInputElement>(null);
 
 
   const fetchDiscussions = async () => {
@@ -507,7 +553,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                       ? "bg-gradient-to-br from-violet-50 to-pink-50 dark:from-violet-500/5 dark:to-pink-500/5 border-violet-200/50 dark:border-violet-500/20 text-tx-secondary"
                       : "bg-app-sidebar border-app-border text-tx-secondary"
                   )}>
-                    {post.content}
+                    {renderTextWithLinks(post.content)}
                     {post.linkedCards && post.linkedCards.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-app-border/40 flex flex-wrap gap-2">
                         {post.linkedCards.map((card) => (
@@ -688,6 +734,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
       <form onSubmit={handleSend} className="p-3 border-t border-app-border bg-app-sidebar flex items-center gap-2 shrink-0">
         <div className="relative flex-1 flex items-center bg-app-bg border border-app-border rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-accent-primary focus-within:border-accent-primary transition-all">
           <Input
+            ref={composerInputRef}
             value={content}
             onChange={(e) => {
               setContent(e.target.value);
@@ -721,6 +768,30 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
               title={t("projects.linkCard") || "关联卡片"}
             >
               <Link2 size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const url = window.prompt("输入链接地址 (URL)", "https://");
+                if (!url) return;
+                const linkText = window.prompt("输入链接文字", "链接");
+                if (!linkText) return;
+                const formatted = `[${linkText}](${url})`;
+                const input = composerInputRef.current;
+                if (input) {
+                  const start = input.selectionStart || 0;
+                  const end = input.selectionEnd || 0;
+                  const before = content.substring(0, start);
+                  const after = content.substring(end);
+                  setContent(before + formatted + after);
+                } else {
+                  setContent(content + formatted);
+                }
+              }}
+              className="p-1 hover:bg-app-hover rounded-lg hover:text-tx-primary transition-colors"
+              title="插入网页链接"
+            >
+              <Link size={15} />
             </button>
           </div>
         </div>

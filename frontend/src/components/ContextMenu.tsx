@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export interface ContextMenuItem {
@@ -70,14 +71,14 @@ export default function ContextMenu({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
       ref={internalRef}
       style={{
         position: "fixed",
         top: adjustedPos.y,
         left: adjustedPos.x,
-        zIndex: 100,
+        zIndex: 9999,
         animation: "contextMenuIn 0.12s ease-out",
       }}
       className="w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl dark:shadow-2xl dark:shadow-black/50 py-1 select-none"
@@ -111,6 +112,8 @@ export default function ContextMenu({
           </button>
         )
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
+

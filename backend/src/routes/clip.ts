@@ -275,24 +275,24 @@ clip.post("/save", async (c) => {
           .prepare(
             "SELECT id FROM notebooks WHERE workspaceId = ? AND name = ? AND isDeleted = 0",
           )
-          .get(workspaceId, "剪藏笔记本");
+          .get(workspaceId, "剪藏笔记");
       } else {
         nb = db
           .prepare(
             "SELECT id FROM notebooks WHERE userId = ? AND workspaceId IS NULL AND name = ? AND isDeleted = 0",
           )
-          .get(userId, "剪藏笔记本");
+          .get(userId, "剪藏笔记");
       }
 
       if (nb) {
         targetNotebookId = nb.id;
       } else {
-        // 创建名为 "剪藏笔记本" 的笔记本
+        // 创建名为 "剪藏笔记" 的笔记本
         targetNotebookId = uuid();
         db.prepare(
           `INSERT INTO notebooks (id, userId, workspaceId, parentId, name, icon, sortOrder, visibility)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(targetNotebookId, userId, workspaceId, null, "剪藏笔记本", "📓", 0, "PRIVATE");
+        ).run(targetNotebookId, userId, workspaceId, null, "剪藏笔记", "📓", 0, "PRIVATE");
       }
     } else {
       // 校验笔记本所有权/写权限

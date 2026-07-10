@@ -113,7 +113,6 @@ export const WORKSPACE_FEATURE_META: Array<{
   { key: "notes", label: "笔记", description: "笔记本、正文、标签等核心功能" },
   { key: "diaries", label: "说说", description: "时间线式短内容" },
   { key: "tasks", label: "待办", description: "任务清单与看板" },
-  { key: "mindmaps", label: "思维导图", description: "节点式思维导图" },
   { key: "files", label: "文件", description: "独立文件管理" },
   { key: "favorites", label: "收藏", description: "快速收藏的笔记集合" },
   { key: "projects", label: "项目", description: "项目管理、任务看板与协作" },
@@ -203,7 +202,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books";
 
 export type MobileView = "list" | "editor";
 
@@ -405,6 +404,7 @@ export interface MindMapNode {
 
 export interface MindMapData {
   root: MindMapNode;
+  structure?: string;
 }
 
 export interface MindMap {
@@ -453,6 +453,12 @@ export interface Diary {
   commentCount?: number;
   /** AI 助手发布的说说时，记录谁调起的 AI */
   triggerUserId?: string | null;
+  bookHash?: string | null;
+  bookNoteId?: string | null;
+  bookTitle?: string | null;
+  bookAuthor?: string | null;
+  bookMetadata?: string | null;
+  bookNoteText?: string | null;
 }
 
 export interface DiaryTimeline {
@@ -663,6 +669,8 @@ export interface ProjectTask {
   checklists?: ProjectTaskChecklist[];
   attachments?: Array<{ id: string; filename: string; mimeType: string; size: number }>;
   dependencies?: Array<{ id: string; title: string; isCompleted: number }>;
+  projectName?: string;
+  stageName?: string;
 }
 
 export interface ProjectTaskChecklist {
@@ -745,5 +753,68 @@ export interface AuditLog {
   createdAt: string;
   username?: string;
   displayName?: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface BookGroup {
+  id: string;
+  name: string;
+  userId: string;
+  workspaceId: string | null;
+  createdAt: string;
+}
+
+export interface Book {
+  userId: string;
+  bookHash: string;
+  workspaceId: string | null;
+  attachmentId: string;
+  title: string;
+  author: string;
+  format: string;
+  size: number;
+  groupId: string | null;
+  tags: string;
+  progress: number;
+  readingStatus: "unread" | "reading" | "finished";
+  visibility: "PRIVATE" | "WORKSPACE";
+  metadata: string;
+  createdAt: string;
+  updatedAt: string;
+  creatorName?: string | null;
+}
+
+export interface BookConfig {
+  userId: string;
+  bookHash: string;
+  location: string | null;
+  xpointer: string | null;
+  progress: string;
+  viewSettings: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookNote {
+  id: string;
+  userId: string;
+  bookHash: string;
+  type: "highlight" | "note";
+  cfi: string | null;
+  xpointer0: string | null;
+  xpointer1: string | null;
+  page: number;
+  text: string;
+  style: string;
+  color: string;
+  note: string;
+  visibility?: "private" | "public" | string;
+  likesCount?: number;
+  likedByMe?: boolean;
+  comments?: Array<{ id: string; userId: string; username: string; displayName?: string; avatarUrl?: string | null; content: string; createdAt: string }>;
+  createdAt: string;
+  updatedAt: string;
+  username?: string;
+  displayName?: string;
   avatarUrl?: string | null;
 }

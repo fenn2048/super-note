@@ -1624,11 +1624,29 @@ export default function TaskCenter() {
           const stages = await api.getProjectStages(todoProject.id);
           const todoStage = stages.find(s => s.name === "待启动" || s.name === "待规划") || stages[0];
           if (todoStage) {
+            let calculatedRemindAt: string | null = null;
+            if (dueDateVal) {
+              try {
+                const hasTime = dueDateVal.includes(" ");
+                const datePart = hasTime ? dueDateVal.split(" ")[0] : dueDateVal;
+                const timePart = hasTime ? dueDateVal.split(" ")[1] : "";
+                const [year, month, day] = datePart.split("-").map(Number);
+                const date = new Date(year, month - 1, day);
+                date.setDate(date.getDate() - 1);
+                calculatedRemindAt = hasTime 
+                  ? `${format(date, "yyyy-MM-dd")} ${timePart}`
+                  : format(date, "yyyy-MM-dd");
+              } catch {
+                calculatedRemindAt = null;
+              }
+            }
+
             const task = await api.createProjectTask(todoProject.id, {
               stageId: todoStage.id,
               title: titleToCreate,
               description: descToCreate || titleToCreate,
               endDate: dueDateVal ? new Date(dueDateVal).toISOString() : null,
+              remindAt: calculatedRemindAt,
               isRecurring: isRecurring || 0,
               recurrenceRule: recurrenceRule || null,
             });

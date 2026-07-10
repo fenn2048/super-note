@@ -1074,6 +1074,9 @@ auth.delete("/sessions", (c) => {
 // 前端在本地清 token 的同时调用此接口，确保服务端的 user_sessions 也被吊销，
 // 这样即使 token 未过期被复用（如日志泄露、浏览器缓存），中间件依旧会拦截。
 auth.post("/logout", (c) => {
+  const { deleteCookie } = require("hono/cookie");
+  deleteCookie(c, "auth_token", { path: "/" });
+
   const authHeader = c.req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return c.json({ success: true });

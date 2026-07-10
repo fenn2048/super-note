@@ -117,6 +117,76 @@ test("Diary (Saysay) Module Tests", async (t) => {
     assert.strictEqual(comments[0].id, comment.id);
   });
 
+  await t.test("4.5. AND/OR Search and Tag filters", async () => {
+    // Seed tags
+    const tag1Id = "tag-coding";
+    const tag2Id = "tag-baking";
+    db.prepare("INSERT INTO tags (id, userId, name) VALUES (?, ?, ?)")
+      .run(tag1Id, userId, "coding");
+    db.prepare("INSERT INTO tags (id, userId, name) VALUES (?, ?, ?)")
+      .run(tag2Id, userId, "baking");
+
+    // Post 1: contentText: "Happy coding today!" with tag "coding"
+    const res1 = await app.request("/api/diary", {
+      method: "POST",
+      headers: { "X-User-Id": userId, "Content-Type": "application/json" },
+      body: JSON.stringify({ contentText: "Happy coding today!", tagIds: [tag1Id] }),
+    });
+    assert.strictEqual(res1.status, 201);
+    const post1 = await res1.json();
+
+    // Post 2: contentText: "Baking some cakes." with tag "baking"
+    const res2 = await app.request("/api/diary", {
+      method: "POST",
+      headers: { "X-User-Id": userId, "Content-Type": "application/json" },
+      body: JSON.stringify({ contentText: "Baking some cakes.", tagIds: [tag2Id] }),
+    });
+    assert.strictEqual(res2.status, 201);
+    const post2 = await res2.json();
+
+    // Post 3: contentText: "Learning code and baking." with tags "coding" and "baking"
+    const res3 = await app.request("/api/diary", {
+      method: "POST",
+      headers: { "X-User-Id": userId, "Content-Type": "application/json" },
+      body: JSON.stringify({ contentText: "Learning code and baking.", tagIds: [tag1Id, tag2Id] }),
+    });
+    assert.strictEqual(res3.status, 201);
+    const post3 = await res3.json();
+
+    // Test Search AND: "code baking" -> Should match only Post 3
+    const resAnd = await app.request("/api/diary/timeline?search=code+baking&searchMode=AND", {
+      method: "GET",
+      headers: { "X-User-Id": userId },
+    });
+    assert.strictEqual(resAnd.status, 200);
+    const bodyAnd = await resAnd.json();
+    assert.strictEqual(bodyAnd.items.length, 1);
+    assert.strictEqual(bodyAnd.items[0].id, post3.id);
+
+    // Test Search OR: "coding baking" -> Should match Post 1, Post 2, and Post 3
+    const resOr = await app.request("/api/diary/timeline?search=coding+baking&searchMode=OR", {
+      method: "GET",
+      headers: { "X-User-Id": userId },
+    });
+    assert.strictEqual(resOr.status, 200);
+    const bodyOr = await resOr.json();
+    assert.strictEqual(bodyOr.items.length, 3);
+
+    // Test Tag Search AND: "#coding #baking" -> Should match only Post 3
+    const resTagAnd = await app.request("/api/diary/timeline?search=%23coding+%23baking&searchMode=AND", {
+      method: "GET",
+      headers: { "X-User-Id": userId },
+    });
+    assert.strictEqual(resTagAnd.status, 200);
+    const bodyTagAnd = await resTagAnd.json();
+    assert.strictEqual(bodyTagAnd.items.length, 1);
+    assert.strictEqual(bodyTagAnd.items[0].id, post3.id);
+
+    // Clean up created test diaries so Delete Diary Post test works as expected
+    db.prepare("DELETE FROM diaries WHERE id IN (?, ?, ?)").run(post1.id, post2.id, post3.id);
+    db.prepare("DELETE FROM tags WHERE id IN (?, ?)").run(tag1Id, tag2Id);
+  });
+
   await t.test("5. Delete Diary Post", async () => {
     const res = await app.request(`/api/diary/${createdDiaryId}`, {
       method: "DELETE",

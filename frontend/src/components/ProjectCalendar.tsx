@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { ProjectStage, ProjectTask } from "@/types";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CheckCircle2, Circle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CheckCircle2, Circle, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Lunar, Solar, HolidayUtil } from "lunar-javascript";
+import { cn } from "@/lib/utils";
+
 
 interface ProjectCalendarProps {
   stages: ProjectStage[];
@@ -14,11 +17,18 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
   const { t } = useTranslation();
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
-  // Extract all tasks
-  const tasks = stages.reduce<ProjectTask[]>((acc, stage) => {
-    return [...acc, ...(stage.tasks || [])];
-  }, []);
+  // Extract all tasks with stageName decoration
+  const tasks = useMemo(() => {
+    return stages.reduce<any[]>((acc, stage) => {
+      const stageTasks = (stage.tasks || []).map(task => ({
+        ...task,
+        stageName: (task as any).stageName || stage.name
+      }));
+      return [...acc, ...stageTasks];
+    }, []);
+  }, [stages]);
 
   const uniqueProjects = useMemo(() => {
     const projMap = new Map<string, string>();
@@ -90,9 +100,25 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
   const getTasksForDate = (date: Date) => {
     const dStr = date.toISOString().split("T")[0];
     return tasks.filter((task) => {
+      // 1. Project Filter
       if (selectedProjectId !== "all" && task.projectId !== selectedProjectId) {
         return false;
       }
+
+      // 2. Status Filter
+      if (selectedStatus !== "all") {
+        const isCompleted = task.isCompleted === 1 || (task as any).stageName === "已完成";
+        const isPaused = task.status === "paused";
+        const isNotStarted = task.isCompleted !== 1 && !isPaused && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划");
+        const isInProgress = task.isCompleted !== 1 && !isPaused && !isNotStarted;
+
+        if (selectedStatus === "pending" && !isNotStarted) return false;
+        if (selectedStatus === "in_progress" && !isInProgress) return false;
+        if (selectedStatus === "paused" && !isPaused) return false;
+        if (selectedStatus === "completed" && !isCompleted) return false;
+      }
+
+      // 3. Date range match
       if (!task.startDate && !task.endDate) return false;
       const start = task.startDate ? task.startDate.split("T")[0] : dStr;
       const end = task.endDate ? task.endDate.split("T")[0] : dStr;
@@ -125,7 +151,7 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary max-w-[150px] truncate"
+              className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary max-w-[120px] md:max-w-[150px] truncate"
             >
               <option value="all">{t("projects.allProjects") || "全部项目"}</option>
               {uniqueProjects.map((proj) => (
@@ -135,6 +161,19 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
               ))}
             </select>
           )}
+
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary min-w-[85px] max-w-[120px] truncate"
+          >
+            <option value="all">{t("calendar.allStatus") || "所有状态"}</option>
+            <option value="pending">{t("calendar.statusPending") || "待启动"}</option>
+            <option value="in_progress">{t("calendar.statusInProgress") || "进行中"}</option>
+            <option value="paused">{t("calendar.statusPaused") || "已暂停"}</option>
+            <option value="completed">{t("calendar.statusCompleted") || "已完成"}</option>
+          </select>
+
           <Button variant="outline" size="sm" onClick={today} className="text-xs">
             {t("calendar.today") || "今天"}
           </Button>
@@ -162,35 +201,101 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
           const dayTasks = getTasksForDate(cell.date);
           const isToday = cell.date.toDateString() === new Date().toDateString();
 
+          // Lunar calculations
+          const lunar = Lunar.fromDate(cell.date);
+          const lunarDateStr = lunar.getDay() === 1 ? `${lunar.getMonthInChinese()}月` : lunar.getDayInChinese();
+
+          const isFirstDayOfMonth = cell.date.getDate() === 1;
+          const solarDateStr = isFirstDayOfMonth ? `${cell.date.getMonth() + 1}月1日` : `${cell.date.getDate()}日`;
+
+          // Holidays, Solar Terms and Festivals
+          const labels: { text: string; isHoliday: boolean; isWork?: boolean }[] = [];
+          const h = HolidayUtil.getHoliday(cell.date.getFullYear(), cell.date.getMonth() + 1, cell.date.getDate());
+          let holidayName = "";
+          if (h) {
+            holidayName = h.getName();
+            labels.push({
+              text: `${holidayName} (${h.isWork() ? '班' : '休'})`,
+              isHoliday: true,
+              isWork: h.isWork()
+            });
+          }
+
+          const jieQi = lunar.getJieQi();
+          if (jieQi) {
+            labels.push({ text: jieQi, isHoliday: false });
+          }
+
+          const solar = Solar.fromDate(cell.date);
+          solar.getFestivals().forEach((f: string) => {
+            if (!holidayName || (!holidayName.includes(f) && !f.includes(holidayName))) {
+              labels.push({ text: f, isHoliday: false });
+            }
+          });
+
+          lunar.getFestivals().forEach((f: string) => {
+            if (!holidayName || (!holidayName.includes(f) && !f.includes(holidayName))) {
+              labels.push({ text: f, isHoliday: false });
+            }
+          });
+
           return (
             <div
               key={idx}
-              className={`min-h-0 flex flex-col p-1.5 space-y-1 transition-colors ${
+              className={cn(
+                "min-h-0 flex flex-col p-1.5 space-y-1 transition-colors",
                 cell.isCurrentMonth ? "bg-app-bg" : "bg-app-sidebar/45 opacity-55"
-              }`}
+              )}
             >
-              <div className="flex justify-between items-center text-xs shrink-0">
-                <span
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full font-bold ${
-                    isToday
-                      ? "bg-accent-primary text-white"
-                      : cell.isCurrentMonth
-                      ? "text-tx-secondary"
-                      : "text-tx-tertiary"
-                  }`}
-                >
-                  {cell.date.getDate()}
+              {/* Header: Lunar Date on Left, Solar Date on Right */}
+              <div className="flex justify-between items-center text-xs shrink-0 select-none">
+                <span className="text-tx-tertiary text-[9px] font-medium truncate max-w-[50%]">
+                  {lunarDateStr}
                 </span>
-                {dayTasks.length > 0 && (
-                  <span className="text-[10px] text-tx-tertiary font-mono">
-                    {dayTasks.length} {t("projects.tasksCount") || "任务"}
-                  </span>
-                )}
+                <span className={cn("text-xs font-semibold flex items-center gap-0.5 shrink-0", cell.isCurrentMonth ? "text-tx-secondary" : "text-tx-tertiary")}>
+                  {isToday ? (
+                    <>
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#ff4d4f] text-white text-[10px] font-bold shrink-0">
+                        {cell.date.getDate()}
+                      </span>
+                      <span>日</span>
+                    </>
+                  ) : (
+                    solarDateStr
+                  )}
+                </span>
               </div>
 
+              {/* Holidays, Solar Terms and Festivals list */}
+              {labels.length > 0 && (
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  {labels.map((lbl, lIdx) => (
+                    <div
+                      key={lIdx}
+                      className={cn(
+                        "w-full px-1 py-0.5 rounded text-[9px] leading-none font-semibold flex items-center gap-0.5 border border-transparent truncate shrink-0",
+                        lbl.isHoliday
+                          ? lbl.isWork
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-500/20"
+                            : "bg-[#e6f4ff] text-[#1677ff] border border-[#d9d9d9]/10"
+                          : "bg-[#e6f4ff] text-[#1677ff]"
+                      )}
+                      title={lbl.text}
+                    >
+                      {!lbl.isHoliday && (
+                        <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[#1677ff] text-white shrink-0 scale-90">
+                          <Star size={7} className="fill-current text-white" />
+                        </span>
+                      )}
+                      <span className="truncate">{lbl.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Tasks list for this day */}
-              <div className="flex-1 overflow-y-auto space-y-1 max-h-[120px] scrollbar-none">
-                {dayTasks.slice(0, 4).map((task) => (
+              <div className="flex-1 overflow-y-auto space-y-1 max-h-[100px] scrollbar-none">
+                {dayTasks.slice(0, 3).map((task) => (
                   <div
                     key={task.id}
                     className={`group/cal-task relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] cursor-pointer border transition-colors truncate font-medium ${
@@ -209,9 +314,9 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
                     <span className="truncate">{task.title}</span>
                   </div>
                 ))}
-                {dayTasks.length > 4 && (
+                {dayTasks.length > 3 && (
                   <div className="text-[9px] text-tx-tertiary text-center font-medium">
-                    +{dayTasks.length - 4} ...
+                    +{dayTasks.length - 3} ...
                   </div>
                 )}
               </div>

@@ -211,7 +211,7 @@ function CreateMenu({
   onClose,
   anchorRef,
 }: {
-  onPick: (type: "normal" | "word") => void;
+  onPick: (type: "normal" | "word" | "markdown") => void;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLButtonElement | null>;
 }) {
@@ -256,6 +256,12 @@ function CreateMenu({
       label: t("noteList.createWordNote"),
       desc: t("noteList.createWordNoteDesc"),
       icon: <FileType2 size={14} />,
+    },
+    {
+      id: "markdown" as const,
+      label: "导入 Markdown 笔记",
+      desc: "选择并导入本地 Markdown 文件",
+      icon: <FileUp size={14} />,
     },
   ];
 
@@ -1178,7 +1184,7 @@ export default function NoteList() {
   const createMenuAnchorMobileRef = useRef<HTMLButtonElement>(null);
   const createMenuAnchorFabRef = useRef<HTMLButtonElement>(null);
   // picker 模式下记住即将创建的笔记类型；用户选 notebook 后据此分支。
-  const [pendingNoteType, setPendingNoteType] = useState<"normal" | "word">("normal");
+  const [pendingNoteType, setPendingNoteType] = useState<"normal" | "word" | "markdown">("normal");
   const [dateFilter, setDateFilter] = useState<string | null>(null); // YYYY-MM-DD
   const [showCalendar, setShowCalendar] = useState(false);
   // 排序偏好（持久化到 localStorage，不入 store；用户在不同设备/浏览器下可独立设置）
@@ -1602,7 +1608,7 @@ export default function NoteList() {
     }
   }, [actions, state.activeNote?.id, sortedNotes, lastClickedId, selectedIds.size, t]);
 
-  const handleCreateNote = async (noteType: "normal" | "word" = "normal") => {
+  const handleCreateNote = async (noteType: "normal" | "word" | "markdown" = "normal") => {
     haptic.light();
     // 回收站视图禁止新建笔记
     if (state.viewMode === "trash") {
@@ -1639,7 +1645,7 @@ export default function NoteList() {
   // noteType="word" 时：弹文件选择器，走 importDocxAsNote（解析 .docx 为富文本笔记）。
   const createNoteInNotebook = async (
     notebookId: string,
-    noteType: "normal" | "word" = "normal",
+    noteType: "normal" | "word" | "markdown" = "normal",
   ) => {
     try {
       let note: any;
@@ -1651,6 +1657,14 @@ export default function NoteList() {
         const result = await importDocxAsNote({ notebookId, file });
         note = result.note;
         toast.success(t('export.exportComplete'));
+      } else if (noteType === "markdown") {
+        const { pickMarkdownFile, importMarkdownAsNote } = await import("@/lib/importService");
+        const file = await pickMarkdownFile();
+        if (!file) return; // 用户取消
+        toast.info(t('noteList.importing'));
+        const result = await importMarkdownAsNote({ notebookId, file });
+        note = result.note;
+        toast.success("导入成功");
       } else {
         note = await api.createNote({ notebookId, title: t('common.untitledNote') });
       }

@@ -212,8 +212,6 @@ async function loadWorkspacesAndNotebooks() {
   const cfg = await getConfig();
   const wsSelect = document.getElementById("workspace-select") as HTMLSelectElement;
   
-  const savedWsId = cfg.lastWorkspaceId || "personal";
-  
   try {
     const workspaces = await getClipWorkspaces(cfg);
     
@@ -225,10 +223,18 @@ async function loadWorkspacesAndNotebooks() {
       wsSelect.appendChild(opt);
     }
     
-    wsSelect.value = savedWsId;
-    if (wsSelect.value !== savedWsId) {
-      wsSelect.value = "personal";
+    let defaultWsId = "personal";
+    const hasLastWs = cfg.lastWorkspaceId && (cfg.lastWorkspaceId === "personal" || workspaces.some(w => w.id === cfg.lastWorkspaceId));
+    if (hasLastWs) {
+      defaultWsId = cfg.lastWorkspaceId!;
+    } else {
+      const familyWs = workspaces.find(w => w.name.includes("家庭空间") || w.name.includes("家庭"));
+      if (familyWs) {
+        defaultWsId = familyWs.id;
+      }
     }
+    
+    wsSelect.value = defaultWsId;
     
     // 监听工作区切换事件
     wsSelect.onchange = async () => {
@@ -254,7 +260,7 @@ async function loadNotebooksForWorkspace(workspaceId: string) {
     const notebooks = await getClipNotebooks(cfg, wsVal);
     
     nbSelect.innerHTML = `
-      <option value="__default__">📓 默认：剪藏笔记本</option>
+      <option value="__default__">📓 默认：剪藏笔记</option>
       <option value="__diary__">💬 保存为说说</option>
     `;
     

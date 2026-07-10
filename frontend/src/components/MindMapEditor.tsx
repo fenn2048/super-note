@@ -24,6 +24,7 @@ interface LayoutNode {
   collapsed: boolean;
   children: LayoutNode[];
   parent: LayoutNode | null;
+  side?: "left" | "right";
 }
 
 const NODE_H = 36;
@@ -67,12 +68,92 @@ function getSubtreeHeight(node: LayoutNode): number {
   return Math.max(node.height, total);
 }
 
-function layoutTree(node: LayoutNode, x: number, yCenter: number) {
-  node.x = x;
+function getSubtreeWidth(node: LayoutNode): number {
+  if (node.children.length === 0) return node.width;
+  let total = 0;
+  node.children.forEach((c, i) => {
+    total += getSubtreeWidth(c);
+    if (i > 0) total += H_GAP;
+  });
+  return Math.max(node.width, total);
+}
+
+// 1. 逻辑图 & 思维导图布局
+function layoutLogical(root: LayoutNode, structure: string) {
+  root.x = 0;
+  root.y = -root.height / 2;
+  
+  if (root.children.length === 0) return;
+
+  if (structure === "mindmap") {
+    // 左右分布
+    const rightChildren = root.children.filter((_, i) => i % 2 === 0);
+    const leftChildren = root.children.filter((_, i) => i % 2 !== 0);
+
+    if (rightChildren.length > 0) {
+      const totalH = rightChildren.reduce(
+        (sum, c, i) => sum + getSubtreeHeight(c) + (i > 0 ? V_GAP : 0),
+        0
+      );
+      let cy = 0 - totalH / 2;
+      rightChildren.forEach((c) => {
+        const ch = getSubtreeHeight(c);
+        layoutSubtreeLogical(c, root.width + H_GAP, cy + ch / 2, "right");
+        cy += ch + V_GAP;
+      });
+    }
+
+    if (leftChildren.length > 0) {
+      const totalH = leftChildren.reduce(
+        (sum, c, i) => sum + getSubtreeHeight(c) + (i > 0 ? V_GAP : 0),
+        0
+      );
+      let cy = 0 - totalH / 2;
+      leftChildren.forEach((c) => {
+        const ch = getSubtreeHeight(c);
+        layoutSubtreeLogical(c, -(root.width + H_GAP), cy + ch / 2, "left");
+        cy += ch + V_GAP;
+      });
+    }
+  } else if (structure === "left-logical" || structure === "left-brace-map") {
+    // 向左逻辑图
+    const totalH = root.children.reduce(
+      (sum, c, i) => sum + getSubtreeHeight(c) + (i > 0 ? V_GAP : 0),
+      0
+    );
+    let cy = 0 - totalH / 2;
+    root.children.forEach((c) => {
+      const ch = getSubtreeHeight(c);
+      layoutSubtreeLogical(c, -(root.width + H_GAP), cy + ch / 2, "left");
+      cy += ch + V_GAP;
+    });
+  } else {
+    // 默认向右逻辑图/括号图
+    const totalH = root.children.reduce(
+      (sum, c, i) => sum + getSubtreeHeight(c) + (i > 0 ? V_GAP : 0),
+      0
+    );
+    let cy = 0 - totalH / 2;
+    root.children.forEach((c) => {
+      const ch = getSubtreeHeight(c);
+      layoutSubtreeLogical(c, root.width + H_GAP, cy + ch / 2, "right");
+      cy += ch + V_GAP;
+    });
+  }
+}
+
+function layoutSubtreeLogical(node: LayoutNode, x: number, yCenter: number, side: "left" | "right") {
+  node.side = side;
+  if (side === "left") {
+    node.x = x - node.width;
+  } else {
+    node.x = x;
+  }
   node.y = yCenter - node.height / 2;
+
   if (node.children.length === 0) return;
 
-  const childX = x + node.width + H_GAP;
+  const childX = side === "left" ? x - node.width - H_GAP : x + node.width + H_GAP;
   const totalH = node.children.reduce(
     (sum, c, i) => sum + getSubtreeHeight(c) + (i > 0 ? V_GAP : 0),
     0
@@ -80,9 +161,366 @@ function layoutTree(node: LayoutNode, x: number, yCenter: number) {
   let cy = yCenter - totalH / 2;
   node.children.forEach((c) => {
     const ch = getSubtreeHeight(c);
-    layoutTree(c, childX, cy + ch / 2);
+    layoutSubtreeLogical(c, childX, cy + ch / 2, side);
     cy += ch + V_GAP;
   });
+}
+
+// 2. 垂直/分类图布局
+function layoutVertical(root: LayoutNode, structure: string) {
+  const isUp = structure === "up-classification";
+  root.x = -root.width / 2;
+  root.y = 0;
+
+  layoutSubtreeVertical(root, 0, 0, isUp ? -1 : 1);
+}
+
+function layoutSubtreeVertical(node: LayoutNode, xCenter: number, y: number, dir: 1 | -1) {
+  node.x = xCenter - node.width / 2;
+  node.y = y;
+
+  if (node.children.length === 0) return;
+
+  const childY = y + dir * (node.height + V_GAP * 2.5);
+  const totalW = node.children.reduce(
+    (sum, c, i) => sum + getSubtreeWidth(c) + (i > 0 ? H_GAP : 0),
+    0
+  );
+  let cx = xCenter - totalW / 2;
+  node.children.forEach((c) => {
+    const cw = getSubtreeWidth(c);
+    layoutSubtreeVertical(c, cx + cw / 2, childY, dir);
+    cx += cw + H_GAP;
+  });
+}
+
+// 3. 气泡图布局
+function layoutBubbleMap(root: LayoutNode) {
+  root.x = -root.width / 2;
+  root.y = -root.height / 2;
+
+  if (root.children.length === 0) return;
+
+  const R = 150 + root.children.length * 10;
+  root.children.forEach((c, i) => {
+    const angle = (i * 2 * Math.PI) / root.children.length;
+    c.x = R * Math.cos(angle) - c.width / 2;
+    c.y = R * Math.sin(angle) - c.height / 2;
+    
+    if (c.children.length > 0) {
+      const subR = 85;
+      c.children.forEach((sc, j) => {
+        const subAngle = angle + ((j - (c.children.length - 1) / 2) * Math.PI) / 6;
+        sc.x = c.x + c.width / 2 + subR * Math.cos(subAngle) - sc.width / 2;
+        sc.y = c.y + c.height / 2 + subR * Math.sin(subAngle) - sc.height / 2;
+      });
+    }
+  });
+}
+
+// 4. 双气泡图布局
+function layoutDoubleBubble(root: LayoutNode) {
+  root.x = -180 - root.width / 2;
+  root.y = -root.height / 2;
+
+  if (root.children.length === 0) return;
+
+  const rootB = root.children[0];
+  rootB.x = 180 - rootB.width / 2;
+  rootB.y = -rootB.height / 2;
+
+  const remainingChildren = root.children.slice(1);
+  if (remainingChildren.length === 0) return;
+
+  const shared: LayoutNode[] = [];
+  const aOnly: LayoutNode[] = [];
+  const bOnly: LayoutNode[] = [];
+
+  remainingChildren.forEach((c, i) => {
+    if (c.text.includes("共享") || c.text.includes("Shared") || i % 3 === 0) {
+      shared.push(c);
+    } else if (i % 2 === 0) {
+      aOnly.push(c);
+    } else {
+      bOnly.push(c);
+    }
+  });
+
+  if (shared.length > 0) {
+    const startY = -((shared.length - 1) * 80) / 2;
+    shared.forEach((c, i) => {
+      c.x = -c.width / 2;
+      c.y = startY + i * 80 - c.height / 2;
+    });
+  }
+
+  if (aOnly.length > 0) {
+    aOnly.forEach((c, i) => {
+      const angle = Math.PI - (Math.PI / 3) + (i * (2 * Math.PI / 3)) / Math.max(1, aOnly.length - 1);
+      c.x = root.x + root.width / 2 + 130 * Math.cos(angle) - c.width / 2;
+      c.y = root.y + root.height / 2 + 130 * Math.sin(angle) - c.height / 2;
+    });
+  }
+
+  if (bOnly.length > 0) {
+    bOnly.forEach((c, i) => {
+      const angle = -(Math.PI / 3) + (i * (2 * Math.PI / 3)) / Math.max(1, bOnly.length - 1);
+      c.x = rootB.x + rootB.width / 2 + 130 * Math.cos(angle) - c.width / 2;
+      c.y = rootB.y + rootB.height / 2 + 130 * Math.sin(angle) - c.height / 2;
+    });
+  }
+}
+
+// 5. 鱼骨图布局
+function layoutFishbone(root: LayoutNode) {
+  root.x = 250;
+  root.y = -root.height / 2;
+
+  if (root.children.length === 0) return;
+
+  root.children.forEach((c, i) => {
+    const isTop = i % 2 === 0;
+    const xPos = 120 - Math.floor(i / 2) * 160;
+    const slantY = isTop ? -130 : 130;
+    c.x = xPos - c.width / 2;
+    c.y = slantY - c.height / 2;
+
+    if (c.children.length > 0) {
+      c.children.forEach((sc, j) => {
+        sc.x = c.x + (isTop ? -sc.width - 20 : c.width + 20);
+        sc.y = c.y + (j - (c.children.length - 1) / 2) * 45;
+      });
+    }
+  });
+}
+
+// 6. 横向时间轴布局
+function layoutHorizontalTimeline(root: LayoutNode) {
+  root.x = 0;
+  root.y = -root.height / 2;
+
+  if (root.children.length === 0) return;
+
+  let currentX = root.width + 80;
+  root.children.forEach((c, i) => {
+    c.x = currentX;
+    c.y = (i % 2 === 0 ? -90 : 90) - c.height / 2;
+
+    if (c.children.length > 0) {
+      c.children.forEach((sc, j) => {
+        sc.x = c.x + (j + 1) * 60;
+        sc.y = c.y + (i % 2 === 0 ? -40 : 40);
+      });
+    }
+    currentX += c.width + 120;
+  });
+}
+
+// 7. 竖向时间轴布局
+function layoutVerticalTimeline(root: LayoutNode) {
+  root.x = -root.width / 2;
+  root.y = 0;
+
+  if (root.children.length === 0) return;
+
+  let currentY = root.height + 60;
+  root.children.forEach((c, i) => {
+    c.y = currentY;
+    c.x = (i % 2 === 0 ? -160 : 60);
+
+    if (c.children.length > 0) {
+      c.children.forEach((sc, j) => {
+        sc.x = c.x + (i % 2 === 0 ? -120 : 120);
+        sc.y = c.y + j * 45;
+      });
+    }
+    currentY += c.height + 80;
+  });
+}
+
+// 8. 圆圈图布局
+function layoutCircleMap(root: LayoutNode) {
+  root.x = -root.width / 2;
+  root.y = -root.height / 2;
+
+  if (root.children.length === 0) return;
+
+  const firstCircle = root.children.slice(0, 6);
+  firstCircle.forEach((c, i) => {
+    const angle = (i * 2 * Math.PI) / firstCircle.length;
+    c.x = 120 * Math.cos(angle) - c.width / 2;
+    c.y = 120 * Math.sin(angle) - c.height / 2;
+  });
+
+  const secondCircle = root.children.slice(6);
+  if (secondCircle.length > 0) {
+    secondCircle.forEach((c, i) => {
+      const angle = (i * 2 * Math.PI) / secondCircle.length;
+      c.x = 220 * Math.cos(angle) - c.width / 2;
+      c.y = 220 * Math.sin(angle) - c.height / 2;
+    });
+  }
+}
+
+// 9. 流程图布局
+function layoutFlowchart(root: LayoutNode) {
+  root.x = -root.width / 2;
+  root.y = 0;
+
+  if (root.children.length === 0) return;
+
+  let currentY = root.height + 60;
+  root.children.forEach((c) => {
+    c.x = -c.width / 2;
+    c.y = currentY;
+
+    if (c.children.length > 0) {
+      const totalW = (c.children.length - 1) * 160;
+      c.children.forEach((sc, j) => {
+        sc.x = -totalW / 2 + j * 160 - sc.width / 2;
+        sc.y = currentY + c.height + 60;
+      });
+    }
+    currentY += c.height + 120;
+  });
+}
+
+// 10. 桥形图布局
+function layoutBridgeMap(root: LayoutNode) {
+  root.x = -root.width / 2;
+  root.y = 60;
+
+  if (root.children.length === 0) return;
+
+  root.children.forEach((c, i) => {
+    c.x = (i + 1) * 220 - c.width / 2;
+    c.y = 60;
+
+    if (c.children.length > 0) {
+      c.children.forEach((sc, j) => {
+        sc.x = c.x;
+        sc.y = -60 - j * 45;
+      });
+    }
+  });
+}
+
+// 统一布局应用入口
+function applyLayout(root: LayoutNode, structure: string) {
+  if (
+    structure === "right-logical" ||
+    structure === "left-logical" ||
+    structure === "mindmap" ||
+    structure === "brace-map" ||
+    structure === "left-brace-map"
+  ) {
+    layoutLogical(root, structure);
+  } else if (
+    structure === "org-chart" ||
+    structure === "down-classification" ||
+    structure === "up-classification"
+  ) {
+    layoutVertical(root, structure);
+  } else if (structure === "bubble-map") {
+    layoutBubbleMap(root);
+  } else if (structure === "double-bubble") {
+    layoutDoubleBubble(root);
+  } else if (structure === "fishbone") {
+    layoutFishbone(root);
+  } else if (structure === "h-timeline") {
+    layoutHorizontalTimeline(root);
+  } else if (structure === "v-timeline") {
+    layoutVerticalTimeline(root);
+  } else if (structure === "circle-map") {
+    layoutCircleMap(root);
+  } else if (
+    structure === "flowchart" ||
+    structure === "multi-flowchart"
+  ) {
+    layoutFlowchart(root);
+  } else if (structure === "bridge-map") {
+    layoutBridgeMap(root);
+  } else {
+    // 默认回滚
+    root.x = 0;
+    root.y = -root.height / 2;
+    if (root.children.length > 0) {
+      const childX = root.width + H_GAP;
+      const totalH = root.children.reduce(
+        (sum, c, i) => sum + getSubtreeHeight(c) + (i > 0 ? V_GAP : 0),
+        0
+      );
+      let cy = 0 - totalH / 2;
+      root.children.forEach((c) => {
+        const ch = getSubtreeHeight(c);
+        layoutSubtreeLogical(c, childX, cy + ch / 2, "right");
+        cy += ch + V_GAP;
+      });
+    }
+  }
+}
+
+/* ===== 大纲编辑器数据操作辅助函数 ===== */
+function addOutlineSibling(root: MindMapNode, targetId: string): MindMapNode {
+  if (targetId === "root") {
+    const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return { ...root, children: [...root.children, { id: newId, text: "", children: [] }] };
+  }
+  const idx = root.children.findIndex((c) => c.id === targetId);
+  if (idx !== -1) {
+    const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const nextChildren = [...root.children];
+    nextChildren.splice(idx + 1, 0, { id: newId, text: "", children: [] });
+    return { ...root, children: nextChildren };
+  }
+  return {
+    ...root,
+    children: root.children.map((c) => addOutlineSibling(c, targetId)),
+  };
+}
+
+function indentOutlineNode(root: MindMapNode, targetId: string): MindMapNode {
+  const idx = root.children.findIndex((c) => c.id === targetId);
+  if (idx > 0) {
+    const preceding = root.children[idx - 1];
+    const target = root.children[idx];
+    const nextChildren = root.children.filter((c) => c.id !== targetId);
+    nextChildren[idx - 1] = {
+      ...preceding,
+      children: [...preceding.children, target],
+    };
+    return { ...root, children: nextChildren };
+  }
+  return {
+    ...root,
+    children: root.children.map((c) => indentOutlineNode(c, targetId)),
+  };
+}
+
+function outdentOutlineNode(root: MindMapNode, targetId: string): { root: MindMapNode; success: boolean } {
+  for (let i = 0; i < root.children.length; i++) {
+    const parent = root.children[i];
+    const childIdx = parent.children.findIndex((c) => c.id === targetId);
+    if (childIdx !== -1) {
+      const targetNode = parent.children[childIdx];
+      const nextParentChildren = parent.children.filter((c) => c.id !== targetId);
+      const nextRootChildren = [...root.children];
+      nextRootChildren[i] = { ...parent, children: nextParentChildren };
+      nextRootChildren.splice(i + 1, 0, targetNode);
+      return { root: { ...root, children: nextRootChildren }, success: true };
+    }
+  }
+  let success = false;
+  const nextChildren = root.children.map((c) => {
+    if (success) return c;
+    const res = outdentOutlineNode(c, targetId);
+    if (res.success) {
+      success = true;
+      return res.root;
+    }
+    return c;
+  });
+  return { root: { ...root, children: nextChildren }, success };
 }
 
 function flattenNodes(node: LayoutNode): LayoutNode[] {
@@ -149,21 +587,53 @@ function crc32(data: Uint8Array): number {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-/* ===== 连线组件 ===== */
-function Edge({ from, to }: { from: LayoutNode; to: LayoutNode }) {
-  const x1 = from.x + from.width;
+/* ===== 连线路径计算 ===== */
+function getEdgePath(from: LayoutNode, to: LayoutNode, structure: string): string {
+  const isLeft = to.side === "left";
+  const x1 = isLeft ? from.x : from.x + from.width;
   const y1 = from.y + from.height / 2;
-  const x2 = to.x;
+  const x2 = isLeft ? to.x + to.width : to.x;
   const y2 = to.y + to.height / 2;
   const mx = (x1 + x2) / 2;
 
+  if (structure === "bubble-map" || structure === "double-bubble" || structure === "circle-map") {
+    return `M${x1},${y1} L${x2},${y2}`;
+  } else if (
+    structure === "org-chart" ||
+    structure === "down-classification" ||
+    structure === "up-classification" ||
+    structure === "flowchart" ||
+    structure === "multi-flowchart"
+  ) {
+    const midY = (y1 + y2) / 2;
+    const px = from.x + from.width / 2;
+    const py = y1 + (structure === "up-classification" ? -from.height / 2 : from.height / 2);
+    const cx = to.x + to.width / 2;
+    const cy = y2 + (structure === "up-classification" ? to.height / 2 : -to.height / 2);
+    return `M${px},${py} V${midY} H${cx} V${cy}`;
+  } else if (structure === "brace-map" || structure === "left-brace-map") {
+    const braceX = x1 + (isLeft ? -15 : 15);
+    return `M${x1},${y1} H${braceX} V${y2} H${x2}`;
+  } else if (structure === "fishbone") {
+    return `M${x1},${y1} L${x2},${y2}`;
+  } else {
+    return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  }
+}
+
+/* ===== 连线组件 ===== */
+function Edge({ from, to, structure }: { from: LayoutNode; to: LayoutNode; structure: string }) {
+  const pathData = getEdgePath(from, to, structure);
+  const isFlow = structure === "flowchart" || structure === "multi-flowchart";
+
   return (
     <path
-      d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`}
+      d={pathData}
       fill="none"
       stroke="rgb(203,213,225)"
       strokeWidth={2}
-      className="dark:stroke-zinc-600"
+      className="dark:stroke-zinc-600 transition-all duration-300"
+      markerEnd={isFlow ? "url(#arrow)" : undefined}
     />
   );
 }
@@ -411,6 +881,374 @@ function MindMapListRow({
   );
 }
 
+/* ===== 大纲节点组件 ===== */
+function OutlineNodeItem({
+  node,
+  onUpdateText,
+  onAddSibling,
+  onIndent,
+  onOutdent,
+  onDelete,
+  depth,
+}: {
+  node: MindMapNode;
+  onUpdateText: (id: string, text: string) => void;
+  onAddSibling: (id: string) => void;
+  onIndent: (id: string) => void;
+  onOutdent: (id: string) => void;
+  onDelete: (id: string) => void;
+  depth: number;
+}) {
+  return (
+    <div className="flex flex-col" style={{ paddingLeft: depth > 0 ? 20 : 0 }}>
+      <div className="flex items-center gap-2 py-1.5 group">
+        <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shrink-0 opacity-70" />
+        <input
+          value={node.text}
+          onChange={(e) => onUpdateText(node.id, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onAddSibling(node.id);
+            } else if (e.key === "Tab") {
+              e.preventDefault();
+              if (e.shiftKey) {
+                onOutdent(node.id);
+              } else {
+                onIndent(node.id);
+              }
+            } else if (e.key === "Backspace" && node.text === "") {
+              e.preventDefault();
+              onDelete(node.id);
+            }
+          }}
+          className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-accent-primary/30 text-sm py-0.5 text-tx-primary font-medium"
+          placeholder="新建节点..."
+        />
+        <button
+          onClick={() => onAddSibling(node.id)}
+          className="opacity-0 group-hover:opacity-100 text-tx-tertiary hover:text-accent-primary transition-opacity text-xs p-1"
+          title="添加同级"
+        >
+          <Plus size={13} />
+        </button>
+        <button
+          onClick={() => onDelete(node.id)}
+          className="opacity-0 group-hover:opacity-100 text-tx-tertiary hover:text-red-500 transition-opacity text-xs p-1"
+          title="删除"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+      {node.children &&
+        node.children.map((c) => (
+          <OutlineNodeItem
+            key={c.id}
+            node={c}
+            depth={depth + 1}
+            onUpdateText={onUpdateText}
+            onAddSibling={onAddSibling}
+            onIndent={onIndent}
+            onOutdent={onOutdent}
+            onDelete={onDelete}
+          />
+        ))}
+    </div>
+  );
+}
+
+const BLANK_STRUCTURES = [
+  { id: "mindmap", name: "思维导图" },
+  { id: "right-logical", name: "向右逻辑图" },
+  { id: "left-logical", name: "向左逻辑图" },
+  { id: "org-chart", name: "组织结构图" },
+  { id: "down-classification", name: "向下分类图" },
+  { id: "up-classification", name: "向上分类图" },
+  { id: "fishbone", name: "鱼骨图" },
+  { id: "h-timeline", name: "横向时间轴" },
+  { id: "v-timeline", name: "竖向时间轴" },
+  { id: "bubble-map", name: "气泡图" },
+  { id: "double-bubble", name: "双气泡图" },
+  { id: "brace-map", name: "括号图" },
+  { id: "left-brace-map", name: "向左括号图" },
+  { id: "flowchart", name: "基础流程图" },
+  { id: "multi-flowchart", name: "复流程图" },
+  { id: "bridge-map", name: "桥形图" },
+  { id: "outline", name: "大纲" }
+];
+
+const PRESET_TEMPLATES = [
+  {
+    id: "weekly-plan",
+    name: "一周工作计划",
+    category: "work",
+    structure: "mindmap",
+    rootText: "一周工作计划",
+    children: [
+      { text: "周一 (Monday)", children: [{ text: "核心工作 1" }, { text: "日常例会" }] },
+      { text: "周二 (Tuesday)", children: [{ text: "核心工作 2" }] },
+      { text: "周三 (Wednesday)", children: [{ text: "核心工作 3" }] },
+      { text: "周四 (Thursday)", children: [{ text: "进度检查" }] },
+      { text: "周五 (Friday)", children: [{ text: "周报与总结" }] }
+    ]
+  },
+  {
+    id: "meeting-minutes",
+    name: "会议记录",
+    category: "work",
+    structure: "right-logical",
+    rootText: "会议记录",
+    children: [
+      { text: "会议信息", children: [{ text: "时间与地点" }, { text: "参会人" }] },
+      { text: "主要议题", children: [{ text: "议题一" }, { text: "议题二" }] },
+      { text: "讨论决议", children: [{ text: "决议一" }, { text: "决议二" }] },
+      { text: "待办事项", children: [{ text: "任务 & 责任人" }] }
+    ]
+  },
+  {
+    id: "project-planning",
+    name: "项目规划",
+    category: "work",
+    structure: "right-logical",
+    rootText: "项目规划",
+    children: [
+      { text: "项目背景", children: [{ text: "目标与使命" }] },
+      { text: "时间节点", children: [{ text: "第一阶段 (里程碑 1)" }, { text: "第二阶段 (里程碑 2)" }] },
+      { text: "成员分工", children: [{ text: "产品/设计" }, { text: "研发/测试" }] },
+      { text: "风险应对", children: [{ text: "潜在技术风险" }] }
+    ]
+  },
+  {
+    id: "four-quadrants",
+    name: "四象限时间工作法",
+    category: "work",
+    structure: "mindmap",
+    rootText: "日常工作时间管理",
+    children: [
+      { text: "重要且紧急 (第一象限)", children: [{ text: "核心任务" }] },
+      { text: "重要但不紧急 (第二象限)", children: [{ text: "长期规划 / 自我提升" }] },
+      { text: "紧急但不重要 (第三象限)", children: [{ text: "临时会议 / 杂务" }] },
+      { text: "不紧急且不重要 (第四象限)", children: [{ text: "消遣娱乐" }] }
+    ]
+  },
+  {
+    id: "swot",
+    name: "SWOT分析",
+    category: "analysis",
+    structure: "mindmap",
+    rootText: "SWOT 竞争力分析",
+    children: [
+      { text: "优势 (Strength)", children: [{ text: "技术积累" }, { text: "团队执行力" }] },
+      { text: "劣势 (Weakness)", children: [{ text: "资金限制" }, { text: "市场占有率较低" }] },
+      { text: "机会 (Opportunity)", children: [{ text: "行业数字化转型" }] },
+      { text: "威胁 (Threat)", children: [{ text: "竞品快速跟进" }] }
+    ]
+  },
+  {
+    id: "mckinsey-6w3h",
+    name: "麦肯锡6W3H分析法",
+    category: "analysis",
+    structure: "right-logical",
+    rootText: "6W3H 分析框架",
+    children: [
+      { text: "Who (谁来进行/谁是受众)" },
+      { text: "What (做什么事/提供什么)" },
+      { text: "Where (在哪里做/应用场景)" },
+      { text: "When (什么时间/时机)" },
+      { text: "Why (为什么要做/根本原因)" },
+      { text: "How (如何实施/具体路径)" },
+      { text: "How much (预算与成本)" }
+    ]
+  },
+  {
+    id: "six-thinking-hats",
+    name: "六项思考帽",
+    category: "analysis",
+    structure: "mindmap",
+    rootText: "六项思考帽决策",
+    children: [
+      { text: "白帽 (客观事实与数据)" },
+      { text: "红帽 (直觉与情感反应)" },
+      { text: "黑帽 (谨慎、防范与风险)" },
+      { text: "黄帽 (乐观、价值与利益)" },
+      { text: "绿帽 (创新与新思路)" },
+      { text: "蓝帽 (控制与思维整理)" }
+    ]
+  },
+  {
+    id: "novel-outline",
+    name: "小说大纲",
+    category: "creation",
+    structure: "right-logical",
+    rootText: "新小说大纲",
+    children: [
+      { text: "世界观/背景设定" },
+      { text: "核心人物", children: [{ text: "男主角" }, { text: "女主角" }] },
+      { text: "主线剧情", children: [{ text: "起 (引入/冲突)" }, { text: "承 (发展/铺垫)" }, { text: "转 (高潮/反转)" }, { text: "合 (结局/尾声)" }] },
+      { text: "核心矛盾与伏笔" }
+    ]
+  },
+  {
+    id: "reading-notes",
+    name: "读书笔记",
+    category: "creation",
+    structure: "right-logical",
+    rootText: "《书名》读书笔记",
+    children: [
+      { text: "基本信息", children: [{ text: "作者 / 出版社" }] },
+      { text: "核心观点", children: [{ text: "核心概念 1" }, { text: "核心概念 2" }] },
+      { text: "精彩片段 & 摘录" },
+      { text: "个人感悟 & 实践方案" }
+    ]
+  },
+  {
+    id: "shopping-list",
+    name: "购物清单",
+    category: "life",
+    structure: "mindmap",
+    rootText: "购物超市清单",
+    children: [
+      { text: "生鲜水果", children: [{ text: "苹果/香蕉" }, { text: "牛肉" }] },
+      { text: "日用百货", children: [{ text: "纸巾" }, { text: "洗洁精" }] },
+      { text: "零食饮料", children: [{ text: "坚果" }, { text: "无糖可乐" }] }
+    ]
+  },
+  {
+    id: "travel-plan",
+    name: "旅行计划",
+    category: "life",
+    structure: "mindmap",
+    rootText: "出行目的地计划",
+    children: [
+      { text: "行前准备", children: [{ text: "证件与现金" }, { text: "衣物与常用药" }] },
+      { text: "日程安排", children: [{ text: "Day 1: 抵达 & 景点 A" }, { text: "Day 2: 景点 B & 美食" }] },
+      { text: "住宿交通", children: [{ text: "机票/高铁票" }, { text: "酒店预订" }] }
+    ]
+  },
+  {
+    id: "daily-study-plan",
+    name: "每日学习计划",
+    category: "education",
+    structure: "right-logical",
+    rootText: "每日学习计划",
+    children: [
+      { text: "上午 (08:30 - 11:30)", children: [{ text: "深度阅读 & 理论学习" }] },
+      { text: "下午 (14:00 - 17:30)", children: [{ text: "实战练习 / 刷题" }] },
+      { text: "晚上 (19:30 - 21:30)", children: [{ text: "错题总结 / 归纳复习" }] }
+    ]
+  }
+];
+
+/* ===== 模板与结构库弹窗 ===== */
+interface GalleryModalProps {
+  onClose: () => void;
+  onCreate: (templateId: string, structure: string, isBlank: boolean) => void;
+  t: (key: string) => string;
+}
+
+function MindMapGalleryModal({ onClose, onCreate, t }: GalleryModalProps) {
+  const [activeCategory, setActiveCategory] = useState<string>("structures");
+
+  const categories = [
+    { id: "structures", name: "基础结构" },
+    { id: "work", name: "工作管理" },
+    { id: "education", name: "教育学习" },
+    { id: "analysis", name: "分析汇报" },
+    { id: "creation", name: "知识创作" },
+    { id: "life", name: "生活娱乐" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-app-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BrainCircuit className="text-accent-primary" size={20} />
+            <h3 className="text-base font-bold text-tx-primary">新建思维导图与模板</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-tx-tertiary hover:text-tx-primary transition-colors text-sm font-medium"
+          >
+            取消
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar */}
+          <div className="w-[180px] border-r border-app-border bg-app-bg/50 p-2 space-y-1 overflow-y-auto">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={cn(
+                  "w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  activeCategory === cat.id
+                    ? "bg-accent-primary text-white"
+                    : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Grid Panel */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            {activeCategory === "structures" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {BLANK_STRUCTURES.map((str) => (
+                  <button
+                    key={str.id}
+                    onClick={() => onCreate("", str.id, true)}
+                    className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border bg-app-elevated hover:border-accent-primary hover:shadow-lg transition-all text-center group"
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-accent-primary/10 flex items-center justify-center text-accent-primary mb-3 group-hover:scale-105 transition-transform">
+                      <BrainCircuit size={24} />
+                    </div>
+                    <span className="text-xs font-bold text-tx-primary">{str.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {PRESET_TEMPLATES.filter((t) => t.category === activeCategory).map((tmpl) => (
+                  <button
+                    key={tmpl.id}
+                    onClick={() => onCreate(tmpl.id, tmpl.structure, false)}
+                    className="flex flex-col text-left p-4 rounded-xl border border-app-border bg-app-elevated hover:border-accent-primary hover:shadow-lg transition-all group"
+                  >
+                    <div className="w-full aspect-[4/3] rounded-lg bg-app-bg border border-app-border/40 flex flex-col p-3 mb-3 relative overflow-hidden group-hover:scale-[1.01] transition-transform">
+                      {/* Structure preview tag */}
+                      <span className="absolute top-2 right-2 text-[9px] px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-tx-secondary font-semibold uppercase">
+                        {tmpl.structure === "mindmap" ? "导图" : "逻辑图"}
+                      </span>
+                      {/* Mini visual tree preview */}
+                      <div className="flex-1 flex flex-col justify-center space-y-1">
+                        <div className="w-16 h-4 rounded bg-accent-primary/20 border border-accent-primary/30 flex items-center px-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent-primary" />
+                        </div>
+                        <div className="flex gap-2 pl-4">
+                          <div className="w-12 h-3 rounded bg-zinc-200 dark:bg-zinc-700" />
+                          <div className="w-12 h-3 rounded bg-zinc-200 dark:bg-zinc-700" />
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-tx-primary truncate">{tmpl.name}</span>
+                    <span className="text-[10px] text-tx-tertiary mt-0.5">点击以应用该模板</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===== 主组件 ===== */
 export default function MindMapCenter() {
   const { t } = useTranslation();
@@ -434,6 +1272,7 @@ export default function MindMapCenter() {
   const [maps, setMaps] = useState<MindMapListItem[]>([]);
   const [activeMap, setActiveMap] = useState<MindMap | null>(null);
   const [mapData, setMapData] = useState<MindMapData | null>(null);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -609,18 +1448,59 @@ export default function MindMapCenter() {
     triggerSave(newData);
   }, [mapData, updateNode, triggerSave]);
 
-  // 创建新导图
-  const handleCreate = useCallback(async () => {
+  // 创建新导图 (打开模板与结构库)
+  const handleCreate = useCallback(() => {
+    setShowGalleryModal(true);
+  }, []);
+
+  // 从选定的结构或模板创建
+  const handleCreateFromTemplate = useCallback(async (templateId: string, structure: string, isBlank: boolean = false) => {
     try {
-      const map = await api.createMindMap({ title: t("mindMap.untitled") });
-      // 注意：MindMapListItem 自 Y4 起新增了必填字段 workspaceId（null = 个人空间）。
-      // 这里必须把后端返回的 workspaceId 一并透传，否则 tsc 会报
-      //   TS2345: Property 'workspaceId' is missing in type ...
-      // 导致 frontend build 挂掉（Docker/Release 流水线里表现为 vite build 阶段失败）。
-      setMaps((prev) => [{ id: map.id, userId: map.userId, workspaceId: map.workspaceId, title: map.title, createdAt: map.createdAt, updatedAt: map.updatedAt }, ...prev]);
+      let rootNode: MindMapNode = {
+        id: "root",
+        text: "中心主题",
+        children: []
+      };
+
+      let title = t("mindMap.untitled");
+
+      if (isBlank) {
+        const match = BLANK_STRUCTURES.find(s => s.id === structure);
+        title = match ? match.name : t("mindMap.untitled");
+        rootNode.text = title;
+      } else {
+        const template = PRESET_TEMPLATES.find(t => t.id === templateId);
+        if (template) {
+          title = template.name;
+          rootNode.text = template.rootText;
+          const buildPresetNodes = (pNode: { text: string; children?: any[] }): MindMapNode => {
+            const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            return {
+              id: newId,
+              text: pNode.text,
+              children: pNode.children ? pNode.children.map(buildPresetNodes) : []
+            };
+          };
+          rootNode.children = template.children ? template.children.map(buildPresetNodes) : [];
+        }
+      }
+
+      const map = await api.createMindMap({
+        title,
+        data: JSON.stringify({
+          root: rootNode,
+          structure: structure
+        })
+      });
+
+      setMaps((prev) => [
+        { id: map.id, userId: map.userId, workspaceId: map.workspaceId, title: map.title, createdAt: map.createdAt, updatedAt: map.updatedAt },
+        ...prev
+      ]);
       handleSelect(map.id);
+      setShowGalleryModal(false);
     } catch (err) {
-      console.error("Failed to create mindmap:", err);
+      console.error("Failed to create mindmap from template:", err);
     }
   }, [handleSelect, t]);
 
@@ -760,8 +1640,8 @@ export default function MindMapCenter() {
     if (!mapData) return { layoutNodes: [], edges: [], viewBox: "0 0 800 600", bounds: { minX: 0, minY: 0, width: 800, height: 600 } };
 
     const root = buildLayout(mapData.root, 0, null);
-    const treeH = getSubtreeHeight(root);
-    layoutTree(root, 0, treeH / 2);
+    const structure = mapData.structure || "right-logical";
+    applyLayout(root, structure);
     const all = flattenNodes(root);
 
     const edgeList: { from: LayoutNode; to: LayoutNode }[] = [];
@@ -816,8 +1696,8 @@ export default function MindMapCenter() {
   // 根据 MindMapData 生成布局并构建导出用的干净 SVG 字符串
   const buildExportSvgFromData = useCallback((data: MindMapData) => {
     const root = buildLayout(data.root, 0, null);
-    const treeH = getSubtreeHeight(root);
-    layoutTree(root, 0, treeH / 2);
+    const structure = data.structure || "right-logical";
+    applyLayout(root, structure);
     const allNodes = flattenNodes(root);
 
     const edgeList: { from: LayoutNode; to: LayoutNode }[] = [];
@@ -845,12 +1725,8 @@ export default function MindMapCenter() {
     let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${minX - pad} ${minY - pad} ${w} ${h}" style="background:#fff">\n`;
 
     edgeList.forEach((e) => {
-      const x1 = e.from.x + e.from.width;
-      const y1 = e.from.y + e.from.height / 2;
-      const x2 = e.to.x;
-      const y2 = e.to.y + e.to.height / 2;
-      const mx = (x1 + x2) / 2;
-      svgContent += `  <path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="rgb(203,213,225)" stroke-width="2"/>\n`;
+      const p = getEdgePath(e.from, e.to, structure);
+      svgContent += `  <path d="${p}" fill="none" stroke="rgb(203,213,225)" stroke-width="2"/>\n`;
     });
 
     allNodes.forEach((n) => {
@@ -1196,6 +2072,39 @@ export default function MindMapCenter() {
                   <Maximize2 size={16} />
                 </button>
                 <div className="w-px h-4 bg-app-border mx-0.5" />
+                
+                {/* 结构选择下拉菜单 */}
+                <select
+                  value={mapData.structure || "right-logical"}
+                  onChange={(e) => {
+                    const newStructure = e.target.value;
+                    const newData = { ...mapData, structure: newStructure };
+                    setMapData(newData);
+                    triggerSave(newData);
+                  }}
+                  className="px-2 py-1 text-xs rounded border border-app-border bg-app-surface text-tx-primary outline-none focus:border-accent-primary"
+                >
+                  <option value="right-logical">向右逻辑图</option>
+                  <option value="left-logical">向左逻辑图</option>
+                  <option value="mindmap">思维导图</option>
+                  <option value="org-chart">组织结构图</option>
+                  <option value="down-classification">向下分类图</option>
+                  <option value="up-classification">向上分类图</option>
+                  <option value="fishbone">鱼骨图</option>
+                  <option value="h-timeline">横向时间轴</option>
+                  <option value="v-timeline">竖向时间轴</option>
+                  <option value="circle-map">圆圈图</option>
+                  <option value="bubble-map">气泡图</option>
+                  <option value="double-bubble">双气泡图</option>
+                  <option value="brace-map">括号图</option>
+                  <option value="left-brace-map">向左括号图</option>
+                  <option value="flowchart">基础流程图</option>
+                  <option value="multi-flowchart">复流程图</option>
+                  <option value="bridge-map">桥形图</option>
+                  <option value="outline">大纲模式</option>
+                </select>
+
+                <div className="w-px h-4 bg-app-border mx-0.5" />
                 <button
                   onClick={() => setShowMiniMap((v) => !v)}
                   className={cn(
@@ -1211,148 +2120,248 @@ export default function MindMapCenter() {
               </div>
             </div>
 
-            {/* Canvas */}
-            <div
-              className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing relative"
-              style={{ userSelect: "none" }}
-            >
-              <svg
-                ref={svgRef}
-                width="100%"
-                height="100%"
-                viewBox={viewBox}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onWheel={handleWheel}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onClick={() => { setSelectedNodeId(null); setEditingNodeId(null); }}
-                style={{
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                  transformOrigin: "0 0",
-                  touchAction: "none",
-                }}
-              >
-                {/* Edges */}
-                {edges.map((e, i) => (
-                  <Edge key={`${e.from.id}-${e.to.id}-${i}`} from={e.from} to={e.to} />
-                ))}
-
-                {/* Nodes */}
-                {layoutNodes.map((n) => (
-                  <NodeBox
-                    key={n.id}
-                    node={n}
-                    isSelected={selectedNodeId === n.id}
-                    isEditing={editingNodeId === n.id}
-                    editValue={editValue}
-                    onSelect={() => setSelectedNodeId(n.id)}
-                    onDoubleClick={() => {
-                      setEditingNodeId(n.id);
-                      setEditValue(n.text);
-                    }}
-                    onEditChange={setEditValue}
-                    onEditSubmit={handleEditSubmit}
-                    onToggleCollapse={() => handleToggleCollapse(n.id)}
-                    onAddChild={() => handleAddChild(n.id)}
-                    onDelete={() => handleDeleteNode(n.id)}
-                    isMobile={isMobile}
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
-                ))}
-              </svg>
-
-              {/* MiniMap 小地图 */}
-              {showMiniMap && layoutNodes.length > 0 && (
-                <div
-                  className="absolute right-2 bottom-2 sm:right-3 sm:bottom-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg overflow-hidden"
-                  style={{ width: isMobile ? 140 : 180, height: isMobile ? 90 : 120 }}
-                >
-                  <svg
-                    width="100%"
-                    height="100%"
-                    viewBox={viewBox}
-                    preserveAspectRatio="xMidYMid meet"
-                    className="cursor-pointer"
-                    onClick={(e) => {
-                      const svg = e.currentTarget;
-                      const rect = svg.getBoundingClientRect();
-                      const svgX = ((e.clientX - rect.left) / rect.width) * bounds.width + bounds.minX;
-                      const svgY = ((e.clientY - rect.top) / rect.height) * bounds.height + bounds.minY;
-                      if (containerRef.current) {
-                        const cr = containerRef.current.getBoundingClientRect();
-                        setPan({
-                          x: cr.width / 2 - svgX * zoom,
-                          y: cr.height / 2 - svgY * zoom,
-                        });
-                      }
-                    }}
-                  >
-                    {/* 连线 */}
-                    {edges.map((e, i) => {
-                      const x1 = e.from.x + e.from.width;
-                      const y1 = e.from.y + e.from.height / 2;
-                      const x2 = e.to.x;
-                      const y2 = e.to.y + e.to.height / 2;
-                      return (
-                        <line
-                          key={`mini-e-${i}`}
-                          x1={x1} y1={y1} x2={x2} y2={y2}
-                          stroke="rgb(203,213,225)"
-                          strokeWidth={3}
-                          className="dark:stroke-zinc-600"
-                        />
-                      );
-                    })}
-                    {/* 节点 */}
-                    {layoutNodes.map((n) => {
-                      const color = getNodeColor(n.depth);
-                      return (
-                        <rect
-                          key={`mini-n-${n.id}`}
-                          x={n.x} y={n.y}
-                          width={n.width} height={n.height}
-                          rx={4}
-                          fill={color.bg}
-                          stroke={color.border}
-                          strokeWidth={2}
-                        />
-                      );
-                    })}
-                    {/* 视口指示框 */}
-                    {containerRef.current && (() => {
-                      const cr = containerRef.current!.getBoundingClientRect();
-                      const vpX = -pan.x / zoom;
-                      const vpY = (-pan.y + 40) / zoom;
-                      const vpW = cr.width / zoom;
-                      const vpH = (cr.height - 80) / zoom;
-                      return (
-                        <rect
-                          x={vpX} y={vpY}
-                          width={vpW} height={vpH}
-                          fill="rgba(99,102,241,0.08)"
-                          stroke="rgb(99,102,241)"
-                          strokeWidth={4}
-                          rx={3}
-                        />
-                      );
-                    })()}
-                  </svg>
+            {/* 画布 / 大纲编辑器 */}
+            {mapData.structure === "outline" ? (
+              <div className="flex-1 overflow-auto p-6 bg-app-surface/50 border-t border-app-border">
+                <div className="max-w-3xl mx-auto space-y-4">
+                  <div className="text-xl font-bold text-tx-primary border-b border-app-border pb-2 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-accent-primary shrink-0" />
+                    <input
+                      value={mapData.root.text}
+                      onChange={(e) => {
+                        const trimmed = e.target.value;
+                        const newRoot = { ...mapData.root, text: trimmed };
+                        const newData = { ...mapData, root: newRoot };
+                        setMapData(newData);
+                        triggerSave(newData, trimmed);
+                      }}
+                      className="flex-1 bg-transparent outline-none font-bold"
+                      placeholder="中心主题"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    {mapData.root.children.map((c) => (
+                      <OutlineNodeItem
+                        key={c.id}
+                        node={c}
+                        depth={0}
+                        onUpdateText={(id, text) => {
+                          const newRoot = updateNode(mapData.root, id, (n) => ({ ...n, text }));
+                          const newData = { ...mapData, root: newRoot };
+                          setMapData(newData);
+                          triggerSave(newData);
+                        }}
+                        onAddSibling={(id) => {
+                          const newRoot = addOutlineSibling(mapData.root, id);
+                          const newData = { ...mapData, root: newRoot };
+                          setMapData(newData);
+                          triggerSave(newData);
+                        }}
+                        onIndent={(id) => {
+                          const newRoot = indentOutlineNode(mapData.root, id);
+                          const newData = { ...mapData, root: newRoot };
+                          setMapData(newData);
+                          triggerSave(newData);
+                        }}
+                        onOutdent={(id) => {
+                          const res = outdentOutlineNode(mapData.root, id);
+                          if (res.success) {
+                            const newData = { ...mapData, root: res.root };
+                            setMapData(newData);
+                            triggerSave(newData);
+                          }
+                        }}
+                        onDelete={(id) => {
+                          const newRoot = removeNode(mapData.root, id);
+                          const newData = { ...mapData, root: newRoot };
+                          setMapData(newData);
+                          triggerSave(newData);
+                        }}
+                      />
+                    ))}
+                    {mapData.root.children.length === 0 && (
+                      <button
+                        onClick={() => {
+                          const newRoot = addOutlineSibling(mapData.root, "root");
+                          const newData = { ...mapData, root: newRoot };
+                          setMapData(newData);
+                          triggerSave(newData);
+                        }}
+                        className="text-xs text-accent-primary hover:opacity-90 font-medium py-2"
+                      >
+                        + 添加分支主题
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
+            ) : (
+              <div
+                className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing relative"
+                style={{ userSelect: "none" }}
+              >
+                <svg
+                  ref={svgRef}
+                  width="100%"
+                  height="100%"
+                  viewBox={viewBox}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onWheel={handleWheel}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onClick={() => { setSelectedNodeId(null); setEditingNodeId(null); }}
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: "0 0",
+                    touchAction: "none",
+                  }}
+                >
+                  <defs>
+                    <marker
+                      id="arrow"
+                      viewBox="0 0 10 10"
+                      refX="6"
+                      refY="5"
+                      markerWidth="6"
+                      markerHeight="6"
+                      orient="auto-start-reverse"
+                    >
+                      <path d="M 0 2 L 8 5 L 0 8 z" fill="rgb(156,163,175)" />
+                    </marker>
+                  </defs>
 
-            </div>
+                  {/* Edges */}
+                  {edges.map((e, i) => (
+                    <Edge key={`${e.from.id}-${e.to.id}-${i}`} from={e.from} to={e.to} structure={mapData.structure || "right-logical"} />
+                  ))}
+
+                  {/* Nodes */}
+                  {layoutNodes.map((n) => (
+                    <NodeBox
+                      key={n.id}
+                      node={n}
+                      isSelected={selectedNodeId === n.id}
+                      isEditing={editingNodeId === n.id}
+                      editValue={editValue}
+                      onSelect={() => setSelectedNodeId(n.id)}
+                      onDoubleClick={() => {
+                        setEditingNodeId(n.id);
+                        setEditValue(n.text);
+                      }}
+                      onEditChange={setEditValue}
+                      onEditSubmit={handleEditSubmit}
+                      onToggleCollapse={() => handleToggleCollapse(n.id)}
+                      onAddChild={() => handleAddChild(n.id)}
+                      onDelete={() => handleDeleteNode(n.id)}
+                      isMobile={isMobile}
+                      onContextMenu={(e) => e.preventDefault()}
+                    />
+                  ))}
+                </svg>
+
+                {/* MiniMap 小地图 */}
+                {showMiniMap && layoutNodes.length > 0 && (
+                  <div
+                    className="absolute right-2 bottom-2 sm:right-3 sm:bottom-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg overflow-hidden"
+                    style={{ width: isMobile ? 140 : 180, height: isMobile ? 90 : 120 }}
+                  >
+                    <svg
+                      width="100%"
+                      height="100%"
+                      viewBox={viewBox}
+                      preserveAspectRatio="xMidYMid meet"
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        const svg = e.currentTarget;
+                        const rect = svg.getBoundingClientRect();
+                        const svgX = ((e.clientX - rect.left) / rect.width) * bounds.width + bounds.minX;
+                        const svgY = ((e.clientY - rect.top) / rect.height) * bounds.height + bounds.minY;
+                        if (containerRef.current) {
+                          const cr = containerRef.current.getBoundingClientRect();
+                          setPan({
+                            x: cr.width / 2 - svgX * zoom,
+                            y: cr.height / 2 - svgY * zoom,
+                          });
+                        }
+                      }}
+                    >
+                      {/* 连线 */}
+                      {edges.map((e, i) => {
+                        const x1 = e.from.x + e.from.width;
+                        const y1 = e.from.y + e.from.height / 2;
+                        const x2 = e.to.x;
+                        const y2 = e.to.y + e.to.height / 2;
+                        return (
+                          <line
+                            key={`mini-e-${i}`}
+                            x1={x1} y1={y1} x2={x2} y2={y2}
+                            stroke="rgb(203,213,225)"
+                            strokeWidth={3}
+                            className="dark:stroke-zinc-600"
+                          />
+                        );
+                      })}
+                      {/* 节点 */}
+                      {layoutNodes.map((n) => {
+                        const color = getNodeColor(n.depth);
+                        return (
+                          <rect
+                            key={`mini-n-${n.id}`}
+                            x={n.x} y={n.y}
+                            width={n.width} height={n.height}
+                            rx={4}
+                            fill={color.bg}
+                            stroke={color.border}
+                            strokeWidth={2}
+                          />
+                        );
+                      })}
+                      {/* 视口指示框 */}
+                      {containerRef.current && (() => {
+                        const cr = containerRef.current!.getBoundingClientRect();
+                        const vpX = -pan.x / zoom;
+                        const vpY = (-pan.y + 40) / zoom;
+                        const vpW = cr.width / zoom;
+                        const vpH = (cr.height - 80) / zoom;
+                        return (
+                          <rect
+                            x={vpX} y={vpY}
+                            width={vpW} height={vpH}
+                            fill="rgba(99,102,241,0.08)"
+                            stroke="rgb(99,102,241)"
+                            strokeWidth={4}
+                            rx={3}
+                          />
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                )}
+              </div>
+            )}
             {!isMobile && (
-            <div className="px-4 py-1.5 border-t border-app-border bg-app-surface/30 flex items-center gap-4 text-[11px] text-tx-tertiary">
-              <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Tab</kbd> {t("mindMap.shortcutAdd")}</span>
-              <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Enter</kbd> {t("mindMap.shortcutEdit")}</span>
-              <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Del</kbd> {t("mindMap.shortcutDelete")}</span>
-              <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Space</kbd> {t("mindMap.shortcutCollapse")}</span>
-              <span>{t("mindMap.dragToMove")}</span>
-            </div>
+              <div className="px-4 py-1.5 border-t border-app-border bg-app-surface/30 flex items-center gap-4 text-[11px] text-tx-tertiary">
+                {mapData.structure === "outline" ? (
+                  <>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Enter</kbd> 新增同级</span>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Tab</kbd> 缩进为子级</span>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Shift+Tab</kbd> 提升为父级</span>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Backspace</kbd> 删除空节点</span>
+                  </>
+                ) : (
+                  <>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Tab</kbd> {t("mindMap.shortcutAdd")}</span>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Enter</kbd> {t("mindMap.shortcutEdit")}</span>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Del</kbd> {t("mindMap.shortcutDelete")}</span>
+                    <span><kbd className="px-1 py-0.5 rounded border border-app-border bg-app-bg text-[10px]">Space</kbd> {t("mindMap.shortcutCollapse")}</span>
+                    <span>{t("mindMap.dragToMove")}</span>
+                  </>
+                )}
+              </div>
             )}
           </>
         ) : (
@@ -1377,6 +2386,15 @@ export default function MindMapCenter() {
           </div>
         )}
       </div>
+
+      {/* 模板与结构库弹窗 */}
+      {showGalleryModal && (
+        <MindMapGalleryModal
+          onClose={() => setShowGalleryModal(false)}
+          onCreate={handleCreateFromTemplate}
+          t={t}
+        />
+      )}
 
       {/* 列表右键菜单 */}
       {listContextMenu && (

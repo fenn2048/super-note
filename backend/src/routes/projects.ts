@@ -464,11 +464,23 @@ projectsRouter.get("/:id/tasks", (c) => {
   return c.json(tasks);
 });
 
+// Get single project task details
+projectsRouter.get("/tasks/:taskId", (c) => {
+  const db = getDb();
+  const taskId = c.req.param("taskId");
+  const task = getFullProjectTask(db, taskId);
+  if (!task) return c.json({ error: "任务不存在" }, 404);
+  return c.json(task);
+});
+
 function getFullProjectTask(db: any, taskId: string) {
   const t = db.prepare(`
-    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl
+    SELECT pt.*, u.username as assigneeName, u.displayName as assigneeDisplayName, u.avatarUrl as assigneeAvatarUrl,
+           p.name as projectName, p.workspaceId as projectWorkspaceId, ps.name as stageName
     FROM project_tasks pt
     LEFT JOIN users u ON pt.assigneeId = u.id
+    JOIN projects p ON pt.projectId = p.id
+    LEFT JOIN project_stages ps ON pt.stageId = ps.id
     WHERE pt.id = ?
   `).get(taskId) as any;
   if (!t) return null;

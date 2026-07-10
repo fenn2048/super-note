@@ -422,7 +422,27 @@ tasks.get("/stats/summary", (c) => {
   const today = count("isCompleted = 0 AND dueDate = date('now')");
   const overdue = count("isCompleted = 0 AND dueDate IS NOT NULL AND dueDate < date('now')");
   const week = count("isCompleted = 0 AND dueDate IS NOT NULL AND dueDate >= date('now') AND dueDate <= date('now', '+7 days')");
-  const activeReminders = count("isCompleted = 0 AND remindAt IS NOT NULL AND remindAt <= date('now', '+1 days')");
+  const personalActiveReminders = count("isCompleted = 0 AND remindAt IS NOT NULL AND remindAt <= datetime('now', 'localtime')");
+
+  let projectActiveReminders = 0;
+  try {
+    const projectWhere = workspaceId
+      ? "WHERE p.isDeleted = 0 AND pt.assigneeId = ? AND COALESCE(pt.isCompleted, 0) != 1 AND (ps.name IS NULL OR ps.name != '已完成') AND pt.remindAt IS NOT NULL AND pt.remindAt <= datetime('now', 'localtime') AND p.workspaceId = ?"
+      : "WHERE p.isDeleted = 0 AND pt.assigneeId = ? AND COALESCE(pt.isCompleted, 0) != 1 AND (ps.name IS NULL OR ps.name != '已完成') AND pt.remindAt IS NOT NULL AND pt.remindAt <= datetime('now', 'localtime') AND (p.workspaceId IS NULL OR p.workspaceId = '')";
+    const projectParams = workspaceId ? [userId, workspaceId] : [userId];
+    const row = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM project_tasks pt
+      JOIN projects p ON pt.projectId = p.id
+      LEFT JOIN project_stages ps ON pt.stageId = ps.id
+      ${projectWhere}
+    `).get(...projectParams) as any;
+    projectActiveReminders = row?.count ?? 0;
+  } catch (err) {
+    console.error("Failed to query project task active reminders:", err);
+  }
+
+  const activeReminders = personalActiveReminders + projectActiveReminders;
 
   return c.json({ total, completed, pending, today, overdue, week, activeReminders });
 });

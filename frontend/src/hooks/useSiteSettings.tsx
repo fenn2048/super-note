@@ -138,7 +138,7 @@ function applyWenkaiFont(enabled: boolean) {
       link = document.createElement("link");
       link.id = linkId;
       link.rel = "stylesheet";
-      link.href = "https://cdn.staticfile.org/lxgw-wenkai-screen-webfont/1.6.0/lxgwwenkaiscreen.css";
+      link.href = "/fonts/lxgw/style.css";
       document.head.appendChild(link);
     }
     document.documentElement.classList.add("font-lxgw");

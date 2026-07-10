@@ -1,0 +1,3350 @@
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { api, getServerUrl } from "@/lib/api";
+import { toast } from "@/lib/toast";
+import { DocumentLoader, TOCItem } from "@/lib/bookDocument";
+import { Book, BookConfig, BookNote } from "@/types";
+import { cn } from "@/lib/utils";
+import {
+  readBookDetail,
+  readBookNotes,
+  readBookConfig,
+  readBookFile
+} from "@/lib/offlineRead";
+import {
+  putBooks,
+  putBookNotes,
+  putBookConfig,
+  putBookFile,
+  putSingleBookNote,
+  deleteBookNote,
+  getBookConfig
+} from "@/lib/localStore";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  BookOpen,
+  Settings,
+  Type,
+  Volume2,
+  VolumeX,
+  Search,
+  Bookmark,
+  Share2,
+  List,
+  MessageSquare,
+  Play,
+  Pause,
+  Square,
+  Plus,
+  Trash2,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Menu,
+  RotateCcw,
+  Sparkles,
+  Columns,
+  Eye,
+  FileText,
+  X,
+  Check,
+  Download,
+  Highlighter,
+  PenTool
+} from "lucide-react";
+
+const dashedUnderline = (rects: any[], options: any = {}) => {
+  const { color = '#fbbf24', width: strokeWidth = 2, padding = 1, writingMode } = options;
+  const createSVG = (tag: string) => document.createElementNS('http://www.w3.org/2000/svg', tag);
+  const g = createSVG('g');
+  g.setAttribute('fill', 'none');
+  g.setAttribute('stroke', color);
+  g.setAttribute('stroke-width', strokeWidth.toString());
+  g.setAttribute('stroke-dasharray', '4, 4');
+  
+  const isVertical = writingMode === 'vertical-rl' || writingMode === 'vertical-lr';
+  if (isVertical) {
+    for (const { right, top, height } of rects) {
+      const el = createSVG('line');
+      el.setAttribute('x1', (right - strokeWidth / 2 + padding).toString());
+      el.setAttribute('y1', top.toString());
+      el.setAttribute('x2', (right - strokeWidth / 2 + padding).toString());
+      el.setAttribute('y2', (top + height).toString());
+      g.append(el);
+    }
+  } else {
+    for (const { left, bottom, width } of rects) {
+      const el = createSVG('line');
+      el.setAttribute('x1', left.toString());
+      el.setAttribute('y1', (bottom + strokeWidth / 2 + padding + 1.5).toString());
+      el.setAttribute('x2', (left + width).toString());
+      el.setAttribute('y2', (bottom + strokeWidth / 2 + padding + 1.5).toString());
+      g.append(el);
+    }
+  }
+  return g;
+};
+
+interface BookReaderProps {
+  bookHash: string;
+  onBack: () => void;
+  workspaceId: string | null;
+}
+
+const DEFAULT_SETTINGS = {
+  fontFamily: "lxgw",
+  fontSize: 20,
+  lineHeight: 1.6,
+  theme: "classic", // "classic", "light", "sepia", "green", "dark"
+  layoutMode: "paginated", // "paginated", "scrolling"
+  columns: 0, // 0 means auto
+  // New paragraph settings
+  usePublisherStyles: false,
+  paragraphSpacing: 1.0,
+  wordSpacing: 0.0,
+  letterSpacing: 0.0,
+  firstLineIndent: 2.0,
+  justifyText: true,
+  hyphenation: true,
+  // New page layout settings
+  marginTop: 120,
+  marginBottom: 120,
+  marginLeft: 40,
+  marginRight: 40,
+  columnGap: 5,
+  maxColumnWidth: 1200,
+  maxColumnHeight: 1200,
+  // Time display setting
+  showTimeDisplay: true
+};
+
+const THEMES = {
+  classic: { bg: "#d6d6d6", fg: "#111111", name: "水墨文楷", isDark: false },
+  light: { bg: "#ffffff", fg: "#2c3e50", name: "日间明亮", isDark: false },
+  sepia: { bg: "#f8f3e8", fg: "#5c4328", name: "护眼雅致", isDark: false },
+  green: { bg: "#eef6eb", fg: "#2e4823", name: "清新绿意", isDark: false },
+  dark: { bg: "#151b26", fg: "#abb2bf", name: "深邃暗夜", isDark: true }
+};
+
+const renderExcerpt = (excerpt: any, query: string): string => {
+  if (!excerpt) return "";
+  if (typeof excerpt === "string") {
+    const escaped = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    return excerpt.replace(new RegExp(escaped, "gi"), (match) => 
+      `<mark class="bg-yellow-200 dark:bg-yellow-800 text-black px-0.5 rounded">${match}</mark>`
+    );
+  }
+  if (typeof excerpt === "object") {
+    const pre = excerpt.pre || "";
+    const match = excerpt.match || "";
+    const post = excerpt.post || "";
+    return `<span>${pre}</span><mark class="bg-yellow-200 dark:bg-yellow-800 text-black px-0.5 rounded">${match}</mark><span>${post}</span>`;
+  }
+  return "";
+};
+
+export default function BookReader({ bookHash, onBack, workspaceId }: BookReaderProps) {
+  const [book, setBook] = useState<Book | null>(null);
+  const [loadingState, setLoadingState] = useState<"loading" | "rendering" | "ready" | "error">("loading");
+  const [loadingProgress, setLoadingProgress] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const [toc, setToc] = useState<TOCItem[]>([]);
+  const [notes, setNotes] = useState<BookNote[]>([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+
+  // Active sidebars
+  const [activeSidebar, setActiveSidebar] = useState<"toc" | "search" | "notes" | "settings" | null>(null);
+  const [showMarkerColors, setShowMarkerColors] = useState(false);
+  const [lastColor, setLastColor] = useState("#ffeb3b");
+  const [lastColorStyle, setLastColorStyle] = useState<"solid" | "underline" | "squiggly">("solid");
+  const [showWriteThoughtsModal, setShowWriteThoughtsModal] = useState(false);
+  const [thoughtText, setThoughtText] = useState("");
+  const [thoughtVisibility, setThoughtVisibility] = useState<"public" | "private">("public");
+  const [activeThoughtsCfi, setActiveThoughtsCfi] = useState<string | null>(null);
+  const [commentsMap, setCommentsMap] = useState<Record<string, any[]>>({});
+  const [likesState, setLikesState] = useState<Record<string, { count: number; liked: boolean }>>({});
+  const [activeCommentNoteId, setActiveCommentNoteId] = useState<string | null>(null);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
+  const [notesPage, setNotesPage] = useState(1);
+
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+
+  const currentSectionIndexRef = useRef(0);
+  const clickTimeoutRef = useRef<any>(null);
+
+  // Sidebar size state
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+
+  const handleSidebarDragInit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const iframe = getActiveIframe();
+    const iframeDoc = iframe?.contentDocument;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      // If event happened inside iframe, adjusting ClientX is needed
+      let clientX = moveEvent.clientX;
+      if (moveEvent.target && iframeDoc && iframeDoc.contains(moveEvent.target as Node)) {
+        const iframeRect = iframe?.getBoundingClientRect();
+        if (iframeRect) {
+          clientX = moveEvent.clientX + iframeRect.left;
+        }
+      }
+
+      const deltaX = clientX - startX;
+      // Current fixed width (320px) is default minimum width. Max is 50% of screen.
+      const maxWidth = Math.max(320, window.innerWidth * 0.5);
+      const newWidth = Math.max(320, Math.min(maxWidth, startWidth + deltaX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (iframeDoc) {
+        iframeDoc.removeEventListener("mousemove", handleMouseMove);
+        iframeDoc.removeEventListener("mouseup", handleMouseUp);
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    if (iframeDoc) {
+      iframeDoc.addEventListener("mousemove", handleMouseMove);
+      iframeDoc.addEventListener("mouseup", handleMouseUp);
+    }
+  };
+
+  // UI state
+  const [currentCfi, setCurrentCfi] = useState("");
+  const [readingProgressText, setReadingProgressText] = useState("0%");
+  const [chapterTitle, setChapterTitle] = useState("");
+  const [currentTime, setCurrentTime] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const hrs = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      setCurrentTime(`${hrs}:${mins}`);
+    };
+    update();
+    const interval = setInterval(update, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Selection state
+  const [selectionRange, setSelectionRange] = useState<{ cfi: string; text: string; page?: number } | null>(null);
+  const [showSelectionPopup, setShowSelectionPopup] = useState(false);
+  const [selectionCoords, setSelectionCoords] = useState({ x: 0, y: 0, position: "top" as "top" | "bottom" });
+  const [annotationNote, setAnnotationNote] = useState("");
+
+  // Active annotation inspector (for clicking highlights)
+  const [inspectingNote, setInspectingNote] = useState<BookNote | null>(null);
+  const [inspectingCoords, setInspectingCoords] = useState({ x: 0, y: 0, position: "top" as "top" | "bottom" });
+  const [noteEditText, setNoteEditText] = useState("");
+
+  // Annotation comments/replies states
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
+
+  // Share Modal State
+  const [shareConfig, setShareConfig] = useState<{
+    show: boolean;
+    title: string;
+    description: string;
+    placeholder: string;
+    onConfirm: (comment: string) => Promise<void>;
+  }>({
+    show: false,
+    title: "",
+    description: "",
+    placeholder: "",
+    onConfirm: async () => {}
+  });
+  const [shareComment, setShareComment] = useState("");
+  const [sharing, setSharing] = useState(false);
+
+  // TTS state
+  const [ttsState, setTtsState] = useState<"stopped" | "playing" | "paused">("stopped");
+  const [ttsRate, setTtsRate] = useState(1.2);
+  const [ttsParagraphs, setTtsParagraphs] = useState<any[]>([]);
+  const [ttsParagraphIndex, setTtsParagraphIndex] = useState(-1);
+  const [ttsShowPlayer, setTtsShowPlayer] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [ttsVolume, setTtsVolume] = useState(1.0);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const ttsUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Immersive mode and background audio playback keeping
+  const [isImmersive, setIsImmersive] = useState(false);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Exit immersive mode when any settings panel is opened
+  useEffect(() => {
+    if (activeSidebar) {
+      setIsImmersive(false);
+    }
+  }, [activeSidebar]);
+
+  // Setup looping silent audio track to keep background audio alive on iOS/Android
+  useEffect(() => {
+    const silentUri = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+    const audio = new Audio(silentUri);
+    audio.loop = true;
+    silentAudioRef.current = audio;
+    return () => {
+      audio.pause();
+    };
+  }, []);
+
+  // Ref container
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<any>(null);
+
+  useEffect(() => {
+    loadBookAndReader();
+    return () => {
+      // Clean up TTS
+      window.speechSynthesis.cancel();
+    };
+  }, [bookHash]);
+
+  // Listen to custom go-to book note event
+  useEffect(() => {
+    const onGotoBookNote = (e: Event) => {
+      const customEvent = e as CustomEvent<{ noteId: string }>;
+      const noteId = customEvent.detail?.noteId;
+      if (noteId && viewRef.current) {
+        const targetNote = notes.find(n => n.id === noteId);
+        if (targetNote && targetNote.cfi) {
+          viewRef.current.goTo(targetNote.cfi);
+          localStorage.removeItem("super-target-book-note-id");
+          toast.success("已定位到指定划线内容");
+        }
+      }
+    };
+    window.addEventListener("super:goto-book-note", onGotoBookNote);
+    return () => {
+      window.removeEventListener("super:goto-book-note", onGotoBookNote);
+    };
+  }, [notes]);
+
+  const loadBookAndReader = async () => {
+    try {
+      setLoadingState("loading");
+      setLoadingProgress("正在获取书籍详情...");
+      const bookData = await readBookDetail(bookHash, async () => {
+        const data = await api.books.get(bookHash);
+        await putBooks([data]);
+        return data;
+      });
+      setBook(bookData);
+
+      setLoadingProgress("正在获取划线标注...");
+      const fetchedNotes = await readBookNotes(bookHash, async () => {
+        const data = await api.books.getNotes(bookHash);
+        await putBookNotes(bookHash, data);
+        return data;
+      });
+      setNotes(fetchedNotes);
+
+      setLoadingProgress("正在获取偏好配置...");
+      const userConfig = await readBookConfig(bookHash, async () => {
+        const configData = await api.books.getConfig(bookHash);
+        await putBookConfig(configData);
+        return configData;
+      });
+      if (userConfig && userConfig.viewSettings) {
+        try {
+          const parsed = JSON.parse(userConfig.viewSettings);
+          setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+        } catch {}
+      }
+
+      setLoadingProgress("正在下载书籍文件...");
+      const fileBlob = await readBookFile(bookHash, async () => {
+        const token = localStorage.getItem("super-token") || "";
+        const res = await fetch(`${getServerUrl()}/api/attachments/${bookData.attachmentId}?download=1`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("下载书籍失败");
+        const blob = await res.blob();
+        await putBookFile(bookHash, blob);
+        return blob;
+      });
+      const file = new File([fileBlob], `${bookData.title}.${bookData.format}`, { type: fileBlob.type });
+
+      setLoadingProgress("正在解析图书结构...");
+      const loader = new DocumentLoader(file);
+      const { book: bookDoc } = await loader.open();
+      setToc(bookDoc.toc || []);
+
+      setLoadingState("rendering");
+      setLoadingProgress("正在渲染阅读器...");
+
+      // Dynamic import foliate-js
+      await import("@/foliate-js/view.js");
+      // @ts-ignore
+      const { Overlayer } = await import("@/foliate-js/overlayer.js");
+      
+      // Clear old reader
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
+
+      const view = document.createElement("foliate-view") as any;
+      view.id = `foliate-${bookHash}`;
+      view.className = "w-full h-full block";
+      containerRef.current?.appendChild(view);
+      viewRef.current = view;
+
+      // Event listeners
+      view.addEventListener("load", handleSectionLoad);
+      view.addEventListener("create-overlay", handleCreateOverlay);
+      view.addEventListener("relocate", handleRelocate);
+      view.addEventListener("show-annotation", handleAnnotationClick);
+      view.addEventListener("draw-annotation", (e: any) => {
+        const { draw, annotation, doc } = e.detail;
+        const { color, style, note } = annotation;
+        console.log("[BookReader debug] draw-annotation event details:", { color, style, note, value: annotation.value });
+        const writingMode = doc ? (doc.body.style.writingMode || window.getComputedStyle(doc.body).writingMode) : 'horizontal';
+        
+        if (style === "underline") {
+          draw(Overlayer.underline, { color });
+        } else if (style === "squiggly") {
+          draw(Overlayer.squiggly, { color });
+        } else {
+          draw(Overlayer.highlight, { color });
+        }
+        if (note) {
+          draw(dashedUnderline, { color: color || '#fbbf24', width: 2, writingMode });
+        }
+      });
+
+      // Open bookDoc
+      await view.open(bookDoc);
+
+      // Target book note redirection
+      const targetNoteId = localStorage.getItem("super-target-book-note-id");
+      let navigatedToTarget = false;
+      if (targetNoteId) {
+        const targetNote = fetchedNotes.find((n: any) => n.id === targetNoteId);
+        if (targetNote && targetNote.cfi) {
+          try {
+            await view.goTo(targetNote.cfi);
+            navigatedToTarget = true;
+            localStorage.removeItem("super-target-book-note-id");
+            toast.success("已定位到指定划线内容");
+          } catch (err) {
+            console.warn("跳转到指定划线失败:", err);
+          }
+        }
+      }
+
+      // Restore location progress if available
+      if (!navigatedToTarget && userConfig && userConfig.location) {
+        try {
+          await view.goTo(userConfig.location);
+        } catch {
+          console.warn("无法跳转到上次阅读位置:", userConfig.location);
+        }
+      }
+
+      setLoadingState("ready");
+    } catch (err) {
+      console.error("阅读器加载失败:", err);
+      setErrorMessage((err as Error).message || "未知错误");
+      setLoadingState("error");
+    }
+  };
+
+  const getActiveIframe = (): HTMLIFrameElement | null => {
+    try {
+      const renderer = viewRef.current?.renderer;
+      if (!renderer) return null;
+      return renderer.iframe || renderer.shadowRoot?.querySelector("iframe") || null;
+    } catch (e) {
+      console.warn("获取 active iframe 失败:", e);
+      return null;
+    }
+  };
+
+  const getIframeRect = () => {
+    const iframe = getActiveIframe();
+    if (iframe) {
+      try {
+        return iframe.getBoundingClientRect();
+      } catch (e) {
+        console.warn("获取 iframe rect 失败:", e);
+      }
+    }
+    return { left: 0, top: 0, width: 0, height: 0 };
+  };
+
+  const handleMouseUpListener = useCallback((e: MouseEvent) => {
+    // Use event target's ownerDocument to get the correct doc (the iframe where mouseup occurred)
+    // This avoids the stale getActiveIframe() bug where it always returns the first iframe
+    const doc = (e.target as Element)?.ownerDocument;
+    if (!doc) return;
+    try {
+      const sel = doc.getSelection();
+      // Determine the section index from the document, not stale currentSectionIndexRef
+      // (which can be overwritten by adjacent section load events)
+      const renderer = viewRef.current?.renderer;
+      const contents = renderer?.getContents();
+      const content = contents?.find((c: any) => c.doc === doc);
+      const index = content?.index ?? currentSectionIndexRef.current;
+      console.log("[BookReader debug] mouseup event fired. Selection text:", sel?.toString(), "isCollapsed:", sel?.isCollapsed, "section index:", index);
+      if (sel && !sel.isCollapsed && sel.toString().trim()) {
+        const text = sel.toString();
+        const range = sel.getRangeAt(0);
+        const cfi = viewRef.current?.getCFI(index, range);
+        console.log("[BookReader debug] Generated cfi:", cfi);
+        
+        if (cfi) {
+          const rect = range.getBoundingClientRect();
+          // Find the exact iframe for this doc to get the correct bounding rect
+          let iframeRect = { left: 0, top: 0, width: 0, height: 0, bottom: 0, right: 0 };
+          if (renderer?.shadowRoot) {
+            const iframes = renderer.shadowRoot.querySelectorAll("iframe") as NodeListOf<HTMLIFrameElement>;
+            for (const iframe of iframes) {
+              if (iframe.contentDocument === doc) {
+                iframeRect = iframe.getBoundingClientRect();
+                break;
+              }
+            }
+          }
+          if (!iframeRect.width) iframeRect = getIframeRect() as any;
+          const isNearTop = iframeRect.top + rect.top < 220;
+          setSelectionRange({ cfi, text });
+          const coords = {
+            x: iframeRect.left + rect.left + rect.width / 2,
+            y: isNearTop ? (iframeRect.top + rect.bottom + 8) : (iframeRect.top + rect.top - 8),
+            position: isNearTop ? "bottom" : "top" as "bottom" | "top"
+          };
+          setSelectionCoords(coords);
+          setShowSelectionPopup(true);
+          setShowMarkerColors(false);
+          setAnnotationNote("");
+        }
+      } else {
+        setShowSelectionPopup(false);
+      }
+    } catch (err) {
+      console.error("[BookReader debug] Error inside mouseup selection listener:", err);
+    }
+  }, []);
+
+  const handleMouseDownListener = useCallback(() => {
+    setShowSelectionPopup(false);
+    setInspectingNote(null);
+  }, []);
+
+  const handleHoverMouseMoveListener = useCallback((e: MouseEvent) => {
+    try {
+      const iframe = getActiveIframe();
+      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+      if (!doc) return;
+
+      const renderer = viewRef.current?.renderer;
+      const contents = renderer?.getContents().find((x: any) => x.index === currentSectionIndexRef.current);
+      const overlayer = contents?.overlayer;
+      if (overlayer) {
+        const [value] = overlayer.hitTest(e);
+        if (value) {
+          const noteCfi = value.startsWith("foliate-note:") ? value.replace("foliate-note:", "") : value;
+          const noteObj = notesRef.current.find(n => n.cfi === noteCfi);
+          if (noteObj && noteObj.note) {
+            doc.body.classList.add("hover-thought");
+            return;
+          }
+        }
+      }
+      doc.body.classList.remove("hover-thought");
+    } catch (err) {
+      console.warn("Hover detection failed:", err);
+    }
+  }, []);
+
+  const handleClickListener = useCallback((e: MouseEvent) => {
+    const iframe = getActiveIframe();
+    const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+    if (!doc) return;
+
+    // 1. Skip if text is currently selected
+    const sel = doc.getSelection();
+    if (sel && !sel.isCollapsed && sel.toString().trim()) {
+      return;
+    }
+
+    // 2. Skip if clicking an interactive element
+    const target = e.target as HTMLElement;
+    if (target.closest("a") || target.closest("button") || target.closest(".annotation") || target.closest("[onclick]")) {
+      return;
+    }
+
+    // 3. Skip if clicking a text area containing thought to let show-annotation event trigger thoughts list modal!
+    const renderer = viewRef.current?.renderer;
+    const contents = renderer?.getContents().find((x: any) => x.index === currentSectionIndexRef.current);
+    const overlayer = contents?.overlayer;
+    console.log("[BookReader debug] handleClickListener:", { hasOverlayer: !!overlayer, clientX: e.clientX, clientY: e.clientY });
+    if (overlayer) {
+      const [value] = overlayer.hitTest(e);
+      console.log("[BookReader debug] handleClickListener hitTest result value:", value);
+      if (value) {
+        const noteCfi = value.startsWith("foliate-note:") ? value.replace("foliate-note:", "") : value;
+        const noteObj = notesRef.current.find(n => n.cfi === noteCfi);
+        console.log("[BookReader debug] handleClickListener matched noteObj:", noteObj);
+        if (noteObj && noteObj.note) {
+          return;
+        }
+      }
+    }
+
+    const clientWidth = doc.documentElement.clientWidth;
+    const ratio = e.clientX / clientWidth;
+    const isMobile = window.innerWidth < 768;
+
+    if (isMobile) {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+        setIsImmersive(prev => !prev);
+      } else {
+        clickTimeoutRef.current = setTimeout(() => {
+          clickTimeoutRef.current = null;
+          if (ratio < 0.5) {
+            viewRef.current?.prev();
+          } else {
+            viewRef.current?.next();
+          }
+        }, 250);
+      }
+    } else {
+      if (ratio >= 0.3 && ratio <= 0.7) {
+        setIsImmersive(prev => !prev);
+      }
+    }
+  }, []);
+
+  // Refs to hold the latest version of listeners to avoid stale closures
+  const handleMouseUpListenerRef = useRef(handleMouseUpListener);
+  const handleMouseDownListenerRef = useRef(handleMouseDownListener);
+  const handleHoverMouseMoveListenerRef = useRef(handleHoverMouseMoveListener);
+  const handleClickListenerRef = useRef(handleClickListener);
+
+  useEffect(() => {
+    handleMouseUpListenerRef.current = handleMouseUpListener;
+  }, [handleMouseUpListener]);
+
+  useEffect(() => {
+    handleMouseDownListenerRef.current = handleMouseDownListener;
+  }, [handleMouseDownListener]);
+
+  useEffect(() => {
+    handleHoverMouseMoveListenerRef.current = handleHoverMouseMoveListener;
+  }, [handleHoverMouseMoveListener]);
+
+  useEffect(() => {
+    handleClickListenerRef.current = handleClickListener;
+  }, [handleClickListener]);
+
+  // Stable wrappers that delegate execution to the latest ref callbacks
+  const mouseUpWrapper = useCallback((e: MouseEvent) => {
+    handleMouseUpListenerRef.current(e);
+  }, []);
+
+  const mouseDownWrapper = useCallback(() => {
+    handleMouseDownListenerRef.current();
+  }, []);
+
+  const mouseMoveWrapper = useCallback((e: MouseEvent) => {
+    handleHoverMouseMoveListenerRef.current(e);
+  }, []);
+
+  const clickWrapper = useCallback((e: MouseEvent) => {
+    handleClickListenerRef.current(e);
+  }, []);
+
+  // Re-attach listeners when activeSidebar changes
+  useEffect(() => {
+    const attach = () => {
+      const iframe = getActiveIframe();
+      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+      if (doc) {
+        doc.removeEventListener("mouseup", mouseUpWrapper);
+        doc.removeEventListener("mousedown", mouseDownWrapper);
+        doc.removeEventListener("mousemove", mouseMoveWrapper);
+        doc.removeEventListener("click", clickWrapper);
+
+        doc.addEventListener("mouseup", mouseUpWrapper);
+        doc.addEventListener("mousedown", mouseDownWrapper);
+        doc.addEventListener("mousemove", mouseMoveWrapper);
+        doc.addEventListener("click", clickWrapper);
+      }
+    };
+    attach();
+    const timer = setTimeout(attach, 350);
+    return () => clearTimeout(timer);
+  }, [activeSidebar, mouseUpWrapper, mouseDownWrapper, mouseMoveWrapper, clickWrapper]);
+
+  const drawAnnotationsOnCurrentSection = useCallback(() => {
+    if (!viewRef.current) return;
+    const currentSectionNotes = notesRef.current.filter(n => n.cfi && n.style);
+    currentSectionNotes.forEach(n => {
+      try {
+        viewRef.current?.deleteAnnotation({ value: n.cfi });
+        viewRef.current?.deleteAnnotation({ value: `foliate-note:${n.cfi}` });
+        viewRef.current?.addAnnotation({
+          value: n.type === "note" ? `foliate-note:${n.cfi}` : n.cfi,
+          style: n.style,
+          color: n.color,
+          note: n.note,
+          userId: n.userId
+        });
+      } catch (err) {
+        console.warn("渲染划线失败:", err);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (loadingState === "ready") {
+      drawAnnotationsOnCurrentSection();
+    }
+  }, [notes, loadingState, drawAnnotationsOnCurrentSection]);
+
+  // Section loaded (fires for BOTH primary and adjacent pre-loaded sections)
+  // Do NOT update currentSectionIndexRef here - only relocate gives the truly visible index
+  const handleSectionLoad = (e: any) => {
+    const { doc, index } = e.detail;
+    if (!doc) return;
+
+    applyReaderStyles();
+    drawAnnotationsOnCurrentSection();
+
+    // Touch swipe gestures for mobile page flipping
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+
+    doc.addEventListener("touchstart", (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+      }
+    }, { passive: true });
+
+    doc.addEventListener("touchend", (e: TouchEvent) => {
+      if (e.changedTouches.length === 1) {
+        const deltaX = e.changedTouches[0].clientX - touchStartX;
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        const timeDiff = Date.now() - touchStartTime;
+
+        if (Math.abs(deltaX) > 40 && Math.abs(deltaY) < 80 && timeDiff < 300) {
+          if (deltaX > 0) {
+            viewRef.current?.prev();
+          } else {
+            viewRef.current?.next();
+          }
+          return;
+        }
+      }
+    });
+
+    doc.removeEventListener("mouseup", mouseUpWrapper);
+    doc.removeEventListener("mousedown", mouseDownWrapper);
+    doc.removeEventListener("mousemove", mouseMoveWrapper);
+    doc.removeEventListener("click", clickWrapper);
+
+    doc.addEventListener("mouseup", mouseUpWrapper);
+    doc.addEventListener("mousedown", mouseDownWrapper);
+    doc.addEventListener("mousemove", mouseMoveWrapper);
+    doc.addEventListener("click", clickWrapper);
+  };
+
+  const handleCreateOverlay = (e: any) => {
+    const { index } = e.detail;
+    console.log("[BookReader debug] create-overlay event fired for index:", index);
+    drawAnnotationsOnCurrentSection();
+  };
+
+  // Relocate event (page/scroll navigation change)
+  // detail.index is the actually-visible section index from #getVisibleRange()
+  const handleRelocate = (e: any) => {
+    const detail = e.detail;
+    if (!detail) return;
+
+    // Update the current section index from the relocate event - this is the
+    // ONLY reliable source of the truly-visible section (unlike load events which
+    // also fire for adjacent pre-loaded sections)
+    if (detail.index !== undefined) {
+      currentSectionIndexRef.current = detail.index;
+    }
+
+    const cfi = detail.cfi;
+    const progressPercent = Math.round(detail.fraction * 100);
+    setCurrentCfi(cfi);
+    setReadingProgressText(`${progressPercent}%`);
+
+    if (detail.location) {
+      setCurrentPage((detail.location.current ?? 0) + 1);
+      setTotalPages(detail.location.total ?? 1);
+    }
+
+    // Get chapter title
+    if (detail.tocItem) {
+      setChapterTitle(detail.tocItem.label || "");
+    } else {
+      setChapterTitle("");
+    }
+
+    // Auto-save progress configuration to backend (debounced / on relocate)
+    api.books.saveConfig(bookHash, {
+      location: cfi,
+      progress: `${progressPercent}%`,
+    }).catch(err => console.warn("保存进度失败:", err));
+
+    // Cache config locally
+    getBookConfig(bookHash).then(existing => {
+      const nextConfig = {
+        userId: localStorage.getItem("super-self-userid") || "",
+        bookHash,
+        location: cfi,
+        progress: `${progressPercent}%`,
+        viewSettings: existing?.viewSettings || JSON.stringify(DEFAULT_SETTINGS),
+        xpointer: existing?.xpointer || null,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      putBookConfig(nextConfig);
+    }).catch(() => {});
+  };
+
+  // Highlighting annotation clicked
+  const handleAnnotationClick = (e: any) => {
+    const detail = e.detail;
+    console.log("[BookReader debug] handleAnnotationClick triggered with detail:", detail);
+    if (!detail) return;
+
+    // Find the note
+    const matchedNote = notesRef.current.find(n => n.cfi === detail.value || `foliate-note:${n.cfi}` === detail.value);
+    if (!matchedNote) return;
+
+    if (matchedNote.note) {
+      // If it contains a thought, open the Thoughts List modal!
+      setActiveThoughtsCfi(matchedNote.cfi);
+    } else {
+      // Otherwise, open the default highlight inspector
+      const rect = detail.rect;
+      const iframeRect = getIframeRect();
+      setInspectingNote(matchedNote);
+      setNoteEditText(matchedNote.note || "");
+      const isNearTop = iframeRect.top + rect.top < 220;
+      setInspectingCoords({
+        x: iframeRect.left + rect.left + rect.width / 2,
+        y: isNearTop ? (iframeRect.top + rect.bottom + 8) : (iframeRect.top + rect.top - 8),
+        position: isNearTop ? "bottom" : "top"
+      });
+    }
+  };
+
+  const applyReaderStyles = (customSettings?: any) => {
+    if (!viewRef.current || !viewRef.current.renderer) return;
+
+    const currentSettings = customSettings || settings;
+    const theme = THEMES[currentSettings.theme as keyof typeof THEMES] || THEMES.sepia;
+    
+    const paragraphMargin = currentSettings.usePublisherStyles ? "" : `margin-bottom: ${currentSettings.paragraphSpacing ?? 1.0}em !important;`;
+    const textIndent = currentSettings.usePublisherStyles ? "" : `text-indent: ${currentSettings.firstLineIndent ?? 2.0}em !important;`;
+    const textAlign = currentSettings.usePublisherStyles ? "" : `text-align: ${currentSettings.justifyText ? "justify" : "left"} !important;`;
+    const wordSpacing = currentSettings.usePublisherStyles ? "" : `word-spacing: ${currentSettings.wordSpacing ?? 0}em !important;`;
+    const letterSpacing = currentSettings.usePublisherStyles ? "" : `letter-spacing: ${currentSettings.letterSpacing ?? 0}px !important;`;
+    const hyphenation = currentSettings.usePublisherStyles ? "" : `
+      hyphens: ${currentSettings.hyphenation ? "auto" : "none"} !important;
+      -webkit-hyphens: ${currentSettings.hyphenation ? "auto" : "none"} !important;
+    `;
+
+    // Build injected stylesheet
+    const css = `
+      @import url('/fonts/lxgw/style.css');
+      html {
+        --serif: "Georgia", serif;
+        --sans-serif: "Inter", "Helvetica Neue", system-ui, sans-serif;
+        --monospace: "Fira Code", "Courier New", monospace;
+        --lxgw: "LXGW WenKai Screen", sans-serif;
+        --theme-bg-color: ${theme.bg};
+        --theme-fg-color: ${theme.fg};
+        --override-color: true;
+        color-scheme: ${theme.isDark ? "dark" : "light"};
+      }
+      body {
+        background-color: var(--theme-bg-color) !important;
+        color: var(--theme-fg-color) !important;
+        font-family: ${currentSettings.fontFamily === "serif" ? "var(--serif)" : currentSettings.fontFamily === "monospace" ? "var(--monospace)" : currentSettings.fontFamily === "lxgw" ? "var(--lxgw)" : "var(--sans-serif)"} !important;
+        font-size: ${currentSettings.fontSize}px !important;
+        line-height: ${currentSettings.lineHeight} !important;
+        ${wordSpacing}
+        ${letterSpacing}
+        ${hyphenation}
+      }
+      p {
+        ${paragraphMargin}
+        ${textIndent}
+        ${textAlign}
+      }
+      img {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+      a {
+        color: var(--theme-primary-color, #3b82f6) !important;
+        text-decoration: underline !important;
+      }
+      body.hover-thought, body.hover-thought * {
+        cursor: pointer !important;
+      }
+    `;
+
+    viewRef.current.renderer.setStyles?.(css);
+
+    // Apply attributes on renderer
+    const renderer = viewRef.current.renderer;
+    if (currentSettings.layoutMode === "paginated") {
+      renderer.removeAttribute("flow");
+    } else {
+      renderer.setAttribute("flow", "scrolling");
+    }
+
+    if (currentSettings.columns > 0) {
+      renderer.setAttribute("max-column-count", currentSettings.columns);
+    } else {
+      renderer.removeAttribute("max-column-count");
+    }
+
+    const isMobile = window.innerWidth < 768;
+    const defMarginTop = isMobile ? 64 : 120;
+    const defMarginBottom = isMobile ? 64 : 120;
+    const defMarginLeft = isMobile ? 20 : 40;
+    const defMarginRight = isMobile ? 20 : 40;
+
+    renderer.setAttribute("margin-top", `${currentSettings.marginTop ?? defMarginTop}px`);
+    renderer.setAttribute("margin-bottom", `${currentSettings.marginBottom ?? defMarginBottom}px`);
+    renderer.setAttribute("margin-left", `${currentSettings.marginLeft ?? defMarginLeft}px`);
+    renderer.setAttribute("margin-right", `${currentSettings.marginRight ?? defMarginRight}px`);
+    renderer.setAttribute("gap", `${currentSettings.columnGap ?? 5}px`);
+    renderer.setAttribute("max-inline-size", `${currentSettings.maxColumnWidth ?? 1200}px`);
+    renderer.setAttribute("max-block-size", `${currentSettings.maxColumnHeight ?? 1200}px`);
+  };
+
+  const updateSetting = (key: string, value: any) => {
+    const nextSettings = { ...settings, [key]: value };
+    setSettings(nextSettings);
+    
+    // Save to backend
+    api.books.saveConfig(bookHash, {
+      viewSettings: JSON.stringify(nextSettings)
+    }).catch(err => console.warn("保存设置失败:", err));
+
+    // Force re-apply styles immediately using the updated settings
+    applyReaderStyles(nextSettings);
+    viewRef.current?.renderer?.relayout?.();
+
+    // Cache settings locally
+    getBookConfig(bookHash).then(existing => {
+      const nextConfig = {
+        userId: localStorage.getItem("super-self-userid") || "",
+        bookHash,
+        location: existing?.location || null,
+        progress: existing?.progress || "0%",
+        viewSettings: JSON.stringify(nextSettings),
+        xpointer: existing?.xpointer || null,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      putBookConfig(nextConfig);
+    }).catch(() => {});
+  };
+
+  const renderStepperSetting = (
+    label: string, 
+    settingKey: string, 
+    min: number, 
+    max: number, 
+    step: number, 
+    isFloat = false
+  ) => {
+    const val = (settings as any)[settingKey] ?? 0;
+    
+    const handleDecrease = () => {
+      const next = isFloat ? +(val - step).toFixed(2) : val - step;
+      updateSetting(settingKey, Math.max(min, next));
+    };
+    
+    const handleIncrease = () => {
+      const next = isFloat ? +(val + step).toFixed(2) : val + step;
+      updateSetting(settingKey, Math.min(max, next));
+    };
+
+    return (
+      <div className="flex justify-between items-center text-xs py-1 border-b border-app-border/10">
+        <span className="text-tx-secondary font-medium">{label}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold w-10 text-right tabular-nums mr-1">{val}</span>
+          <button
+            onClick={handleDecrease}
+            disabled={val <= min}
+            className="w-6 h-6 rounded-full border border-app-border bg-app-surface hover:bg-app-hover flex items-center justify-center font-bold text-xs disabled:opacity-40 select-none"
+          >
+            －
+          </button>
+          <button
+            onClick={handleIncrease}
+            disabled={val >= max}
+            className="w-6 h-6 rounded-full border border-app-border bg-app-surface hover:bg-app-hover flex items-center justify-center font-bold text-xs disabled:opacity-40 select-none"
+          >
+            ＋
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderToggleSetting = (label: string, settingKey: string) => {
+    const val = !!(settings as any)[settingKey];
+    return (
+      <div className="flex justify-between items-center text-xs py-1.5 border-b border-app-border/10">
+        <span className="text-tx-secondary font-medium">{label}</span>
+        <button
+          onClick={() => updateSetting(settingKey, !val)}
+          className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 select-none ${
+            val ? "bg-accent-primary" : "bg-app-border"
+          }`}
+        >
+          <div
+            className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+              val ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+    );
+  };
+
+  const handleResetSettings = () => {
+    setSettings(DEFAULT_SETTINGS);
+    api.books.saveConfig(bookHash, {
+      viewSettings: JSON.stringify(DEFAULT_SETTINGS)
+    }).catch(err => console.warn("重置设置失败:", err));
+    applyReaderStyles(DEFAULT_SETTINGS);
+    viewRef.current?.renderer?.relayout?.();
+
+    // Cache settings locally
+    getBookConfig(bookHash).then(existing => {
+      const nextConfig = {
+        userId: localStorage.getItem("super-self-userid") || "",
+        bookHash,
+        location: existing?.location || null,
+        progress: existing?.progress || "0%",
+        viewSettings: JSON.stringify(DEFAULT_SETTINGS),
+        xpointer: existing?.xpointer || null,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      putBookConfig(nextConfig);
+    }).catch(() => {});
+  };
+
+  // Add Annotation Highlight
+  const handleAddHighlight = async (color: string, style: "solid" | "underline" | "squiggly") => {
+    if (!selectionRange) return;
+    try {
+      const type = annotationNote.trim() ? "note" : "highlight";
+      const newNote = await api.books.createNote(bookHash, {
+        type,
+        cfi: selectionRange.cfi,
+        text: selectionRange.text,
+        style,
+        color,
+        note: annotationNote.trim()
+      });
+
+      // Update state without duplicates
+      setNotes(prev => {
+        const index = prev.findIndex(n => n.id === newNote.id || (n.cfi === newNote.cfi && n.userId === newNote.userId));
+        if (index > -1) {
+          const next = [...prev];
+          next[index] = newNote;
+          return next;
+        }
+        return [...prev, newNote];
+      });
+
+      // Remove old annotation overlay if exists
+      viewRef.current?.deleteAnnotation({ value: newNote.cfi });
+      viewRef.current?.deleteAnnotation({ value: `foliate-note:${newNote.cfi}` });
+
+      // Render highlight in Foliate
+      viewRef.current?.addAnnotation({
+        value: type === "note" ? `foliate-note:${newNote.cfi}` : newNote.cfi,
+        style,
+        color,
+        note: newNote.note,
+        userId: newNote.userId
+      });
+
+      // Cache single note locally
+      await putSingleBookNote(newNote);
+
+      setShowSelectionPopup(false);
+      setSelectionRange(null);
+    } catch (err) {
+      console.error("创建划线失败:", err);
+      alert("划线保存失败");
+    }
+  };
+
+  const handleSaveNoteComment = async () => {
+    if (!inspectingNote) return;
+    try {
+      const updated = await api.books.updateNote(bookHash, inspectingNote.id, {
+        note: noteEditText.trim()
+      });
+
+      // Update state
+      setNotes(prev => prev.map(n => n.id === updated.id ? { ...n, note: updated.note } : n));
+      
+      // Update Foliate overlay
+      if (updated.cfi) {
+        viewRef.current?.deleteAnnotation({ value: updated.cfi });
+        viewRef.current?.deleteAnnotation({ value: `foliate-note:${updated.cfi}` });
+        
+        const type = updated.note ? "note" : "highlight";
+        viewRef.current?.addAnnotation({
+          value: type === "note" ? `foliate-note:${updated.cfi}` : updated.cfi,
+          style: updated.style as any,
+          color: updated.color,
+          note: updated.note,
+          userId: updated.userId
+        });
+      }
+
+      // Close inspector and show success toast
+      setInspectingNote(null);
+      toast.success("保存成功");
+      
+      // Cache single note locally
+      await putSingleBookNote(updated);
+    } catch (err) {
+      console.error("更新批注失败:", err);
+      toast.error("保存失败");
+    }
+  };
+
+  const handleUpdateNoteInline = async (noteId: string) => {
+    if (!editingNoteText.trim()) {
+      toast.error("想法内容不能为空");
+      return;
+    }
+    try {
+      const updated = await api.books.updateNote(bookHash, noteId, {
+        note: editingNoteText.trim()
+      });
+
+      // Update state
+      setNotes(prev => prev.map(n => n.id === updated.id ? { ...n, note: updated.note } : n));
+      
+      // Update Foliate overlay
+      if (updated.cfi) {
+        viewRef.current?.deleteAnnotation({ value: updated.cfi });
+        viewRef.current?.deleteAnnotation({ value: `foliate-note:${updated.cfi}` });
+        
+        const type = updated.note ? "note" : "highlight";
+        viewRef.current?.addAnnotation({
+          value: type === "note" ? `foliate-note:${updated.cfi}` : updated.cfi,
+          style: updated.style as any,
+          color: updated.color,
+          note: updated.note,
+          userId: updated.userId
+        });
+      }
+
+      // Cache single note locally
+      await putSingleBookNote(updated);
+      
+      // Close editing mode
+      setEditingNoteId(null);
+      setEditingNoteText("");
+      toast.success("修改成功");
+    } catch (err) {
+      console.error("更新想法失败:", err);
+      toast.error("修改失败");
+    }
+  };
+
+  // Load comments when inspecting a note
+  useEffect(() => {
+    if (!inspectingNote) {
+      setComments([]);
+      setCommentText("");
+      return;
+    }
+
+    let active = true;
+    const fetchComments = async () => {
+      setLoadingComments(true);
+      try {
+        const data = await api.books.getNoteComments(bookHash, inspectingNote.id);
+        if (active) {
+          setComments(data);
+        }
+      } catch (err) {
+        console.error("加载评论失败:", err);
+      } finally {
+        if (active) {
+          setLoadingComments(false);
+        }
+      }
+    };
+
+    fetchComments();
+    return () => {
+      active = false;
+    };
+  }, [inspectingNote?.id, bookHash]);
+
+  // Add comment / reply
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inspectingNote || !commentText.trim() || postingComment) return;
+
+    setPostingComment(true);
+    try {
+      const newComment = await api.books.addNoteComment(bookHash, inspectingNote.id, commentText.trim());
+      setComments(prev => [...prev, newComment]);
+      setCommentText("");
+      toast.success("回复成功");
+    } catch (err) {
+      console.error("发表回复失败:", err);
+      toast.error("回复失败");
+    } finally {
+      setPostingComment(false);
+    }
+  };
+
+  const handleDeleteHighlight = async (noteId: string) => {
+    if (!confirm("确定要删除这条划线吗？")) return;
+
+    // Close modals immediately to prevent race conditions from confirm dialog click propagation
+    setInspectingNote(null);
+    setActiveThoughtsCfi(null);
+
+    const noteToDelete = notes.find(n => n.id === noteId);
+
+    // Optimistic UI updates
+    setNotes(prev => prev.filter(n => n.id !== noteId));
+    if (noteToDelete) {
+      // Remove from Foliate
+      if (noteToDelete.cfi) {
+        viewRef.current?.addAnnotation({
+          value: noteToDelete.cfi,
+        }, true);
+        viewRef.current?.addAnnotation({
+          value: `foliate-note:${noteToDelete.cfi}`,
+        }, true);
+      }
+      await deleteBookNote(noteId).catch(() => {});
+    }
+
+    try {
+      await api.books.deleteNote(bookHash, noteId);
+      toast.success("删除成功");
+    } catch (err) {
+      console.error("删除划线失败:", err);
+      toast.error("删除失败，你只能删除自己创建的划线。");
+      // Rollback on error
+      if (noteToDelete) {
+        setNotes(prev => [...prev, noteToDelete]);
+        if (noteToDelete.cfi) {
+          viewRef.current?.addAnnotation({
+            value: noteToDelete.type === "note" ? `foliate-note:${noteToDelete.cfi}` : noteToDelete.cfi,
+            style: noteToDelete.style as any,
+            color: noteToDelete.color,
+            note: noteToDelete.note,
+            userId: noteToDelete.userId
+          });
+        }
+        await putSingleBookNote(noteToDelete).catch(() => {});
+      }
+    }
+  };
+
+  const handleCopyTextFromSelection = () => {
+    if (!selectionRange) return;
+    navigator.clipboard.writeText(selectionRange.text);
+    toast.success("已复制到剪贴板");
+    setShowSelectionPopup(false);
+    setSelectionRange(null);
+  };
+
+  const handleOpenWriteThoughts = () => {
+    if (!selectionRange) return;
+    setThoughtText("");
+    setThoughtVisibility("public");
+    setShowWriteThoughtsModal(true);
+    setShowSelectionPopup(false);
+  };
+
+  const handleDeleteHighlightFromSelection = async (noteId: string) => {
+    try {
+      await api.books.deleteNote(bookHash, noteId);
+      const noteToDelete = notes.find(n => n.id === noteId);
+      if (noteToDelete) {
+        viewRef.current?.addAnnotation({
+          value: noteToDelete.type === "note" ? `foliate-note:${noteToDelete.cfi}` : noteToDelete.cfi,
+        }, true);
+      }
+      setNotes(prev => prev.filter(n => n.id !== noteId));
+      setShowSelectionPopup(false);
+      setSelectionRange(null);
+      await deleteBookNote(noteId);
+      toast.success("删除成功");
+    } catch (err) {
+      console.error("删除划线失败:", err);
+      toast.error("删除失败");
+    }
+  };
+
+  const handleSaveThought = async () => {
+    if (!selectionRange) return;
+    try {
+      const type = "note";
+      const style = lastColorStyle;
+      const color = lastColor;
+      const noteText = thoughtText.trim();
+      
+      const newNote = await api.books.createNote(bookHash, {
+        type,
+        cfi: selectionRange.cfi,
+        text: selectionRange.text,
+        style,
+        color,
+        note: noteText,
+        visibility: thoughtVisibility
+      });
+
+      setNotes(prev => {
+        const index = prev.findIndex(n => n.id === newNote.id || (n.cfi === newNote.cfi && n.userId === newNote.userId));
+        if (index > -1) {
+          const next = [...prev];
+          next[index] = newNote;
+          return next;
+        }
+        return [...prev, newNote];
+      });
+
+      viewRef.current?.deleteAnnotation({ value: newNote.cfi });
+      viewRef.current?.deleteAnnotation({ value: `foliate-note:${newNote.cfi}` });
+
+      viewRef.current?.addAnnotation({
+        value: `foliate-note:${newNote.cfi}`,
+        style,
+        color,
+        note: newNote.note,
+        userId: newNote.userId
+      });
+
+      await putSingleBookNote(newNote);
+
+      setShowWriteThoughtsModal(false);
+      setThoughtText("");
+      setShowSelectionPopup(false);
+      setSelectionRange(null);
+      toast.success("想法已保存");
+    } catch (err) {
+      console.error("创建想法失败:", err);
+      toast.error("保存想法失败");
+    }
+  };
+
+  // Thoughts List comments and likes helpers
+  const toggleLike = (noteId: string) => {
+    setLikesState(prev => {
+      const cur = prev[noteId] || { count: 0, liked: false };
+      const nextLiked = !cur.liked;
+      return {
+        ...prev,
+        [noteId]: {
+          count: nextLiked ? cur.count + 1 : Math.max(0, cur.count - 1),
+          liked: nextLiked
+        }
+      };
+    });
+  };
+
+  const fetchNoteComments = async (noteId: string) => {
+    try {
+      const list = await api.books.getNoteComments(bookHash, noteId);
+      setCommentsMap(prev => ({ ...prev, [noteId]: list }));
+    } catch (err) {
+      console.warn("获取评论失败:", err);
+    }
+  };
+
+  const handleAddThoughtComment = async (noteId: string) => {
+    const content = newCommentText.trim();
+    if (!content) return;
+    try {
+      await api.books.addNoteComment(bookHash, noteId, content);
+      setNewCommentText("");
+      setActiveCommentNoteId(null);
+      await fetchNoteComments(noteId);
+      toast.success("评论成功");
+    } catch (err) {
+      console.error("发表评论失败:", err);
+      toast.error("发表评论失败");
+    }
+  };
+
+  useEffect(() => {
+    if (activeThoughtsCfi) {
+      const cfiNotes = notes.filter(n => n.cfi === activeThoughtsCfi && n.note);
+      cfiNotes.forEach(n => {
+        fetchNoteComments(n.id);
+      });
+    }
+  }, [activeThoughtsCfi, notes]);
+
+  useEffect(() => {
+    if (activeSidebar === "notes") {
+      setNotesPage(1);
+    }
+  }, [activeSidebar]);
+
+  // Full-text search inside Book
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim() || !viewRef.current) return;
+    
+    setIsSearching(true);
+    setSearchResults([]);
+
+    try {
+      const results: any[] = [];
+      // Foliate view search returns async generator
+      for await (const result of viewRef.current.search({ query: searchQuery.trim() })) {
+        if (result.subitems) {
+          results.push(...result.subitems);
+          setSearchResults([...results]);
+        } else if (result.cfi) {
+          results.push(result);
+          setSearchResults([...results]);
+        }
+      }
+    } catch (err) {
+      console.error("内容检索失败:", err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Speech (TTS)
+  const handleToggleTts = () => {
+    if (ttsState === "playing") {
+      window.speechSynthesis.pause();
+      setTtsState("paused");
+      updateMediaSession("paused", ttsParagraphIndex, ttsParagraphs);
+    } else if (ttsState === "paused") {
+      window.speechSynthesis.resume();
+      setTtsState("playing");
+      updateMediaSession("playing", ttsParagraphIndex, ttsParagraphs);
+    } else {
+      startTts();
+    }
+  };
+
+  const playParagraph = (paragraphsList: any[], index: number, overrideVolume?: number) => {
+    if (index < 0 || index >= paragraphsList.length) {
+      handleStopTts();
+      return;
+    }
+
+    const currentVolume = overrideVolume !== undefined ? overrideVolume : ttsVolume;
+
+    window.speechSynthesis.cancel();
+    setTtsParagraphIndex(index);
+    setTtsState("playing");
+    updateMediaSession("playing", index, paragraphsList);
+
+    // Clear previous paragraph highlights
+    paragraphsList.forEach(item => {
+      try {
+        item.el.style.backgroundColor = "";
+        item.el.style.borderRadius = "";
+        item.el.style.padding = "";
+      } catch {}
+    });
+
+    // Apply grey background style to active paragraph
+    const current = paragraphsList[index];
+    if (current?.el) {
+      current.el.style.backgroundColor = "rgba(0, 0, 0, 0.08)";
+      current.el.style.borderRadius = "4px";
+      current.el.style.padding = "2px 4px";
+      // Smoothly scroll element into view (auto flips pages)
+      current.el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    const utterance = new SpeechSynthesisUtterance(current.text);
+    utterance.lang = "zh-CN";
+    utterance.rate = ttsRate;
+    utterance.volume = currentVolume;
+    utterance.onend = () => {
+      const nextIndex = index + 1;
+      setTtsParagraphIndex(nextIndex);
+      playParagraph(paragraphsList, nextIndex, currentVolume);
+    };
+    utterance.onerror = (e) => {
+      console.error("TTS 播放出错:", e);
+      setTimeout(() => {
+        const nextIndex = index + 1;
+        setTtsParagraphIndex(nextIndex);
+        playParagraph(paragraphsList, nextIndex, currentVolume);
+      }, 500);
+    };
+
+    ttsUtteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleVolumeChange = (v: number) => {
+    setTtsVolume(v);
+    if (ttsState === "playing" && ttsParagraphIndex !== -1) {
+      playParagraph(ttsParagraphs, ttsParagraphIndex, v);
+    }
+  };
+
+  const startTts = () => {
+    window.speechSynthesis.cancel();
+
+    // Extract text paragraphs from iframe body
+    const iframe = getActiveIframe();
+    const doc = iframe?.contentDocument;
+    if (!doc) return;
+
+    const elements = Array.from(doc.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6"))
+      .map((el: any) => ({
+        el,
+        text: el.innerText?.trim() || ""
+      }))
+      .filter(item => item.text.length > 0);
+
+    if (elements.length === 0) {
+      alert("无可读文本");
+      return;
+    }
+
+    setTtsParagraphs(elements);
+    setTtsShowPlayer(true);
+    playParagraph(elements, 0);
+  };
+
+  const handleNextTts = () => {
+    if (ttsParagraphs.length === 0 || ttsParagraphIndex === -1) return;
+    const next = ttsParagraphIndex + 1;
+    if (next < ttsParagraphs.length) {
+      playParagraph(ttsParagraphs, next);
+    } else {
+      handleStopTts();
+    }
+  };
+
+  const handlePrevTts = () => {
+    if (ttsParagraphs.length === 0 || ttsParagraphIndex === -1) return;
+    const prev = Math.max(0, ttsParagraphIndex - 1);
+    playParagraph(ttsParagraphs, prev);
+  };
+
+  const handleStopTts = () => {
+    window.speechSynthesis.cancel();
+    setTtsState("stopped");
+    setTtsParagraphIndex(-1);
+    setTtsShowPlayer(false);
+    updateMediaSession("stopped");
+    
+    // Clear all paragraph highlights
+    ttsParagraphs.forEach(item => {
+      try {
+        item.el.style.backgroundColor = "";
+        item.el.style.borderRadius = "";
+        item.el.style.padding = "";
+      } catch {}
+    });
+  };
+
+  // Sync background Media Session action controls to TTS synthesis
+  const updateMediaSession = (state: "playing" | "paused" | "stopped", pIndex?: number, paragraphsList?: any[]) => {
+    if (!('mediaSession' in navigator)) return;
+
+    if (state === "stopped") {
+      navigator.mediaSession.playbackState = "none";
+      silentAudioRef.current?.pause();
+      return;
+    }
+
+    const currentParagraph = paragraphsList && pIndex !== undefined ? paragraphsList[pIndex] : null;
+    const desc = currentParagraph ? currentParagraph.text.slice(0, 40) + "..." : "";
+
+    navigator.mediaSession.playbackState = state === "playing" ? "playing" : "paused";
+
+    let coverUrl: string | null = null;
+    if (book?.metadata) {
+      try {
+        const meta = JSON.parse(book.metadata);
+        if (meta.coverAttachmentId) {
+          coverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+        }
+      } catch {}
+    }
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: book?.title || "电子书朗读",
+      artist: chapterTitle || "super-note",
+      album: desc || "正在语音朗读中...",
+      artwork: coverUrl ? [
+        { src: coverUrl, sizes: "256x256", type: "image/png" }
+      ] : []
+    });
+
+    if (state === "playing") {
+      silentAudioRef.current?.play().catch(err => console.log("Silent audio autoplay blocked or failed:", err));
+    } else {
+      silentAudioRef.current?.pause();
+    }
+  };
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.setActionHandler("play", () => {
+      if (ttsState === "paused") {
+        window.speechSynthesis.resume();
+        setTtsState("playing");
+        updateMediaSession("playing", ttsParagraphIndex, ttsParagraphs);
+      } else if (ttsState === "stopped") {
+        startTts();
+      }
+    });
+
+    navigator.mediaSession.setActionHandler("pause", () => {
+      if (ttsState === "playing") {
+        window.speechSynthesis.pause();
+        setTtsState("paused");
+        updateMediaSession("paused", ttsParagraphIndex, ttsParagraphs);
+      }
+    });
+
+    navigator.mediaSession.setActionHandler("seekbackward", () => {
+      handlePrevTts();
+    });
+
+    navigator.mediaSession.setActionHandler("seekforward", () => {
+      handleNextTts();
+    });
+
+    return () => {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler("play", null);
+        navigator.mediaSession.setActionHandler("pause", null);
+        navigator.mediaSession.setActionHandler("seekbackward", null);
+        navigator.mediaSession.setActionHandler("seekforward", null);
+      }
+    };
+  }, [ttsState, ttsParagraphIndex, ttsParagraphs, ttsRate, ttsVolume]);
+
+  const getTtsRemainingTimeText = () => {
+    if (ttsParagraphs.length === 0 || ttsParagraphIndex === -1) return "剩余 00:00";
+    let remainingChars = 0;
+    for (let i = ttsParagraphIndex; i < ttsParagraphs.length; i++) {
+      remainingChars += ttsParagraphs[i].text.length;
+    }
+    const totalSeconds = Math.round(remainingChars / 5.5); // 5.5 characters per second
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `本章剩余 ${mins}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const handleShareNoteToTalk = (note: BookNote) => {
+    if (!book) return;
+    setShareComment("");
+    setShareConfig({
+      show: true,
+      title: "分享划线到“说说”",
+      description: `📝 摘录原文：\n"${note.text}"`,
+      placeholder: "写下你对这句段落的想法...",
+      onConfirm: async (comment) => {
+        try {
+          // 1. If book is PRIVATE, change it to WORKSPACE visibility first
+          if (book.visibility === "PRIVATE") {
+            await api.books.update(bookHash, { visibility: "WORKSPACE" });
+            setBook(prev => prev ? { ...prev, visibility: "WORKSPACE" } : null);
+          }
+
+          // 2. Post to diaries (说说)
+          await api.postDiary({
+            contentText: comment.trim(),
+            bookHash,
+            bookNoteId: note.id,
+            visibility: "WORKSPACE"
+          }, workspaceId || undefined);
+
+          toast.success("成功分享至“说说”！");
+        } catch (err) {
+          console.error("分享说说失败:", err);
+          toast.error("分享失败: " + (err as Error).message);
+          throw err;
+        }
+      }
+    });
+  };
+
+  const handleShareBookToTalk = () => {
+    if (!book) return;
+    setShareComment("");
+    setShareConfig({
+      show: true,
+      title: "推荐整本图书到“说说”",
+      description: `📖 您正在向工作区成员分享书籍《${book.title}》/ ${book.author || "未知作者"}。`,
+      placeholder: "写下你对本书的推荐语或想法...",
+      onConfirm: async (comment) => {
+        try {
+          // 1. Ensure book is shared in workspace
+          if (book.visibility === "PRIVATE") {
+            await api.books.update(bookHash, { visibility: "WORKSPACE" });
+            setBook(prev => prev ? { ...prev, visibility: "WORKSPACE" } : null);
+          }
+
+          // 2. Post diary
+          await api.postDiary({
+            contentText: comment.trim(),
+            bookHash,
+            visibility: "WORKSPACE"
+          }, workspaceId || undefined);
+
+          toast.success("书籍分享成功！");
+        } catch (err) {
+          console.error("分享书籍失败:", err);
+          toast.error("分享失败: " + (err as Error).message);
+          throw err;
+        }
+      }
+    });
+  };
+
+  // Export Notes to Markdown
+  const handleExportNotes = () => {
+    if (notes.length === 0) {
+      alert("暂无读书笔记可导出");
+      return;
+    }
+    const header = `# 读书笔记: 《${book?.title}》\n作者: ${book?.author || "未知作者"}\n导出日期: ${new Date().toLocaleDateString()}\n\n---\n\n`;
+    const content = notes.map((n, i) => {
+      const date = new Date(n.createdAt).toLocaleString();
+      return `### 标注 ${i + 1}\n- **原文**: ${n.text}\n- **批注**: ${n.note || "（无批注）"}\n- **日期**: ${date}\n\n`;
+    }).join("");
+
+    const blob = new Blob([header + content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${book?.title}_读书笔记.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Render outline items recursively
+  const renderTocItem = (item: TOCItem, depth = 0) => {
+    return (
+      <div key={item.id} className="space-y-1">
+        <button
+          onClick={() => {
+            viewRef.current?.goTo(item.href);
+            // Auto close sidebar on mobile
+            if (window.innerWidth < 640) setActiveSidebar(null);
+          }}
+          className="w-full text-left py-1.5 px-3 hover:bg-app-surface hover:text-accent-primary text-xs rounded transition-all truncate block"
+          style={{ paddingLeft: `${depth * 12 + 12}px` }}
+          title={item.label}
+        >
+          {item.label}
+        </button>
+        {item.subitems && item.subitems.map(sub => renderTocItem(sub, depth + 1))}
+      </div>
+    );
+  };
+
+  // Layout Themes Palette Colors
+  const theme = THEMES[settings.theme as keyof typeof THEMES] || THEMES.sepia;
+
+  let bookCoverUrl: string | null = null;
+  if (book?.metadata) {
+    try {
+      const meta = JSON.parse(book.metadata);
+      if (meta.coverAttachmentId) {
+        bookCoverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+      }
+    } catch {}
+  }
+
+  const notesPerPage = 5;
+  const totalNotesPages = Math.ceil(notes.length / notesPerPage);
+  const displayedNotes = notes.slice((notesPage - 1) * notesPerPage, notesPage * notesPerPage);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-app-bg text-tx-primary select-none overflow-hidden" style={{ backgroundColor: theme.bg, color: theme.fg }}>
+      
+      {/* Main Body Layout */}
+      <div className="w-full h-full flex relative overflow-hidden">
+        {/* Sidebar Container */}
+        {activeSidebar && activeSidebar !== "notes" && (
+          <div 
+            style={{
+              width: window.innerWidth < 768 ? "100%" : `${sidebarWidth}px`,
+              paddingTop: isImmersive ? "0px" : "calc(56px + var(--safe-area-top, 0px))"
+            }}
+            className="absolute inset-y-0 left-0 w-full md:relative md:h-full border-r border-app-border/40 bg-app-surface md:bg-black/5 md:dark:bg-white/5 backdrop-blur-lg flex flex-col shrink-0 z-30 md:z-20 animate-slide-in"
+          >
+            {/* Drag Resize Handle (hidden on mobile) */}
+            {window.innerWidth >= 768 && (
+              <div
+                className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent-primary/50 active:bg-accent-primary transition-colors z-30"
+                onMouseDown={handleSidebarDragInit}
+              />
+            )}
+            {/* Sidebar header */}
+            <div className="px-4 py-3 border-b border-app-border/40 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider">
+                {activeSidebar === "toc" && "书籍大纲"}
+                {activeSidebar === "search" && "全文搜索"}
+                {(activeSidebar as any) === "notes" && "读书笔记"}
+                {activeSidebar === "settings" && "排版设置"}
+              </h3>
+              <button
+                onClick={() => setActiveSidebar(null)}
+                className="p-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-all"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Sidebar content panels */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {/* 1. Outline TOC */}
+              {activeSidebar === "toc" && (
+                <div className="space-y-1">
+                  {toc.map(item => renderTocItem(item))}
+                  {toc.length === 0 && (
+                    <div className="text-xs italic text-center py-8 opacity-60">
+                      本书暂无目录大纲
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. Full-Text Search inside Book */}
+              {activeSidebar === "search" && (
+                <div className="space-y-4">
+                  <form onSubmit={handleSearch} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="搜索书内关键词..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="flex-1 p-2 border border-app-border bg-app-bg rounded-lg text-xs focus:outline-none focus:border-accent-primary text-tx-primary"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSearching}
+                      className="px-4 py-2 bg-accent-primary text-white text-xs font-semibold rounded-lg hover:bg-accent-primary/95 disabled:opacity-50 transition-all shrink-0 flex items-center justify-center gap-1.5"
+                    >
+                      {isSearching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                      <span>搜索</span>
+                    </button>
+                  </form>
+
+                  {/* Results */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-tx-tertiary">
+                      搜索结果 ({searchResults.length})
+                    </span>
+                    {searchResults.length === 0 && !isSearching && (
+                      <div className="text-xs text-tx-tertiary italic text-center py-8">
+                        {searchQuery.trim() ? "未找到匹配结果" : "输入关键词开始搜索"}
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                      {searchResults.map((item, idx) => {
+                        const excerptHtml = renderExcerpt(item.excerpt, searchQuery);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={async () => {
+                              try {
+                                if (viewRef.current) {
+                                  await viewRef.current.goTo(item.cfi);
+                                  // Auto close sidebar on mobile
+                                  if (window.innerWidth < 640) setActiveSidebar(null);
+                                }
+                              } catch (err) {
+                                console.warn("跳转到搜索结果失败:", err);
+                              }
+                            }}
+                            className="p-3 border border-app-border/40 hover:border-accent-primary bg-black/5 dark:bg-white/5 hover:bg-accent-primary/5 rounded-xl cursor-pointer transition-all text-left flex flex-col gap-1.5"
+                          >
+                            <div
+                              className="text-xs leading-relaxed text-tx-secondary break-words"
+                              dangerouslySetInnerHTML={{ __html: excerptHtml }}
+                            />
+                            {item.sectionName && (
+                              <span className="text-[9px] text-tx-tertiary font-bold tracking-tight truncate self-start opacity-75">
+                                📍 {item.sectionName}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Book Notes List */}
+              {(activeSidebar as any) === "notes" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-tx-tertiary">
+                      全书划线/笔记 ({notes.length})
+                    </span>
+                    {notes.length > 0 && (
+                      <button
+                        onClick={handleExportNotes}
+                        className="px-2.5 py-1 text-[10px] font-bold border border-app-border text-tx-secondary rounded-lg hover:bg-app-surface transition-all flex items-center gap-1 shrink-0"
+                      >
+                        <Download size={10} />
+                        <span>导出 Markdown</span>
+                      </button>
+                    )}
+                  </div>
+                  {notes.length === 0 && (
+                    <div className="text-xs italic text-center py-8 opacity-60">
+                      本书暂无划线或笔记，选中文字可添加划线
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    {notes.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={async () => {
+                          try {
+                            if (viewRef.current) {
+                              await viewRef.current.goTo(n.cfi);
+                              // Auto close sidebar on mobile
+                              if (window.innerWidth < 640) setActiveSidebar(null);
+                            }
+                          } catch (err) {
+                            console.warn("跳转笔记失败:", err);
+                          }
+                        }}
+                        className="p-3 border border-app-border/50 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-xl cursor-pointer transition-all text-left flex flex-col gap-2"
+                      >
+                        <p className="text-xs italic font-serif leading-relaxed opacity-95 border-l-2 pl-2" style={{ borderColor: n.color }}>
+                          "{n.text}"
+                        </p>
+                        {n.note && (
+                          <div className="text-xs font-medium text-tx-secondary leading-relaxed bg-black/5 dark:bg-white/5 p-2 rounded-lg break-words">
+                            💡 {n.note}
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-[8px] opacity-60 font-medium">
+                          <span>👤 {n.username || "我的笔记"}</span>
+                          <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. Reading settings panel */}
+              {activeSidebar === "settings" && (
+                <div className="space-y-4 text-left">
+                  {/* 排版设置 */}
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-tx-secondary">字体样式</h4>
+                    
+                    {/* Font family selection */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "serif", name: "宋体/Serif" },
+                        { id: "sans-serif", name: "黑体/Sans" },
+                        { id: "monospace", name: "等宽/Mono" },
+                        { id: "lxgw", name: "霞鹜文楷" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => updateSetting("fontFamily", item.id)}
+                          className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                            settings.fontFamily === item.id
+                              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                              : "border-app-border hover:bg-app-surface text-tx-secondary"
+                          }`}
+                        >
+                          {item.name}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1 mt-2">
+                      {renderStepperSetting("字体大小", "fontSize", 12, 48, 1)}
+                      {renderStepperSetting("行高比例", "lineHeight", 1.0, 3.0, 0.1)}
+                    </div>
+                  </div>
+
+                  {/* 布局主题 */}
+                  <div className="space-y-2 border-t border-app-border/40 pt-4">
+                    <h4 className="font-bold text-tx-secondary">阅读主题</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(THEMES).map(([key, value]) => (
+                        <button
+                          key={key}
+                          onClick={() => updateSetting("theme", key)}
+                          className={`py-2 px-3 rounded-lg border flex items-center justify-between text-xs font-semibold transition-all ${
+                            settings.theme === key
+                              ? "border-accent-primary text-accent-primary"
+                              : "border-app-border hover:bg-app-surface text-tx-secondary"
+                          }`}
+                          style={{ backgroundColor: value.bg, color: value.fg }}
+                        >
+                          <span>{value.name}</span>
+                          {settings.theme === key && <Check size={12} className="text-accent-primary" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 分栏与布局 */}
+                  <div className="space-y-2 border-t border-app-border/40 pt-4">
+                    <h4 className="font-bold text-tx-secondary">页面排版模式</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "paginated", name: "左右翻页" },
+                        { id: "scrolling", name: "竖向滚动" }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => updateSetting("layoutMode", item.id)}
+                          className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                            settings.layoutMode === item.id
+                              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                              : "border-app-border hover:bg-app-surface text-tx-secondary"
+                          }`}
+                        >
+                          {item.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 详细版面规格调整 */}
+                  <div className="space-y-2 border-t border-app-border/40 pt-4">
+                    <h4 className="font-bold text-tx-secondary">版面规格设置</h4>
+                    <div className="space-y-1">
+                      {renderStepperSetting("上边距", "marginTop", 0, 120, 2)}
+                      {renderStepperSetting("下边距", "marginBottom", 0, 120, 2)}
+                      {renderStepperSetting("左边距", "marginLeft", 0, 120, 2)}
+                      {renderStepperSetting("右边距", "marginRight", 0, 120, 2)}
+                      {renderStepperSetting("列间距", "columnGap", 0, 40, 1)}
+                      {renderStepperSetting("分栏数", "columns", 0, 4, 1)}
+                      {renderStepperSetting("最大列宽", "maxColumnWidth", 300, 1200, 20)}
+                      {renderStepperSetting("最大列高", "maxColumnHeight", 400, 2400, 20)}
+                    </div>
+                  </div>
+
+                  {/* 其他设置 */}
+                  <div className="space-y-2 border-t border-app-border/40 pt-4">
+                    <h4 className="font-bold text-tx-secondary">其他设置</h4>
+                    <div className="space-y-1">
+                      {renderToggleSetting("显示当前时间", "showTimeDisplay")}
+                    </div>
+                  </div>
+
+                  {/* TTS Speech Synthesis Settings */}
+                  <div className="space-y-2 border-t border-app-border/40 pt-4">
+                    <h4 className="font-bold text-tx-secondary flex items-center gap-1.5">
+                      <Volume2 size={14} />
+                      语音朗读速度
+                    </h4>
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() => {
+                          const rate = Math.max(0.6, +(ttsRate - 0.2).toFixed(1));
+                          setTtsRate(rate);
+                          if (ttsState === "playing") startTts();
+                        }}
+                        className="flex-1 py-1.5 rounded-lg border border-app-border hover:bg-app-surface text-center"
+                      >
+                        慢速
+                      </button>
+                      <span className="px-2 font-bold">{ttsRate}x</span>
+                      <button
+                        onClick={() => {
+                          const rate = Math.min(3.0, +(ttsRate + 0.2).toFixed(1));
+                          setTtsRate(rate);
+                          if (ttsState === "playing") startTts();
+                        }}
+                        className="flex-1 py-1.5 rounded-lg border border-app-border hover:bg-app-surface text-center"
+                      >
+                        快速
+                      </button>
+                    </div>
+                    {ttsState === "stopped" ? (
+                      <button
+                        onClick={handleToggleTts}
+                        className="w-full mt-2 py-2 bg-accent-primary text-white rounded-lg font-semibold hover:bg-accent-primary/95 flex items-center justify-center gap-2"
+                      >
+                        <Play size={12} fill="currentColor" />
+                        <span>开始语音朗读</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleToggleTts}
+                        className="w-full mt-2 py-2 border border-accent-primary text-accent-primary bg-accent-primary/5 rounded-lg font-semibold hover:bg-accent-primary/10 flex items-center justify-center gap-2"
+                      >
+                        {ttsState === "playing" ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+                        <span>{ttsState === "playing" ? "暂停朗读" : "继续朗读"}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Reset Settings */}
+                  <button
+                    onClick={handleResetSettings}
+                    className="w-full mt-4 py-2 border border-app-border text-tx-secondary rounded-lg hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-all flex items-center justify-center gap-2 font-semibold"
+                  >
+                    <RotateCcw size={12} />
+                    <span>恢复默认排版设置</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Reader Viewport area */}
+        <div className="flex-1 h-full flex flex-col relative overflow-hidden">
+          {/* Loading status screens */}
+          {loadingState === "loading" && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-app-bg" style={{ backgroundColor: theme.bg }}>
+              <Loader2 size={32} className="animate-spin text-accent-primary" />
+              <div className="text-xs font-semibold">{loadingProgress}</div>
+            </div>
+          )}
+
+          {loadingState === "rendering" && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-app-bg" style={{ backgroundColor: theme.bg }}>
+              <Loader2 size={32} className="animate-spin text-accent-primary" />
+              <div className="text-xs font-semibold">{loadingProgress}</div>
+            </div>
+          )}
+
+          {loadingState === "error" && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-app-bg text-center p-6" style={{ backgroundColor: theme.bg }}>
+              <VolumeX size={48} className="text-red-500" />
+              <h3 className="text-sm font-bold">阅读器加载失败</h3>
+              <p className="text-xs text-tx-tertiary max-w-sm">{errorMessage}</p>
+              <button
+                onClick={loadBookAndReader}
+                className="mt-2 px-4 py-1.5 bg-accent-primary text-white rounded-lg text-xs font-semibold hover:bg-accent-primary/95"
+              >
+                重试加载
+              </button>
+            </div>
+          )}
+
+          {/* Foliate container */}
+          <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
+
+          {/* Pagination Buttons for Reflowable/Paging books */}
+          {loadingState === "ready" && settings.layoutMode === "paginated" && (
+            <>
+              {/* Bottom Left Page Flip Button */}
+              <button
+                onClick={() => viewRef.current?.prev()}
+                className="absolute left-6 bottom-[49px] flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs z-30 transition-all active:scale-95 hidden md:flex"
+                style={{
+                  borderColor: `${theme.fg}40`,
+                  color: theme.fg,
+                  backgroundColor: `${theme.bg}a0`,
+                  backdropFilter: "blur(4px)"
+                }}
+                title="上一页"
+              >
+                <ChevronLeft size={14} />
+                <span>上一页</span>
+              </button>
+
+              {/* Bottom Right Page Flip Button */}
+              <button
+                onClick={() => viewRef.current?.next()}
+                className="absolute right-6 bottom-[49px] flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs z-30 transition-all active:scale-95 hidden md:flex"
+                style={{
+                  borderColor: `${theme.fg}40`,
+                  color: theme.fg,
+                  backgroundColor: `${theme.bg}a0`,
+                  backdropFilter: "blur(4px)"
+                }}
+                title="下一页"
+              >
+                <span>下一页</span>
+                <ChevronRight size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Top Header Bar Overlay */}
+      <div 
+        className={cn(
+          "absolute top-0 left-0 right-0 border-b border-app-border/40 px-4 flex items-center justify-between bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
+          isImmersive ? "-translate-y-full" : "translate-y-0"
+        )}
+        style={{
+          height: "calc(56px + var(--safe-area-top, 0px))",
+          paddingTop: "var(--safe-area-top, 0px)",
+          color: theme.fg
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-all active:scale-95"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold truncate max-w-[120px] sm:max-w-md">
+              {book?.title}
+            </span>
+            {chapterTitle && (
+              <span className="text-[10px] opacity-75 truncate max-w-[100px] sm:max-w-xs font-medium">
+                {chapterTitle}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Action Panel Toggles */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* TTS Controls */}
+          {ttsState !== "stopped" && (
+            <div className="flex items-center gap-1 bg-black/10 dark:bg-white/10 rounded-lg px-2 py-1 text-xs">
+              <button
+                onClick={handleStopTts}
+                className="p-1 hover:text-red-500 rounded transition-colors"
+                title="停止播放"
+              >
+                <Square size={12} fill="currentColor" />
+              </button>
+              <button
+                onClick={handleToggleTts}
+                className="p-1 hover:text-accent-primary rounded transition-colors"
+                title={ttsState === "playing" ? "暂停" : "继续播放"}
+              >
+                {ttsState === "playing" ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+              </button>
+              <span className="text-[9px] opacity-75">{ttsRate}x</span>
+            </div>
+          )}
+
+          <button
+            onClick={() => setActiveSidebar(activeSidebar === "toc" ? null : "toc")}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
+              activeSidebar === "toc" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
+            }`}
+            title="大纲目录"
+          >
+            <List size={16} />
+          </button>
+          <button
+            onClick={() => setActiveSidebar(activeSidebar === "search" ? null : "search")}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
+              activeSidebar === "search" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
+            }`}
+            title="全文搜索"
+          >
+            <Search size={16} />
+          </button>
+          <button
+            onClick={() => setActiveSidebar(activeSidebar === "notes" ? null : "notes")}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
+              activeSidebar === "notes" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
+            }`}
+            title="读书笔记"
+          >
+            <MessageSquare size={16} />
+          </button>
+          <button
+            onClick={() => setActiveSidebar(activeSidebar === "settings" ? null : "settings")}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
+              activeSidebar === "settings" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
+            }`}
+            title="字体排版设置"
+          >
+            <Settings size={16} />
+          </button>
+          <button
+            onClick={handleShareBookToTalk}
+            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all text-inherit"
+            title="推荐分享本书到说说"
+          >
+            <Share2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom Bar progress info Overlay */}
+      {loadingState === "ready" && (
+        <div 
+          className={cn(
+            "absolute bottom-0 left-0 right-0 border-t border-app-border/30 px-6 flex items-center justify-between text-[10px] opacity-70 bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
+            isImmersive ? "translate-y-full" : "translate-y-0"
+          )}
+          style={{
+            height: "calc(32px + var(--safe-area-bottom, 0px))",
+            paddingBottom: "var(--safe-area-bottom, 0px)",
+            color: theme.fg
+          }}
+        >
+          <span className="truncate max-w-[120px] sm:max-w-md">{chapterTitle || "阅读中..."}</span>
+          <div className="flex items-center gap-4">
+            {settings.showTimeDisplay && currentTime && (
+              <span className="font-semibold mr-2 tabular-nums">{currentTime}</span>
+            )}
+            <span>页码: {currentPage}/{totalPages}</span>
+            <span>进度: {readingProgressText}</span>
+          </div>
+        </div>
+      )}
+
+      {/* 1. Selection Popover (Floating Action Menu) */}
+      {showSelectionPopup && selectionRange && (() => {
+        const existingAnnotation = notes.find(n => n.cfi === selectionRange.cfi);
+
+        return createPortal(
+          <div
+            className="fixed z-[9999] animate-fade-in flex flex-col shadow-xl rounded-xl border p-1.5"
+            style={{
+              left: `${selectionCoords.x}px`,
+              top: `${selectionCoords.y}px`,
+              transform: selectionCoords.position === "bottom" ? "translate(-50%, 0)" : "translate(-50%, -100%)",
+              backgroundColor: theme.bg,
+              color: theme.fg,
+              borderColor: `${theme.fg}20`
+            }}
+          >
+            {showMarkerColors ? (
+              <div className="flex items-center gap-2 px-1 py-0.5">
+                <button
+                  onClick={() => setShowMarkerColors(false)}
+                  className={cn(
+                    "p-1 rounded transition-colors text-inherit",
+                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
+                  )}
+                >
+                  <ArrowLeft size={13} />
+                </button>
+                {["#ffeb3b", "#ff4081", "#00e676", "#29b6f6", "#e0e0e0"].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      setLastColor(color);
+                      setLastColorStyle("solid");
+                      handleAddHighlight(color, "solid");
+                      setShowMarkerColors(false);
+                    }}
+                    className="w-6 h-6 rounded-full border border-white/20 shadow hover:scale-110 active:scale-95 transition-transform"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-inherit">
+                <button
+                  onClick={handleCopyTextFromSelection}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
+                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
+                  )}
+                >
+                  <Copy size={13} />
+                  <span>复制</span>
+                </button>
+                <button
+                  onClick={() => setShowMarkerColors(true)}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
+                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
+                  )}
+                >
+                  <Highlighter size={13} />
+                  <span>马克笔</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setLastColorStyle("squiggly");
+                    setLastColor("#ff4081");
+                    handleAddHighlight("#ff4081", "squiggly");
+                  }}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
+                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
+                  )}
+                >
+                  <Sparkles size={13} />
+                  <span>波浪线</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setLastColorStyle("underline");
+                    setLastColor("#29b6f6");
+                    handleAddHighlight("#29b6f6", "underline");
+                  }}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
+                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
+                  )}
+                >
+                  <Type size={13} className="underline" />
+                  <span>直线</span>
+                </button>
+                <button
+                  onClick={handleOpenWriteThoughts}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
+                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
+                  )}
+                >
+                  <PenTool size={13} />
+                  <span>写想法</span>
+                </button>
+                {existingAnnotation && (
+                  <button
+                    onClick={() => handleDeleteHighlightFromSelection(existingAnnotation.id)}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded transition-all flex items-center gap-1 text-red-500",
+                      theme.isDark ? "hover:bg-red-500/20" : "hover:bg-red-500/10"
+                    )}
+                  >
+                    <Trash2 size={13} />
+                    <span>删除划线</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>,
+          document.body
+        );
+      })()}
+
+      {/* 2. Highlight / Note Annotation Inspector Popover */}
+      {inspectingNote && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={() => setInspectingNote(null)}
+        >
+          <div
+            className="w-full max-w-sm border rounded-2xl shadow-xl overflow-hidden flex flex-col animate-scale-in p-5 gap-3"
+            style={{
+              backgroundColor: theme.bg,
+              color: theme.fg,
+              borderColor: `${theme.fg}20`
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Note owner header */}
+            <div className="flex justify-between items-center text-[10px] opacity-75 border-b pb-2" style={{ borderColor: `${theme.fg}15` }}>
+              <span className="font-semibold">
+                {inspectingNote.displayName || inspectingNote.username ? `@${inspectingNote.displayName || inspectingNote.username} 的标注` : "我的标注"}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="opacity-60">{new Date(inspectingNote.createdAt).toLocaleDateString()}</span>
+                <button
+                  onClick={() => setInspectingNote(null)}
+                  className="p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                  style={{ color: theme.fg }}
+                  title="关闭"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            </div>
+
+            {/* Selected text */}
+            <p className="text-xs italic font-serif opacity-80 border-l-2 pl-2.5 leading-relaxed whitespace-pre-wrap" style={{ borderColor: inspectingNote.color }}>
+              "{inspectingNote.text}"
+            </p>
+
+            {/* Editable comment by owner, or read-only if shared by other users */}
+            {inspectingNote.userId === localStorage.getItem("super-self-userid") || !inspectingNote.userId ? (
+              <div className="space-y-1.5 mt-1">
+                <textarea
+                  value={noteEditText}
+                  onChange={(e) => setNoteEditText(e.target.value)}
+                  placeholder="添加批注内容..."
+                  className="w-full h-32 p-3 bg-transparent border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-all resize-none"
+                  style={{
+                    borderColor: `${theme.fg}20`,
+                    color: theme.fg
+                  }}
+                />
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={() => handleDeleteHighlight(inspectingNote.id)}
+                    className="p-1 hover:text-red-500 rounded transition-colors text-[9px] font-bold flex items-center gap-1"
+                  >
+                    <Trash2 size={10} />
+                    <span>删除</span>
+                  </button>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => handleShareNoteToTalk(inspectingNote)}
+                      className="p-1 hover:text-accent-primary rounded transition-colors text-[9px] font-bold flex items-center gap-1"
+                      title="分享至说说"
+                    >
+                      <Share2 size={10} />
+                      <span>分享</span>
+                    </button>
+                    <button
+                      onClick={handleSaveNoteComment}
+                      className="px-2.5 py-1 bg-accent-primary text-white hover:bg-accent-primary/95 text-[9px] rounded font-bold"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1 space-y-1.5">
+                {inspectingNote.note ? (
+                  <div className="text-[10px] p-2 rounded-lg leading-relaxed" style={{ backgroundColor: `${theme.fg}08` }}>
+                    {inspectingNote.note}
+                  </div>
+                ) : (
+                  <div className="text-[9px] italic opacity-60">（该成员仅做了划线，未写批注）</div>
+                )}
+                <div className="text-[8px] opacity-50 text-right">只读，不可修改他人标注</div>
+              </div>
+            )}
+
+            {/* Comments/Replies list */}
+            <div className="border-t pt-2 flex flex-col gap-2 max-h-48 overflow-y-auto" style={{ borderColor: `${theme.fg}15` }}>
+              <span className="text-[9px] font-semibold opacity-75">回复评论 ({comments.length})</span>
+              
+              {loadingComments ? (
+                <div className="flex justify-center py-2">
+                  <Loader2 size={12} className="animate-spin opacity-50" />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {comments.map((c) => (
+                    <div key={c.id} className="text-[10px] flex flex-col gap-0.5 border-b pb-1.5 last:border-0 last:pb-0" style={{ borderColor: `${theme.fg}10` }}>
+                      <div className="flex justify-between items-center opacity-75">
+                        <span className="font-bold text-accent-primary">@{c.displayName || c.username}</span>
+                        <span className="text-[8px] opacity-60">{new Date(c.createdAt).toLocaleString()}</span>
+                      </div>
+                      <p className="leading-relaxed break-words opacity-90">{c.content}</p>
+                    </div>
+                  ))}
+                  {comments.length === 0 && (
+                    <span className="text-[9px] italic opacity-50">暂无评论回复，写一条评论交流吧~</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Comment reply input */}
+            <form onSubmit={handleAddComment} className="flex gap-2 border-t pt-2 shrink-0" style={{ borderColor: `${theme.fg}15` }}>
+              <input
+                type="text"
+                placeholder="撰写评论回复..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                className="flex-1 px-3 py-1 bg-transparent border rounded-lg text-xs focus:outline-none focus:border-accent-primary placeholder-tx-tertiary/75 transition-colors"
+                style={{
+                  borderColor: `${theme.fg}20`,
+                  color: theme.fg
+                }}
+              />
+              <button
+                type="submit"
+                disabled={postingComment || !commentText.trim()}
+                className="px-2.5 py-1 bg-accent-primary hover:bg-accent-primary/95 disabled:opacity-50 text-white text-[10px] rounded-lg font-bold shrink-0 transition-colors"
+              >
+                {postingComment ? <Loader2 size={10} className="animate-spin" /> : "发送"}
+              </button>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Floating Audio Player */}
+      {ttsShowPlayer && (
+        <div className={cn(
+          "fixed left-1/2 -translate-x-1/2 bottom-14 z-45 max-w-[420px] w-[calc(100%-2rem)] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl p-2.5 flex items-center justify-between gap-3 select-none text-zinc-850 dark:text-zinc-100 transition-all duration-300 animate-fade-in",
+          isImmersive ? "translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+        )}>
+          {/* Cover & Info */}
+          <div className="flex items-center gap-2 overflow-hidden flex-1">
+            {/* Book Cover */}
+            <div className="w-10 h-14 bg-zinc-100 dark:bg-zinc-900 rounded overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
+              {bookCoverUrl ? (
+                <img src={bookCoverUrl} alt="cover" className="w-full h-full object-cover" />
+              ) : (
+                <BookOpen size={18} className="opacity-40" />
+              )}
+            </div>
+            {/* Titles */}
+            <div className="flex flex-col text-left min-w-0">
+              <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-50 truncate">
+                {book?.title}
+              </span>
+              <span className="text-[9px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                {chapterTitle || "正在朗读"} · {getTtsRemainingTimeText()}
+              </span>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Skip Backward */}
+            <button
+              onClick={handlePrevTts}
+              className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+              title="上一段"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            {/* Play/Pause */}
+            <button
+              onClick={handleToggleTts}
+              className="w-8 h-8 rounded-full bg-accent-primary text-white flex items-center justify-center shadow hover:scale-105 active:scale-95 transition-all"
+              title={ttsState === "playing" ? "暂停" : "播放"}
+            >
+              {ttsState === "playing" ? (
+                <Pause size={12} fill="currentColor" className="ml-[0.5px]" />
+              ) : (
+                <Play size={12} fill="currentColor" className="ml-[1.5px]" />
+              )}
+            </button>
+            {/* Skip Forward */}
+            <button
+              onClick={handleNextTts}
+              className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+              title="下一段"
+            >
+              <ChevronRight size={16} />
+            </button>
+
+            {/* Volume control */}
+            <div className="relative flex items-center">
+              <button
+                onClick={(e) => {
+                  if (window.innerWidth < 768) {
+                    setShowVolumeSlider(prev => !prev);
+                  } else {
+                    handleVolumeChange(ttsVolume === 0 ? 1.0 : 0);
+                  }
+                }}
+                onMouseEnter={() => {
+                  if (window.innerWidth >= 768) setShowVolumeSlider(true);
+                }}
+                onMouseLeave={() => {
+                  if (window.innerWidth >= 768) setShowVolumeSlider(false);
+                }}
+                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+                title="音量"
+              >
+                {ttsVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              {showVolumeSlider && (
+                <div 
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg flex flex-col items-center gap-1.5 z-50"
+                  onMouseEnter={() => {
+                    if (window.innerWidth >= 768) setShowVolumeSlider(true);
+                  }}
+                  onMouseLeave={() => {
+                    if (window.innerWidth >= 768) setShowVolumeSlider(false);
+                  }}
+                >
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={ttsVolume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                    className="h-16 w-1 accent-accent-primary cursor-pointer appearance-none bg-zinc-200 dark:bg-zinc-800 rounded"
+                    style={{ writingMode: 'bt-lr' as any, WebkitAppearance: 'slider-vertical' }}
+                  />
+                  <span className="text-[8px] font-bold tabular-nums text-zinc-555 dark:text-zinc-400">{Math.round(ttsVolume * 100)}%</span>
+                </div>
+              )}
+            </div>
+
+            {/* Close */}
+            <button
+              onClick={handleStopTts}
+              className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500 hover:text-red-500 transition-colors ml-1 border-l border-zinc-200 dark:border-zinc-800 pl-2"
+              title="关闭播放器"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Custom Share Modal */}
+      {shareConfig.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-app-surface border border-app-border rounded-2xl shadow-xl overflow-hidden flex flex-col animate-scale-in text-tx-primary">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-app-border flex justify-between items-center bg-app-surface/50">
+              <h3 className="text-sm font-bold text-tx-primary flex items-center gap-2">
+                <Share2 size={16} className="text-accent-primary" />
+                {shareConfig.title}
+              </h3>
+              <button
+                onClick={() => setShareConfig(prev => ({ ...prev, show: false }))}
+                className="p-1 rounded-lg hover:bg-app-border text-tx-tertiary transition-colors"
+                disabled={sharing}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              {shareConfig.description && (
+                <div className="p-3 bg-app-bg border border-app-border rounded-xl text-xs text-tx-secondary italic font-serif leading-relaxed whitespace-pre-wrap">
+                  {shareConfig.description}
+                </div>
+              )}
+              
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-tx-tertiary">
+                  我的感想与推荐语
+                </label>
+                <textarea
+                  autoFocus
+                  placeholder={shareConfig.placeholder}
+                  value={shareComment}
+                  onChange={(e) => setShareComment(e.target.value)}
+                  className="w-full h-24 p-3 bg-app-bg border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-all resize-none text-tx-primary placeholder-tx-tertiary"
+                  disabled={sharing}
+                />
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-5 py-3.5 border-t border-app-border bg-app-surface/50 flex justify-end gap-3">
+              <button
+                onClick={() => setShareConfig(prev => ({ ...prev, show: false }))}
+                className="px-4 py-1.5 border border-app-border hover:bg-app-border text-tx-secondary rounded-lg text-xs font-semibold transition-all active:scale-95"
+                disabled={sharing}
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  setSharing(true);
+                  try {
+                    await shareConfig.onConfirm(shareComment);
+                    setShareComment("");
+                    setShareConfig(prev => ({ ...prev, show: false }));
+                  } catch (err) {
+                    console.error(err);
+                  } finally {
+                    setSharing(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-1.5 bg-accent-primary hover:bg-accent-primary/95 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all active:scale-95 shadow"
+                disabled={sharing}
+              >
+                {sharing ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>正在分享...</span>
+                  </>
+                ) : (
+                  <span>确认分享</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Custom Write Thoughts Modal */}
+      {showWriteThoughtsModal && selectionRange && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div
+            className="w-full max-w-lg border rounded-2xl shadow-xl overflow-hidden flex flex-col animate-scale-in"
+            style={{
+              backgroundColor: theme.bg,
+              color: theme.fg,
+              borderColor: `${theme.fg}20`
+            }}
+          >
+            {/* Header */}
+            <div
+              className="px-5 py-4 border-b flex justify-between items-center bg-black/5 dark:bg-white/5"
+              style={{ borderColor: `${theme.fg}15` }}
+            >
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <Sparkles size={16} className="text-accent-primary" />
+                <span>写想法</span>
+              </h3>
+              <button
+                onClick={() => setShowWriteThoughtsModal(false)}
+                className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-tx-tertiary transition-colors"
+                style={{ color: theme.fg }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <div
+                className="p-3 border rounded-xl text-xs italic font-serif leading-relaxed whitespace-pre-wrap max-h-24 overflow-y-auto"
+                style={{
+                  borderColor: `${theme.fg}15`,
+                  backgroundColor: `${theme.fg}08`,
+                  color: theme.fg
+                }}
+              >
+                {selectionRange.text}
+              </div>
+              
+              <div className="space-y-1.5">
+                <textarea
+                  autoFocus
+                  placeholder="这一刻的想法..."
+                  value={thoughtText}
+                  onChange={(e) => setThoughtText(e.target.value)}
+                  className="w-full h-32 p-3 bg-transparent border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-all resize-none"
+                  style={{
+                    borderColor: `${theme.fg}20`,
+                    color: theme.fg
+                  }}
+                />
+              </div>
+
+              {/* Visibility Switch */}
+              <div className="flex items-center justify-between text-xs pt-1.5">
+                <span className="opacity-75 font-medium">想法可见性</span>
+                <div className="flex items-center gap-1 border rounded-lg p-0.5" style={{ borderColor: `${theme.fg}20` }}>
+                  <button
+                    type="button"
+                    onClick={() => setThoughtVisibility("public")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all font-semibold text-[10px]",
+                      thoughtVisibility === "public"
+                        ? "bg-accent-primary text-white"
+                        : "opacity-75 hover:opacity-100"
+                    )}
+                  >
+                    🌐 公开可见
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setThoughtVisibility("private")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all font-semibold text-[10px]",
+                      thoughtVisibility === "private"
+                        ? "bg-accent-primary text-white"
+                        : "opacity-75 hover:opacity-100"
+                    )}
+                  >
+                    🔒 仅自己可见
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div
+              className="px-5 py-3 border-t flex justify-end gap-3 bg-black/5 dark:bg-white/5"
+              style={{ borderColor: `${theme.fg}15` }}
+            >
+              <button
+                onClick={() => setShowWriteThoughtsModal(false)}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ color: theme.fg }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveThought}
+                className="px-4 py-1.5 bg-accent-primary hover:bg-accent-primary/95 text-white text-xs rounded-xl font-semibold transition-all active:scale-95 shadow-sm"
+              >
+                发表想法
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Custom Notes List Dialog */}
+      {activeSidebar === "notes" && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div
+            className="w-full max-w-3xl h-[80vh] border rounded-2xl shadow-xl overflow-hidden flex flex-col animate-scale-in"
+            style={{
+              backgroundColor: theme.bg,
+              color: theme.fg,
+              borderColor: `${theme.fg}20`
+            }}
+          >
+            {/* Header */}
+            <div
+              className="px-5 py-4 border-b flex justify-between items-center bg-black/5 dark:bg-white/5"
+              style={{ borderColor: `${theme.fg}15` }}
+            >
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <MessageSquare size={16} className="text-accent-primary" />
+                <span>全书划线/读书笔记 ({notes.length})</span>
+              </h3>
+              <div className="flex items-center gap-3">
+                {notes.length > 0 && (
+                  <button
+                    onClick={handleExportNotes}
+                    className="px-3 py-1.5 text-xs font-bold border rounded-xl transition-all flex items-center gap-1.5 shrink-0 hover:bg-black/5 dark:hover:bg-white/5"
+                    style={{
+                      borderColor: `${theme.fg}30`,
+                      color: theme.fg
+                    }}
+                  >
+                    <Download size={12} />
+                    <span>导出 Markdown</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setActiveSidebar(null)}
+                  className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-tx-tertiary transition-colors"
+                  style={{ color: theme.fg }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {notes.length === 0 && (
+                <div className="text-xs italic text-center py-20 opacity-60">
+                  本书暂无划线或笔记，选中文字可添加划线
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-4">
+                {displayedNotes.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={async () => {
+                      try {
+                        if (viewRef.current) {
+                          await viewRef.current.goTo(n.cfi);
+                          setActiveSidebar(null);
+                        }
+                      } catch (err) {
+                        console.warn("跳转笔记失败:", err);
+                      }
+                    }}
+                    className={cn(
+                      "p-4 border rounded-xl cursor-pointer transition-all text-left flex flex-col justify-between gap-3",
+                      theme.isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-black/5 hover:bg-black/10"
+                    )}
+                    style={{
+                      borderColor: `${theme.fg}15`
+                    }}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-xs italic font-serif leading-relaxed opacity-95 border-l-2 pl-2" style={{ borderColor: n.color }}>
+                        "{n.text}"
+                      </p>
+                      {editingNoteId === n.id ? (
+                        <div className="space-y-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            autoFocus
+                            value={editingNoteText}
+                            onChange={(e) => setEditingNoteText(e.target.value)}
+                            className="w-full h-20 p-2 text-xs bg-transparent border rounded-lg focus:outline-none focus:border-accent-primary resize-none"
+                            style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
+                          />
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingNoteId(null);
+                                setEditingNoteText("");
+                              }}
+                              className="px-2.5 py-1 text-[10px] rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-medium"
+                              style={{ color: theme.fg }}
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={() => handleUpdateNoteInline(n.id)}
+                              className="px-2.5 py-1 bg-accent-primary text-white text-[10px] rounded-lg font-bold"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        n.note && (
+                          <div
+                            className="text-xs font-medium leading-relaxed p-3 rounded-lg break-words"
+                            style={{
+                              backgroundColor: `${theme.fg}08`,
+                              color: theme.fg
+                            }}
+                          >
+                            💡 {n.note}
+                          </div>
+                        )
+                      )}
+                    </div>
+                    <div
+                      className="flex justify-between items-center text-[10px] opacity-60 font-medium border-t pt-2"
+                      style={{ borderColor: `${theme.fg}10` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>👤 {n.displayName || n.username || "我的笔记"}</span>
+                        {(n.userId === localStorage.getItem("super-self-userid") || !n.userId) && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingNoteId(n.id);
+                                setEditingNoteText(n.note || "");
+                              }}
+                              className="p-1 hover:text-accent-primary rounded transition-colors text-[9px] font-bold flex items-center gap-1 shrink-0"
+                              title="编辑想法"
+                            >
+                              <PenTool size={10} />
+                              <span>编辑</span>
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleDeleteHighlight(n.id);
+                              }}
+                              className="p-1 hover:text-red-500 rounded transition-colors text-[9px] font-bold flex items-center gap-1 shrink-0"
+                              title="删除"
+                            >
+                              <Trash2 size={10} />
+                              <span>删除</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {totalNotesPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-6 border-t border-app-border/40 mt-6 select-none">
+                  <button
+                    disabled={notesPage === 1}
+                    onClick={() => setNotesPage(prev => Math.max(1, prev - 1))}
+                    className="p-1.5 px-3 rounded-xl border text-[11px] font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
+                  >
+                    上一页
+                  </button>
+                  {Array.from({ length: totalNotesPages }).map((_, idx) => {
+                    const p = idx + 1;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => setNotesPage(p)}
+                        className={cn(
+                          "w-7 h-7 rounded-xl border text-xs font-bold transition-all flex items-center justify-center active:scale-95",
+                          notesPage === p ? "bg-accent-primary text-white border-transparent" : "hover:bg-black/5 dark:hover:bg-white/5"
+                        )}
+                        style={notesPage === p ? undefined : { borderColor: `${theme.fg}15`, color: theme.fg }}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <button
+                    disabled={notesPage === totalNotesPages}
+                    onClick={() => setNotesPage(prev => Math.min(totalNotesPages, prev + 1))}
+                    className="p-1.5 px-3 rounded-xl border text-[11px] font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
+                  >
+                    下一页
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Custom Thoughts List Modal */}
+      {activeThoughtsCfi && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div
+            className="w-full max-w-lg max-h-[85vh] border rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-in"
+            style={{
+              backgroundColor: theme.bg,
+              color: theme.fg,
+              borderColor: `${theme.fg}20`
+            }}
+          >
+            {/* Header */}
+            <div
+              className="px-5 py-4 border-b flex justify-between items-center bg-black/5 dark:bg-white/5"
+              style={{ borderColor: `${theme.fg}15` }}
+            >
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <MessageSquare size={16} className="text-accent-primary" />
+                <span>书友想法列表</span>
+              </h3>
+              <button
+                onClick={() => setActiveThoughtsCfi(null)}
+                className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-tx-tertiary transition-colors"
+                style={{ color: theme.fg }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Quoted Text */}
+              <div
+                className="p-3.5 border-l-4 rounded-r-xl text-xs italic font-serif leading-relaxed"
+                style={{
+                  borderColor: theme.fg,
+                  backgroundColor: `${theme.fg}08`,
+                  color: theme.fg
+                }}
+              >
+                "{notes.find(n => n.cfi === activeThoughtsCfi)?.text}"
+              </div>
+              
+              {/* Thoughts list */}
+              <div className="space-y-4">
+                {notes.filter(n => n.cfi === activeThoughtsCfi && n.note).map((noteItem) => {
+                  const comments = commentsMap[noteItem.id] || [];
+                  const likes = likesState[noteItem.id] || { count: 0, liked: false };
+                  const isPrivate = noteItem.visibility === "private";
+
+                  return (
+                    <div
+                      key={noteItem.id}
+                      className="p-4 border rounded-xl space-y-3 text-left"
+                      style={{ borderColor: `${theme.fg}15`, backgroundColor: `${theme.fg}03` }}
+                    >
+                      {/* Author Info */}
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                          {noteItem.avatarUrl ? (
+                            <img
+                              src={noteItem.avatarUrl.startsWith("http") ? noteItem.avatarUrl : `${getServerUrl()}${noteItem.avatarUrl}`}
+                              alt=""
+                              className="w-8 h-8 rounded-full object-cover"
+                              style={{ border: `1px solid ${theme.fg}20` }}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-accent-primary/10 flex items-center justify-center font-bold text-xs uppercase" style={{ color: theme.fg, border: `1px solid ${theme.fg}20` }}>
+                              {noteItem.displayName ? noteItem.displayName.slice(0, 2) : (noteItem.username ? noteItem.username.slice(0, 2) : "书")}
+                            </div>
+                          )}
+                          <div>
+                            <div className="text-xs font-bold">{noteItem.displayName || noteItem.username || "匿名书友"}</div>
+                            <div className="text-[10px] opacity-60">{new Date(noteItem.createdAt).toLocaleDateString()}</div>
+                          </div>
+                        </div>
+                        {isPrivate && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full border opacity-70 flex items-center gap-1" style={{ borderColor: `${theme.fg}20` }}>
+                            🔒 仅自己可见
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Thought Content / Inline Edit */}
+                      {editingNoteId === noteItem.id ? (
+                        <div className="space-y-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            autoFocus
+                            value={editingNoteText}
+                            onChange={(e) => setEditingNoteText(e.target.value)}
+                            className="w-full h-20 p-2 text-xs bg-transparent border rounded-lg focus:outline-none focus:border-accent-primary resize-none"
+                            style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
+                          />
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingNoteId(null);
+                                setEditingNoteText("");
+                              }}
+                              className="px-2.5 py-1 text-[10px] rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-medium"
+                              style={{ color: theme.fg }}
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={() => handleUpdateNoteInline(noteItem.id)}
+                              className="px-2.5 py-1 bg-accent-primary text-white text-[10px] rounded-lg font-bold"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs leading-relaxed font-medium pl-1">{noteItem.note}</p>
+                          
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-4 pt-1 text-[11px] font-bold border-t border-dashed" style={{ borderColor: `${theme.fg}10` }}>
+                            <button
+                              onClick={() => toggleLike(noteItem.id)}
+                              className={cn(
+                                "flex items-center gap-1 transition-colors",
+                                likes.liked ? "text-red-500" : "opacity-75 hover:opacity-100"
+                              )}
+                            >
+                              <svg className="w-3.5 h-3.5" fill={likes.liked ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                              </svg>
+                              <span>赞 {likes.count}</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveCommentNoteId(activeCommentNoteId === noteItem.id ? null : noteItem.id);
+                                setNewCommentText("");
+                              }}
+                              className="flex items-center gap-1 opacity-75 hover:opacity-100"
+                            >
+                              <MessageSquare size={13} />
+                              <span>评论 {comments.length}</span>
+                            </button>
+                            {noteItem.userId === localStorage.getItem("super-self-userid") && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingNoteId(noteItem.id);
+                                    setEditingNoteText(noteItem.note || "");
+                                  }}
+                                  className="flex items-center gap-1 text-accent-primary opacity-75 hover:opacity-100 ml-auto"
+                                  title="编辑想法"
+                                >
+                                  <PenTool size={13} />
+                                  <span>编辑</span>
+                                </button>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await handleDeleteHighlight(noteItem.id);
+                                  }}
+                                  className="flex items-center gap-1 text-red-500 opacity-75 hover:opacity-100"
+                                  title="删除"
+                                >
+                                  <Trash2 size={13} />
+                                  <span>删除</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Comments List */}
+                      {comments.length > 0 && (
+                        <div className="space-y-2 mt-2 p-2.5 rounded-lg text-[11px]" style={{ backgroundColor: `${theme.fg}05` }}>
+                          {comments.map((comment) => (
+                            <div key={comment.id} className="space-y-0.5">
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold opacity-90">{comment.displayName || comment.username || "匿名书友"}:</span>
+                                <span className="text-[9px] opacity-50">{new Date(comment.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              <p className="opacity-80 pl-1">{comment.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Comment Input Box */}
+                      {activeCommentNoteId === noteItem.id && (
+                        <div className="space-y-2 mt-2 pt-2 border-t border-dashed" style={{ borderColor: `${theme.fg}10` }}>
+                          <textarea
+                            autoFocus
+                            placeholder="写下你的评论想法..."
+                            value={newCommentText}
+                            onChange={(e) => setNewCommentText(e.target.value)}
+                            className="w-full h-16 p-2 text-xs bg-transparent border rounded-lg focus:outline-none focus:border-accent-primary resize-none"
+                            style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => setActiveCommentNoteId(null)}
+                              className="px-2.5 py-1 text-[10px] font-semibold opacity-70 hover:opacity-100"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={() => handleAddThoughtComment(noteItem.id)}
+                              className="px-3 py-1 bg-accent-primary hover:bg-accent-primary/95 text-white text-[10px] font-semibold rounded-md shadow-sm"
+                            >
+                              发送评论
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

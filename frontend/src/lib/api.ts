@@ -1,4 +1,4 @@
-import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion, Plan, Milestone, AuditLog } from "@/types";
+import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion, Plan, Milestone, AuditLog, BookGroup, Book, BookConfig, BookNote } from "@/types";
 import {
   shouldEnqueue as _shouldEnqueue,
   enqueue as _enqueue,
@@ -971,19 +971,19 @@ export const api = {
     return p;
   },
   deleteNote: (id: string) => request(`/notes/${id}`, { method: "DELETE" }),
-  emptyTrash: () =>
-    request<{
+  emptyTrash: (workspaceId?: string) => {
+    const ws = workspaceId ?? getCurrentWorkspace();
+    const query = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    return request<{
       success: boolean;
       count: number;
       skipped: number;
       removedFiles?: number;
-      /** 后端是否做了 WAL checkpoint（把 -wal 并回主文件并截断） */
       walTruncated?: boolean;
-      /** 本次是否触发了 VACUUM（释放体量 >= 阈值时才做） */
       vacuumed?: boolean;
-      /** 估算释放的字节数（笔记文本 + 附件 size 登记值） */
       freedBytesEstimate?: number;
-    }>(`/notes/trash/empty`, { method: "DELETE" }),
+    }>(`/notes/trash/empty${query}`, { method: "DELETE" });
+  },
   reorderNotes: (items: { id: string; sortOrder: number }[]) =>
     request<{ success: boolean }>("/notes/reorder/batch", { method: "PUT", body: JSON.stringify({ items }) }),
   /**
@@ -1125,6 +1125,7 @@ export const api = {
     const qs = params.toString() ? `?${params.toString()}` : "";
     return request<ProjectTask[]>(`/projects/my-tasks${qs}`);
   },
+  getProjectTask: (taskId: string) => request<ProjectTask>(`/projects/tasks/${taskId}`),
 
   createProjectTask: (projectId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags" | "dependencies"> & { participants?: string[]; tags?: string[]; dependencies?: string[] }) => request<ProjectTask>(`/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(data) }),
   updateProjectTask: (taskId: string, data: Omit<Partial<ProjectTask>, "participants" | "tags" | "checklists" | "dependencies"> & { checklists?: any[]; participants?: string[]; tags?: string[]; dependencies?: string[] }) => request<ProjectTask>(`/projects/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -1611,7 +1612,7 @@ export const api = {
   // 在工作区中：发布权限按"是否成员 + 功能开关"，删除权限按 canManageResource
   //   （创建者本人 / admin / owner）。
   postDiary: (
-    data: { contentText: string; mood?: string; images?: string[]; visibility?: string; voice?: { id: string; duration: number } | null; createdAt?: string; tagIds?: string[] },
+    data: { contentText: string; mood?: string; images?: string[]; visibility?: string; voice?: { id: string; duration: number } | null; createdAt?: string; tagIds?: string[]; bookHash?: string; bookNoteId?: string },
     workspaceId?: string,
   ) => {
     const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
@@ -1625,6 +1626,7 @@ export const api = {
     visibility?: string, // 'all' | 'private' | 'public'
     tagId?: string,
     search?: string,
+    searchMode?: string,
   ) => {
     const params = new URLSearchParams();
     if (cursor) params.set("cursor", cursor);
@@ -1635,6 +1637,7 @@ export const api = {
     if (visibility) params.set("visibility", visibility);
     if (tagId) params.set("tagId", tagId);
     if (search) params.set("search", search);
+    if (searchMode) params.set("searchMode", searchMode);
     const ws = getCurrentWorkspace();
     if (ws && ws !== "") params.set("workspaceId", ws);
     const qs = params.toString();
@@ -1664,12 +1667,13 @@ export const api = {
     const qs = params.toString();
     return request<DiaryStats>(`/diary/stats${qs ? `?${qs}` : ""}`);
   },
-  getDiaryCalendar: (year: number, month: number, tagId?: string, search?: string) => {
+  getDiaryCalendar: (year: number, month: number, tagId?: string, search?: string, searchMode?: string) => {
     const params = new URLSearchParams({ year: String(year), month: String(month) });
     const ws = getCurrentWorkspace();
     if (ws && ws !== "") params.set("workspaceId", ws);
     if (tagId) params.set("tagId", tagId);
     if (search) params.set("search", search);
+    if (searchMode) params.set("searchMode", searchMode);
     return request<{ dates: string[]; year: number; month: number }>(
       `/diary/calendar?${params.toString()}`,
     );
@@ -1856,6 +1860,115 @@ export const api = {
         throw new Error(err.error || `文件上传失败: ${res.status}`);
       }
       return res.json();
+    },
+  },
+
+  books: {
+    getGroups: (): Promise<BookGroup[]> => {
+      const ws = getCurrentWorkspace();
+      const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<BookGroup[]>(`/books/groups${qs}`);
+    },
+    createGroup: (name: string): Promise<BookGroup> => {
+      const ws = getCurrentWorkspace();
+      return request<BookGroup>("/books/groups", {
+        method: "POST",
+        body: JSON.stringify({ name, workspaceId: ws || undefined }),
+      });
+    },
+    updateGroup: (id: string, name: string): Promise<{ success: boolean }> => {
+      return request<{ success: boolean }>(`/books/groups/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name }),
+      });
+    },
+    deleteGroup: (id: string): Promise<{ success: boolean }> => {
+      return request<{ success: boolean }>(`/books/groups/${id}`, {
+        method: "DELETE",
+      });
+    },
+    list: (params: { groupId?: string; q?: string } = {}): Promise<Book[]> => {
+      const qs = new URLSearchParams();
+      if (params.groupId) qs.set("groupId", params.groupId);
+      if (params.q) qs.set("q", params.q);
+      const ws = getCurrentWorkspace();
+      if (ws && ws !== "") qs.set("workspaceId", ws);
+      const s = qs.toString();
+      return request<Book[]>(`/books${s ? `?${s}` : ""}`);
+    },
+    get: (bookHash: string): Promise<Book> => request<Book>(`/books/${bookHash}`),
+    import: async (file: File, groupId?: string | null, coverBlob?: Blob, title?: string, author?: string): Promise<Book> => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", file);
+      if (groupId) form.append("groupId", groupId);
+      if (coverBlob) form.append("cover", coverBlob, "cover.jpg");
+      if (title) form.append("title", title);
+      if (author) form.append("author", author);
+      const ws = getCurrentWorkspace();
+      if (ws && ws !== "") form.append("workspaceId", ws);
+      const res = await fetch(`${getBaseUrl()}/books/import`, {
+        method: "POST",
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `电子书导入失败: ${res.status}`);
+      }
+      return res.json();
+    },
+    update: (bookHash: string, data: Partial<{ title: string; author: string; groupId: string | null; tags: string; visibility: "PRIVATE" | "WORKSPACE" }>): Promise<Book> => {
+      return request<Book>(`/books/${bookHash}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    delete: (bookHash: string): Promise<{ success: boolean }> => {
+      return request<{ success: boolean }>(`/books/${bookHash}`, {
+        method: "DELETE",
+      });
+    },
+    getConfig: (bookHash: string): Promise<BookConfig> => {
+      return request<BookConfig>(`/books/${bookHash}/config`);
+    },
+    saveConfig: (bookHash: string, data: Partial<{ location: string; xpointer: string; progress: string; viewSettings: string }>): Promise<{ success: boolean }> => {
+      return request<{ success: boolean }>(`/books/${bookHash}/config`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    getNotes: (bookHash: string): Promise<BookNote[]> => {
+      return request<BookNote[]>(`/books/${bookHash}/notes`);
+    },
+    createNote: (bookHash: string, data: Partial<BookNote>): Promise<BookNote> => {
+      return request<BookNote>(`/books/${bookHash}/notes`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    updateNote: (bookHash: string, id: string, data: Partial<{ note: string; style: string; color: string }>): Promise<BookNote> => {
+      return request<BookNote>(`/books/${bookHash}/notes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    deleteNote: (bookHash: string, id: string): Promise<{ success: boolean }> => {
+      return request<{ success: boolean }>(`/books/${bookHash}/notes/${id}`, {
+        method: "DELETE",
+      });
+    },
+    getNoteInfo: (noteId: string): Promise<{ bookHash: string }> => {
+      return request<{ bookHash: string }>(`/books/note-info/${noteId}`);
+    },
+    getNoteComments: (bookHash: string, noteId: string): Promise<any[]> => {
+      return request<any[]>(`/books/${bookHash}/notes/${noteId}/comments`);
+    },
+    addNoteComment: (bookHash: string, noteId: string, content: string): Promise<any> => {
+      return request<any>(`/books/${bookHash}/notes/${noteId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
     },
   },
 

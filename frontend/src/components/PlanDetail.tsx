@@ -413,7 +413,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
             <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider border-b border-app-border/40 pb-2">
               {t("sidebar.planOutline")}
             </h3>
-            <div className="prose prose-sm max-w-none text-tx-secondary leading-relaxed dark:prose-invert">
+            <div className="prose prose-sm max-w-none text-tx-secondary leading-relaxed dark:prose-invert prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:underline hover:prose-a:text-blue-800 dark:hover:prose-a:text-blue-300">
               {plan.details ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                   {plan.details}

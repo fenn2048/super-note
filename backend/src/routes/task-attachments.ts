@@ -32,6 +32,7 @@ import fs from "fs";
 import path from "path";
 import { ensureAttachmentsDir, getAttachmentsDir, MIME_TO_EXT } from "./attachments";
 import { getUserWorkspaceRole, canManageResource } from "../middleware/acl";
+import { getAuthUserId } from "../lib/auth-security";
 
 // 与 attachments 一致的 MIME 白名单（图片类）以及新增的视频类型。
 const ALLOWED_MIMES = new Set([
@@ -71,9 +72,27 @@ export function handleDownloadTaskAttachment(c: Context): Response {
   const id = c.req.param("id");
   const db = getDb();
   const row = db
-    .prepare("SELECT id, mimeType, path FROM task_attachments WHERE id = ?")
-    .get(id) as { id: string; mimeType: string; path: string } | undefined;
+    .prepare("SELECT id, mimeType, path, taskId, workspaceId, userId FROM task_attachments WHERE id = ?")
+    .get(id) as { id: string; mimeType: string; path: string; taskId: string | null; workspaceId: string | null; userId: string } | undefined;
   if (!row) return c.json({ error: "附件不存在" }, 404);
+
+  const actorId = getAuthUserId(c);
+  if (!actorId) {
+    return c.json({ error: "未授权，请先登录", code: "UNAUTHENTICATED" }, 401);
+  }
+
+  // 校验权限
+  if (row.workspaceId) {
+    const role = getUserWorkspaceRole(row.workspaceId, actorId);
+    if (!role) {
+      return c.json({ error: "无权访问该附件", code: "FORBIDDEN" }, 403);
+    }
+  } else {
+    // 个人空间：只能创建者本人查看
+    if (row.userId !== actorId) {
+      return c.json({ error: "无权访问该附件", code: "FORBIDDEN" }, 403);
+    }
+  }
 
   const absPath = path.join(getAttachmentsDir(), row.path);
   if (!fs.existsSync(absPath)) {
@@ -84,7 +103,7 @@ export function handleDownloadTaskAttachment(c: Context): Response {
   return new Response(buffer, {
     headers: {
       "Content-Type": row.mimeType || "application/octet-stream",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": "private, no-cache",
       // Phase 5: 为附件下载添加严格 CSP
       "Content-Security-Policy": "default-src 'none'; sandbox;",
     },

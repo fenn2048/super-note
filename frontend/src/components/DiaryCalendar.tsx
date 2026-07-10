@@ -8,6 +8,7 @@ interface DiaryCalendarProps {
   onDateSelect: (dateStr: string) => void;
   tagId?: string;
   search?: string;
+  searchMode?: string;
 }
 
 // 周几标题（本地化友好，这里直接用简写）
@@ -19,7 +20,7 @@ const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
  * 按月网格展示，标记有说说的日期。
  * 支持月份切换、今日快捷定位、点击跳转。
  */
-export default function DiaryCalendar({ onDateSelect, tagId, search }: DiaryCalendarProps) {
+export default function DiaryCalendar({ onDateSelect, tagId, search, searchMode }: DiaryCalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -34,7 +35,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search }: DiaryCale
     setLoading(true);
     setError(null);
     try {
-      const res = await api.getDiaryCalendar(y, m, tagId, search);
+      const res = await api.getDiaryCalendar(y, m, tagId, search, searchMode);
       setDates(new Set(res.dates));
     } catch (e: any) {
       console.error("Calendar load failed:", e);
@@ -43,11 +44,11 @@ export default function DiaryCalendar({ onDateSelect, tagId, search }: DiaryCale
     } finally {
       setLoading(false);
     }
-  }, [tagId, search]);
+  }, [tagId, search, searchMode]);
 
   useEffect(() => {
     loadCalendar(year, month);
-  }, [year, month, tagId, search, loadCalendar]);
+  }, [year, month, tagId, search, searchMode, loadCalendar]);
 
   // 月导航
   const goPrev = () => {
@@ -90,7 +91,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search }: DiaryCale
     }
     let active = true;
     setLoadingDay(true);
-    api.getDiaryTimeline(undefined, 20, { from: selectedDate, to: selectedDate }, undefined, tagId, search)
+    api.getDiaryTimeline(undefined, 20, { from: selectedDate, to: selectedDate }, undefined, tagId, search, searchMode)
       .then((res) => {
         if (active) {
           setDayItems(res.items || []);
@@ -109,7 +110,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search }: DiaryCale
     return () => {
       active = false;
     };
-  }, [selectedDate, tagId, search]);
+  }, [selectedDate, tagId, search, searchMode]);
 
   // 不允许跳到未来月份
   const isFutureMonth =

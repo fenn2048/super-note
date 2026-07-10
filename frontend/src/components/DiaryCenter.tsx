@@ -32,8 +32,10 @@ import {
   Menu,
   ScanText,
   RotateCcw,
+  Link,
+  BookOpen,
 } from "lucide-react";
-import { api, getCurrentWorkspace, getBaseUrl } from "@/lib/api";
+import { api, getCurrentWorkspace, getBaseUrl, getServerUrl } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { toast } from "@/lib/toast";
 import { Diary, DiaryStats, Tag, DiaryComment, User } from "@/types";
@@ -136,8 +138,129 @@ export function renderDiaryContent(text: string): string {
   const sanitized = DOMPurify.sanitize(rawHtml, {
     ADD_TAGS: ["iframe"],
     ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "sandbox", "src", "width", "height", "style"],
-  });
+    ALLOWED_SCHEMES: ["http", "https", "ftp", "mailto", "tel", "data", "book", "book-note"],
+  } as any).toString();
   return transformIframesToClickToPlay(sanitized);
+}
+
+export function renderTextWithLinks(text: string) {
+  if (!text) return "";
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    if (match[1] && match[2]) {
+      parts.push(
+        <a 
+          key={match.index} 
+          href={match[2]} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {match[1]}
+        </a>
+      );
+    } else if (match[3]) {
+      parts.push(
+        <a 
+          key={match.index} 
+          href={match[3]} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {match[3]}
+        </a>
+      );
+    }
+    lastIndex = linkRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
+/**
+ * 递归高亮 HTML 文本节点中的搜索关键词（避开 pre、code、script、style 等节点）
+ */
+export function highlightHtmlKeyword(html: string, keyword?: string): string {
+  if (!html) return "";
+  if (!keyword || !keyword.trim()) return html;
+
+  const trimmedKeyword = keyword.trim();
+  const searchTerms = new Set<string>();
+  searchTerms.add(trimmedKeyword);
+  if (trimmedKeyword.startsWith("#")) {
+    searchTerms.add(trimmedKeyword.slice(1));
+  }
+
+  const sortedTerms = Array.from(searchTerms)
+    .filter((term) => term.length > 0)
+    .sort((a, b) => b.length - a.length);
+
+  if (sortedTerms.length === 0) return html;
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const walk = (node: Node) => {
+      const parentName = node.parentNode?.nodeName.toLowerCase();
+      if (
+        parentName === "script" ||
+        parentName === "style" ||
+        parentName === "pre" ||
+        parentName === "code"
+      ) {
+        return;
+      }
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.nodeValue || "";
+        if (!text.trim()) return;
+
+        const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const pattern = sortedTerms.map(escapeRegex).join("|");
+        const regex = new RegExp(`(${pattern})`, "gi");
+
+        if (regex.test(text)) {
+          const parts = text.split(regex);
+          const frag = doc.createDocumentFragment();
+
+          parts.forEach((part) => {
+            if (regex.test(part)) {
+              const mark = doc.createElement("mark");
+              mark.className =
+                "bg-amber-500/20 dark:bg-amber-500/30 text-amber-950 dark:text-amber-100 font-semibold rounded px-0.5 mx-px border-b border-amber-500/40";
+              mark.textContent = part;
+              frag.appendChild(mark);
+            } else if (part) {
+              frag.appendChild(doc.createTextNode(part));
+            }
+          });
+
+          node.parentNode?.replaceChild(frag, node);
+        }
+      } else {
+        const children = Array.from(node.childNodes);
+        children.forEach(walk);
+      }
+    };
+
+    walk(doc.body);
+    return doc.body.innerHTML;
+  } catch (err) {
+    console.error("Failed to highlight HTML keyword:", err);
+    return html;
+  }
 }
 
 // 心情选项
@@ -895,7 +1018,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       onDrop={handleDrop}
     >
       {/* 输入区域 */}
-      <div className="relative border border-app-border/80 bg-app-bg rounded-lg p-2.5 transition-all mb-3 focus-within:border-accent-primary/40 focus-within:ring-1 focus-within:ring-accent-primary/10">
+      <div className="relative border border-app-border/80 bg-app-bg dark:bg-[#121214] rounded-lg p-2.5 transition-all mb-3 focus-within:border-accent-primary/40 focus-within:ring-1 focus-within:ring-accent-primary/10">
         {showFormatToolbar && (
           <TextareaFormatToolbar
             textareaRef={textareaRef}
@@ -1711,9 +1834,9 @@ function VoicePlayer({
           className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all shrink-0 z-10"
         >
           {isPlaying ? (
-            <Pause size={16} fill="white" />
+            <Pause size={20} fill="white" />
           ) : (
-            <Play size={16} fill="white" className="ml-0.5" />
+            <Play size={20} fill="white" className="ml-0.5" />
           )}
         </button>
 
@@ -1839,11 +1962,15 @@ function DiaryCard({
   onDelete,
   onUpdate,
   isHighlighted,
+  search,
+  onTagClick,
 }: {
   item: Diary;
   onDelete: (id: string) => void;
   onUpdate: (updated: Diary) => void;
   isHighlighted?: boolean;
+  search?: string;
+  onTagClick?: (tagId: string) => void;
 }) {
   const { t } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -2073,6 +2200,27 @@ function DiaryCard({
       />
     );
   }
+  let coverUrl = "";
+  if (item.bookMetadata) {
+    try {
+      const meta = JSON.parse(item.bookMetadata);
+      if (meta.coverAttachmentId) {
+        coverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+      }
+    } catch {}
+  }
+
+  const handleOpenBook = () => {
+    if (item.bookHash) {
+      if (item.bookNoteId) {
+        localStorage.setItem("super-target-book-note-id", item.bookNoteId);
+      }
+      localStorage.setItem("super-target-book-hash", item.bookHash);
+      window.dispatchEvent(new CustomEvent("super:open-book", {
+        detail: { bookHash: item.bookHash }
+      }));
+    }
+  };
 
   return (
     <>
@@ -2172,8 +2320,49 @@ function DiaryCard({
                     placeholder.style.cursor = "default";
                   }
                 }}
-                dangerouslySetInnerHTML={{ __html: renderDiaryContent(item.contentText) }}
+                dangerouslySetInnerHTML={{ __html: highlightHtmlKeyword(renderDiaryContent(item.contentText), search) }}
               />
+            )}
+
+            {/* Book & Highlight Card Share wrapper */}
+            {item.bookHash && (
+              <div className="mt-3 space-y-2 border border-app-border/30 rounded-xl p-3 bg-black/5 dark:bg-white/5">
+                {/* Note highlight text quoted if present */}
+                {item.bookNoteText && (
+                  <p className="text-xs italic font-serif opacity-90 border-l-2 border-accent-primary pl-2.5 leading-relaxed text-tx-secondary whitespace-pre-wrap">
+                    "{item.bookNoteText}"
+                  </p>
+                )}
+                
+                {/* Book Card wrapper */}
+                <div 
+                  onClick={handleOpenBook}
+                  className="flex items-center gap-3 bg-app-surface border border-app-border/50 rounded-lg p-2.5 hover:border-accent-primary hover:bg-app-hover/50 cursor-pointer transition-all active:scale-[0.98] select-none"
+                  title="点击开始阅读此书"
+                >
+                  {/* Cover */}
+                  <div className="w-10 h-14 rounded bg-black/10 dark:bg-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-sm border border-app-border/30">
+                    {coverUrl ? (
+                      <img src={coverUrl} alt={item.bookTitle || "Book Cover"} className="w-full h-full object-cover" />
+                    ) : (
+                      <BookOpen size={16} className="text-tx-tertiary opacity-70" />
+                    )}
+                  </div>
+                  {/* Metadata */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xs font-bold text-tx-primary truncate leading-tight">
+                      {item.bookTitle || "共享图书"}
+                    </h4>
+                    <p className="text-[10px] text-tx-tertiary truncate mt-1">
+                      {item.bookAuthor || "未知作者"}
+                    </p>
+                  </div>
+                  {/* Right Action Icon Indicator */}
+                  <div className="text-[9px] font-semibold text-accent-primary px-2 py-1 bg-accent-primary/10 rounded-md shrink-0">
+                    去阅读
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* 语音播放器 */}
@@ -2192,11 +2381,15 @@ function DiaryCard({
                 {item.tags.map((tag) => (
                   <span
                     key={tag.id}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-pointer hover:bg-app-hover active:scale-95 transition-all select-none"
                     style={{
                       backgroundColor: getTagColor(tag) + "15",
                       borderColor: getTagColor(tag) + "30",
                       color: getTagColor(tag),
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTagClick?.(tag.id);
                     }}
                   >
                     {tag.name}
@@ -2366,7 +2559,7 @@ function DiaryCard({
                               </span>
                               <span className="text-[10px] text-tx-tertiary">{timeAgo(comment.createdAt, t)}</span>
                             </div>
-                            <p className="diary-comment-text text-tx-secondary mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
+                            <p className="diary-comment-text text-tx-secondary mt-1 whitespace-pre-wrap break-words">{renderTextWithLinks(comment.content)}</p>
                             
                             {/* Action Buttons */}
                             <div className="flex items-center gap-3 mt-1.5 text-[10px] text-tx-tertiary">
@@ -2441,7 +2634,7 @@ function DiaryCard({
                                       )}
                                       <span className="text-[10px] text-tx-tertiary ml-auto shrink-0">{timeAgo(reply.createdAt, t)}</span>
                                     </div>
-                                    <p className="diary-comment-text text-tx-secondary mt-1 whitespace-pre-wrap break-words">{reply.content}</p>
+                                    <p className="diary-comment-text text-tx-secondary mt-1 whitespace-pre-wrap break-words">{renderTextWithLinks(reply.content)}</p>
                                     
                                     {/* Actions */}
                                     <div className="flex items-center gap-3 mt-1.5 text-[10px] text-tx-tertiary">
@@ -2465,6 +2658,23 @@ function DiaryCard({
                                           删除
                                         </button>
                                       )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const url = window.prompt("输入链接地址 (URL)", "https://");
+                                          if (!url) return;
+                                          const linkText = window.prompt("输入链接文字", "链接");
+                                          if (!linkText) return;
+                                          const formatted = `[${linkText}](${url})`;
+                                          const before = newCommentText.substring(0, commentCursorPos);
+                                          const after = newCommentText.substring(commentCursorPos);
+                                          setNewCommentText(before + formatted + after);
+                                        }}
+                                        className="text-tx-tertiary hover:text-tx-secondary transition-colors ml-1.5"
+                                        title="插入超链接"
+                                      >
+                                        <Link size={16} />
+                                      </button>
                                     </div>
                                   </div>
                                 </div>
@@ -2537,6 +2747,23 @@ function DiaryCard({
                         title="选择表情"
                       >
                         <Smile size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = window.prompt("输入链接地址 (URL)", "https://");
+                          if (!url) return;
+                          const linkText = window.prompt("输入链接文字", "链接");
+                          if (!linkText) return;
+                          const formatted = `[${linkText}](${url})`;
+                          const before = newCommentText.substring(0, commentCursorPos);
+                          const after = newCommentText.substring(commentCursorPos);
+                          setNewCommentText(before + formatted + after);
+                        }}
+                        className="text-tx-tertiary hover:text-tx-secondary transition-colors ml-1.5"
+                        title="插入超链接"
+                      >
+                        <Link size={16} />
                       </button>
 
                       <AnimatePresence>
@@ -3001,6 +3228,32 @@ function DiaryEditor({
               </span>
             )}
           </button>
+          
+          {/* 超链接按钮 */}
+          <button
+            type="button"
+            onClick={() => {
+              const url = window.prompt("输入链接地址 (URL)", "https://");
+              if (!url) return;
+              const textVal = window.prompt("输入链接文字", "链接");
+              if (!textVal) return;
+              const formatted = `[${textVal}](${url})`;
+              const textarea = textareaRef.current;
+              if (textarea) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const updated = text.substring(0, start) + formatted + text.substring(end);
+                setText(updated);
+              } else {
+                setText(text + formatted);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-all"
+            title="插入超链接"
+          >
+            <Link size={18} />
+            <span className="hidden sm:inline">超链接</span>
+          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -3320,6 +3573,20 @@ export default function DiaryCenter() {
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  const [searchMode, setSearchMode] = useState<"AND" | "OR">(() => {
+    try {
+      const saved = sessionStorage.getItem("super-diary-search-mode");
+      return (saved ? JSON.parse(saved) : "AND") as "AND" | "OR";
+    } catch {
+      return "AND";
+    }
+  });
+
+  const searchTermsList = useMemo(() => {
+    if (!diarySearchQuery || !diarySearchQuery.trim()) return [];
+    return diarySearchQuery.trim().split(/\s+/).filter(Boolean);
+  }, [diarySearchQuery]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(diarySearchQuery);
@@ -3335,6 +3602,22 @@ export default function DiaryCenter() {
       sessionStorage.setItem("super-diary-search-query", JSON.stringify(query));
     } catch { /* sessionStorage may be unavailable */ }
   };
+
+  const handleTagClick = useCallback((tagId: string) => {
+    const tag = state.tags.find((t) => t.id === tagId);
+    if (tag) {
+      const tagQuery = `#${tag.name}`;
+      setDiarySearchQuery(tagQuery);
+      try {
+        sessionStorage.setItem("super-diary-search-query", JSON.stringify(tagQuery));
+      } catch { /* sessionStorage may be unavailable */ }
+      setFilterMode("all");
+    }
+    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') || scrollRef.current;
+    if (viewport) {
+      viewport.scrollTop = 0;
+    }
+  }, [state.tags]);
   const activeRange = useMemo(
     () => presetToRange(preset, customRange),
     [preset, customRange],
@@ -3376,6 +3659,7 @@ export default function DiaryCenter() {
           vis,
           tagId === "all" ? undefined : tagId,
           debouncedSearch || undefined,
+          searchMode,
         );
         if (reset) {
           setItems(data.items);
@@ -3391,7 +3675,7 @@ export default function DiaryCenter() {
         setLoadingMore(false);
       }
     },
-    [nextCursor, activeRange, filterMode, debouncedSearch],
+    [nextCursor, activeRange, filterMode, debouncedSearch, searchMode],
   );
 
   const loadStats = useCallback(async () => {
@@ -3482,7 +3766,7 @@ export default function DiaryCenter() {
     loadTimeline(true);
     loadStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRange, filterMode, debouncedSearch]);
+  }, [activeRange, filterMode, debouncedSearch, searchMode]);
 
   useEffect(() => {
     loadTimeline(true);
@@ -3694,21 +3978,57 @@ export default function DiaryCenter() {
               )}
 
               {/* 过滤状态指示器 */}
-              {activeFilterLabel && (
-                <div className="flex items-center gap-2 text-xs text-tx-secondary py-1 select-none animate-in fade-in duration-200">
+              {(activeFilterLabel || searchTermsList.length > 0) && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-tx-secondary py-1 select-none animate-in fade-in duration-200">
                   <span className="text-tx-tertiary">Filter:</span>
-                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium">
-                    {activeFilterLabel.icon}
-                    <span>{activeFilterLabel.name}</span>
+                  {searchTermsList.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setFilterMode("all")}
-                      className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
-                      title="清除过滤"
+                      onClick={() => {
+                        const nextMode = searchMode === "AND" ? "OR" : "AND";
+                        setSearchMode(nextMode);
+                        try {
+                          sessionStorage.setItem("super-diary-search-mode", JSON.stringify(nextMode));
+                        } catch {}
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] font-semibold hover:bg-accent-primary/20 active:scale-95 transition-all select-none cursor-pointer"
                     >
-                      <X size={10} />
+                      <span>关系: {searchMode === "AND" ? "并且 (AND)" : "或者 (OR)"}</span>
                     </button>
-                  </div>
+                  )}
+                  {activeFilterLabel && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium">
+                      {activeFilterLabel.icon}
+                      <span>{activeFilterLabel.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFilterMode("all")}
+                        className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
+                        title="清除过滤"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  )}
+                  {searchTermsList.map((term: string, index: number) => (
+                    <div key={index} className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium animate-in zoom-in-95 duration-150">
+                      <span>{term}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = searchTermsList.filter((_: string, i: number) => i !== index).join(" ");
+                          setDiarySearchQuery(updated);
+                          try {
+                            sessionStorage.setItem("super-diary-search-query", JSON.stringify(updated));
+                          } catch {}
+                        }}
+                        className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
+                        title="清除"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -3719,6 +4039,7 @@ export default function DiaryCenter() {
                     onDateSelect={handleCalendarDateSelect}
                     tagId={(filterMode !== "all" && filterMode !== "public" && filterMode !== "private" && filterMode !== "liked") ? filterMode : undefined}
                     search={debouncedSearch || undefined}
+                    searchMode={searchMode}
                   />
                 </div>
               ) : loading ? (
@@ -3765,6 +4086,8 @@ export default function DiaryCenter() {
                                 onDelete={handleDelete}
                                 onUpdate={handleUpdate}
                                 isHighlighted={highlightedId === item.id}
+                                search={debouncedSearch || undefined}
+                                onTagClick={handleTagClick}
                               />
                             </motion.div>
                           ))}
@@ -3807,6 +4130,8 @@ export default function DiaryCenter() {
                                 onDelete={handleDelete}
                                 onUpdate={handleUpdate}
                                 isHighlighted={highlightedId === item.id}
+                                search={debouncedSearch || undefined}
+                                onTagClick={handleTagClick}
                               />
                             </motion.div>
                           ))}
@@ -3840,7 +4165,7 @@ export default function DiaryCenter() {
       </div>
 
       {/* 右侧边栏：搜索框 + 热力图 + 标签筛选 */}
-      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-app-surface border-l border-app-border/50 overflow-y-auto px-5 py-4 gap-5">
+      <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-app-surface border-l border-app-border/50 overflow-y-auto px-5 py-4 gap-5 diary-project-sidebar">
 
         {/* 搜索框 */}
         <div className="relative">

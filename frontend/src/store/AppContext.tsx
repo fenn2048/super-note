@@ -103,6 +103,7 @@ function getSavedViewMode(): ViewMode {
     const validModes: ViewMode[] = [
       "home", "notebook", "favorites", "trash", "all", "search", "tasks", "tag",
       "mindmaps", "ai-chat", "diary", "files", "mentions", "more", "projects",
+      "plans", "books"
     ];
     if (saved && validModes.includes(saved as ViewMode)) {
       return saved as ViewMode;

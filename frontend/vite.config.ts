@@ -23,6 +23,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@pdfjs/pdf.min.mjs": path.resolve(__dirname, "./src/foliate-js/vendor/pdfjs/pdf.mjs"),
+      "@pdfjs": path.resolve(__dirname, "./src/foliate-js/vendor/pdfjs"),
     },
   },
   optimizeDeps: {

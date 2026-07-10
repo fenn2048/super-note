@@ -36,8 +36,9 @@
 
 /* ===== Light Theme (默认：Obsidian Light) ===== */
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
-  --editor-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  font-family: "LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  --editor-font-family: "LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  font-weight: 480; /* 全局提升默认字重，使纤细的霞鹜文楷在非粗体下也清晰可见 */
   line-height: 1.6;
 
   /* Unified Spacing System */
@@ -62,11 +63,11 @@
   --font-size-label-md: 0.75rem;      /* 12px */
   --font-size-label-sm: 0.6875rem;    /* 11px */
 
-  --color-bg: #fafaf9;                /* 象牙白右侧主工作区：极温润护眼，柔和白纸质感 */
-  --color-surface: #f2f0e8;           /* 燕麦暖灰中栏：温和沉静，为列表和选项卡建立清晰的物理空间 */
-  --color-sidebar: #ebeee8;           /* 鼠尾草灰绿左栏：宁静致远，富含自然意境的侧边控制条 */
-  --color-elevated: #ffffff;          /* 纯白UI卡片：立体高亮，在燕麦灰底上自然浮现 */
-  --color-border: #e6e3dc;            /* 浅陶土灰边框：极其自然柔和的物理质感分割线，替代原生刺眼的高灰度线 */
+  --color-bg: rgba(250, 250, 249, 0.45);                /* 象牙白右侧主工作区：极温润护眼，柔和白纸质感 */
+  --color-surface: rgba(242, 240, 232, 0.55);           /* 燕麦暖灰中栏：温和沉静，为列表和选项卡建立清晰的物理空间 */
+  --color-sidebar: rgba(235, 238, 232, 0.65);           /* 鼠尾草灰绿左栏：宁静致远，富含自然意境的侧边控制条 */
+  --color-elevated: rgba(255, 255, 255, 0.85);          /* 纯白UI卡片：立体高亮，在燕麦灰底上自然浮现 */
+  --color-border: rgba(230, 227, 220, 0.45);            /* 浅陶土灰边框：极其自然柔和的物理质感分割线，替代原生刺眼的高灰度线 */
   --color-hover: rgba(0, 0, 0, 0.035);
   --color-active: rgba(72, 54, 153, 0.08);
 
@@ -136,11 +137,11 @@ html.font-lxgw .font-semibold {
 
 /* ===== Dark Theme (默认：Obsidian Dark - 优化为高档深蓝灰) ===== */
 .dark {
-  --color-bg: #12151d;
-  --color-surface: #12151d;
-  --color-sidebar: #0e1117;
-  --color-elevated: #1a1d26;
-  --color-border: #242834;
+  --color-bg: rgba(18, 21, 29, 0.45);
+  --color-surface: rgba(18, 21, 29, 0.55);
+  --color-sidebar: rgba(14, 17, 23, 0.65);
+  --color-elevated: rgba(26, 29, 38, 0.85);
+  --color-border: rgba(36, 40, 52, 0.5);
   --color-hover: rgba(255, 255, 255, 0.05);
   --color-active: rgba(138, 99, 255, 0.18);
 
@@ -221,13 +222,17 @@ html[data-native="ios"] {
   --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
 }
 
-/* ===== 移动端排版与提示框优化 ===== */
+/* ===== 全局排版字号与提示框优化 ===== */
+html {
+  font-size: 112.5% !important; /* 全局提升默认 rem 比例（16px -> 18px） */
+}
+
 @media (max-width: 767px) {
   :root {
     --toast-top: calc(var(--safe-area-top) + 3.75rem);
   }
   html {
-    font-size: 106.25%; /* 提升移动端全局 rem 比例（16px -> 17px） */
+    font-size: 118.75% !important; /* 提升移动端全局 rem 比例（16px -> 19px） */
   }
   .ProseMirror {
     font-size: 1.0625rem; /* 独立提升编辑器字号至 ~18px，保障输入体验 */
@@ -242,6 +247,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   letter-spacing: -0.011em;
+}
+
+/* 全局磨砂玻璃 (Glassmorphism) 效果 */
+.bg-app-bg, .bg-background {
+  background: var(--color-bg);
+}
+
+.bg-app-surface, .bg-secondary {
+  backdrop-filter: blur(15px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(15px) saturate(110%) !important;
+}
+.bg-app-sidebar {
+  backdrop-filter: blur(25px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(25px) saturate(130%) !important;
+}
+.bg-app-elevated, .bg-card, .bg-popover {
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
 }
 
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */
@@ -2457,13 +2480,13 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
 /* ---------- E-Ink Light (墨水屏浅色 - 护眼柔和纸质感) ---------- */
 :root[data-skin="eink"] {
-  --color-bg: #f2efeb;
-  --color-surface: #f7f5f2;
-  --color-sidebar: #eae6e1;
-  --color-sidebar-solid: #eae6e1;
-  --color-elevated: #ffffff;
-  --color-elevated-solid: #ffffff;
-  --color-border: #dbd8d0;          /* 调柔和的灰色边框 */
+  --color-bg: rgba(242, 239, 235, 0.45);
+  --color-surface: rgba(247, 245, 242, 0.55);
+  --color-sidebar: rgba(234, 230, 225, 0.65);
+  --color-sidebar-solid: rgba(234, 230, 225, 0.65);
+  --color-elevated: rgba(255, 255, 255, 0.85);
+  --color-elevated-solid: rgba(255, 255, 255, 0.85);
+  --color-border: rgba(219, 216, 208, 0.45);          /* 调柔和的灰色边框 */
   --color-hover: #e0dcd5;
   --color-active: #d5d0c9;
 
@@ -2510,13 +2533,13 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
 /* ---------- Claude Light ---------- */
 :root[data-skin="claude"] {
-  --color-bg: #f9f6f0;
-  --color-surface: #ffffff;
-  --color-sidebar: #f2ede4;
-  --color-sidebar-solid: #f2ede4;
-  --color-elevated: #ffffff;
-  --color-elevated-solid: #ffffff;
-  --color-border: #e9e5d9;
+  --color-bg: rgba(249, 246, 240, 0.45);
+  --color-surface: rgba(255, 255, 255, 0.55);
+  --color-sidebar: rgba(242, 237, 228, 0.65);
+  --color-sidebar-solid: rgba(242, 237, 228, 0.65);
+  --color-elevated: rgba(255, 255, 255, 0.85);
+  --color-elevated-solid: rgba(255, 255, 255, 0.85);
+  --color-border: rgba(233, 229, 217, 0.45);
   --color-hover: rgba(201, 91, 54, 0.05);
   --color-active: rgba(201, 91, 54, 0.12);
 
@@ -2557,13 +2580,13 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
 /* ---------- Claude Dark ---------- */
 :root[data-skin="claude"].dark {
-  --color-bg: #181715;
-  --color-surface: #22201c;
-  --color-sidebar: #1d1b19;
-  --color-sidebar-solid: #1d1b19;
-  --color-elevated: #2c2925;
-  --color-elevated-solid: #2c2925;
-  --color-border: #2f2d28;
+  --color-bg: rgba(24, 23, 21, 0.45);
+  --color-surface: rgba(34, 32, 28, 0.55);
+  --color-sidebar: rgba(29, 27, 25, 0.65);
+  --color-sidebar-solid: rgba(29, 27, 25, 0.65);
+  --color-elevated: rgba(44, 41, 37, 0.85);
+  --color-elevated-solid: rgba(44, 41, 37, 0.85);
+  --color-border: rgba(47, 45, 40, 0.5);
   --color-hover: rgba(226, 138, 109, 0.08);
   --color-active: rgba(226, 138, 109, 0.18);
 
@@ -2604,13 +2627,13 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
 /* ---------- E-Ink Dark (墨水屏深色 - 夜间护眼低亮) ---------- */
 :root[data-skin="eink"].dark {
-  --color-bg: #1c1c1c;
-  --color-surface: #262626;
-  --color-sidebar: #181818;
-  --color-sidebar-solid: #181818;
-  --color-elevated: #2e2e2e;
-  --color-elevated-solid: #2e2e2e;
-  --color-border: #333333;          /* 调柔和的暗灰边框 */
+  --color-bg: rgba(28, 28, 28, 0.45);
+  --color-surface: rgba(38, 38, 38, 0.55);
+  --color-sidebar: rgba(24, 24, 24, 0.65);
+  --color-sidebar-solid: rgba(24, 24, 24, 0.65);
+  --color-elevated: rgba(46, 46, 46, 0.85);
+  --color-elevated-solid: rgba(46, 46, 46, 0.85);
+  --color-border: rgba(51, 51, 51, 0.5);          /* 调柔和的暗灰边框 */
   --color-hover: #333333;
   --color-active: #3a3a3a;
 

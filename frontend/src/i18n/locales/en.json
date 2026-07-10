@@ -119,6 +119,7 @@
     "mindMaps": "Mind Maps",
     "aiChat": "AI Chat",
     "diary": "Diary",
+    "books": "Book Library",
     "fileManager": "Files",
     "projects": "Projects",
     "favorites": "Favorites",
@@ -1882,7 +1883,12 @@
     "wednesday": "Wed",
     "thursday": "Thu",
     "friday": "Fri",
-    "saturday": "Sat"
+    "saturday": "Sat",
+    "allStatus": "All Statuses",
+    "statusPending": "To Start",
+    "statusInProgress": "In Progress",
+    "statusPaused": "Paused",
+    "statusCompleted": "Completed"
   },
   "plans": {
     "title": "Plan Management",

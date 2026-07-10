@@ -15,6 +15,7 @@ import {
   Quote,
   CheckSquare,
   Check,
+  Link,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -147,6 +148,31 @@ export default function TextareaFormatToolbar({
     
     onChange(newValue);
     focusTextarea(newStart, newEnd);
+  };
+
+  // Link Formatting
+  const handleLink = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = value.substring(start, end);
+
+    let linkText = selected;
+    if (!linkText) {
+      const promptedText = window.prompt(t("format.enterLinkText", "输入链接文本"), "");
+      if (promptedText === null) return;
+      linkText = promptedText || t("format.linkDefaultText", "链接");
+    }
+
+    const url = window.prompt(t("format.enterLinkUrl", "输入链接地址 (URL)"), "https://");
+    if (url === null) return;
+
+    const formatted = `[${linkText}](${url})`;
+    const newValue = value.substring(0, start) + formatted + value.substring(end);
+    
+    onChange(newValue);
+    focusTextarea(start + 1, start + 1 + linkText.length);
   };
 
   // 4. Color Formatting
@@ -334,6 +360,16 @@ export default function TextareaFormatToolbar({
         title={t("format.monospace", "等宽样式")}
       >
         <Code size={14} />
+      </button>
+
+      {/* Link (超链接) */}
+      <button
+        type="button"
+        onClick={handleLink}
+        className="p-1 rounded-md text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors"
+        title={t("format.link", "插入超链接")}
+      >
+        <Link size={14} />
       </button>
 
       {/* Color Picker Popover */}

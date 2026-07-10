@@ -1857,6 +1857,118 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 29,
+    name: "add-books-and-reader-tables",
+    up: (db) => {
+      // 1. Create book_groups table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS book_groups (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          workspaceId TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_book_groups_workspace ON book_groups(workspaceId);
+      `);
+
+      // 2. Create books table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS books (
+          userId TEXT NOT NULL,
+          bookHash TEXT NOT NULL,
+          workspaceId TEXT,
+          attachmentId TEXT NOT NULL,
+          title TEXT,
+          author TEXT,
+          format TEXT,
+          size INTEGER,
+          groupId TEXT,
+          tags TEXT,
+          progress REAL DEFAULT 0.0,
+          readingStatus TEXT DEFAULT 'unread',
+          visibility TEXT DEFAULT 'PRIVATE',
+          metadata TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (userId, bookHash),
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (groupId) REFERENCES book_groups(id) ON DELETE SET NULL,
+          FOREIGN KEY (attachmentId) REFERENCES attachments(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_books_workspace ON books(workspaceId);
+        CREATE INDEX IF NOT EXISTS idx_books_group ON books(groupId);
+      `);
+
+      // 3. Create book_configs table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS book_configs (
+          userId TEXT NOT NULL,
+          bookHash TEXT NOT NULL,
+          location TEXT,
+          xpointer TEXT,
+          progress TEXT,
+          viewSettings TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (userId, bookHash),
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+
+      // 4. Create book_notes table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS book_notes (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          bookHash TEXT NOT NULL,
+          type TEXT DEFAULT 'highlight',
+          cfi TEXT,
+          xpointer0 TEXT,
+          xpointer1 TEXT,
+          page INTEGER,
+          text TEXT,
+          style TEXT,
+          color TEXT,
+          note TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_book_notes_hash ON book_notes(bookHash);
+      `);
+
+      // 5. Add columns to diaries table
+      const diariesCols = db.prepare("PRAGMA table_info(diaries)").all() as { name: string }[];
+      if (!diariesCols.some(c => c.name === "bookHash")) {
+        db.exec("ALTER TABLE diaries ADD COLUMN bookHash TEXT DEFAULT NULL;");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_diaries_book_hash ON diaries(bookHash);");
+      }
+      if (!diariesCols.some(c => c.name === "bookNoteId")) {
+        db.exec("ALTER TABLE diaries ADD COLUMN bookNoteId TEXT DEFAULT NULL;");
+      }
+    },
+  },
+  {
+    version: 30,
+    name: "add-book-note-comments-table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS book_note_comments (
+          id TEXT PRIMARY KEY,
+          noteId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          content TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (noteId) REFERENCES book_notes(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_book_note_comments_note ON book_note_comments(noteId);
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

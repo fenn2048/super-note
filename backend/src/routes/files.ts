@@ -1093,7 +1093,7 @@ function pickExt(filename: string | undefined, mime: string): string {
  * 约定：同一 scope 下只会有一个 holder（userId + workspaceId + name 三元组唯一）。
  * 所有写入都在单 transaction 里，保证并发安全。
  */
-function ensureHolderNote(
+export function ensureHolderNote(
   userId: string,
   workspaceId: string | null,
 ): { notebookId: string; noteId: string } {

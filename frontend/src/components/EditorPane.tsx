@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import TiptapEditor, { HeadingItem } from "@/components/TiptapEditor";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import HtmlPreviewPane, { isFullHtmlDocument } from "@/components/HtmlPreviewPane";
+import MarkdownPreviewPane from "@/components/MarkdownPreviewPane";
 import type { NoteEditorHandle } from "@/components/editors/types";
 import { useApp, useAppActions, SyncStatus } from "@/store/AppContext";
 import { api } from "@/lib/api";
@@ -66,7 +67,7 @@ import { useUserPreferences } from "@/hooks/useUserPreferences";
 //     - `localStorage["super.editor_mode"]` 仍然被读取
 //     - toggleEditorMode 完整切换协议保留，未来若把入口迁到设置页，一行开关即可恢复
 //   如要在开发期临时显示按钮，把下方常量改为 true；正式发布请保持 false。
-const SHOW_EDITOR_MODE_TOGGLE = false;
+const SHOW_EDITOR_MODE_TOGGLE = true;
 
 export default function EditorPane() {
   const { state } = useApp();
@@ -152,6 +153,7 @@ export default function EditorPane() {
   const [noteIsHtml, setNoteIsHtml] = useState(false);
   // 完全克隆模式（完整 HTML 文档，如 <!DOCTYPE ...>）不支持编辑，不显示切换按钮。
   const [noteIsFullHtmlDoc, setNoteIsFullHtmlDoc] = useState(false);
+  const [mdPreviewMode, setMdPreviewMode] = useState(false);
 
   // 编辑器模式（MD / Tiptap）——初值来自 URL / localStorage，运行时可切换
   const [editorMode, setEditorMode] = useState<EditorMode>(() => resolveEditorMode());
@@ -869,6 +871,7 @@ export default function EditorPane() {
     setHtmlPreviewMode(isHtml);
     setNoteIsHtml(isHtml);
     setNoteIsFullHtmlDoc(isFullDoc);
+    setMdPreviewMode(false);
   }, [activeNote?.id]); // 只在切换笔记时检测，编辑过程中不再自动切换
 
   /** 从 presence 中反查用户名（用于横幅显示） */
@@ -1933,6 +1936,42 @@ export default function EditorPane() {
                     <Paperclip size={15} className="text-amber-500" />
                     <span>附件目录</span>
                   </button>
+                  {/* 编辑器模式切换（MD / Tiptap） */}
+                  {SHOW_EDITOR_MODE_TOGGLE && (
+                    <>
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      <button
+                        onClick={async () => {
+                          setShowMobileMenu(false);
+                          await toggleEditorMode();
+                        }}
+                        disabled={modeSwitching}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
+                      >
+                        <FileCode size={15} className="text-violet-500" />
+                        <span>{editorMode === "md" ? "切换为富文本模式" : "切换为 Markdown 模式"}</span>
+                      </button>
+                    </>
+                  )}
+                  {/* Markdown 预览 / 编辑切换 */}
+                  {editorMode === "md" && (
+                    <>
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      <button
+                        onClick={async () => {
+                          setShowMobileMenu(false);
+                          if (!mdPreviewMode) {
+                            try { await editorHandleRef.current?.flushSave(); } catch {}
+                          }
+                          setMdPreviewMode(prev => !prev);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
+                      >
+                        {mdPreviewMode ? <Pencil size={15} className="text-amber-500" /> : <Eye size={15} className="text-blue-500" />}
+                        <span>{mdPreviewMode ? "切换为编辑" : "切换为预览"}</span>
+                      </button>
+                    </>
+                  )}
                   {/* HTML 预览 / 编辑切换（仅 HTML 片段笔记显示，完全克隆不支持编辑） */}
                   {noteIsHtml && !noteIsFullHtmlDoc && (
                     <>
@@ -2327,6 +2366,28 @@ export default function EditorPane() {
             </button>
           )}
 
+          {/* Markdown 预览 / 编辑切换 */}
+          {editorMode === "md" && (
+            <button
+              onClick={async () => {
+                if (!mdPreviewMode) {
+                  try { await editorHandleRef.current?.flushSave(); } catch {}
+                }
+                setMdPreviewMode(prev => !prev);
+              }}
+              title={mdPreviewMode ? "切换为编辑" : "切换为预览"}
+              className={cn(
+                "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-medium transition-colors border",
+                mdPreviewMode
+                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/15"
+                  : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active"
+              )}
+            >
+              {mdPreviewMode ? <Eye size={12} /> : <Pencil size={12} />}
+              <span>{mdPreviewMode ? "编辑" : "预览"}</span>
+            </button>
+          )}
+
           {/* HTML 预览 / 编辑切换：仅在笔记原始格式为 HTML 时显示 */}
           {noteIsHtml && (
             <button
@@ -2450,22 +2511,28 @@ export default function EditorPane() {
               editable={false}
             />
           ) : editorMode === "md" ? (
-            <MarkdownEditor
-              // Phase 3: key 绑定 CRDT 启用态，切换 provider 时强制重建编辑器，
-              // 避免 yCollab 扩展在运行时更换 yText 带来的状态错乱
-              key={collabYDoc ? `md-y-${activeNote.id}` : `md-${activeNote.id}`}
-              ref={editorHandleRef}
-              note={activeNote}
-              onUpdate={handleUpdate}
-              onTagsChange={handleTagsChange}
-              onHeadingsChange={setHeadings}
-              onEditorReady={(fn) => { scrollToRef.current = fn; }}
-              // UX3：模式切换期间冻结编辑（避免用户在 mount→unmount 间隔里敲字，
-              // 这段输入进不了任一编辑器的数据流，属于"黑洞输入"）。
-              editable={!effectiveLocked && !modeSwitching}
-              yDoc={collabYDoc}
-              awareness={collabProvider?.awareness ?? null}
-            />
+            mdPreviewMode ? (
+              <MarkdownPreviewPane
+                note={activeNote}
+              />
+            ) : (
+              <MarkdownEditor
+                // Phase 3: key 绑定 CRDT 启用态，切换 provider 时强制重建编辑器，
+                // 避免 yCollab 扩展在运行时更换 yText 带来的状态错乱
+                key={collabYDoc ? `md-y-${activeNote.id}` : `md-${activeNote.id}`}
+                ref={editorHandleRef}
+                note={activeNote}
+                onUpdate={handleUpdate}
+                onTagsChange={handleTagsChange}
+                onHeadingsChange={setHeadings}
+                onEditorReady={(fn) => { scrollToRef.current = fn; }}
+                // UX3：模式切换期间冻结编辑（避免用户在 mount→unmount 间隔里敲字，
+                // 这段输入进不了任一编辑器的数据流，属于"黑洞输入"）。
+                editable={!effectiveLocked && !modeSwitching}
+                yDoc={collabYDoc}
+                awareness={collabProvider?.awareness ?? null}
+              />
+            )
           ) : (
             <TiptapEditor
               ref={editorHandleRef}

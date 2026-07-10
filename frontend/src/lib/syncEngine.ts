@@ -32,9 +32,15 @@ import {
   deleteNotebook,
   deleteTag,
   isReady as localStoreReady,
+  putBooks,
+  deleteBook,
+  getAllBooks,
+  putBookGroups,
+  deleteBookGroup,
+  getAllBookGroups
 } from "@/lib/localStore";
 import { getQueue as getOfflineQueue } from "@/lib/offlineQueue";
-import type { Note, User } from "@/types";
+import type { Note, User, Book, BookGroup } from "@/types";
 
 // ─── 状态机 ────────────────────────────────────────────────────────────────────
 
@@ -85,12 +91,13 @@ export async function bootstrap(user: User): Promise<void> {
   setState("bootstrapping");
 
   try {
-    // 并行拉三类元数据；任一失败时单独捕获 —— 比如标签接口暂时挂了
-    // 不应该拖累笔记本/笔记列表的缓存
-    const [notebooksRes, notesRes, tagsRes] = await Promise.allSettled([
+    // 并行拉笔记本、笔记、标签、图书、分类元数据；任一失败不应拖累其它元数据
+    const [notebooksRes, notesRes, tagsRes, booksRes, groupsRes] = await Promise.allSettled([
       api.getNotebooks(),
       api.getNotes(),
       api.getTags(),
+      api.books.list(),
+      api.books.getGroups()
     ]);
 
     if (notebooksRes.status === "fulfilled") {
@@ -130,6 +137,26 @@ export async function bootstrap(user: User): Promise<void> {
       await putTags(tagsRes.value);
     } else {
       console.warn("[syncEngine] pull tags failed:", tagsRes.reason);
+    }
+    if (booksRes.status === "fulfilled") {
+      const localBooks = await getAllBooks();
+      const remoteIds = new Set(booksRes.value.map((b) => b.bookHash));
+      for (const b of localBooks) {
+        if (!remoteIds.has(b.bookHash)) await deleteBook(b.bookHash);
+      }
+      await putBooks(booksRes.value);
+    } else {
+      console.warn("[syncEngine] pull books failed:", booksRes.reason);
+    }
+    if (groupsRes.status === "fulfilled") {
+      const localGroups = await getAllBookGroups();
+      const remoteIds = new Set(groupsRes.value.map((g) => g.id));
+      for (const g of localGroups) {
+        if (!remoteIds.has(g.id)) await deleteBookGroup(g.id);
+      }
+      await putBookGroups(groupsRes.value);
+    } else {
+      console.warn("[syncEngine] pull book groups failed:", groupsRes.reason);
     }
 
     await setMeta("lastSyncAt", Date.now());

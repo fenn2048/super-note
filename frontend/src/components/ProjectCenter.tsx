@@ -37,6 +37,7 @@ import ProjectList from "./ProjectList";
 import ProjectDiscussion from "./ProjectDiscussion";
 import ProjectCalendar from "./ProjectCalendar";
 import ProjectGantt from "./ProjectGantt";
+import TaskDetailModal from "./TaskDetailModal";
 
 const PRESET_COVERS = [
   "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -175,6 +176,7 @@ function TaskRow({
   onSelectProject,
   onStartTask,
   onPauseTask,
+  showProjectName = true,
 }: {
   task: ProjectTask;
   onToggleComplete: (taskId: string, currentCompleted: number) => void;
@@ -182,14 +184,12 @@ function TaskRow({
   onSelectProject: (projectId: string) => void;
   onStartTask?: (task: ProjectTask) => void;
   onPauseTask?: (task: ProjectTask) => void;
+  showProjectName?: boolean;
 }) {
   return (
     <div
       onClick={() => {
-        onSelectProject(task.projectId);
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
-        }, 100);
+        window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
       }}
       className="group flex items-center justify-between p-3.5 hover:bg-app-hover/20 transition-all gap-4 cursor-pointer"
     >
@@ -219,16 +219,16 @@ function TaskRow({
             <TitleView title={task.title} isCompleted={task.isCompleted === 1} />
           </div>
           
-          <div className="flex items-center gap-2 text-[10px] text-tx-tertiary font-bold mt-0.5">
-            <span>所在项目: {(task as any).projectName || "个人TODO"}</span>
-            <span className="opacity-40">•</span>
-            <span>阶段: {(task as any).stageName || "进行中"}</span>
-          </div>
+          {showProjectName && (
+            <div className="flex items-center gap-2 text-[10px] text-tx-tertiary font-bold mt-0.5 animate-in fade-in duration-200">
+              <span>所在项目: {(task as any).projectName || "个人TODO"}</span>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Due Date & Assignee & Actions */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Start / Pause / Complete / Resume Action Buttons */}
         {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划") && onStartTask && (
           <button
@@ -236,11 +236,10 @@ function TaskRow({
               e.stopPropagation();
               onStartTask(task);
             }}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-all text-xs font-semibold"
+            className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-all shrink-0"
             title="启动任务"
           >
-            <Play size={10} fill="currentColor" />
-            <span>启动</span>
+            <Play size={11} fill="currentColor" />
           </button>
         )}
 
@@ -250,27 +249,25 @@ function TaskRow({
               e.stopPropagation();
               onStartTask(task);
             }}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all text-xs font-semibold"
+            className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
             title="恢复任务"
           >
-            <Play size={10} fill="currentColor" />
-            <span>恢复</span>
+            <Play size={11} fill="currentColor" />
           </button>
         )}
 
         {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {onPauseTask && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onPauseTask(task);
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-all text-xs font-semibold"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-all shrink-0"
                 title="暂停任务"
               >
-                <Pause size={10} fill="currentColor" />
-                <span>暂停</span>
+                <Pause size={11} fill="currentColor" />
               </button>
             )}
             <button
@@ -278,11 +275,10 @@ function TaskRow({
                 e.stopPropagation();
                 onToggleComplete(task.id, task.isCompleted);
               }}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all text-xs font-semibold"
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
               title="完成任务"
             >
-              <Check size={10} />
-              <span>完成</span>
+              <Check size={11} />
             </button>
           </div>
         )}
@@ -414,22 +410,41 @@ export default function ProjectCenter() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "today" | "overdue" | "completed">("pending");
   const [wsMembers, setWsMembers] = useState<any[]>([]);
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
+  const [projectSearchMode, setProjectSearchMode] = useState<"AND" | "OR">("AND");
   const [selectedProjectTagId, setSelectedProjectTagId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [centerActiveTask, setCenterActiveTask] = useState<ProjectTask | null>(null);
+  const [myTasksProjectFilter, setMyTasksProjectFilter] = useState<string>("all");
+
+  // Reset myTasksProjectFilter when activeFilter changes or is not my-tasks
+  useEffect(() => {
+    if (activeFilter.type !== "my-tasks") {
+      setMyTasksProjectFilter("all");
+    }
+  }, [activeFilter]);
 
   // 监听来自全局的任务打开事件
   useEffect(() => {
-    const handleOpenTask = (e: Event) => {
+    const handleOpenTask = async (e: Event) => {
       const customEvent = e as CustomEvent;
       const taskId = customEvent.detail;
       if (taskId) {
-        setActiveTaskId(taskId);
-        setDetailTab("kanban");
+        if (activeFilter.type === "detail" && detailTab === "kanban") {
+          setActiveTaskId(taskId);
+        } else {
+          try {
+            const taskDetails = await api.getProjectTask(taskId);
+            setCenterActiveTask(taskDetails);
+          } catch (err) {
+            console.error("Failed to load task details:", err);
+            toast.error("加载任务详情失败");
+          }
+        }
       }
     };
     window.addEventListener("super:open-project-task", handleOpenTask);
     return () => window.removeEventListener("super:open-project-task", handleOpenTask);
-  }, []);
+  }, [activeFilter.type, detailTab]);
 
   // 监听来自 Sidebar 的任务搜索状态变化
   useEffect(() => {
@@ -681,6 +696,12 @@ export default function ProjectCenter() {
     }
   }, [workspaceId]);
 
+  const triggerStatsRefresh = () => {
+    try {
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
+    } catch {}
+  };
+
   const fetchMyTasks = useCallback(async () => {
     if (activeFilter.type === "my-tasks" && currentUserId) {
       setLoadingMyTasks(true);
@@ -688,6 +709,7 @@ export default function ProjectCenter() {
         const queryFilter = roleFilter === "favorites" ? "all" : roleFilter;
         const tasks = await api.getMyTasks(workspaceId, queryFilter);
         setMyTasks(tasks);
+        triggerStatsRefresh();
       } catch (e) {
         console.error(e);
         toast.error("加载任务失败");
@@ -701,6 +723,45 @@ export default function ProjectCenter() {
   useEffect(() => {
     fetchMyTasks();
   }, [fetchMyTasks]);
+
+  const refreshCurrentView = async () => {
+    if (activeFilter.type === "my-tasks") {
+      fetchMyTasks();
+    }
+    if (activeFilter.type === "detail" && activeFilter.projectId) {
+      try {
+        const stages = await api.getProjectStages(activeFilter.projectId);
+        setProjectStages(stages);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    if (activeFilter.type === "calendar") {
+      setLoadingWorkspaceStages(true);
+      try {
+        const allProjs = await api.getProjects(workspaceId, "active");
+        const promises = allProjs.map(async (p) => {
+          try {
+            const stages = await api.getProjectStages(p.id);
+            stages.forEach((st) => {
+              st.tasks?.forEach((t) => {
+                (t as any).projectName = p.name;
+              });
+            });
+            return stages;
+          } catch {
+            return [];
+          }
+        });
+        const results = await Promise.all(promises);
+        setWorkspaceStages(results.flat());
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingWorkspaceStages(false);
+      }
+    }
+  };
 
   // Set default project ID for quick add
   useEffect(() => {
@@ -761,11 +822,25 @@ export default function ProjectCenter() {
   const taskMatchesProjectFilters = (task: ProjectTask) => {
     const query = projectSearchQuery.trim().toLowerCase();
     if (query) {
-      const title = task.title?.toLowerCase() || "";
-      const description = task.description?.toLowerCase() || "";
-      const projectName = ((task as any).projectName || "").toLowerCase();
-      if (!title.includes(query) && !description.includes(query) && !projectName.includes(query)) {
-        return false;
+      const terms = query.split(/\s+/).filter(Boolean);
+      if (terms.length > 0) {
+        const matches = terms.map((term) => {
+          if (term.startsWith("#")) {
+            const tagSearch = term.substring(1);
+            return task.tags?.some((tag) => tag.name.toLowerCase().includes(tagSearch)) || false;
+          } else {
+            const title = task.title?.toLowerCase() || "";
+            const description = task.description?.toLowerCase() || "";
+            const projectName = ((task as any).projectName || "").toLowerCase();
+            return title.includes(term) || description.includes(term) || projectName.includes(term);
+          }
+        });
+        
+        if (projectSearchMode === "AND") {
+          if (!matches.every(Boolean)) return false;
+        } else {
+          if (!matches.some(Boolean)) return false;
+        }
       }
     }
     if (selectedProjectTagId) {
@@ -798,8 +873,11 @@ export default function ProjectCenter() {
     if (roleFilter === "favorites") {
       list = list.filter((task) => favorites.includes(task.projectId));
     }
+    if (myTasksProjectFilter !== "all") {
+      list = list.filter((task) => task.projectId === myTasksProjectFilter);
+    }
     return list.filter(taskMatchesProjectFilters);
-  }, [myTasks, roleFilter, favorites, projectSearchQuery, selectedProjectTagId]);
+  }, [myTasks, roleFilter, favorites, projectSearchQuery, selectedProjectTagId, projectSearchMode, myTasksProjectFilter]);
 
   const filteredWorkspaceStages = useMemo(() => {
     if (!projectSearchQuery && !selectedProjectTagId) {
@@ -811,7 +889,22 @@ export default function ProjectCenter() {
         tasks: stage.tasks?.filter(taskMatchesProjectFilters),
       }))
       .filter((stage) => (stage.tasks?.length || 0) > 0);
-  }, [workspaceStages, projectSearchQuery, selectedProjectTagId]);
+  }, [workspaceStages, projectSearchQuery, selectedProjectTagId, projectSearchMode]);
+
+  const filteredProjectStages = useMemo(() => {
+    if (!projectSearchQuery && !selectedProjectTagId) {
+      return projectStages;
+    }
+    return projectStages
+      .map((stage) => ({
+        ...stage,
+        tasks: stage.tasks?.filter(taskMatchesProjectFilters),
+      }))
+      .map((stage) => ({
+        ...stage,
+        tasks: stage.tasks || [],
+      }));
+  }, [projectStages, projectSearchQuery, selectedProjectTagId, projectSearchMode]);
 
   const selectProject = (id: string) => {
     const filter = { type: "detail", projectId: id };
@@ -980,6 +1073,7 @@ export default function ProjectCenter() {
       }
 
       await api.updateProjectTask(taskId, payload);
+      triggerStatsRefresh();
       // Re-fetch project details stages
       if (selectedProject) {
         const stages = await api.getProjectStages(selectedProject.id);
@@ -1003,6 +1097,7 @@ export default function ProjectCenter() {
         inProgressStage = await api.createProjectStage(task.projectId, { name: "进行中" });
       }
       await api.updateProjectTask(task.id, { stageId: inProgressStage.id, status: "pending" });
+      triggerStatsRefresh();
       toast.success("任务已启动");
       fetchMyTasks();
       if (selectedProject && task.projectId === selectedProject.id) {
@@ -1017,6 +1112,7 @@ export default function ProjectCenter() {
   const handlePauseTask = async (task: ProjectTask) => {
     try {
       await api.updateProjectTask(task.id, { status: "paused" });
+      triggerStatsRefresh();
       toast.success("任务已暂停");
       fetchMyTasks();
       if (selectedProject && task.projectId === selectedProject.id) {
@@ -1044,6 +1140,7 @@ export default function ProjectCenter() {
     if (!confirm("确定要删除此任务吗？")) return;
     try {
       await api.deleteProjectTask(taskId);
+      triggerStatsRefresh();
       toast.success("删除任务成功");
       fetchMyTasks();
       if (selectedProject) {
@@ -1182,6 +1279,7 @@ export default function ProjectCenter() {
       };
 
       const newTask = await api.createProjectTask(taskProjId, payload);
+      triggerStatsRefresh();
       toast.success("创建任务成功");
       fetchMyTasks();
       if (selectedProject && taskProjId === selectedProject.id) {
@@ -1233,10 +1331,19 @@ export default function ProjectCenter() {
     const paused: ProjectTask[] = [];
     const completed: ProjectTask[] = [];
 
-    const isTaskToday = (dateStr: string | null) => {
-      if (!dateStr) return false;
-      const date = toLocalDate(dateStr);
-      return isToday(date);
+    const isTaskUrgent = (remindAtStr: string | null) => {
+      if (!remindAtStr) return false;
+      try {
+        const cleanStr = remindAtStr.trim().replace(" ", "T");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(remindAtStr.trim())) {
+          const [y, m, d] = remindAtStr.trim().split("-").map(Number);
+          const localDate = new Date(y, m - 1, d, 23, 59, 59);
+          return localDate.getTime() <= Date.now();
+        }
+        return new Date(cleanStr).getTime() <= Date.now();
+      } catch {
+        return false;
+      }
     };
 
     const isTaskOverdue = (dateStr: string | null) => {
@@ -1259,7 +1366,7 @@ export default function ProjectCenter() {
 
       // 2. Classify into time-dimension lists (only uncompleted tasks go here)
       if (t.isCompleted !== 1) {
-        if (isTaskToday(t.endDate)) {
+        if (isTaskUrgent(t.remindAt)) {
           today.push(t);
         } else if (isTaskOverdue(t.endDate)) {
           overdue.push(t);
@@ -1378,12 +1485,12 @@ export default function ProjectCenter() {
             ) : null}
 
             {detailTab === "overview" && (
-              <ProjectOverview project={selectedProject} stages={projectStages} />
+              <ProjectOverview project={selectedProject} stages={filteredProjectStages} />
             )}
             {detailTab === "kanban" && (
               <ProjectKanban
                 project={selectedProject}
-                stages={projectStages}
+                stages={filteredProjectStages}
                 wsMembers={wsMembers}
                 onRefresh={async () => {
                   const stages = await api.getProjectStages(selectedProject.id);
@@ -1396,7 +1503,7 @@ export default function ProjectCenter() {
             )}
             {detailTab === "list" && (
               <ProjectList
-                stages={projectStages}
+                stages={filteredProjectStages}
                 onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
                 onToggleTaskComplete={handleToggleTaskComplete}
                 onRefresh={async () => {
@@ -1406,17 +1513,17 @@ export default function ProjectCenter() {
               />
             )}
             {detailTab === "discussion" && (
-              <ProjectDiscussion project={selectedProject} tasks={projectStages.flatMap((s) => s.tasks || [])} />
+              <ProjectDiscussion project={selectedProject} tasks={filteredProjectStages.flatMap((s) => s.tasks || [])} />
             )}
             {detailTab === "calendar" && (
               <ProjectCalendar
-                stages={projectStages}
+                stages={filteredProjectStages}
                 onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
               />
             )}
             {detailTab === "gantt" && (
               <ProjectGantt
-                stages={projectStages}
+                stages={filteredProjectStages}
                 onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
               />
             )}
@@ -1526,27 +1633,7 @@ export default function ProjectCenter() {
                       </div>
                     )}
 
-                    {/* 过滤状态指示器 */}
-                    {selectedProjectTagId && (
-                      <div className="flex items-center gap-2 text-xs text-tx-secondary py-1 select-none animate-in fade-in duration-200 max-w-[640px] mx-auto w-full">
-                        <span className="text-tx-tertiary">Filter:</span>
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium">
-                          <span
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: availableProjectTags.find(t => t.id === selectedProjectTagId)?.color || "#ccc" }}
-                          />
-                          <span>{availableProjectTags.find(t => t.id === selectedProjectTagId)?.name || "标签"}</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedProjectTagId(null)}
-                            className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
-                            title="清除过滤"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Quick Add Form Panel */}
                     {window.innerWidth >= 768 && (
@@ -1719,7 +1806,77 @@ export default function ProjectCenter() {
                     )}
 
                     {/* Tasks Lists Sections */}
-                    <div className="space-y-4 max-w-[640px] mx-auto pb-12">
+                    <div className="space-y-4 max-w-[640px] mx-auto pb-12 md:pt-4">
+                      {/* Filter indicator & Project Select Dropdown */}
+                      <div className="flex items-center justify-between gap-4 mb-2 select-none min-h-[32px]">
+                        {/* Filter Status Indicator (Left side) */}
+                        <div className="flex-1 min-w-0">
+                          {(selectedProjectTagId || (projectSearchQuery && projectSearchQuery.trim() !== "")) && (
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs text-tx-secondary py-1 animate-in fade-in duration-200">
+                              <span className="text-tx-tertiary">Filter:</span>
+                              {projectSearchQuery && projectSearchQuery.trim() !== "" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setProjectSearchMode(projectSearchMode === "AND" ? "OR" : "AND")}
+                                  className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] font-semibold hover:bg-accent-primary/20 active:scale-95 transition-all cursor-pointer"
+                                >
+                                  <span>关系: {projectSearchMode === "AND" ? "并且 (AND)" : "或者 (OR)"}</span>
+                                </button>
+                              )}
+                              {selectedProjectTagId && (
+                                <div className="flex items-center gap-1 bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium px-2 py-0.5 rounded">
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ backgroundColor: availableProjectTags.find(t => t.id === selectedProjectTagId)?.color || "#ccc" }}
+                                  />
+                                  <span>{availableProjectTags.find(t => t.id === selectedProjectTagId)?.name || "标签"}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedProjectTagId(null)}
+                                    className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
+                                    title="清除过滤"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              )}
+                              {projectSearchQuery && projectSearchQuery.trim() !== "" && projectSearchQuery.trim().split(/\s+/).filter(Boolean).map((term, index, arr) => (
+                                <div key={index} className="flex items-center gap-1 px-2 py-0.5 rounded bg-app-hover border border-app-border/40 text-tx-secondary text-[11px] font-medium animate-in zoom-in-95 duration-100">
+                                  <span>{term}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = arr.filter((_, i) => i !== index).join(" ");
+                                      setProjectSearchQuery(updated);
+                                    }}
+                                    className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
+                                    title="清除"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Project Select Dropdown (Right side) */}
+                        <div className="flex items-center gap-1.5 bg-app-elevated border border-app-border/40 px-3 py-1.5 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors shadow-sm shrink-0">
+                          <select
+                            value={myTasksProjectFilter}
+                            onChange={(e) => setMyTasksProjectFilter(e.target.value)}
+                            className="bg-transparent border-0 focus:outline-none text-xs text-tx-secondary cursor-pointer font-semibold"
+                          >
+                            <option value="all">{t("projects.allProjects") || "全部项目"}</option>
+                            {projects.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
                       {loadingMyTasks ? (
                         <div className="flex items-center justify-center py-12">
                           <Loader2 size={24} className="animate-spin text-accent-primary" />
@@ -1755,6 +1912,7 @@ export default function ProjectCenter() {
                                       onSelectProject={selectProject}
                                       onStartTask={handleStartTask}
                                       onPauseTask={handlePauseTask}
+                                      showProjectName={myTasksProjectFilter === "all"}
                                     />
                                   ))}
                                   {myTasksCategorized.overdue.length > visibleCounts.overdue && (
@@ -1782,8 +1940,8 @@ export default function ProjectCenter() {
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.today ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">{t("projects.todayTasks") || "今日到期"}</span>
-                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
+                                <span className="text-xs font-bold text-red-500 uppercase tracking-wider">{t("projects.todayTasks") || "今日到期"}</span>
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 font-mono">
                                   {myTasksCategorized.today.length}
                                 </span>
                               </div>
@@ -1805,6 +1963,7 @@ export default function ProjectCenter() {
                                         onSelectProject={selectProject}
                                         onStartTask={handleStartTask}
                                         onPauseTask={handlePauseTask}
+                                        showProjectName={myTasksProjectFilter === "all"}
                                       />
                                     ))}
                                     {myTasksCategorized.today.length > visibleCounts.today && (
@@ -1856,6 +2015,7 @@ export default function ProjectCenter() {
                                         onSelectProject={selectProject}
                                         onStartTask={handleStartTask}
                                         onPauseTask={handlePauseTask}
+                                        showProjectName={myTasksProjectFilter === "all"}
                                       />
                                     ))}
                                     {myTasksCategorized.notStarted.length > visibleCounts.notStarted && (
@@ -1907,6 +2067,7 @@ export default function ProjectCenter() {
                                         onSelectProject={selectProject}
                                         onStartTask={handleStartTask}
                                         onPauseTask={handlePauseTask}
+                                        showProjectName={myTasksProjectFilter === "all"}
                                       />
                                     ))}
                                     {myTasksCategorized.pending.length > visibleCounts.pending && (
@@ -1958,6 +2119,7 @@ export default function ProjectCenter() {
                                         onSelectProject={selectProject}
                                         onStartTask={handleStartTask}
                                         onPauseTask={handlePauseTask}
+                                        showProjectName={myTasksProjectFilter === "all"}
                                       />
                                     ))}
                                     {myTasksCategorized.paused.length > visibleCounts.paused && (
@@ -2009,6 +2171,7 @@ export default function ProjectCenter() {
                                         onSelectProject={selectProject}
                                         onStartTask={handleStartTask}
                                         onPauseTask={handlePauseTask}
+                                        showProjectName={myTasksProjectFilter === "all"}
                                       />
                                     ))}
                                     {myTasksCategorized.completed.length > visibleCounts.completed && (
@@ -2036,23 +2199,58 @@ export default function ProjectCenter() {
             </div>
 
             {/* 右侧边栏：搜索框 + 标签/分类过滤 */}
-            <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-app-surface border-l border-app-border/50 overflow-y-auto px-5 py-4 gap-5 animate-in fade-in duration-200">
+            <div className="hidden md:flex w-[260px] min-w-[260px] shrink-0 flex-col bg-app-surface border-l border-app-border/50 overflow-y-auto px-5 py-4 gap-5 animate-in fade-in duration-200 diary-project-sidebar">
               {/* 搜索框 */}
-              <div className="relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
-                <Input
-                  placeholder={t('projects.searchTasksPlaceholder') || "搜索任务..."}
-                  className="pl-8 h-8 text-xs bg-app-bg border-app-border no-focus-ring"
-                  value={projectSearchQuery}
-                  onChange={(e) => setProjectSearchQuery(e.target.value)}
-                />
-                {projectSearchQuery && (
-                  <button
-                    onClick={() => setProjectSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary hover:text-tx-secondary"
-                  >
-                    <X size={12} />
-                  </button>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+                  <Input
+                    placeholder={t('projects.searchTasksPlaceholder') || "搜索任务..."}
+                    className="pl-8 h-8 text-xs bg-app-bg border-app-border no-focus-ring"
+                    value={projectSearchQuery}
+                    onChange={(e) => setProjectSearchQuery(e.target.value)}
+                  />
+                  {projectSearchQuery && (
+                    <button
+                      onClick={() => setProjectSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary hover:text-tx-secondary"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {projectSearchQuery && projectSearchQuery.trim() !== "" && (
+                  <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-app-hover/50 border border-app-border/40 animate-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between text-[10px] text-tx-tertiary select-none font-medium">
+                      <span>过滤条件</span>
+                      <button
+                        type="button"
+                        onClick={() => setProjectSearchMode(projectSearchMode === "AND" ? "OR" : "AND")}
+                        className="px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary font-semibold hover:bg-accent-primary/20 active:scale-95 transition-all cursor-pointer"
+                      >
+                        {projectSearchMode === "AND" ? "并且 (AND)" : "或者 (OR)"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {projectSearchQuery.trim().split(/\s+/).filter(Boolean).map((term, index, arr) => (
+                        <div key={index} className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-app-surface border border-app-border/50 text-tx-secondary text-[10px] font-medium animate-in zoom-in-95 duration-100">
+                          <span className="truncate max-w-[120px]">{term}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = arr.filter((_, i) => i !== index).join(" ");
+                              setProjectSearchQuery(updated);
+                            }}
+                            className="text-tx-tertiary hover:text-tx-primary p-0.5 rounded transition-colors"
+                            title="清除"
+                          >
+                            <X size={8} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -2219,10 +2417,7 @@ export default function ProjectCenter() {
               stages={filteredWorkspaceStages}
               showProjectFilter={true}
               onTaskClick={(task) => {
-                selectProject(task.projectId);
-                setTimeout(() => {
-                  window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
-                }, 100);
+                window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
               }}
             />
           )}
@@ -2877,6 +3072,15 @@ export default function ProjectCenter() {
           </>
         )}
       </AnimatePresence>
+      {centerActiveTask && (
+        <TaskDetailModal
+          task={centerActiveTask}
+          wsMembers={wsMembers}
+          onClose={() => setCenterActiveTask(null)}
+          onRefresh={refreshCurrentView}
+          showProjectName={true}
+        />
+      )}
     </div>
   );
 }

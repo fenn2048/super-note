@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Plus, Star, Trash, Trash2, Search, ChevronRight, FileText,
-  ChevronDown, ListTodo, CheckSquare,
+  ChevronDown, ListTodo,
   Settings, LogOut, FilePlus, FolderPlus, Edit2, X, BrainCircuit,
   Sparkles, NotebookPen, Smile, GripVertical,
   FolderInput, Check, Home, Download, FolderOpen,
-  Columns2, Columns3, FileType2, Link2,
+  Columns2, Columns3, FileType2, Link2, FileUp,
   Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Globe, Lock, Eye,
   Compass, Milestone,
 } from "lucide-react";
@@ -878,43 +879,7 @@ function ProjectSidebar() {
     actions.setMobileSidebar(false);
   };
 
-  const handlePersonalTodoClick = async () => {
-    let todoProj = projects.find(p => p.name === "个人TODO");
-    if (!todoProj) {
-      try {
-        todoProj = await api.createProject({
-          name: "个人TODO",
-          visibility: "PRIVATE"
-        });
-        await fetchGroupsAndProjects();
-        window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
-      } catch (err) {
-        console.error("Failed to create 个人TODO project:", err);
-        toast.error("创建个人TODO项目失败");
-        return;
-      }
-    }
-    selectFilter({ type: "detail", projectId: todoProj.id });
-  };
 
-  const handleFamilyTodoClick = async () => {
-    let todoProj = projects.find(p => p.name === "家庭TODO");
-    if (!todoProj) {
-      try {
-        todoProj = await api.createProject({
-          name: "家庭TODO",
-          visibility: "PRIVATE"
-        });
-        await fetchGroupsAndProjects();
-        window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
-      } catch (err) {
-        console.error("Failed to create 家庭TODO project:", err);
-        toast.error("创建家庭TODO项目失败");
-        return;
-      }
-    }
-    selectFilter({ type: "detail", projectId: todoProj.id });
-  };
 
   const selectTagFilter = (tagId: string | null) => {
     setSelectedProjectTagId(tagId);
@@ -1074,38 +1039,7 @@ function ProjectSidebar() {
         </div>
       </div>
 
-      {/* 快捷项目入口 */}
-      <div className="px-3 pb-1">
-        <div className="text-[10px] font-semibold text-tx-tertiary uppercase tracking-wider mb-1">
-          {t("projects.quickAccess") || "快捷项目"}
-        </div>
-        <div className="space-y-0.5">
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
-              activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "家庭TODO"
-                ? "bg-app-active text-tx-primary font-medium"
-                : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-            )}
-            onClick={handleFamilyTodoClick}
-          >
-            <CheckSquare size={13} />
-            <span>{t("projects.familyTodo") || "家庭TODO"}</span>
-          </div>
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
-              activeFilter.type === "detail" && projects.find(p => p.id === activeFilter.projectId)?.name === "个人TODO"
-                ? "bg-app-active text-tx-primary font-medium"
-                : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-            )}
-            onClick={handlePersonalTodoClick}
-          >
-            <CheckSquare size={13} />
-            <span>{t("projects.personalTodo") || "个人TODO"}</span>
-          </div>
-        </div>
-      </div>
+
 
       {/* Project Groups */}
       <div className="space-y-1">
@@ -1604,6 +1538,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     const items: ContextMenuItem[] = [
       { id: "new_note", label: t('sidebar.newNote'), icon: <FilePlus size={14} /> },
       { id: "new_word_note", label: t('sidebar.importWordNote'), icon: <FileType2 size={14} /> },
+      { id: "new_markdown_note", label: "导入 Markdown 笔记", icon: <FileUp size={14} /> },
       { id: "new_url_note", label: t('sidebar.importUrlNote'), icon: <Link2 size={14} /> },
       { id: "new_sub", label: t('sidebar.newSubNotebook'), icon: <FolderPlus size={14} /> },
       { id: "sep1", label: "", separator: true },
@@ -1964,6 +1899,41 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         }
         break;
       }
+      case "new_markdown_note": {
+        try {
+          const { pickMarkdownFile, importMarkdownAsNote } = await import("@/lib/importService");
+          const { toast } = await import("@/lib/toast");
+          const file = await pickMarkdownFile();
+          if (!file) break; // 用户取消
+          toast.info(t("noteList.importing"));
+          const { note } = await importMarkdownAsNote({ notebookId: targetId, file });
+          actions.setActiveNote(note as any);
+          actions.setSelectedNotebook(targetId);
+          actions.setViewMode("notebook");
+          actions.addNoteToList({
+            id: note.id,
+            userId: note.userId,
+            title: note.title,
+            contentText: note.contentText || "",
+            notebookId: note.notebookId,
+            isPinned: note.isPinned || 0,
+            isFavorite: note.isFavorite || 0,
+            isLocked: note.isLocked || 0,
+            isArchived: note.isArchived || 0,
+            isTrashed: note.isTrashed || 0,
+            version: note.version || 1,
+            sortOrder: note.sortOrder || 0,
+            updatedAt: note.updatedAt,
+            createdAt: note.createdAt,
+          } as any);
+          actions.refreshNotebooks();
+          toast.success("导入成功");
+        } catch (err: any) {
+          const { toast } = await import("@/lib/toast");
+          toast.error(err?.message || "导入失败");
+        }
+        break;
+      }
       case "new_url_note": {
         // 导入公众号文章：用项目统一的 prompt 弹窗输入 URL（替代原生 window.prompt）
         // - validate 内联做格式校验：错误信息直接展示在弹窗里，避免关闭后再 toast 报错
@@ -2311,7 +2281,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     // ─── 内容模块 ───
     { icon: <NotebookPen size={16} />, label: t('sidebar.diary'), mode: "diary", active: state.viewMode === "diary", feature: "diaries", group: "modules" },
     { icon: <ListTodo size={16} />, label: t('sidebar.tasks'), mode: "tasks", active: state.viewMode === "tasks", feature: "tasks", group: "modules" },
-    { icon: <BrainCircuit size={16} />, label: t('sidebar.mindMaps'), mode: "mindmaps", active: state.viewMode === "mindmaps", feature: "mindmaps", group: "modules" },
 
     // ─── 工具 ───
     { icon: <Sparkles size={16} />, label: t('sidebar.aiChat'), mode: "ai-chat", active: state.viewMode === "ai-chat", group: "tools" },
@@ -2835,55 +2804,58 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       </AnimatePresence>
 
       {/* 清空回收站确认 */}
-      <AnimatePresence>
-        {emptyTrashOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => !emptyingTrash && setEmptyTrashOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", duration: 0.4, bounce: 0 }}
-              className="relative bg-app-elevated w-full max-w-sm p-5 rounded-xl shadow-2xl border border-app-border"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-accent-danger/10 flex items-center justify-center shrink-0">
-                  <Trash2 size={18} className="text-accent-danger" />
+      {createPortal(
+        <AnimatePresence>
+          {emptyTrashOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={() => !emptyingTrash && setEmptyTrashOpen(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ type: "spring", duration: 0.4, bounce: 0 }}
+                className="relative bg-app-elevated w-full max-w-sm p-5 rounded-xl shadow-2xl border border-app-border"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent-danger/10 flex items-center justify-center shrink-0">
+                    <Trash2 size={18} className="text-accent-danger" />
+                  </div>
+                  <h4 className="text-base font-bold text-tx-primary">
+                    {t('sidebar.emptyTrashConfirmTitle')}
+                  </h4>
                 </div>
-                <h4 className="text-base font-bold text-tx-primary">
-                  {t('sidebar.emptyTrashConfirmTitle')}
-                </h4>
-              </div>
-              <p className="text-sm text-tx-secondary mb-5 pl-[52px]">
-                {t('sidebar.emptyTrashConfirm', { count: trashCount })}
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setEmptyTrashOpen(false)}
-                  disabled={emptyingTrash}
-                  className="px-4 py-2 text-sm text-tx-secondary hover:bg-app-hover rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleEmptyTrashConfirm}
-                  disabled={emptyingTrash}
-                  className="px-4 py-2 text-sm font-medium text-white bg-accent-danger hover:bg-accent-danger/90 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {emptyingTrash ? t('common.loading') : t('sidebar.emptyTrash')}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                <p className="text-sm text-tx-secondary mb-5 pl-[52px]">
+                  {t('sidebar.emptyTrashConfirm', { count: trashCount })}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEmptyTrashOpen(false)}
+                    disabled={emptyingTrash}
+                    className="px-4 py-2 text-sm text-tx-secondary hover:bg-app-hover rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={handleEmptyTrashConfirm}
+                    disabled={emptyingTrash}
+                    className="px-4 py-2 text-sm font-medium text-white bg-accent-danger hover:bg-accent-danger/90 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {emptyingTrash ? t('common.loading') : t('sidebar.emptyTrash')}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* 标签颜色选择浮层：右键 / 长按触发（笔记本标签） */}
       {tagColorPopover && (

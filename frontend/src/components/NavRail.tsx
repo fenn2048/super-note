@@ -29,7 +29,7 @@
  */
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  BookOpen, Star, Trash, Trash2, ListTodo, BrainCircuit,
+  BookOpen, Book, Star, Trash, Trash2, ListTodo, BrainCircuit,
   Sparkles, NotebookPen, FolderOpen, Briefcase, Compass,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
   Columns2, Columns3, Cloud, CloudOff, Bell, Home,
@@ -65,7 +65,7 @@ const NAV_CONFIG: NavConfigItem[] = [
   { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "workspace" },
   { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "workspace" },
   { icon: <BookOpen size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.allNotes",    mode: "all",        feature: "notes",     group: "workspace" },
-  { icon: <BrainCircuit size={RAIL_ICON_SIZE} />,labelKey: "sidebar.mindMaps",    mode: "mindmaps",   feature: "mindmaps",  group: "workspace" },
+  { icon: <Book size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.books",       mode: "books",                             group: "workspace" },
   { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "workspace" },
   { icon: <FolderOpen size={RAIL_ICON_SIZE} />,  labelKey: "sidebar.fileManager", mode: "files",      feature: "files",     group: "workspace" },
 ];
@@ -184,6 +184,9 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
   const handleClick = useCallback((mode: ViewMode) => {
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
+    if (mode === "books") {
+      window.dispatchEvent(new CustomEvent("super:close-book"));
+    }
     
     // 只要是笔记/项目相关视图（所有笔记、收藏、回收站、项目），中间栏默认显示；其他模块（如首页、说说等）默认隐藏中间栏
     const isNoteOrProjectView = mode === "all" || mode === "favorites" || mode === "trash" || mode === "notebook" || mode === "tag" || mode === "search" || mode === "projects" || mode === "plans";

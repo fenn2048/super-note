@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { getCookie, setCookie } from "hono/cookie";
 import { logger } from "hono/logger";
 import { compress } from "hono/compress";
 import path from "path";
@@ -44,6 +45,7 @@ import tokensRouter from "./routes/tokens";
 import userMigrationRouter from "./routes/user-migration";
 import versionRouter, { resolveAppVersion } from "./routes/version";
 import releasesRouter from "./routes/releases";
+import booksRouter from "./routes/books";
 import { seedDatabase } from "./db/seed";
 import { initApiTokensTable, looksLikeApiToken, resolveApiToken } from "./lib/api-tokens";
 import { getDb, closeDb } from "./db/schema";
@@ -365,6 +367,11 @@ app.use("/api/*", async (c, next) => {
   const tokenQuery = c.req.query("token");
   if (!authHeader && tokenQuery) {
     authHeader = `Bearer ${tokenQuery}`;
+  } else if (!authHeader) {
+    const cookieToken = getCookie(c, "auth_token");
+    if (cookieToken) {
+      authHeader = `Bearer ${cookieToken}`;
+    }
   }
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -448,6 +455,18 @@ app.use("/api/*", async (c, next) => {
 
   c.req.raw.headers.set("X-User-Id", payload.userId);
   if (payload.jti) c.req.raw.headers.set("X-Session-Id", payload.jti);
+
+  const currentCookie = getCookie(c, "auth_token");
+  if (token && currentCookie !== token && !looksLikeApiToken(token)) {
+    setCookie(c, "auth_token", token, {
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "Lax",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    });
+  }
+
   await next();
 });
 
@@ -487,6 +506,7 @@ app.route("/api/fonts", fontsRouter);
 app.route("/api/attachments", attachmentsRouter);
 app.route("/api/task-attachments", taskAttachmentsRouter);
 app.route("/api/files", filesRouter);
+app.route("/api/books", booksRouter);
 
 app.get("/api/events/stream", async (c) => {
   const userId = c.req.header("X-User-Id");

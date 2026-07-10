@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Super Note Web Clipper",
+  "name": "星空笔记",
   "version": "0.1.3",
-  "description": "一键把网页文字、图片与链接剪藏到 super-note。",
+  "description": "一键把网页文字、图片与链接剪藏到星空笔记。",
   "permissions": [
     "activeTab",
     "scripting",

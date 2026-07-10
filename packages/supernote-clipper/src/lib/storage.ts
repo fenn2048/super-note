@@ -118,5 +118,9 @@ export function isConfigured(cfg: SuperClipperConfig): boolean {
 
 /** 规范化 baseUrl：去掉末尾斜杠 */
 export function normalizeBaseUrl(url: string): string {
-  return url.trim().replace(/\/+$/, "");
+  let cleaned = url.trim().replace(/\/+$/, "");
+  if (cleaned && !/^https?:\/\//i.test(cleaned)) {
+    cleaned = "http://" + cleaned;
+  }
+  return cleaned;
 }

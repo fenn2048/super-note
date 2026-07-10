@@ -29,6 +29,8 @@ const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
 const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 const PlanCenter = React.lazy(() => import("@/components/PlanCenter"));
+const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
+const BookReader = React.lazy(() => import("@/components/books/BookReader"));
 import MobileCameraModal from "@/components/MobileCameraModal";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
 import FirstRunWizard from "@/components/FirstRunWizard";
@@ -41,7 +43,7 @@ import { ConfirmProvider, prompt as appPrompt } from "@/components/ui/confirm";
 import { toast } from "@/lib/toast";
 import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
-import { api, getServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
+import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
 import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
@@ -333,10 +335,65 @@ function AppLayout() {
     setBarsVisible(true);
   }, [state.viewMode, state.mobileView, showSettings]);
 
+
+
   // 太空飞船健康提醒
   const { prefs: userPrefs } = useUserPreferences();
   const [showReminder, setShowReminder] = useState(false);
   const [reminderTrigger, setReminderTrigger] = useState(0);
+  const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
+
+  // Sync hash changes -> App State
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith("#/books/")) {
+        const bookHash = hash.replace("#/books/", "");
+        if (bookHash) {
+          actions.setViewMode("books");
+          setActiveBookHash(bookHash);
+        }
+      } else if (hash === "#/books") {
+        actions.setViewMode("books");
+        setActiveBookHash(null);
+      } else if (hash === "#/diary") {
+        actions.setViewMode("diary");
+      } else if (hash === "#/notes") {
+        actions.setViewMode("all");
+      } else if (hash === "#/tasks") {
+        actions.setViewMode("tasks");
+      } else if (hash === "#/files") {
+        actions.setViewMode("files");
+      } else if (hash === "#/home" || hash === "#/") {
+        actions.setViewMode("home");
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [actions]);
+
+  // Sync App State -> URL Hash
+  useEffect(() => {
+    if (state.viewMode === "books") {
+      if (activeBookHash) {
+        if (window.location.hash !== `#/books/${activeBookHash}`) {
+          window.location.hash = `#/books/${activeBookHash}`;
+        }
+      } else {
+        if (window.location.hash !== "#/books") {
+          window.location.hash = "#/books";
+        }
+      }
+    } else {
+      const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
+      const targetHash = notesViewModes.includes(state.viewMode) ? "#/notes" : `#/${state.viewMode}`;
+      if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+      }
+    }
+  }, [state.viewMode, activeBookHash]);
 
   useEffect(() => {
     if (showReminder) return;
@@ -346,6 +403,77 @@ function AppLayout() {
     }, intervalMs);
     return () => clearTimeout(timer);
   }, [userPrefs.reminderInterval, showReminder, reminderTrigger]);
+
+  // Listen to custom open-book event
+  useEffect(() => {
+    const onOpenBook = (e: Event) => {
+      const customEvent = e as CustomEvent<{ bookHash: string }>;
+      const hash = customEvent.detail?.bookHash;
+      if (hash) {
+        actions.setViewMode("books");
+        setActiveBookHash(hash);
+      }
+    };
+    window.addEventListener("super:open-book", onOpenBook);
+    return () => {
+      window.removeEventListener("super:open-book", onOpenBook);
+    };
+  }, [actions]);
+
+  // Listen to custom close-book event
+  useEffect(() => {
+    const onCloseBook = () => {
+      setActiveBookHash(null);
+    };
+    window.addEventListener("super:close-book", onCloseBook);
+    return () => {
+      window.removeEventListener("super:close-book", onCloseBook);
+    };
+  }, []);
+
+  // Confirm browser reload in reader mode
+  useEffect(() => {
+    if (!activeBookHash) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "是否要继续刷新？您的阅读进度和设置已自动保存。";
+      return e.returnValue;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [activeBookHash]);
+
+  // Global click interceptor for book:// and book-note:// links
+  useEffect(() => {
+    const handleGlobalClick = async (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const a = target.closest("a");
+      if (!a) return;
+      const href = a.getAttribute("href");
+      if (!href) return;
+
+      if (href.startsWith("book://")) {
+        e.preventDefault();
+        const bookHash = href.replace("book://", "");
+        window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+      } else if (href.startsWith("book-note://")) {
+        e.preventDefault();
+        const noteId = href.replace("book-note://", "");
+        try {
+          const { bookHash } = await api.books.getNoteInfo(noteId);
+          window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+        } catch (err) {
+          console.warn("无法解析读书笔记关联的书籍:", err);
+        }
+      }
+    };
+    document.addEventListener("click", handleGlobalClick);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick);
+    };
+  }, []);
 
   // Listen to custom open-settings event
   useEffect(() => {
@@ -365,7 +493,7 @@ function AppLayout() {
   // 否则用户会陷入"既无 Rail 又无主侧栏"的死局，找不到任何导航入口。
   const [railMode] = useRailMode();
   const railVisible = railMode !== "hidden" || state.sidebarCollapsed;
-  const isMindMapView = state.viewMode === "mindmaps";
+  const isMindMapView = false;
   const isAIChatView = state.viewMode === "ai-chat";
   const isHomeView = state.viewMode === "home";
   const isDiaryView = state.viewMode === "diary";
@@ -375,6 +503,7 @@ function AppLayout() {
   const isNotesView = ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode);
   const isFilesView = state.viewMode === "files";
   const isMentionsView = state.viewMode === "mentions";
+  const isBooksView = state.viewMode === "books";
 
   /**
    * Cmd-K 全局搜索面板开关
@@ -774,7 +903,7 @@ function AppLayout() {
       sessionStorage.removeItem("super:pending-import-url");
 
       const { toast } = await import("@/lib/toast");
-      const loadingToastId = toast.info("正在抓取并保存文章到剪藏笔记本...", 0);
+      const loadingToastId = toast.info("正在抓取并保存文章到剪藏笔记...", 0);
 
       try {
         const { api } = await import("@/lib/api");
@@ -783,7 +912,7 @@ function AppLayout() {
         if (!active) return;
 
         toast.dismiss(loadingToastId);
-        toast.success("已成功保存至「剪藏笔记本」");
+        toast.success("已成功保存至「剪藏笔记」");
 
         // 刷新列表和笔记本
         actions.refreshNotebooks();
@@ -943,7 +1072,7 @@ function AppLayout() {
           v16 P3 后续：Rail 三档模式（icon=48px 纯图标 / label=64px 图标+文字 / hidden=完全隐藏）；
           hidden 模式下若主侧栏也折叠，强制保留 Rail（避免完全无侧栏入口）。 */}
       {railVisible && <NavRail />}
-      {!state.sidebarCollapsed && !isDiaryView && !isMindMapView && (
+      {!state.sidebarCollapsed && (isNotesView || isProjectsView || isPlansView) && (
         <div
           className="hidden md:flex shrink-0"
           style={{ width: `${state.sidebarWidth}px` }}
@@ -951,7 +1080,7 @@ function AppLayout() {
           <Sidebar variant="desktop" />
         </div>
       )}
-      {!isDiaryView && !isMindMapView && <SidebarResizeHandle />}
+      {(isNotesView || isProjectsView || isPlansView) && <SidebarResizeHandle />}
 
       {/* ===== 主内容区 ===== */}
       <div className={cn(
@@ -1030,6 +1159,23 @@ function AppLayout() {
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
                   <FileManager />
+                </Suspense>
+              </div>
+            ) : isBooksView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  {activeBookHash ? (
+                    <BookReader
+                      bookHash={activeBookHash}
+                      onBack={() => setActiveBookHash(null)}
+                      workspaceId={getCurrentWorkspace()}
+                    />
+                  ) : (
+                    <BookCenter
+                      onOpenBook={(hash) => setActiveBookHash(hash)}
+                      workspaceId={getCurrentWorkspace()}
+                    />
+                  )}
                 </Suspense>
               </div>
             ) : state.viewMode === "more" ? (
@@ -1200,8 +1346,6 @@ function MobileTopBar() {
         return t("sidebar.allNotes") || "全部笔记";
       case "favorites":
         return "我的收藏";
-      case "mindmaps":
-        return t("sidebar.mindMaps") || "思维导图";
       case "tasks":
         return t("projects.myTasks") || "我的待办";
       case "trash":
@@ -1310,6 +1454,9 @@ function MobileTabBar({ visible }: { visible: boolean }) {
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
     actions.setMobileView("list");
+    if (mode === "books") {
+      window.dispatchEvent(new CustomEvent("super:close-book"));
+    }
     if (mode === "projects") {
       const filter = { type: "my-tasks" };
       sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));

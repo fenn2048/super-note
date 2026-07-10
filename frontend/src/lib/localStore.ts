@@ -29,7 +29,7 @@
  */
 
 import { openDB, type IDBPDatabase, type DBSchema } from "idb";
-import type { Note, NoteListItem, Notebook, Tag } from "@/types";
+import type { Note, NoteListItem, Notebook, Tag, Book, BookGroup, BookConfig, BookNote } from "@/types";
 
 // ─── Schema ────────────────────────────────────────────────────────────────────
 
@@ -63,10 +63,40 @@ interface SuperCacheSchema extends DBSchema {
       updatedAt: number;
     };
   };
+  books: {
+    key: string;
+    value: Book;
+    indexes: {
+      "by-updated": string;
+    };
+  };
+  bookGroups: {
+    key: string;
+    value: BookGroup;
+  };
+  bookConfigs: {
+    key: string;
+    value: BookConfig;
+  };
+  bookNotes: {
+    key: string;
+    value: BookNote;
+    indexes: {
+      "by-bookHash": string;
+    };
+  };
+  bookFiles: {
+    key: string;
+    value: {
+      bookHash: string;
+      blob: Blob;
+      updatedAt: number;
+    };
+  };
 }
 
 const DB_NAME_PREFIX = "super-cache-v2-";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // ─── 单例连接管理 ──────────────────────────────────────────────────────────────
 
@@ -140,23 +170,44 @@ function getDb(): Promise<IDBPDatabase<SuperCacheSchema>> | null {
   if (!currentCacheIdentity) return null;
   if (!dbPromise) {
     dbPromise = openDB<SuperCacheSchema>(getDbName(currentCacheIdentity), DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains("notebooks")) {
-          const s = db.createObjectStore("notebooks", { keyPath: "id" });
-          s.createIndex("by-parent", "parentId");
-          s.createIndex("by-updated", "updatedAt");
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          if (!db.objectStoreNames.contains("notebooks")) {
+            const s = db.createObjectStore("notebooks", { keyPath: "id" });
+            s.createIndex("by-parent", "parentId");
+            s.createIndex("by-updated", "updatedAt");
+          }
+          if (!db.objectStoreNames.contains("notes")) {
+            const s = db.createObjectStore("notes", { keyPath: "id" });
+            s.createIndex("by-notebook", "notebookId");
+            s.createIndex("by-updated", "updatedAt");
+            s.createIndex("by-trashed", "isTrashed");
+          }
+          if (!db.objectStoreNames.contains("tags")) {
+            db.createObjectStore("tags", { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains("meta")) {
+            db.createObjectStore("meta", { keyPath: "key" });
+          }
         }
-        if (!db.objectStoreNames.contains("notes")) {
-          const s = db.createObjectStore("notes", { keyPath: "id" });
-          s.createIndex("by-notebook", "notebookId");
-          s.createIndex("by-updated", "updatedAt");
-          s.createIndex("by-trashed", "isTrashed");
-        }
-        if (!db.objectStoreNames.contains("tags")) {
-          db.createObjectStore("tags", { keyPath: "id" });
-        }
-        if (!db.objectStoreNames.contains("meta")) {
-          db.createObjectStore("meta", { keyPath: "key" });
+        if (oldVersion < 2) {
+          if (!db.objectStoreNames.contains("books")) {
+            const s = db.createObjectStore("books", { keyPath: "bookHash" });
+            s.createIndex("by-updated", "updatedAt");
+          }
+          if (!db.objectStoreNames.contains("bookGroups")) {
+            db.createObjectStore("bookGroups", { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains("bookConfigs")) {
+            db.createObjectStore("bookConfigs", { keyPath: "bookHash" });
+          }
+          if (!db.objectStoreNames.contains("bookNotes")) {
+            const s = db.createObjectStore("bookNotes", { keyPath: "id" });
+            s.createIndex("by-bookHash", "bookHash");
+          }
+          if (!db.objectStoreNames.contains("bookFiles")) {
+            db.createObjectStore("bookFiles", { keyPath: "bookHash" });
+          }
         }
       },
       blocked() {
@@ -358,13 +409,9 @@ export async function clearAll(): Promise<void> {
   if (!p) return;
   await safe(async () => {
     const db = await p;
-    const tx = db.transaction(["notebooks", "notes", "tags", "meta"], "readwrite");
-    await Promise.all([
-      tx.objectStore("notebooks").clear(),
-      tx.objectStore("notes").clear(),
-      tx.objectStore("tags").clear(),
-      tx.objectStore("meta").clear(),
-    ]);
+    const stores = ["notebooks", "notes", "tags", "meta", "books", "bookGroups", "bookConfigs", "bookNotes", "bookFiles"] as const;
+    const tx = db.transaction(stores as any, "readwrite");
+    await Promise.all(stores.map(store => tx.objectStore(store as any).clear()));
     await tx.done;
   }, undefined, "clearAll");
 }
@@ -376,4 +423,172 @@ export function isReady(): boolean {
 
 export function getCurrentUserId(): string | null {
   return currentUserId;
+}
+
+// ─── Books ────────────────────────────────────────────────────────────────────
+
+export async function putBooks(books: Book[]): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    const tx = db.transaction("books", "readwrite");
+    await Promise.all(books.map((b) => tx.store.put(b)));
+    await tx.done;
+  }, undefined, "putBooks");
+}
+
+export async function getAllBooks(): Promise<Book[]> {
+  const p = getDb();
+  if (!p) return [];
+  return safe(async () => {
+    const db = await p;
+    return db.getAll("books");
+  }, [], "getAllBooks");
+}
+
+export async function getBook(bookHash: string): Promise<Book | undefined> {
+  const p = getDb();
+  if (!p) return undefined;
+  return safe(async () => {
+    const db = await p;
+    return db.get("books", bookHash);
+  }, undefined, "getBook");
+}
+
+export async function deleteBook(bookHash: string): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.delete("books", bookHash);
+  }, undefined, "deleteBook");
+}
+
+// ─── Book Groups ───────────────────────────────────────────────────────────────
+
+export async function putBookGroups(groups: BookGroup[]): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    const tx = db.transaction("bookGroups", "readwrite");
+    await Promise.all(groups.map((g) => tx.store.put(g)));
+    await tx.done;
+  }, undefined, "putBookGroups");
+}
+
+export async function getAllBookGroups(): Promise<BookGroup[]> {
+  const p = getDb();
+  if (!p) return [];
+  return safe(async () => {
+    const db = await p;
+    return db.getAll("bookGroups");
+  }, [], "getAllBookGroups");
+}
+
+export async function deleteBookGroup(id: string): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.delete("bookGroups", id);
+  }, undefined, "deleteBookGroup");
+}
+
+// ─── Book Configs ──────────────────────────────────────────────────────────────
+
+export async function putBookConfig(config: BookConfig): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.put("bookConfigs", config);
+  }, undefined, "putBookConfig");
+}
+
+export async function getBookConfig(bookHash: string): Promise<BookConfig | undefined> {
+  const p = getDb();
+  if (!p) return undefined;
+  return safe(async () => {
+    const db = await p;
+    return db.get("bookConfigs", bookHash);
+  }, undefined, "getBookConfig");
+}
+
+// ─── Book Notes ────────────────────────────────────────────────────────────────
+
+export async function putBookNotes(bookHash: string, notes: BookNote[]): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    // Clear old notes for this book first to keep it clean (similar to reload sync)
+    const oldNotes = await db.getAllFromIndex("bookNotes", "by-bookHash", bookHash);
+    const tx = db.transaction("bookNotes", "readwrite");
+    await Promise.all(oldNotes.map(n => tx.store.delete(n.id)));
+    await Promise.all(notes.map((n) => tx.store.put(n)));
+    await tx.done;
+  }, undefined, "putBookNotes");
+}
+
+export async function getBookNotes(bookHash: string): Promise<BookNote[]> {
+  const p = getDb();
+  if (!p) return [];
+  return safe(async () => {
+    const db = await p;
+    return db.getAllFromIndex("bookNotes", "by-bookHash", bookHash);
+  }, [], "getBookNotes");
+}
+
+export async function putSingleBookNote(note: BookNote): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.put("bookNotes", note);
+  }, undefined, "putSingleBookNote");
+}
+
+export async function deleteBookNote(id: string): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.delete("bookNotes", id);
+  }, undefined, "deleteBookNote");
+}
+
+// ─── Book Files (Blobs) ────────────────────────────────────────────────────────
+
+export async function putBookFile(bookHash: string, blob: Blob): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.put("bookFiles", {
+      bookHash,
+      blob,
+      updatedAt: Date.now()
+    });
+  }, undefined, "putBookFile");
+}
+
+export async function getBookFile(bookHash: string): Promise<Blob | undefined> {
+  const p = getDb();
+  if (!p) return undefined;
+  return safe(async () => {
+    const db = await p;
+    const fileRow = await db.get("bookFiles", bookHash);
+    return fileRow?.blob;
+  }, undefined, "getBookFile");
+}
+
+export async function deleteBookFile(bookHash: string): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.delete("bookFiles", bookHash);
+  }, undefined, "deleteBookFile");
 }

@@ -317,6 +317,8 @@ function initSchema(db: Database.Database) {
       visibility TEXT NOT NULL DEFAULT 'PRIVATE',
       voice TEXT DEFAULT NULL,
       isPinned INTEGER DEFAULT 0,
+      bookHash TEXT DEFAULT NULL,
+      bookNoteId TEXT DEFAULT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -341,6 +343,93 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_diary_attachments_diary ON diary_attachments(diaryId);
     CREATE INDEX IF NOT EXISTS idx_diary_attachments_user_created ON diary_attachments(userId, createdAt);
+
+    -- 书籍分组表
+    CREATE TABLE IF NOT EXISTS book_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      workspaceId TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_book_groups_workspace ON book_groups(workspaceId);
+
+    -- 书籍主表
+    CREATE TABLE IF NOT EXISTS books (
+      userId TEXT NOT NULL,
+      bookHash TEXT NOT NULL,
+      workspaceId TEXT,
+      attachmentId TEXT NOT NULL,
+      title TEXT,
+      author TEXT,
+      format TEXT,
+      size INTEGER,
+      groupId TEXT,
+      tags TEXT,
+      progress REAL DEFAULT 0.0,
+      readingStatus TEXT DEFAULT 'unread',
+      visibility TEXT DEFAULT 'PRIVATE',
+      metadata TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (userId, bookHash),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (groupId) REFERENCES book_groups(id) ON DELETE SET NULL,
+      FOREIGN KEY (attachmentId) REFERENCES attachments(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_books_workspace ON books(workspaceId);
+    CREATE INDEX IF NOT EXISTS idx_books_group ON books(groupId);
+
+    -- 书籍配置表（进度）
+    CREATE TABLE IF NOT EXISTS book_configs (
+      userId TEXT NOT NULL,
+      bookHash TEXT NOT NULL,
+      location TEXT,
+      xpointer TEXT,
+      progress TEXT,
+      viewSettings TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (userId, bookHash),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- 书籍划线标注表
+    CREATE TABLE IF NOT EXISTS book_notes (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      bookHash TEXT NOT NULL,
+      type TEXT DEFAULT 'highlight',
+      cfi TEXT,
+      xpointer0 TEXT,
+      xpointer1 TEXT,
+      page INTEGER,
+      text TEXT,
+      style TEXT,
+      color TEXT,
+      note TEXT,
+      visibility TEXT DEFAULT 'public',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_book_notes_hash ON book_notes(bookHash);
+
+    -- 书籍标注评论表
+    CREATE TABLE IF NOT EXISTS book_note_comments (
+      id TEXT PRIMARY KEY,
+      noteId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (noteId) REFERENCES book_notes(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_note_comments_note ON book_note_comments(noteId);
 
     -- 分享记录表
     CREATE TABLE IF NOT EXISTS shares (
@@ -1286,6 +1375,10 @@ function initSchema(db: Database.Database) {
   // v?? 说说 AI 助手：trigger_user_id 记录谁调起了 AI（用于删除权限判断）
   try { db.exec("ALTER TABLE diary_comments ADD COLUMN trigger_user_id TEXT"); } catch {}
   try { db.exec("ALTER TABLE diaries ADD COLUMN trigger_user_id TEXT"); } catch {}
+  try { db.exec("ALTER TABLE diaries ADD COLUMN bookHash TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE diaries ADD COLUMN bookNoteId TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_diaries_book_hash ON diaries(bookHash)"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_workspace ON task_attachments(workspaceId);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_notes_query_v2 ON notes(userId, workspaceId, isTrashed, isPinned DESC, updatedAt DESC);"); } catch {}
+  try { db.exec("ALTER TABLE book_notes ADD COLUMN visibility TEXT DEFAULT 'public'"); } catch {}
 }

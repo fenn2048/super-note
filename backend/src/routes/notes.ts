@@ -163,15 +163,37 @@ app.get("/", (c) => {
 app.delete("/trash/empty", (c) => {
   const db = getDb();
   const userId = c.req.header("X-User-Id") || "";
+  const wsRaw = c.req.query("workspaceId");
+  const workspaceId = !wsRaw || wsRaw === "personal" ? null : wsRaw;
 
-  // 仅清理个人空间的回收站；工作区回收站由管理员操作
-  const targets = db.prepare(
-    "SELECT id FROM notes WHERE userId = ? AND workspaceId IS NULL AND isTrashed = 1 AND isLocked = 0"
-  ).all(userId) as { id: string }[];
+  if (workspaceId) {
+    const role = getUserWorkspaceRole(workspaceId, userId);
+    if (!role) {
+      return c.json({ error: "无权访问该工作区" }, 403);
+    }
+  }
 
-  const skipped = (db.prepare(
-    "SELECT COUNT(*) as count FROM notes WHERE userId = ? AND workspaceId IS NULL AND isTrashed = 1 AND isLocked = 1"
-  ).get(userId) as { count: number }).count;
+  // 1. 获取目标笔记（区分个人空间与工作区）
+  let targets: { id: string }[];
+  let skipped = 0;
+
+  if (workspaceId) {
+    targets = db.prepare(
+      "SELECT id FROM notes WHERE workspaceId = ? AND isTrashed = 1 AND isLocked = 0"
+    ).all(workspaceId) as { id: string }[];
+
+    skipped = (db.prepare(
+      "SELECT COUNT(*) as count FROM notes WHERE workspaceId = ? AND isTrashed = 1 AND isLocked = 1"
+    ).get(workspaceId) as { count: number }).count;
+  } else {
+    targets = db.prepare(
+      "SELECT id FROM notes WHERE userId = ? AND workspaceId IS NULL AND isTrashed = 1 AND isLocked = 0"
+    ).all(userId) as { id: string }[];
+
+    skipped = (db.prepare(
+      "SELECT COUNT(*) as count FROM notes WHERE userId = ? AND workspaceId IS NULL AND isTrashed = 1 AND isLocked = 1"
+    ).get(userId) as { count: number }).count;
+  }
 
   if (targets.length === 0) {
     return c.json({ success: true, count: 0, skipped });

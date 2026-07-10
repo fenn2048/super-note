@@ -37,6 +37,7 @@ import {
   requireWorkspaceFeature,
 } from "../middleware/acl";
 import { createMentions, broadcastToWorkspace } from "../lib/mentions";
+import { getAuthUserId } from "../lib/auth-security";
 
 
 const diary = new Hono();
@@ -119,6 +120,12 @@ interface DiaryRow {
   tagsJson?: string | null;
   commentCount?: number;
   trigger_user_id?: string | null;
+  bookHash?: string | null;
+  bookNoteId?: string | null;
+  bookTitle?: string | null;
+  bookAuthor?: string | null;
+  bookMetadata?: string | null;
+  bookNoteText?: string | null;
 }
 
 export function rowToDiary(row: DiaryRow) {
@@ -176,6 +183,12 @@ export function rowToDiary(row: DiaryRow) {
     tags,
     commentCount: row.commentCount ?? 0,
     triggerUserId: row.trigger_user_id ?? null,
+    bookHash: row.bookHash ?? null,
+    bookNoteId: row.bookNoteId ?? null,
+    bookTitle: row.bookTitle ?? null,
+    bookAuthor: row.bookAuthor ?? null,
+    bookMetadata: row.bookMetadata ?? null,
+    bookNoteText: row.bookNoteText ?? null,
   };
 }
 
@@ -242,7 +255,7 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
   } catch {
     return c.json({ error: "Invalid JSON" }, 400);
   }
-  const { contentText, mood, visibility, voice, createdAt, tagIds = [] } = body;
+  const { contentText, mood, visibility, voice, createdAt, tagIds = [], bookHash, bookNoteId } = body;
   const rawImages = Array.isArray(body.images) ? body.images : [];
   const images: string[] = rawImages
     .filter((x: unknown) => typeof x === "string")
@@ -262,7 +275,7 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
   const tx = db.transaction(() => {
     if (customCreatedAt) {
       db.prepare(
-        "INSERT INTO diaries (id, userId, workspaceId, contentText, mood, images, visibility, voice, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO diaries (id, userId, workspaceId, contentText, mood, images, visibility, voice, createdAt, bookHash, bookNoteId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).run(
         id,
         userId,
@@ -273,10 +286,12 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
         typeof visibility === "string" ? visibility : "PRIVATE",
         hasVoice ? JSON.stringify(voice) : null,
         customCreatedAt,
+        typeof bookHash === "string" ? bookHash : null,
+        typeof bookNoteId === "string" ? bookNoteId : null,
       );
     } else {
       db.prepare(
-        "INSERT INTO diaries (id, userId, workspaceId, contentText, mood, images, visibility, voice) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO diaries (id, userId, workspaceId, contentText, mood, images, visibility, voice, bookHash, bookNoteId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).run(
         id,
         userId,
@@ -286,6 +301,8 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
         JSON.stringify(images),
         typeof visibility === "string" ? visibility : "PRIVATE",
         hasVoice ? JSON.stringify(voice) : null,
+        typeof bookHash === "string" ? bookHash : null,
+        typeof bookNoteId === "string" ? bookNoteId : null,
       );
     }
 
@@ -364,12 +381,16 @@ diary.post("/", requireWorkspaceFeature("diaries"), async (c) => {
 
   const created = db.prepare(`
     SELECT diaries.*, COALESCE(users.displayName, users.username) AS creatorName,
+           b.title AS bookTitle, b.author AS bookAuthor, b.metadata AS bookMetadata, bn.text AS bookNoteText,
            (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
             FROM tags t
             JOIN diary_tags dt ON t.id = dt.tagId
             WHERE dt.diaryId = diaries.id) AS tagsJson,
            (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount
-    FROM diaries LEFT JOIN users ON users.id = diaries.userId
+    FROM diaries
+    LEFT JOIN users ON users.id = diaries.userId
+    LEFT JOIN books b ON diaries.bookHash = b.bookHash
+    LEFT JOIN book_notes bn ON diaries.bookNoteId = bn.id
     WHERE diaries.id = ?
   `).get(id) as DiaryRow;
   return c.json(rowToDiary(created), 201);
@@ -416,6 +437,7 @@ function buildTimeRangeWhere(
   visibilityFilter?: string,
   tagId?: string | null,
   search?: string | null,
+  searchMode?: string | null,
 ): { sql: string; args: unknown[] } {
   let sql: string;
   const args: unknown[] = [];
@@ -451,8 +473,22 @@ function buildTimeRangeWhere(
     args.push(tagId);
   }
   if (search && search.trim() !== "") {
-    sql += " AND diaries.contentText LIKE ?";
-    args.push(`%${search.trim()}%`);
+    const mode = (searchMode || "AND").toUpperCase() === "OR" ? "OR" : "AND";
+    const terms = search.trim().split(/\s+/).filter(Boolean);
+    if (terms.length > 0) {
+      const clauses: string[] = [];
+      terms.forEach((term) => {
+        if (term.startsWith("#")) {
+          const tagSearch = term.substring(1);
+          clauses.push("diaries.id IN (SELECT dt.diaryId FROM diary_tags dt JOIN tags t ON dt.tagId = t.id WHERE t.name LIKE ?)");
+          args.push(`%${tagSearch}%`);
+        } else {
+          clauses.push("diaries.contentText LIKE ?");
+          args.push(`%${term}%`);
+        }
+      });
+      sql += ` AND (${clauses.join(` ${mode} `)})`;
+    }
   }
   return { sql, args };
 }
@@ -468,11 +504,12 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
   const visibilityFilter = c.req.query("visibility"); // 'all' | 'private' | 'public'
   const tagId = c.req.query("tagId");
   const search = c.req.query("search");
+  const searchMode = c.req.query("searchMode") || "AND";
 
   const scope = resolveDiaryScope(c, userId);
   if (scope.error) return c.json({ error: scope.error, code: "FORBIDDEN" }, 403);
 
-  const { sql: whereSql, args } = buildTimeRangeWhere(scope, userId, from, to, visibilityFilter, tagId, search);
+  const { sql: whereSql, args } = buildTimeRangeWhere(scope, userId, from, to, visibilityFilter, tagId, search, searchMode);
   let finalWhere = whereSql;
   const finalArgs = [...args];
   if (cursor) {
@@ -482,6 +519,7 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
   }
 
   const selectFields = `diaries.*, COALESCE(users.displayName, users.username) AS creatorName, users.avatarUrl AS creatorAvatarUrl,
+    b.title AS bookTitle, b.author AS bookAuthor, b.metadata AS bookMetadata, bn.text AS bookNoteText,
     (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
      FROM tags t
      JOIN diary_tags dt ON t.id = dt.tagId
@@ -491,7 +529,10 @@ diary.get("/timeline", requireWorkspaceFeature("diaries"), (c) => {
   const rows = db
     .prepare(
       `SELECT ${selectFields}
-       FROM diaries LEFT JOIN users ON users.id = diaries.userId
+       FROM diaries
+       LEFT JOIN users ON users.id = diaries.userId
+       LEFT JOIN books b ON diaries.bookHash = b.bookHash
+       LEFT JOIN book_notes bn ON diaries.bookNoteId = bn.id
        WHERE ${finalWhere}
        ORDER BY diaries.isPinned DESC, diaries.createdAt DESC
        LIMIT ?`,
@@ -751,12 +792,16 @@ diary.put("/:id", (c) => {
     const updated = db
       .prepare(
         `SELECT diaries.*, COALESCE(users.displayName, users.username) AS creatorName, users.avatarUrl AS creatorAvatarUrl,
+                b.title AS bookTitle, b.author AS bookAuthor, b.metadata AS bookMetadata, bn.text AS bookNoteText,
                 (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
                  FROM tags t
                  JOIN diary_tags dt ON t.id = dt.tagId
                  WHERE dt.diaryId = diaries.id) AS tagsJson,
                 (SELECT COUNT(*) FROM diary_comments WHERE diaryId = diaries.id) AS commentCount
-           FROM diaries LEFT JOIN users ON users.id = diaries.userId
+           FROM diaries
+           LEFT JOIN users ON users.id = diaries.userId
+           LEFT JOIN books b ON diaries.bookHash = b.bookHash
+           LEFT JOIN book_notes bn ON diaries.bookNoteId = bn.id
           WHERE diaries.id = ?`,
       )
       .get(id) as DiaryRow;
@@ -854,6 +899,7 @@ diary.get("/calendar", requireWorkspaceFeature("diaries"), (c) => {
   const month = parseInt(c.req.query("month") || "0");
   const tagId = c.req.query("tagId");
   const search = c.req.query("search");
+  const searchMode = c.req.query("searchMode") || "AND";
 
   if (year < 2000 || year > 2100 || month < 1 || month > 12) {
     return c.json({ error: "参数错误" }, 400);
@@ -893,8 +939,22 @@ diary.get("/calendar", requireWorkspaceFeature("diaries"), (c) => {
   }
 
   if (search && search.trim() !== "") {
-    whereSql += " AND diaries.contentText LIKE ?";
-    args.push(`%${search.trim()}%`);
+    const mode = (searchMode || "AND").toUpperCase() === "OR" ? "OR" : "AND";
+    const terms = search.trim().split(/\s+/).filter(Boolean);
+    if (terms.length > 0) {
+      const clauses: string[] = [];
+      terms.forEach((term) => {
+        if (term.startsWith("#")) {
+          const tagSearch = term.substring(1);
+          clauses.push("diaries.id IN (SELECT dt.diaryId FROM diary_tags dt JOIN tags t ON dt.tagId = t.id WHERE t.name LIKE ?)");
+          args.push(`%${tagSearch}%`);
+        } else {
+          clauses.push("diaries.contentText LIKE ?");
+          args.push(`%${term}%`);
+        }
+      });
+      whereSql += ` AND (${clauses.join(` ${mode} `)})`;
+    }
   }
 
   const rows = db
@@ -1069,9 +1129,40 @@ export function handleDownloadDiaryImage(c: Context): Response {
   const id = c.req.param("id");
   const db = getDb();
   const row = db
-    .prepare("SELECT id, mimeType, path FROM diary_attachments WHERE id = ?")
-    .get(id) as { id: string; mimeType: string; path: string } | undefined;
+    .prepare("SELECT id, mimeType, path, diaryId, userId FROM diary_attachments WHERE id = ?")
+    .get(id) as { id: string; mimeType: string; path: string; diaryId: string | null; userId: string } | undefined;
   if (!row) return c.json({ error: "图片不存在" }, 404);
+
+  const actorId = getAuthUserId(c);
+  if (!actorId) {
+    return c.json({ error: "未授权，请先登录", code: "UNAUTHENTICATED" }, 401);
+  }
+
+  // 校验权限：
+  // 1. 如果 diaryId 为空（刚上传，尚未绑定到具体说说），则只有上传者本人可以访问
+  if (!row.diaryId) {
+    if (row.userId !== actorId) {
+      return c.json({ error: "无权访问该图片", code: "FORBIDDEN" }, 403);
+    }
+  } else {
+    // 2. 如果已绑定到具体说说，检查说说本身的访问权限
+    const diaryRow = db
+      .prepare("SELECT userId, workspaceId, visibility FROM diaries WHERE id = ?")
+      .get(row.diaryId) as { userId: string; workspaceId: string | null; visibility: string } | undefined;
+    if (!diaryRow) {
+      // 容错：如果对应的说说不存在，允许上传者本人访问
+      if (row.userId !== actorId) {
+        return c.json({ error: "无权访问该图片", code: "FORBIDDEN" }, 403);
+      }
+    } else {
+      const hasAccess = diaryRow.workspaceId
+        ? !!getUserWorkspaceRole(diaryRow.workspaceId, actorId)
+        : (diaryRow.userId === actorId || diaryRow.visibility === "PUBLIC");
+      if (!hasAccess) {
+        return c.json({ error: "无权访问该图片", code: "FORBIDDEN" }, 403);
+      }
+    }
+  }
 
   const absPath = path.join(getAttachmentsDir(), row.path);
   if (!fs.existsSync(absPath)) {
@@ -1082,7 +1173,7 @@ export function handleDownloadDiaryImage(c: Context): Response {
   return new Response(buffer, {
     headers: {
       "Content-Type": row.mimeType || "application/octet-stream",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": "private, no-cache",
       // Phase 5: 为附件下载添加严格 CSP
       "Content-Security-Policy": "default-src 'none'; sandbox;",
     },

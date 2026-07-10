@@ -17,6 +17,8 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
+import { getDb } from "../db/schema";
 
 // ========== JWT Secret 初始化 ==========
 
@@ -120,6 +122,47 @@ export function verifyLoginToken(token: string): LoginTokenPayload | null {
     // C1: 非 login 类型的 token（sudo）不得用于登录认证
     if (payload.typ && payload.typ !== "login") return null;
     return payload;
+  } catch {
+    return null;
+  }
+}
+
+/** 从 Header, Query, 或 Cookie 中解析并验证用户 ID */
+export function getAuthUserId(c: Context): string | null {
+  let authHeader = c.req.header("Authorization");
+  const tokenQuery = c.req.query("token");
+  if (!authHeader && tokenQuery) {
+    authHeader = `Bearer ${tokenQuery}`;
+  } else if (!authHeader) {
+    const cookieToken = getCookie(c, "auth_token");
+    if (cookieToken) {
+      authHeader = `Bearer ${cookieToken}`;
+    }
+  }
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice(7);
+  const payload = verifyLoginToken(token);
+  if (!payload || !payload.userId) return null;
+
+  try {
+    const db = getDb();
+    const user = db
+      .prepare("SELECT tokenVersion, isDisabled FROM users WHERE id = ?")
+      .get(payload.userId) as { tokenVersion: number; isDisabled: number } | undefined;
+    if (!user || user.isDisabled) return null;
+    if ((payload.tver ?? 0) !== user.tokenVersion) return null;
+
+    if (payload.jti) {
+      const sess = db
+        .prepare("SELECT revokedAt FROM user_sessions WHERE id = ? AND userId = ?")
+        .get(payload.jti, payload.userId) as { revokedAt: string | null } | undefined;
+      if (!sess || sess.revokedAt) return null;
+    }
+    return payload.userId;
   } catch {
     return null;
   }
