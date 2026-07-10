@@ -52,7 +52,9 @@ import {
   Check,
   Download,
   Highlighter,
-  PenTool
+  PenTool,
+  Maximize,
+  Minimize
 } from "lucide-react";
 
 const dashedUnderline = (rects: any[], options: any = {}) => {
@@ -175,6 +177,14 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const handleSectionLoadRef = useRef<any>(null);
+  const handleCreateOverlayRef = useRef<any>(null);
+  const handleRelocateRef = useRef<any>(null);
+  const handleAnnotationClickRef = useRef<any>(null);
+
   const currentSectionIndexRef = useRef(0);
   const clickTimeoutRef = useRef<any>(null);
 
@@ -289,10 +299,21 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const [totalPages, setTotalPages] = useState(1);
   const [ttsVolume, setTtsVolume] = useState(1.0);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  // Voice selection: 'male' | 'female' | 'child'
+  const [ttsVoiceType, setTtsVoiceType] = useState<'male' | 'female' | 'child'>('female');
+  const [showVoicePanel, setShowVoicePanel] = useState(false);
   const ttsUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // Refs to avoid stale closures inside utterance callbacks
+  const ttsVolumeRef = useRef(1.0);
+  const ttsRateRef = useRef(1.2);
+  const ttsVoiceTypeRef = useRef<'male' | 'female' | 'child'>('female');
+  const ttsPausedAtIndexRef = useRef<number>(-1);  // for manual pause-by-cancel
+  const ttsPausedListRef = useRef<any[]>([]);
+  const volumeSliderHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Immersive mode and background audio playback keeping
   const [isImmersive, setIsImmersive] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Exit immersive mode when any settings panel is opened
@@ -301,6 +322,62 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       setIsImmersive(false);
     }
   }, [activeSidebar]);
+
+  // Fullscreen enter/exit handler
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  // Sync fullscreen DOM state → React state, enter immersive on fullscreen
+  useEffect(() => {
+    const onFsChange = () => {
+      const inFs = !!document.fullscreenElement;
+      setIsFullscreen(inFs);
+      if (inFs) {
+        setIsImmersive(true);
+        setActiveSidebar(null);
+      } else {
+        setIsImmersive(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Keyboard navigation: arrow keys for page/scroll
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when user is typing in an input / textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+
+      const isPaginated = settingsRef.current.layoutMode === "paginated";
+      if (isPaginated) {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+          e.preventDefault();
+          viewRef.current?.next();
+        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+          e.preventDefault();
+          viewRef.current?.prev();
+        }
+      } else {
+        // Scrolled mode: up/down arrow keys
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          viewRef.current?.next();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          viewRef.current?.prev();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Setup looping silent audio track to keep background audio alive on iOS/Android
   useEffect(() => {
@@ -415,10 +492,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       viewRef.current = view;
 
       // Event listeners
-      view.addEventListener("load", handleSectionLoad);
-      view.addEventListener("create-overlay", handleCreateOverlay);
-      view.addEventListener("relocate", handleRelocate);
-      view.addEventListener("show-annotation", handleAnnotationClick);
+      view.addEventListener("load", (e: any) => handleSectionLoadRef.current?.(e));
+      view.addEventListener("create-overlay", (e: any) => handleCreateOverlayRef.current?.(e));
+      view.addEventListener("relocate", (e: any) => handleRelocateRef.current?.(e));
+      view.addEventListener("show-annotation", (e: any) => handleAnnotationClickRef.current?.(e));
       view.addEventListener("draw-annotation", (e: any) => {
         const { draw, annotation, doc } = e.detail;
         const { color, style, note } = annotation;
@@ -458,11 +535,24 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       }
 
       // Restore location progress if available
-      if (!navigatedToTarget && userConfig && userConfig.location) {
-        try {
-          await view.goTo(userConfig.location);
-        } catch {
-          console.warn("无法跳转到上次阅读位置:", userConfig.location);
+      if (!navigatedToTarget) {
+        if (userConfig && userConfig.location) {
+          try {
+            await view.goTo(userConfig.location);
+          } catch {
+            console.warn("无法跳转到上次阅读位置:", userConfig.location);
+            try {
+              await view.goTo(0);
+            } catch (err) {
+              console.error("无法打开书籍首页(0):", err);
+            }
+          }
+        } else {
+          try {
+            await view.goTo(0);
+          } catch (err) {
+            console.error("无法打开书籍首页(0):", err);
+          }
         }
       }
 
@@ -478,6 +568,15 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     try {
       const renderer = viewRef.current?.renderer;
       if (!renderer) return null;
+      
+      // 1. Try getContents() first as it is the most reliable API of the paginator
+      const contents = renderer.getContents?.();
+      if (contents && contents.length > 0) {
+        const frame = contents[0].doc?.defaultView?.frameElement;
+        if (frame) return frame as HTMLIFrameElement;
+      }
+      
+      // 2. Fallback: search shadow DOM for iframe
       return renderer.iframe || renderer.shadowRoot?.querySelector("iframe") || null;
     } catch (e) {
       console.warn("获取 active iframe 失败:", e);
@@ -739,6 +838,40 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     applyReaderStyles();
     drawAnnotationsOnCurrentSection();
 
+    // Check if TTS should auto-start on this section
+    const ttsAutoStart = localStorage.getItem("super-tts-auto-start") === "true";
+    if (ttsAutoStart) {
+      localStorage.removeItem("super-tts-auto-start");
+      
+      // Extract text paragraphs from this new document
+      setTimeout(() => {
+        const elements = Array.from(doc.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6"))
+          .filter((el: any) => {
+            const className = el.className || "";
+            const id = el.id || "";
+            const tagName = el.tagName.toLowerCase();
+            if (tagName === "aside") return false;
+            if (className.includes("footnote") || className.includes("annotation") || className.includes("comment")) return false;
+            if (id.includes("footnote") || id.includes("annotation") || id.includes("comment")) return false;
+            return true;
+          })
+          .map((el: any) => ({
+            el,
+            text: getCleanText(el)
+          }))
+          .filter(item => hasReadableContent(item.text));
+
+        if (elements.length > 0) {
+          setTtsParagraphs(elements);
+          setTtsShowPlayer(true);
+          playParagraph(elements, 0);
+        } else {
+          // If this section has no text, try the next one!
+          handleNextSectionTts();
+        }
+      }, 300);
+    }
+
     // Touch swipe gestures for mobile page flipping
     let touchStartX = 0;
     let touchStartY = 0;
@@ -866,10 +999,16 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     }
   };
 
+  // Keep listener refs up to date on each render
+  handleSectionLoadRef.current = handleSectionLoad;
+  handleCreateOverlayRef.current = handleCreateOverlay;
+  handleRelocateRef.current = handleRelocate;
+  handleAnnotationClickRef.current = handleAnnotationClick;
+
   const applyReaderStyles = (customSettings?: any) => {
     if (!viewRef.current || !viewRef.current.renderer) return;
 
-    const currentSettings = customSettings || settings;
+    const currentSettings = customSettings || settingsRef.current;
     const theme = THEMES[currentSettings.theme as keyof typeof THEMES] || THEMES.sepia;
     
     const paragraphMargin = currentSettings.usePublisherStyles ? "" : `margin-bottom: ${currentSettings.paragraphSpacing ?? 1.0}em !important;`;
@@ -929,13 +1068,13 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     const renderer = viewRef.current.renderer;
     if (currentSettings.layoutMode === "paginated") {
       renderer.removeAttribute("flow");
+      if (currentSettings.columns > 0) {
+        renderer.setAttribute("max-column-count", currentSettings.columns);
+      } else {
+        renderer.removeAttribute("max-column-count");
+      }
     } else {
-      renderer.setAttribute("flow", "scrolling");
-    }
-
-    if (currentSettings.columns > 0) {
-      renderer.setAttribute("max-column-count", currentSettings.columns);
-    } else {
+      renderer.setAttribute("flow", "scrolled");
       renderer.removeAttribute("max-column-count");
     }
 
@@ -1465,28 +1604,129 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     }
   };
 
-  // Speech (TTS)
+  // Speech (TTS) — Note: speechSynthesis.pause() is broken in Chrome, so we
+  // implement pause by cancelling the utterance and remembering the paragraph index.
   const handleToggleTts = () => {
     if (ttsState === "playing") {
-      window.speechSynthesis.pause();
+      // Manual pause: cancel synthesis and remember where we stopped
+      window.speechSynthesis.cancel();
+      ttsPausedAtIndexRef.current = ttsParagraphIndex;
+      ttsPausedListRef.current = ttsParagraphs;
       setTtsState("paused");
       updateMediaSession("paused", ttsParagraphIndex, ttsParagraphs);
     } else if (ttsState === "paused") {
-      window.speechSynthesis.resume();
+      // Resume: replay from the saved paragraph index
+      const resumeIndex = ttsPausedAtIndexRef.current >= 0 ? ttsPausedAtIndexRef.current : 0;
+      const resumeList = ttsPausedListRef.current.length > 0 ? ttsPausedListRef.current : ttsParagraphs;
       setTtsState("playing");
-      updateMediaSession("playing", ttsParagraphIndex, ttsParagraphs);
+      updateMediaSession("playing", resumeIndex, resumeList);
+      playParagraph(resumeList, resumeIndex);
     } else {
       startTts();
     }
   };
 
-  const playParagraph = (paragraphsList: any[], index: number, overrideVolume?: number) => {
-    if (index < 0 || index >= paragraphsList.length) {
+  const getCleanText = (el: HTMLElement): string => {
+    const clone = el.cloneNode(true) as HTMLElement;
+    const selectorsToRemove = [
+      "sup", "sub", "img", "image", "svg", 
+      "a.footnote", "a.fn", "a.note", 
+      ".footnote", ".footnotes", "aside", 
+      "script", "style", "iframe"
+    ];
+    selectorsToRemove.forEach(selector => {
+      clone.querySelectorAll(selector).forEach(node => node.remove());
+    });
+    let text = clone.innerText || clone.textContent || "";
+    text = text.replace(/\[\d+\]/g, "");
+    text = text.replace(/\(\d+\)/g, "");
+    text = text.replace(/\[注\]/g, "");
+    return text.trim();
+  };
+
+  const hasReadableContent = (text: string): boolean => {
+    return /[\u4e00-\u9fa5a-zA-Z0-9]/.test(text);
+  };
+
+  const handleNextSectionTts = async () => {
+    const view = viewRef.current;
+    if (!view) {
       handleStopTts();
       return;
     }
 
-    const currentVolume = overrideVolume !== undefined ? overrideVolume : ttsVolume;
+    const currentIndex = currentSectionIndexRef.current;
+    const totalSections = view.book?.sections?.length || 0;
+    if (currentIndex + 1 < totalSections) {
+      console.log("[TTS debug] Moving to next section:", currentIndex + 1);
+      
+      // Clear current paragraph highlights before changing sections
+      ttsParagraphs.forEach(item => {
+        try {
+          item.el.style.backgroundColor = "";
+          item.el.style.borderRadius = "";
+          item.el.style.padding = "";
+        } catch {}
+      });
+
+      localStorage.setItem("super-tts-auto-start", "true");
+      await view.goTo(currentIndex + 1);
+    } else {
+      console.log("[TTS debug] End of book reached.");
+      handleStopTts();
+    }
+  };
+
+  // Voice profile: pitch + rate multiplier to simulate different voice types.
+  // On macOS/Chrome, only one Chinese voice (Tingting, female) is typically exposed,
+  // so we use pitch to create audible character differences that always work.
+  const getVoiceProfile = (voiceType: 'male' | 'female' | 'child'): {
+    voice: SpeechSynthesisVoice | null;
+    pitch: number;
+    rateMultiplier: number;
+  } => {
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoices = voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('cmn'));
+    const allVoices = zhVoices.length > 0 ? zhVoices : voices;
+
+    // Keyword lists for each type (Windows / Edge TTS names)
+    const malePhrases   = ['male', 'man', 'Kangkang', '大山', 'Yunyang', '云扬', 'Yunxi', '云希', 'Daniel', 'Lekinho', 'Reed'];
+    const femalePhrases = ['female', 'woman', 'Xiaoxiao', '晓晓', 'Xiaoyi', '晓伊', 'Huihui', '慧慧', 'Tingting', '婷婷', 'Meijia', 'Sinji'];
+    const childPhrases  = ['child', 'kid', 'Yaoyao', '姚姚', 'junior', 'young', 'Xiaobei'];
+
+    const phrasesMap = { male: malePhrases, female: femalePhrases, child: childPhrases };
+    const phrases = phrasesMap[voiceType];
+
+    // Try to find a dedicated voice for this type
+    const scored = allVoices.map(v => ({
+      v,
+      score: phrases.reduce((s, p) => v.name.toLowerCase().includes(p.toLowerCase()) ? s + 1 : s, 0),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    const bestVoice = scored[0]?.score > 0 ? scored[0].v : (allVoices[0] || null);
+
+    // Always apply pitch + rate to create a distinct sound character,
+    // even when only one voice is available (common on macOS).
+    // pitch range: 0 (lowest) – 2 (highest), default = 1
+    const profiles = {
+      male:   { pitch: 0.55, rateMultiplier: 0.92 },  // deep, slightly slower
+      female: { pitch: 1.05, rateMultiplier: 1.0  },  // natural
+      child:  { pitch: 1.75, rateMultiplier: 1.08 },  // high, slightly faster
+    };
+
+    return { voice: bestVoice, ...profiles[voiceType] };
+  };
+
+  const playParagraph = (paragraphsList: any[], index: number) => {
+    if (index < 0 || index >= paragraphsList.length) {
+      handleNextSectionTts();
+      return;
+    }
+
+    // Always read from refs to avoid stale closures
+    const currentVolume = ttsVolumeRef.current;
+    const currentRate   = ttsRateRef.current;
+    const currentVoiceType = ttsVoiceTypeRef.current;
 
     window.speechSynthesis.cancel();
     setTtsParagraphIndex(index);
@@ -1502,31 +1742,37 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       } catch {}
     });
 
-    // Apply grey background style to active paragraph
+    // Apply highlight to active paragraph
     const current = paragraphsList[index];
     if (current?.el) {
       current.el.style.backgroundColor = "rgba(0, 0, 0, 0.08)";
       current.el.style.borderRadius = "4px";
       current.el.style.padding = "2px 4px";
-      // Smoothly scroll element into view (auto flips pages)
       current.el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
     const utterance = new SpeechSynthesisUtterance(current.text);
     utterance.lang = "zh-CN";
-    utterance.rate = ttsRate;
     utterance.volume = currentVolume;
+
+    // Apply voice profile (voice object + pitch + rate multiplier)
+    const { voice, pitch, rateMultiplier } = getVoiceProfile(currentVoiceType);
+    if (voice) utterance.voice = voice;
+    utterance.pitch = pitch;
+    utterance.rate  = currentRate * rateMultiplier;
+
     utterance.onend = () => {
       const nextIndex = index + 1;
       setTtsParagraphIndex(nextIndex);
-      playParagraph(paragraphsList, nextIndex, currentVolume);
+      playParagraph(paragraphsList, nextIndex);
     };
     utterance.onerror = (e) => {
+      if ((e as any).error === 'interrupted') return; // cancelled intentionally
       console.error("TTS 播放出错:", e);
       setTimeout(() => {
         const nextIndex = index + 1;
         setTtsParagraphIndex(nextIndex);
-        playParagraph(paragraphsList, nextIndex, currentVolume);
+        playParagraph(paragraphsList, nextIndex);
       }, 500);
     };
 
@@ -1536,8 +1782,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
   const handleVolumeChange = (v: number) => {
     setTtsVolume(v);
-    if (ttsState === "playing" && ttsParagraphIndex !== -1) {
-      playParagraph(ttsParagraphs, ttsParagraphIndex, v);
+    ttsVolumeRef.current = v;  // update ref immediately for stale closure safety
+    // Immediately restart current utterance with new volume for instant effect
+    if (ttsState === "playing" && ttsParagraphIndex >= 0 && ttsParagraphs.length > 0) {
+      playParagraph(ttsParagraphs, ttsParagraphIndex);
     }
   };
 
@@ -1550,19 +1798,33 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     if (!doc) return;
 
     const elements = Array.from(doc.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6"))
+      .filter((el: any) => {
+        const className = el.className || "";
+        const id = el.id || "";
+        const tagName = el.tagName.toLowerCase();
+        if (tagName === "aside") return false;
+        if (className.includes("footnote") || className.includes("annotation") || className.includes("comment")) return false;
+        if (id.includes("footnote") || id.includes("annotation") || id.includes("comment")) return false;
+        return true;
+      })
       .map((el: any) => ({
         el,
-        text: el.innerText?.trim() || ""
+        text: getCleanText(el)
       }))
-      .filter(item => item.text.length > 0);
+      .filter(item => hasReadableContent(item.text));
 
     if (elements.length === 0) {
-      alert("无可读文本");
+      // If there are no text elements in this section, automatically try the next section!
+      handleNextSectionTts();
       return;
     }
 
     setTtsParagraphs(elements);
     setTtsShowPlayer(true);
+    // Ensure refs are up to date before first play
+    ttsVolumeRef.current = ttsVolume;
+    ttsRateRef.current = ttsRate;
+    ttsVoiceTypeRef.current = ttsVoiceType;
     playParagraph(elements, 0);
   };
 
@@ -1572,7 +1834,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     if (next < ttsParagraphs.length) {
       playParagraph(ttsParagraphs, next);
     } else {
-      handleStopTts();
+      handleNextSectionTts();
     }
   };
 
@@ -1588,6 +1850,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     setTtsParagraphIndex(-1);
     setTtsShowPlayer(false);
     updateMediaSession("stopped");
+    localStorage.removeItem("super-tts-auto-start");
     
     // Clear all paragraph highlights
     ttsParagraphs.forEach(item => {
@@ -2106,6 +2369,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         onClick={() => {
                           const rate = Math.max(0.6, +(ttsRate - 0.2).toFixed(1));
                           setTtsRate(rate);
+                          ttsRateRef.current = rate;
                           if (ttsState === "playing") startTts();
                         }}
                         className="flex-1 py-1.5 rounded-lg border border-app-border hover:bg-app-surface text-center"
@@ -2117,6 +2381,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         onClick={() => {
                           const rate = Math.min(3.0, +(ttsRate + 0.2).toFixed(1));
                           setTtsRate(rate);
+                          ttsRateRef.current = rate;
                           if (ttsState === "playing") startTts();
                         }}
                         className="flex-1 py-1.5 rounded-lg border border-app-border hover:bg-app-surface text-center"
@@ -2263,6 +2528,15 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
         {/* Action Panel Toggles */}
         <div className="flex items-center gap-1 sm:gap-2">
+          {/* Fullscreen toggle — first in toolbar */}
+          <button
+            onClick={handleToggleFullscreen}
+            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all text-inherit"
+            title={isFullscreen ? "退出全屏 (Esc)" : "全屏阅读"}
+          >
+            {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+          </button>
+
           {/* TTS Controls */}
           {ttsState !== "stopped" && (
             <div className="flex items-center gap-1 bg-black/10 dark:bg-white/10 rounded-lg px-2 py-1 text-xs">
@@ -2674,48 +2948,84 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
               <ChevronRight size={16} />
             </button>
 
-            {/* Volume control */}
+            {/* Voice selection */}
             <div className="relative flex items-center">
               <button
-                onClick={(e) => {
-                  if (window.innerWidth < 768) {
-                    setShowVolumeSlider(prev => !prev);
-                  } else {
-                    handleVolumeChange(ttsVolume === 0 ? 1.0 : 0);
-                  }
-                }}
-                onMouseEnter={() => {
-                  if (window.innerWidth >= 768) setShowVolumeSlider(true);
-                }}
-                onMouseLeave={() => {
-                  if (window.innerWidth >= 768) setShowVolumeSlider(false);
-                }}
+                onClick={() => setShowVoicePanel(prev => !prev)}
+                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+                title="选择声音"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </button>
+              {showVoicePanel && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-50 overflow-hidden min-w-[140px]">
+                  <div className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">选择声音</div>
+                  {([
+                    { key: 'male', label: '磁性男声', icon: '👨' },
+                    { key: 'female', label: '温柔女声', icon: '👩' },
+                    { key: 'child', label: '奶萌孩童', icon: '🧒' },
+                  ] as const).map(({ key, label, icon }) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setTtsVoiceType(key);
+                        ttsVoiceTypeRef.current = key;
+                        setShowVoicePanel(false);
+                        // Restart current paragraph with new voice
+                        if (ttsState === 'playing' && ttsParagraphIndex >= 0) {
+                          playParagraph(ttsParagraphs, ttsParagraphIndex);
+                        }
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+                        ttsVoiceType === key ? 'text-accent-primary font-semibold' : 'text-zinc-700 dark:text-zinc-300'
+                      }`}
+                    >
+                      <span>{icon}</span>
+                      <span>{label}</span>
+                      {ttsVoiceType === key && <span className="ml-auto text-accent-primary">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Volume control */}
+            <div
+              className="relative flex items-center"
+              onMouseEnter={() => {
+                if (volumeSliderHideTimerRef.current) clearTimeout(volumeSliderHideTimerRef.current);
+                setShowVolumeSlider(true);
+              }}
+              onMouseLeave={() => {
+                volumeSliderHideTimerRef.current = setTimeout(() => setShowVolumeSlider(false), 150);
+              }}
+            >
+              <button
+                onClick={() => setShowVolumeSlider(prev => !prev)}
                 className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
                 title="音量"
               >
                 {ttsVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
               {showVolumeSlider && (
-                <div 
-                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg flex flex-col items-center gap-1.5 z-50"
-                  onMouseEnter={() => {
-                    if (window.innerWidth >= 768) setShowVolumeSlider(true);
-                  }}
-                  onMouseLeave={() => {
-                    if (window.innerWidth >= 768) setShowVolumeSlider(false);
-                  }}
-                >
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl flex flex-col items-center gap-2 z-50">
                   <input
                     type="range"
                     min="0"
                     max="1"
-                    step="0.1"
+                    step="0.05"
                     value={ttsVolume}
                     onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                    className="h-16 w-1 accent-accent-primary cursor-pointer appearance-none bg-zinc-200 dark:bg-zinc-800 rounded"
-                    style={{ writingMode: 'bt-lr' as any, WebkitAppearance: 'slider-vertical' }}
+                    className="h-20 w-1 accent-accent-primary cursor-pointer"
+                    style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
                   />
-                  <span className="text-[8px] font-bold tabular-nums text-zinc-555 dark:text-zinc-400">{Math.round(ttsVolume * 100)}%</span>
+                  <span className="text-[9px] font-bold tabular-nums text-zinc-500 dark:text-zinc-400">{Math.round(ttsVolume * 100)}%</span>
+                  <button
+                    onClick={() => handleVolumeChange(ttsVolume === 0 ? 1.0 : 0)}
+                    className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  >
+                    {ttsVolume === 0 ? '取消静音' : '静音'}
+                  </button>
                 </div>
               )}
             </div>

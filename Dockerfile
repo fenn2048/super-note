@@ -61,16 +61,21 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# 复制整个项目（包含 clipper 插件、整个 frontend 目录、根 package.json）
+# 复制依赖定义文件以利用 Docker 缓存
 COPY package.json ./
-COPY packages/supernote-clipper ./packages/supernote-clipper
+COPY frontend/package.json ./frontend/
+COPY frontend/package-lock.json ./frontend/
+
+# Step 1: 安装依赖
+RUN cd frontend \
+    && npm install --no-audit --no-fund --legacy-peer-deps
+
+# 复制其余前端源码（包含之前在宿主机生成的 downloads 目录中的浏览器扩展和 APK）
 COPY frontend ./frontend
 
-# Step 1: 安装依赖 + 构建前端（无论如何都执行）
+# Step 2: 根据目标架构处理 rollup 并构建前端
 RUN cd frontend \
-    && npm install --no-audit --no-fund --legacy-peer-deps; \
-    \
-    if [ -n "${TARGETARCH}" ]; then \
+    && if [ -n "${TARGETARCH}" ]; then \
       ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}"); \
       [ -z "$ROLLUP_VER" ] && ROLLUP_VER="4.59.0"; \
       case "$TARGETARCH" in \

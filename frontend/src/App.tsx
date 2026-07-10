@@ -341,7 +341,17 @@ function AppLayout() {
   const { prefs: userPrefs } = useUserPreferences();
   const [showReminder, setShowReminder] = useState(false);
   const [reminderTrigger, setReminderTrigger] = useState(0);
-  const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
+  // Initialize from URL eagerly (before effects run) to prevent the hash-sync
+  // effect from overwriting a full book URL (e.g. #/books/<64-char-hash>) with
+  // just "#/books" when the page is reloaded while reading a book.
+  const [activeBookHash, setActiveBookHash] = useState<string | null>(() => {
+    const h = window.location.hash;
+    if (h.startsWith("#/books/")) {
+      const hash = h.replace("#/books/", "");
+      return hash || null;
+    }
+    return null;
+  });
 
   // Sync hash changes -> App State
   useEffect(() => {

@@ -111,6 +111,8 @@ services:
     image: docker.m.daocloud.io/redis:7-alpine
     container_name: super-note-redis
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
       - redis-data:/data
     deploy:

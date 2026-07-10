@@ -8,11 +8,47 @@ set -e
 #cd ..
 
 
-# Run Android build script
-echo "Running frontend/android/build_signed_debug_apk.sh..."
-cd frontend/android
-./build_signed_debug_apk.sh
-cd ../../
+# Check if the user wants to rebuild assets
+BUILD_ASSETS=false
+for arg in "$@"; do
+  if [ "$arg" = "--build-assets" ] || [ "$arg" = "-a" ]; then
+    BUILD_ASSETS=true
+  fi
+done
+
+# Check if pre-built download assets exist in frontend/public/downloads/
+REQUIRED_ASSETS=(
+  "frontend/public/downloads/super-note-debug.apk"
+  "frontend/public/downloads/super-clipper-chrome.zip"
+  "frontend/public/downloads/super-clipper-edge.zip"
+  "frontend/public/downloads/super-clipper-firefox.zip"
+)
+
+MISSING_ASSETS=false
+for asset in "${REQUIRED_ASSETS[@]}"; do
+  if [ ! -f "$asset" ]; then
+    MISSING_ASSETS=true
+    break
+  fi
+done
+
+if [ "$MISSING_ASSETS" = true ]; then
+  echo "Missing pre-built mobile app or browser extensions in frontend/public/downloads/."
+  echo "Forcing asset build..."
+  BUILD_ASSETS=true
+fi
+
+if [ "$BUILD_ASSETS" = true ]; then
+  echo "Running frontend/android/build_signed_debug_apk.sh..."
+  cd frontend/android
+  ./build_signed_debug_apk.sh
+  cd ../../
+else
+  echo "=========================================================="
+  echo " Using existing pre-built assets in frontend/public/downloads/"
+  echo " To force rebuild apk/extensions, run: $0 --build-assets"
+  echo "=========================================================="
+fi
 
 # BuildKit is required for multi-arch ARGs (BUILDPLATFORM / TARGETARCH).
 # If you hit overlay issues, run: docker builder prune

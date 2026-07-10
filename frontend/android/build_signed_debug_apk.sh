@@ -136,32 +136,32 @@ else
 fi
 
 # 2. Build frontend and sync assets to Android
-echo "==== Building frontend ===="
-pushd "$FRONTEND_DIR" >/dev/null
-if [ -f "package-lock.json" ]; then
-  npm ci --no-audit --no-fund --legacy-peer-deps || npm install --no-audit --no-fund --legacy-peer-deps
-else
-  npm install --no-audit --no-fund --legacy-peer-deps
-fi
-
-# Install rollup target architecture package if TARGETARCH is set (inside Docker build)
-if [ -n "${TARGETARCH:-}" ]; then
-  ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}")
-  [ -z "$ROLLUP_VER" ] && ROLLUP_VER="4.59.0"
-  case "$TARGETARCH" in
-    amd64) ROLLUP_PKG="@rollup/rollup-linux-x64-musl@${ROLLUP_VER}" ;;
-    arm64) ROLLUP_PKG="@rollup/rollup-linux-arm64-musl@${ROLLUP_VER}" ;;
-    *)     ROLLUP_PKG="" ;;
-  esac
-  if [ -n "$ROLLUP_PKG" ]; then
-    echo "Installing rollup target arch pkg: $ROLLUP_PKG"
-    npm install "$ROLLUP_PKG" --save-optional --no-audit --no-fund 2>/dev/null || true
-  fi
-fi
-
-npm run build
-# Sync web build output to Android assets directory.
 if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
+  echo "==== Building frontend ===="
+  pushd "$FRONTEND_DIR" >/dev/null
+  if [ -f "package-lock.json" ]; then
+    npm ci --no-audit --no-fund --legacy-peer-deps || npm install --no-audit --no-fund --legacy-peer-deps
+  else
+    npm install --no-audit --no-fund --legacy-peer-deps
+  fi
+
+  # Install rollup target architecture package if TARGETARCH is set (inside Docker build)
+  if [ -n "${TARGETARCH:-}" ]; then
+    ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}")
+    [ -z "$ROLLUP_VER" ] && ROLLUP_VER="4.59.0"
+    case "$TARGETARCH" in
+      amd64) ROLLUP_PKG="@rollup/rollup-linux-x64-musl@${ROLLUP_VER}" ;;
+      arm64) ROLLUP_PKG="@rollup/rollup-linux-arm64-musl@${ROLLUP_VER}" ;;
+      *)     ROLLUP_PKG="" ;;
+    esac
+    if [ -n "$ROLLUP_PKG" ]; then
+      echo "Installing rollup target arch pkg: $ROLLUP_PKG"
+      npm install "$ROLLUP_PKG" --save-optional --no-audit --no-fund 2>/dev/null || true
+    fi
+  fi
+
+  npm run build
+  # Sync web build output to Android assets directory.
   echo "Syncing dist/ to Android assets..."
   if [ -d "android/app/src/main/assets/public" ]; then
     rm -rf android/app/src/main/assets/public/*
@@ -173,8 +173,10 @@ if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
     mkdir -p android/app/src/main/assets/public
     cp -r dist/* android/app/src/main/assets/public/
   fi
+  popd >/dev/null
+else
+  echo "==== Android build skipped, skipping host frontend build ===="
 fi
-popd >/dev/null
 
 # 3. Build signed Android APK if SDK tools exist
 if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then

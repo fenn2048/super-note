@@ -42,11 +42,21 @@ if ! nc -z 127.0.0.1 6379 >/dev/null 2>&1; then
   elif command -v redis-server &>/dev/null; then
     redis-server --daemonize yes
     sleep 1.5
+  elif command -v docker &>/dev/null; then
+    if docker ps -a --format '{{.Names}}' | grep -q "^super-note-redis$"; then
+      echo "🔄 检测到已存在的 Docker Redis 容器，正在启动..."
+      docker start super-note-redis
+    else
+      echo "📥 正在拉取并启动 Docker Redis 容器..."
+      docker run -d --name super-note-redis -p 6379:6379 docker.m.daocloud.io/redis:7-alpine || \
+      docker run -d --name super-note-redis -p 6379:6379 redis:7-alpine
+    fi
+    sleep 2
   fi
 
   # 再次确认 Redis 是否成功启动
   if ! nc -z 127.0.0.1 6379 >/dev/null 2>&1; then
-    echo "❌ 无法自动启动 Redis 服务，请确保已安装并手动运行 redis-server (port 6379)。"
+    echo "❌ 无法自动启动 Redis 服务，请确保已安装并手动运行 redis-server (port 6379) 或已运行 Docker。"
     exit 1
   else
     echo "✅ Redis 服务已成功启动！"
