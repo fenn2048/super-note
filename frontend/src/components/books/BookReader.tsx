@@ -173,6 +173,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
   const [notesPage, setNotesPage] = useState(1);
+  const [noteFilter, setNoteFilter] = useState<'all' | 'mine'>('all');
 
   const notesRef = useRef(notes);
   notesRef.current = notes;
@@ -1222,7 +1223,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         text: selectionRange.text,
         style,
         color,
-        note: annotationNote.trim()
+        note: annotationNote.trim(),
+        chapterTitle,
+        progress: readingProgressText
       });
 
       // Update state without duplicates
@@ -1486,7 +1489,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         style,
         color,
         note: noteText,
-        visibility: thoughtVisibility
+        visibility: thoughtVisibility,
+        chapterTitle,
+        progress: readingProgressText
       });
 
       setNotes(prev => {
@@ -2023,14 +2028,18 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
   // Export Notes to Markdown
   const handleExportNotes = () => {
-    if (notes.length === 0) {
+    const myUserId = localStorage.getItem('super-self-userid');
+    const filteredNotesToExport = noteFilter === 'mine' ? notes.filter(n => n.userId === myUserId || !n.userId) : notes;
+    if (filteredNotesToExport.length === 0) {
       alert("暂无读书笔记可导出");
       return;
     }
     const header = `# 读书笔记: 《${book?.title}》\n作者: ${book?.author || "未知作者"}\n导出日期: ${new Date().toLocaleDateString()}\n\n---\n\n`;
-    const content = notes.map((n, i) => {
+    const content = filteredNotesToExport.map((n, i) => {
       const date = new Date(n.createdAt).toLocaleString();
-      return `### 标注 ${i + 1}\n- **原文**: ${n.text}\n- **批注**: ${n.note || "（无批注）"}\n- **日期**: ${date}\n\n`;
+      const chapterInfo = n.chapterTitle ? `\n- **章节**: ${n.chapterTitle}` : '';
+      const progressInfo = n.progress ? `\n- **进度/页码**: ${n.progress}` : '';
+      return `### 标注 ${i + 1}${chapterInfo}${progressInfo}\n- **原文**: ${n.text}\n- **批注**: ${n.note || "（无批注）"}\n- **日期**: ${date}\n\n`;
     }).join("");
 
     const blob = new Blob([header + content], { type: "text/markdown;charset=utf-8" });
@@ -2077,8 +2086,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   }
 
   const notesPerPage = 5;
-  const totalNotesPages = Math.ceil(notes.length / notesPerPage);
-  const displayedNotes = notes.slice((notesPage - 1) * notesPerPage, notesPage * notesPerPage);
+  const myUserId = localStorage.getItem('super-self-userid');
+  const filteredNotesForDisplay = noteFilter === 'mine' ? notes.filter(n => n.userId === myUserId || !n.userId) : notes;
+  const totalNotesPages = Math.ceil(filteredNotesForDisplay.length / notesPerPage);
+  const displayedNotes = filteredNotesForDisplay.slice((notesPage - 1) * notesPerPage, notesPage * notesPerPage);
 
   return (
     <div className="fixed inset-0 z-50 bg-app-bg text-tx-primary select-none overflow-hidden" style={{ backgroundColor: theme.bg, color: theme.fg }}>
@@ -2228,8 +2239,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                           try {
                             if (viewRef.current) {
                               await viewRef.current.goTo(n.cfi);
-                              // Auto close sidebar on mobile
-                              if (window.innerWidth < 640) setActiveSidebar(null);
+                              // Auto close sidebar on mobile (and desktop for notes view)
+                              setActiveSidebar(null);
                             }
                           } catch (err) {
                             console.warn("跳转笔记失败:", err);
@@ -3255,6 +3266,18 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                 <span>全书划线/读书笔记 ({notes.length})</span>
               </h3>
               <div className="flex items-center gap-3">
+                <select
+                  value={noteFilter}
+                  onChange={(e) => {
+                    setNoteFilter(e.target.value as 'all' | 'mine');
+                    setNotesPage(1);
+                  }}
+                  className="px-2 py-1 bg-transparent border rounded-lg text-xs focus:outline-none"
+                  style={{ borderColor: `${theme.fg}30`, color: theme.fg }}
+                >
+                  <option value="all">全部人员</option>
+                  <option value="mine">仅看自己</option>
+                </select>
                 {notes.length > 0 && (
                   <button
                     onClick={handleExportNotes}
@@ -3359,6 +3382,16 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     >
                       <div className="flex items-center gap-2">
                         <span>👤 {n.displayName || n.username || "我的笔记"}</span>
+                        {n.chapterTitle && (
+                          <span className="ml-2 opacity-70" title="章节">
+                            📖 {n.chapterTitle}
+                          </span>
+                        )}
+                        {n.progress && (
+                          <span className="ml-1 opacity-70" title="进度/页数">
+                            📍 {n.progress}
+                          </span>
+                        )}
                         {(n.userId === localStorage.getItem("super-self-userid") || !n.userId) && (
                           <>
                             <button

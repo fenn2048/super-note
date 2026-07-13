@@ -1456,7 +1456,7 @@ export default function MindMapCenter() {
   // 从选定的结构或模板创建
   const handleCreateFromTemplate = useCallback(async (templateId: string, structure: string, isBlank: boolean = false) => {
     try {
-      let rootNode: MindMapNode = {
+      const rootNode: MindMapNode = {
         id: "root",
         text: "中心主题",
         children: []

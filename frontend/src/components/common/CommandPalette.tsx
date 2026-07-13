@@ -313,7 +313,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       icon: ListTodo,
       handler: async () => {
         try {
-          let tagIds: string[] = [];
+          const tagIds: string[] = [];
           if (parsed.tag) {
             const allTags = await api.getTags();
             let matchedTag = allTags.find(t => t.name === parsed.tag);

@@ -412,6 +412,8 @@ function initSchema(db: Database.Database) {
       color TEXT,
       note TEXT,
       visibility TEXT DEFAULT 'public',
+      chapterTitle TEXT,
+      progress TEXT,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
@@ -1381,4 +1383,6 @@ function initSchema(db: Database.Database) {
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_task_attachments_workspace ON task_attachments(workspaceId);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_notes_query_v2 ON notes(userId, workspaceId, isTrashed, isPinned DESC, updatedAt DESC);"); } catch {}
   try { db.exec("ALTER TABLE book_notes ADD COLUMN visibility TEXT DEFAULT 'public'"); } catch {}
+  try { db.exec("ALTER TABLE book_notes ADD COLUMN chapterTitle TEXT"); } catch {}
+  try { db.exec("ALTER TABLE book_notes ADD COLUMN progress TEXT"); } catch {}
 }
