@@ -1083,6 +1083,9 @@ export default function ProjectCenter() {
       if (activeFilter.type === "my-tasks") {
         fetchMyTasks();
       }
+
+      // We must fully refresh current view to properly get generated tasks if it's recurring.
+      refreshCurrentView();
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "操作失败");

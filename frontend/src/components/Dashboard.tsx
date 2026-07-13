@@ -538,6 +538,7 @@ export default function Dashboard() {
         api.getTaskStats().then((s) => {
           setStats((prev) => ({ ...prev, taskPending: s.activeReminders || prev.taskPending }));
         }).catch(console.error);
+        loadDashboard(); // Fully reload to fetch any generated recurring task
       } catch {
         loadDashboard(); // 回滚
       }
