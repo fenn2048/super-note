@@ -5,6 +5,7 @@ import { api, getCurrentWorkspace } from "@/lib/api";
 import { Project, ProjectMember, Tag } from "@/types";
 import { toast } from "@/lib/toast";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
+import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,8 @@ export default function MobileTaskCreateModal({
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>({ type: "weekday" });
   const [remindAt, setRemindAt] = useState("");
+  const [reminderOffsetValue, setReminderOffsetValue] = useState<number>(1);
+  const [reminderOffsetUnit, setReminderOffsetUnit] = useState<'minute'|'hour'|'day'|'month'|'year'>('day');
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showOCRModal, setShowOCRModal] = useState(false);
@@ -139,6 +142,8 @@ export default function MobileTaskCreateModal({
         endDate: dueDate ? new Date(dueDate).toISOString() : null,
         priority,
         remindAt: remindAt || null,
+        reminderOffsetValue,
+        reminderOffsetUnit,
         isRecurring: isRecurring ? 1 : 0,
         recurrenceRule: isRecurring ? JSON.stringify(recurrenceRule) : null,
       };
@@ -314,17 +319,17 @@ export default function MobileTaskCreateModal({
                         showTime={true}
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-tx-secondary block">提醒日期</label>
-                      <SleekDatePicker
-                        value={remindAt}
-                        onChange={(v) => setRemindAt(v)}
-                        placeholder="添加提醒日期"
-                        className="w-full"
-                        variant="mobile-form"
-                        showTime={true}
-                      />
-                    </div>
+                    {(dueDate || isRecurring) && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-tx-secondary block">提醒设置</label>
+                        <ReminderOffsetPicker
+                          value={reminderOffsetValue}
+                          unit={reminderOffsetUnit}
+                          onChangeValue={setReminderOffsetValue}
+                          onChangeUnit={setReminderOffsetUnit}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Recurrence Configuration */}

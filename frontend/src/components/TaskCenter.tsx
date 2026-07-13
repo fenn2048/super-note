@@ -25,6 +25,7 @@ import SleekDatePicker from "@/components/common/SleekDatePicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { syncTaskNotification, syncAllTaskNotifications } from "@/hooks/useCapacitor";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 
 
 /* ===========================================================================
@@ -502,7 +503,7 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
     1: { label: t('tasks.low'), color: "text-blue-400", flagClass: "text-blue-400" },
   };
 
-  const [remindAt, setRemindAt] = useState(task.remindAt || "");
+
   const [taskTags, setTaskTags] = useState<Tag[]>(task.tags || []);
   const [isRecurring, setIsRecurring] = useState(task.isRecurring === 1);
   const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>(() => {
@@ -522,7 +523,7 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
     setTitle(task.title);
     setPriority(task.priority);
     setDueDate(task.dueDate || "");
-    setRemindAt(task.remindAt || "");
+
     setTaskTags(task.tags || []);
     setIsRecurring(task.isRecurring === 1);
     try {
@@ -579,7 +580,7 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
       title: title.trim() || task.title,
       priority,
       dueDate: dueDate || null,
-      remindAt: remindAt || null,
+      remindAt: task.remindAt || null,
       tagIds: taskTags.map((t) => t.id),
       isRecurring: isRecurring ? 1 : 0,
       recurrenceRule: isRecurring ? JSON.stringify(recurrenceRule) : null,
@@ -747,33 +748,24 @@ const TaskDetail = React.forwardRef<HTMLDivElement, {
             onChange={(e) => {
               const val = e.target.value || null;
               setDueDate(val || "");
-              let nextRemindAt = remindAt;
-              if (val && !remindAt) {
-                const date = new Date(val);
-                date.setDate(date.getDate() - 1);
-                nextRemindAt = date.toISOString().split("T")[0];
-                setRemindAt(nextRemindAt);
-              }
-              onUpdate(task.id, { dueDate: val, remindAt: nextRemindAt || null });
+              onUpdate(task.id, { dueDate: val });
             }}
             className="w-full px-3 py-2 rounded-md bg-app-bg border border-app-border text-sm text-tx-primary focus:outline-none focus:border-accent-primary transition-colors"
           />
         </div>
 
-        {/* 提醒开始日期 */}
-        <div>
-          <label className="text-xs text-tx-tertiary uppercase tracking-wider mb-1.5 block">{t('tasks.remindAt', '提醒日期')}</label>
-          <input
-            type="date"
-            value={remindAt ? remindAt.split("T")[0] : ""}
-            onChange={(e) => {
-              const val = e.target.value || null;
-              setRemindAt(val || "");
-              onUpdate(task.id, { remindAt: val });
-            }}
-            className="w-full px-3 py-2 rounded-md bg-app-bg border border-app-border text-sm text-tx-primary focus:outline-none focus:border-accent-primary transition-colors"
-          />
-        </div>
+        {/* 提醒日期 (提前X) */}
+        {(dueDate || isRecurring) && (
+          <div>
+            <label className="text-xs text-tx-tertiary uppercase tracking-wider mb-1.5 block">{t('tasks.remindAt', '提醒设置')}</label>
+            <ReminderOffsetPicker
+              value={task.reminderOffsetValue !== undefined ? task.reminderOffsetValue : 1}
+              unit={task.reminderOffsetUnit || 'day'}
+              onChangeValue={(val) => onUpdate(task.id, { reminderOffsetValue: val })}
+              onChangeUnit={(val) => onUpdate(task.id, { reminderOffsetUnit: val })}
+            />
+          </div>
+        )}
 
         {/* 周期设置 */}
         <div className="border-t border-app-border/40 pt-4 mt-2">

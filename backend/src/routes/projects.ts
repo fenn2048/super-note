@@ -598,7 +598,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, dependencies } = body;
+  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, dependencies } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -680,6 +680,20 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
     const oldEnd = task.endDate ? task.endDate.split("T")[0] : "无";
     const newEnd = endDate ? endDate.split("T")[0] : "无";
     logAudit(userId, "task", "update_task_end_date", `将任务截止时间从「${oldEnd}」修改为「${newEnd}」`, { targetType: "project_task", targetId: taskId });
+  }
+
+  let calculatedRemindAt = body.remindAt !== undefined ? body.remindAt : task.remindAt;
+  const finalOffsetValue = body.reminderOffsetValue !== undefined ? body.reminderOffsetValue : task.reminderOffsetValue;
+  const finalOffsetUnit = body.reminderOffsetUnit !== undefined ? body.reminderOffsetUnit : task.reminderOffsetUnit;
+  const finalEndDate = body.endDate !== undefined ? body.endDate : task.endDate;
+  const finalIsRecurring = body.isRecurring !== undefined ? body.isRecurring : task.isRecurring;
+
+  if (finalEndDate && (!calculatedRemindAt || finalIsRecurring)) {
+      try {
+         calculatedRemindAt = calculateRemindAt(finalEndDate, finalOffsetValue, finalOffsetUnit);
+      } catch(e) { console.warn("Failed to update calculated remind at for project task", e); }
+  } else if (!finalEndDate && body.endDate === null) {
+    calculatedRemindAt = null;
   }
 
   const updates: string[] = [];
