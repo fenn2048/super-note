@@ -136,7 +136,22 @@ export function handleRecurringTask(db: any, taskId: string, isProjectTask: bool
         const diff = dueTime - remindTime;
         if (!isNaN(diff)) {
           const nextDueTime = new Date(nextEndDate).getTime();
-          nextRemindAt = new Date(nextDueTime - diff).toISOString();
+          const remDate = new Date(nextDueTime - diff);
+          if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
+            nextRemindAt = remDate.toISOString();
+          } else if (task.remindAt.includes(' ')) {
+            const yyyy = remDate.getFullYear();
+            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(remDate.getDate()).padStart(2, '0');
+            const hh = String(remDate.getHours()).padStart(2, '0');
+            const mm = String(remDate.getMinutes()).padStart(2, '0');
+            nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
+          } else {
+            const yyyy = remDate.getFullYear();
+            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(remDate.getDate()).padStart(2, '0');
+            nextRemindAt = `${yyyy}-${MM}-${dd}`;
+          }
         }
       }
 
@@ -198,11 +213,17 @@ export function handleRecurringTask(db: any, taskId: string, isProjectTask: bool
         const diff = dueTime - remindTime;
         if (!isNaN(diff)) {
           const nextDueTime = new Date(nextDueDate).getTime();
-          // Format nextRemindAt matching format of remindAt
-          if (task.remindAt.includes("T") || task.remindAt.includes("Z")) {
-            nextRemindAt = new Date(nextDueTime - diff).toISOString();
+          const remDate = new Date(nextDueTime - diff);
+          if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
+            nextRemindAt = remDate.toISOString();
+          } else if (task.remindAt.includes(' ')) {
+            const yyyy = remDate.getFullYear();
+            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(remDate.getDate()).padStart(2, '0');
+            const hh = String(remDate.getHours()).padStart(2, '0');
+            const mm = String(remDate.getMinutes()).padStart(2, '0');
+            nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
           } else {
-            const remDate = new Date(nextDueTime - diff);
             const yyyy = remDate.getFullYear();
             const MM = String(remDate.getMonth() + 1).padStart(2, '0');
             const dd = String(remDate.getDate()).padStart(2, '0');

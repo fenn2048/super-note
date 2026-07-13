@@ -1588,6 +1588,9 @@ export default function TaskCenter() {
       // Refresh stats
       const s = await api.getTaskStats();
       setStats(s);
+
+      // Fully reload tasks to get newly generated recurring tasks if any
+      loadTasks();
     } catch (e: any) {
       toast.error(e?.message || "操作失败，前置依赖未完成");
       loadTasks(); // rollback
