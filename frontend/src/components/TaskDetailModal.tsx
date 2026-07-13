@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import { toast } from "@/lib/toast";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,8 @@ export default function TaskDetailModal({
         titleColor: activeTask.titleColor || null,
         dependencies: activeTask.dependencies?.map((d) => d.id) || [],
         remindAt: activeTask.remindAt || null,
+        reminderOffsetValue: activeTask.reminderOffsetValue,
+        reminderOffsetUnit: activeTask.reminderOffsetUnit,
       });
       if (updated.remindAt) {
         syncTaskNotification(updated as any);
@@ -616,26 +619,31 @@ export default function TaskDetailModal({
               </div>
             </div>
 
-            {/* Reminder Date */}
-            <div className="flex items-center gap-3 md:col-span-2">
-              <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 flex-shrink-0">
-                <Bell size={13} />
-                <span>提醒日期</span>
+            {/* Reminder Offset */}
+            {(activeTask.endDate || activeTask.isRecurring) ? (
+              <div className="flex items-center gap-3 md:col-span-2">
+                <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 flex-shrink-0">
+                  <Bell size={13} />
+                  <span>提醒设置</span>
+                </div>
+                <div className="flex-1 flex items-center">
+                  <ReminderOffsetPicker
+                    value={activeTask.reminderOffsetValue !== undefined ? activeTask.reminderOffsetValue : 1}
+                    unit={activeTask.reminderOffsetUnit || 'day'}
+                    onChangeValue={(val) =>
+                      setActiveTask((prev) =>
+                        prev ? { ...prev, reminderOffsetValue: val } : null
+                      )
+                    }
+                    onChangeUnit={(val) =>
+                      setActiveTask((prev) =>
+                        prev ? { ...prev, reminderOffsetUnit: val } : null
+                      )
+                    }
+                  />
+                </div>
               </div>
-              <div className="flex-1 flex items-center font-mono text-[11px] text-tx-secondary">
-                <SleekDatePicker
-                  value={activeTask.remindAt || ""}
-                  onChange={(val) =>
-                    setActiveTask((prev) =>
-                      prev ? { ...prev, remindAt: val || null } : null
-                    )
-                  }
-                  className="w-full"
-                  placeholder="选择提醒日期"
-                  showTime={true}
-                />
-              </div>
-            </div>
+            ) : null}
 
             {/* Task Tags */}
             <div className="flex items-center gap-3 relative md:col-span-2">

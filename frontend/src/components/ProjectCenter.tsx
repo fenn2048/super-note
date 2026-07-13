@@ -23,6 +23,7 @@ import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from
 import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
+import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import GenericTagInput from "@/components/GenericTagInput";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
@@ -479,6 +480,8 @@ export default function ProjectCenter() {
   const [taskPriority, setTaskPriority] = useState<number>(2);
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskRemindAt, setTaskRemindAt] = useState("");
+  const [taskReminderOffsetValue, setTaskReminderOffsetValue] = useState<number>(1);
+  const [taskReminderOffsetUnit, setTaskReminderOffsetUnit] = useState<'minute'|'hour'|'day'|'month'|'year'>('day');
   const [taskDescription, setTaskDescription] = useState("");
   const [taskTags, setTaskTags] = useState<Tag[]>([]);
 
@@ -1276,6 +1279,8 @@ export default function ProjectCenter() {
         endDate: taskDueDate ? new Date(taskDueDate).toISOString() : null,
         priority: taskPriority,
         remindAt: taskRemindAt || null,
+        reminderOffsetValue: taskReminderOffsetValue,
+        reminderOffsetUnit: taskReminderOffsetUnit,
         isRecurring: taskIsRecurring ? 1 : 0,
         recurrenceRule: taskIsRecurring ? JSON.stringify(taskRecurrenceRule) : null,
         tags: taskTags.map((t) => t.id),
@@ -2909,16 +2914,19 @@ export default function ProjectCenter() {
                   />
                 </div>
 
-                {/* Reminder Date */}
+                {/* Reminder Offset */}
                 <div className="space-y-2.5">
-                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">提醒日期</label>
-                  <SleekDatePicker
-                    value={taskRemindAt}
-                    onChange={setTaskRemindAt}
-                    className="w-full h-10 rounded-xl"
-                    placeholder="选择提醒日期"
-                    showTime={true}
-                  />
+                  {(taskDueDate || taskIsRecurring) ? (
+                    <>
+                      <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">提醒设置</label>
+                      <ReminderOffsetPicker
+                        value={taskReminderOffsetValue}
+                        unit={taskReminderOffsetUnit}
+                        onChangeValue={setTaskReminderOffsetValue}
+                        onChangeUnit={setTaskReminderOffsetUnit}
+                      />
+                    </>
+                  ) : null}
                 </div>
               </div>
 
