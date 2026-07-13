@@ -658,9 +658,9 @@ app.post("/:bookHash/notes", async (c) => {
       if (existing) {
         db.prepare(`
           UPDATE book_notes
-          SET type = ?, style = ?, color = ?, note = ?, visibility = ?, updatedAt = datetime('now')
+          SET type = ?, style = ?, color = ?, note = ?, visibility = ?, chapterTitle = ?, progress = ?, updatedAt = datetime('now')
           WHERE id = ?
-        `).run(type || "highlight", style || "solid", color || "#ffeb3b", note || "", visibility || existing.visibility || "public", existing.id);
+        `).run(type || "highlight", style || "solid", color || "#ffeb3b", note || "", visibility || existing.visibility || "public", chapterTitle || existing.chapterTitle, progress || existing.progress, existing.id);
         
         const updated = db.prepare(`
           SELECT bn.*, u.username, u.displayName, u.avatarUrl
@@ -673,8 +673,8 @@ app.post("/:bookHash/notes", async (c) => {
     }
 
     db.prepare(`
-      INSERT INTO book_notes (id, userId, bookHash, type, cfi, xpointer0, xpointer1, page, text, style, color, note, visibility, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      INSERT INTO book_notes (id, userId, bookHash, type, cfi, xpointer0, xpointer1, page, text, style, color, note, visibility, chapterTitle, progress, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `).run(
       noteId,
       userId,
@@ -688,7 +688,9 @@ app.post("/:bookHash/notes", async (c) => {
       style || "solid",
       color || "#ffeb3b",
       note || "",
-      visibility || "public"
+      visibility || "public",
+      chapterTitle || null,
+      progress || null
     );
 
     const created = db.prepare(`
@@ -743,6 +745,14 @@ app.put("/:bookHash/notes/:id", async (c) => {
     if (visibility !== undefined) {
       updates.push("visibility = ?");
       params.push(visibility);
+    }
+    if (chapterTitle !== undefined) {
+      updates.push("chapterTitle = ?");
+      params.push(chapterTitle);
+    }
+    if (progress !== undefined) {
+      updates.push("progress = ?");
+      params.push(progress);
     }
 
     if (updates.length > 0) {

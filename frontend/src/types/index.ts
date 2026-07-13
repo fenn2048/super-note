@@ -809,6 +809,8 @@ export interface BookNote {
   color: string;
   note: string;
   visibility?: "private" | "public" | string;
+  chapterTitle?: string;
+  progress?: string;
   likesCount?: number;
   likedByMe?: boolean;
   comments?: Array<{ id: string; userId: string; username: string; displayName?: string; avatarUrl?: string | null; content: string; createdAt: string }>;
