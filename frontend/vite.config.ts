@@ -11,9 +11,8 @@ const rootPkg = JSON.parse(
 const APP_VERSION = rootPkg.version || "0.0.0"
 
 export default defineConfig({
-  // Electron 远端/API-only 模式会直接加载打包后的 frontend/dist/index.html。
-  // 使用相对 base，确保 file:// 下 /assets 不会解析到磁盘根目录。
-  base: "./",
+  // 使用绝对路径，确保嵌套路由 (例如 /share/:id) 能正确加载静态资源
+  base: "/",
   root: path.resolve(__dirname),
   plugins: [react()],
   define: {
