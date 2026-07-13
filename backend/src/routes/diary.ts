@@ -1196,7 +1196,10 @@ function sweepOrphanDiaryImages(): number {
     const orphans = db
       .prepare(
         `SELECT id FROM diary_attachments
-          WHERE diaryId IS NULL AND createdAt < ?`,
+          WHERE diaryId IS NULL 
+            AND id NOT IN (SELECT replace(cover_url, '/api/diary/attachments/', '') FROM media_items WHERE cover_url LIKE '/api/diary/attachments/%')
+            AND id NOT IN (SELECT replace(cover_url, '/api/diary/attachments/', '') FROM media_collections WHERE cover_url LIKE '/api/diary/attachments/%')
+            AND createdAt < ?`,
       )
       .all(cutoffIso) as { id: string }[];
     if (!orphans.length) return 0;

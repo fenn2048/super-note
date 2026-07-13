@@ -31,6 +31,7 @@ const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 const PlanCenter = React.lazy(() => import("@/components/PlanCenter"));
 const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
 const BookReader = React.lazy(() => import("@/components/books/BookReader"));
+const MediaCenter = React.lazy(() => import("@/components/media/MediaCenter"));
 import MobileCameraModal from "@/components/MobileCameraModal";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
 import FirstRunWizard from "@/components/FirstRunWizard";
@@ -514,6 +515,7 @@ function AppLayout() {
   const isFilesView = state.viewMode === "files";
   const isMentionsView = state.viewMode === "mentions";
   const isBooksView = state.viewMode === "books";
+  const isMediaView = state.viewMode === "media";
 
   /**
    * Cmd-K 全局搜索面板开关
@@ -1186,6 +1188,12 @@ function AppLayout() {
                       workspaceId={getCurrentWorkspace()}
                     />
                   )}
+                </Suspense>
+              </div>
+            ) : isMediaView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <MediaCenter />
                 </Suspense>
               </div>
             ) : state.viewMode === "more" ? (

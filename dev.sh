@@ -63,6 +63,33 @@ if ! nc -z 127.0.0.1 6379 >/dev/null 2>&1; then
   fi
 fi
 
+# 检查 Alist 状态，若未运行则自动尝试启动
+if ! nc -z 127.0.0.1 5244 >/dev/null 2>&1; then
+  echo "⚠️  检测到 Alist (port 5244) 未运行，正在尝试启动本地 Alist 服务..."
+  if command -v docker &>/dev/null; then
+    if docker ps -a --format '{{.Names}}' | grep -q "^super-note-alist$"; then
+      echo "🔄 检测到已存在的 Docker Alist 容器，正在启动..."
+      docker start super-note-alist
+    else
+      echo "📥 正在拉取并启动 Docker Alist 容器..."
+      docker run -d --name super-note-alist -v super-note-alist-data:/opt/alist/data -p 5244:5244 docker.m.daocloud.io/xhofe/alist:latest || \
+      docker run -d --name super-note-alist -v super-note-alist-data:/opt/alist/data -p 5244:5244 xhofe/alist:latest
+    fi
+    sleep 3
+    
+    # 统一设置本地开发调试默认管理员密码为 admin123
+    echo "🔑 正在初始化 Alist 默认管理员密码 (设置为 admin123)..."
+    docker exec super-note-alist ./alist admin set admin123
+  fi
+
+  # 再次确认 Alist 是否成功启动
+  if ! nc -z 127.0.0.1 5244 >/dev/null 2>&1; then
+    echo "❌ 无法自动启动 Alist 服务，请确保已安装并运行 Docker。"
+  else
+    echo "✅ Alist 服务已成功启动！地址: http://localhost:5244"
+  fi
+fi
+
 # 检查并释放占用端口 3001 和 5173 的旧进程，防止 EADDRINUSE 报错
 for port in 3001 5173; do
   PID=$(lsof -t -i:$port 2>/dev/null)

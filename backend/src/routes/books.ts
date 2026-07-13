@@ -713,11 +713,13 @@ app.put("/:bookHash/notes/:id", async (c) => {
   if (!userId) return c.json({ error: "未授权" }, 401);
 
   const id = c.req.param("id");
-  const { note, style, color, visibility } = await c.req.json<{
+  const { note, style, color, visibility, chapterTitle, progress } = await c.req.json<{
     note?: string;
     style?: string;
     color?: string;
     visibility?: string;
+    chapterTitle?: string;
+    progress?: string;
   }>();
 
   const db = getDb();

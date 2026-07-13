@@ -321,7 +321,8 @@ export type WorkspaceFeature =
   | "tasks"
   | "mindmaps"
   | "files"
-  | "favorites";
+  | "favorites"
+  | "media";
 
 /**
  * 功能开关 JSON 的结构。所有字段都是可选的：
@@ -340,6 +341,7 @@ export interface EnabledFeaturesConfig {
   mindmaps?: boolean;
   files?: boolean;
   favorites?: boolean;
+  media?: boolean;
 }
 
 /**

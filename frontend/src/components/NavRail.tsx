@@ -32,7 +32,7 @@ import {
   BookOpen, Book, Star, Trash, Trash2, ListTodo, BrainCircuit,
   Sparkles, NotebookPen, FolderOpen, Briefcase, Compass,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
-  Columns2, Columns3, Cloud, CloudOff, Bell, Home,
+  Columns2, Columns3, Cloud, CloudOff, Bell, Home, Film,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -68,6 +68,7 @@ const NAV_CONFIG: NavConfigItem[] = [
   { icon: <Book size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.books",       mode: "books",                             group: "workspace" },
   { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "workspace" },
   { icon: <FolderOpen size={RAIL_ICON_SIZE} />,  labelKey: "sidebar.fileManager", mode: "files",      feature: "files",     group: "workspace" },
+  { icon: <Film size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.mediaLibrary", mode: "media",     feature: "media",     group: "workspace" },
 ];
 
 /**

@@ -121,6 +121,23 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  # ============================================================================
+  # Alist 网盘挂载管理服务 (7x24 常驻)
+  # ----------------------------------------------------------------------------
+  alist:
+    image: docker.m.daocloud.io/xhofe/alist:latest
+    container_name: super-note-alist
+    restart: unless-stopped
+    ports:
+      - "5244:5244"
+    volumes:
+      - alist-data:/opt/alist/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
 volumes:
   super-note-data:
     driver: local
@@ -131,4 +148,6 @@ volumes:
   ollama-data:
     driver: local
   redis-data:
+    driver: local
+  alist-data:
     driver: local

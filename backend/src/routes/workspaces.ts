@@ -433,6 +433,7 @@ const FEATURE_KEYS: WorkspaceFeature[] = [
   "mindmaps",
   "files",
   "favorites",
+  "media",
 ];
 
 app.get("/:id/features", (c) => {

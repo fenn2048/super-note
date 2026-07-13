@@ -1992,6 +1992,89 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 32,
+    name: "add-media-library-tables",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS media_collections (
+          id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          workspace_id    TEXT,                              
+          title           TEXT NOT NULL,
+          type            TEXT NOT NULL CHECK(type IN ('video','audio')),
+          cover_url       TEXT,                              
+          description     TEXT,
+          recommendation  TEXT,                              
+          sort_order      INTEGER DEFAULT 0,
+          created_by      INTEGER NOT NULL REFERENCES users(id),
+          created_at      TEXT DEFAULT (datetime('now')),
+          updated_at      TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_collections_workspace ON media_collections(workspace_id);
+
+        CREATE TABLE IF NOT EXISTS media_items (
+          id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          collection_id   TEXT REFERENCES media_collections(id) ON DELETE SET NULL, 
+          workspace_id    TEXT,
+          title           TEXT NOT NULL,
+          type            TEXT NOT NULL CHECK(type IN ('video','audio')),
+          cover_url       TEXT,                              
+          description     TEXT,                              
+          alist_path      TEXT NOT NULL,                     
+          artist          TEXT,                              
+          duration        INTEGER,                           
+          year            INTEGER,                           
+          genre           TEXT DEFAULT '[]',                 
+          sort_order      INTEGER DEFAULT 0,                 
+          play_count      INTEGER DEFAULT 0,
+          last_played_at  TEXT,
+          created_by      INTEGER NOT NULL REFERENCES users(id),
+          created_at      TEXT DEFAULT (datetime('now')),
+          updated_at      TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_items_collection ON media_items(collection_id);
+        CREATE INDEX IF NOT EXISTS idx_media_items_workspace ON media_items(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_media_items_type ON media_items(type);
+        CREATE INDEX IF NOT EXISTS idx_media_items_title ON media_items(title);
+
+        CREATE TABLE IF NOT EXISTS media_tags (
+          media_id  TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+          tag_id    INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+          PRIMARY KEY (media_id, tag_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS media_reviews (
+          id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          media_id    TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+          user_id     INTEGER NOT NULL REFERENCES users(id),
+          type        TEXT NOT NULL CHECK(type IN ('long_review','short_comment','recommendation')),
+          title       TEXT,                                  
+          content     TEXT NOT NULL,                         
+          created_at  TEXT DEFAULT (datetime('now')),
+          updated_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_reviews_media ON media_reviews(media_id);
+        CREATE INDEX IF NOT EXISTS idx_media_reviews_user ON media_reviews(user_id);
+        CREATE INDEX IF NOT EXISTS idx_media_reviews_type ON media_reviews(media_id, type);
+
+        CREATE TABLE IF NOT EXISTS media_play_history (
+          id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          media_id    TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+          user_id     INTEGER NOT NULL REFERENCES users(id),
+          progress    INTEGER DEFAULT 0,                     
+          played_at   TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_play_history_user ON media_play_history(user_id, played_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_play_history_media ON media_play_history(media_id);
+
+        CREATE TABLE IF NOT EXISTS media_collection_tags (
+          collection_id  TEXT NOT NULL REFERENCES media_collections(id) ON DELETE CASCADE,
+          tag_id         INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+          PRIMARY KEY (collection_id, tag_id)
+        );
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

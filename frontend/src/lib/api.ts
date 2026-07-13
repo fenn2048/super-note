@@ -692,6 +692,7 @@ function handleOfflineEnqueue<T>(url: string, method: string, bodyStr?: string):
 }
 
 export const api = {
+  request,
   // Public (no auth required)
   getSiteSettingsPublic: async (): Promise<{
     site_title: string;

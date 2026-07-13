@@ -102,6 +102,7 @@ export interface WorkspaceFeatures {
   files: boolean;
   favorites: boolean;
   projects: boolean;
+  media: boolean;
 }
 
 /** 功能开关的稳定排序 + 展示元信息，UI 渲染列表用。 */
@@ -116,6 +117,7 @@ export const WORKSPACE_FEATURE_META: Array<{
   { key: "files", label: "文件", description: "独立文件管理" },
   { key: "favorites", label: "收藏", description: "快速收藏的笔记集合" },
   { key: "projects", label: "项目", description: "项目管理、任务看板与协作" },
+  { key: "media", label: "媒体库", description: "音视频媒体管理与在线播放" },
 ];
 
 export interface Notebook {
@@ -202,7 +204,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media";
 
 export type MobileView = "list" | "editor";
 
