@@ -635,7 +635,7 @@ app.post("/:bookHash/notes", async (c) => {
   if (!userId) return c.json({ error: "未授权" }, 401);
 
   const bookHash = c.req.param("bookHash");
-  const { id, type, cfi, xpointer0, xpointer1, page, text, style, color, note, visibility } = await c.req.json<{
+  const { id, type, cfi, xpointer0, xpointer1, page, text, style, color, note, visibility, chapterTitle, progress } = await c.req.json<{
     id?: string;
     type?: string;
     cfi?: string;
@@ -647,6 +647,8 @@ app.post("/:bookHash/notes", async (c) => {
     color?: string;
     note?: string;
     visibility?: string;
+    chapterTitle?: string;
+    progress?: string;
   }>();
 
   const noteId = id || uuid();
