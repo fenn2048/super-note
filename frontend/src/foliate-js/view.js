@@ -399,7 +399,7 @@ export class View extends HTMLElement {
     // Uses strict element-ID checking to prevent wrong-position draws.
     #tryFallbackDraw(annotation, anchor, primaryIndex, value, remove) {
         if (remove) return
-        const elementId = FoliateView.#getCfiElementId(value)
+        const elementId = View.#getCfiElementId(value)
         const allContents = this.renderer.getContents()
         for (const altContent of allContents) {
             if (altContent.index === primaryIndex) continue
