@@ -4,7 +4,8 @@ import { v4 as uuid } from "uuid";
 import { logAudit } from "../services/audit.js";
 import { getUserWorkspaceRole } from "../middleware/acl.js";
 import { propagateProjectStatusUp, syncMilestoneStatusDirect, propagateStatusDown } from "../lib/planStatusSync.js";
-import { handleRecurringTask } from "../lib/recurrence.js";
+import { handleRecurringTask, getNextOccurrenceString } from "../lib/recurrence.js";
+import { calculateRemindAt } from "../lib/reminders.js";
 
 const projectsRouter = new Hono();
 
@@ -521,7 +522,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null, dependencies = [], status = 'pending' } = body;
+  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null, dependencies = [], status = 'pending', reminderOffsetValue = 1, reminderOffsetUnit = 'day', recurrenceEndDate = null } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
 
@@ -529,10 +530,31 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const maxSort = db.prepare("SELECT MAX(sortOrder) as max FROM project_tasks WHERE stageId = ?").get(stageId) as { max: number | null };
   const sortOrder = (maxSort.max ?? -1) + 1;
 
+  let calculatedEndDate = endDate;
+  if (isRecurring && recurrenceRule) {
+    try {
+       let rule = typeof recurrenceRule === 'string' ? JSON.parse(recurrenceRule) : recurrenceRule;
+       const now = new Date();
+       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+       calculatedEndDate = getNextOccurrenceString(todayStr, rule);
+    } catch (e) {
+      console.warn("Failed to calculate initial recurring end date", e);
+    }
+  }
+
+  let calculatedRemindAt = remindAt;
+  if (calculatedEndDate && (!remindAt || isRecurring)) {
+    try {
+       calculatedRemindAt = calculateRemindAt(calculatedEndDate, reminderOffsetValue, reminderOffsetUnit);
+    } catch (e) {
+       console.warn("Failed to calculate remind at", e);
+    }
+  }
+
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, status, assigneeId, startDate, endDate, description, cover, sortOrder, userId, userId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule);
+    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(taskId, id, stageId, title, status, assigneeId, startDate, calculatedEndDate, description, cover, sortOrder, userId, userId, priority, calculatedRemindAt, titleColor, progress, isRecurring, typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule), reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate);
 
   // Add dependencies
   if (Array.isArray(dependencies)) {
@@ -576,10 +598,22 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, dependencies } = body;
+  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, dependencies, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
+
+  let calculatedRemindAt = remindAt !== undefined ? remindAt : task.remindAt;
+  const finalOffsetValue = reminderOffsetValue !== undefined ? reminderOffsetValue : task.reminderOffsetValue;
+  const finalOffsetUnit = reminderOffsetUnit !== undefined ? reminderOffsetUnit : task.reminderOffsetUnit;
+
+  if (endDate && body.endDate !== undefined && (!calculatedRemindAt || isRecurring)) {
+      try {
+         calculatedRemindAt = calculateRemindAt(endDate, finalOffsetValue, finalOffsetUnit);
+      } catch(e) { console.warn("Failed to update calculated remind at", e); }
+  } else if (!endDate && body.endDate === null) {
+    calculatedRemindAt = null;
+  }
 
   if (finalProgress !== undefined) {
     const progVal = Number(finalProgress);
@@ -675,11 +709,14 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (projectId !== undefined) { updates.push("projectId = ?"); params.push(projectId); }
   if (sortOrder !== undefined) { updates.push("sortOrder = ?"); params.push(sortOrder); }
   if (priority !== undefined) { updates.push("priority = ?"); params.push(priority); }
-  if (remindAt !== undefined) { updates.push("remindAt = ?"); params.push(remindAt); }
+  updates.push("remindAt = ?"); params.push(calculatedRemindAt);
   if (titleColor !== undefined) { updates.push("titleColor = ?"); params.push(titleColor); }
   if (finalProgress !== undefined) { updates.push("progress = ?"); params.push(finalProgress); }
   if (isRecurring !== undefined) { updates.push("isRecurring = ?"); params.push((isRecurring === 1 || isRecurring === true) ? 1 : 0); }
-  if (recurrenceRule !== undefined) { updates.push("recurrenceRule = ?"); params.push(recurrenceRule); }
+  if (recurrenceRule !== undefined) { updates.push("recurrenceRule = ?"); params.push(typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule)); }
+  if (reminderOffsetValue !== undefined) { updates.push("reminderOffsetValue = ?"); params.push(reminderOffsetValue); }
+  if (reminderOffsetUnit !== undefined) { updates.push("reminderOffsetUnit = ?"); params.push(reminderOffsetUnit); }
+  if (recurrenceEndDate !== undefined) { updates.push("recurrenceEndDate = ?"); params.push(recurrenceEndDate); }
 
   if (updates.length > 0) {
     updates.push("modifierId = ?");

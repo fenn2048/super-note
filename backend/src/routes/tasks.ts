@@ -6,6 +6,8 @@ import { canManageResource } from "../middleware/acl.js";
 import { handleRecurringTask } from "../lib/recurrence.js";
 import { broadcastToWorkspace } from "../lib/mentions.js";
 import { createMentions } from "../lib/mentions.js";
+import { calculateRemindAt } from "../lib/reminders.js";
+import { getNextOccurrenceString } from "../lib/recurrence.js";
 
 const tasks = new Hono();
 
@@ -95,27 +97,39 @@ tasks.post("/", async (c) => {
   const userId = c.req.header("X-User-Id")!;
   const body = await c.req.json();
 
-  const { title, workspaceId, priority = 2, dueDate, remindAt, noteId, parentId, isRecurring, recurrenceRule, tagIds, dependencies } = body;
+  const { title, workspaceId, priority = 2, dueDate, remindAt, noteId, parentId, isRecurring, recurrenceRule, tagIds, dependencies, reminderOffsetValue = 1, reminderOffsetUnit = 'day', recurrenceEndDate = null } = body;
 
   if (!title) return c.json({ error: "Title is required" }, 400);
 
   const id = uuid();
   const effectiveWorkspaceId = workspaceId || null;
 
-  let calculatedRemindAt = remindAt;
-  if (dueDate && !remindAt) {
+  let calculatedDueDate = dueDate;
+  if (isRecurring && recurrenceRule) {
     try {
-      const date = new Date(dueDate);
-      date.setDate(date.getDate() - 1);
-      calculatedRemindAt = date.toISOString().split("T")[0];
-    } catch {}
+       let rule = typeof recurrenceRule === 'string' ? JSON.parse(recurrenceRule) : recurrenceRule;
+       const now = new Date();
+       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+       calculatedDueDate = getNextOccurrenceString(todayStr, rule);
+    } catch (e) {
+      console.warn("Failed to calculate initial recurring due date", e);
+    }
+  }
+
+  let calculatedRemindAt = remindAt;
+  if (calculatedDueDate && (!remindAt || isRecurring)) {
+    try {
+       calculatedRemindAt = calculateRemindAt(calculatedDueDate, reminderOffsetValue, reminderOffsetUnit);
+    } catch (e) {
+       console.warn("Failed to calculate remind at", e);
+    }
   }
 
   const tx = db.transaction(() => {
     db.prepare(`
-      INSERT INTO tasks (id, userId, workspaceId, title, isCompleted, status, priority, dueDate, remindAt, noteId, parentId, isRecurring, recurrenceRule)
-      VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, userId, effectiveWorkspaceId, title.trim(), priority, dueDate, calculatedRemindAt, noteId, parentId, isRecurring, recurrenceRule);
+      INSERT INTO tasks (id, userId, workspaceId, title, isCompleted, status, priority, dueDate, remindAt, noteId, parentId, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate)
+      VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, userId, effectiveWorkspaceId, title.trim(), priority, calculatedDueDate, calculatedRemindAt, noteId, parentId, isRecurring, typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule), reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate);
 
     if (Array.isArray(tagIds) && tagIds.length > 0) {
       const insertTag = db.prepare("INSERT INTO task_tags (taskId, tagId) VALUES (?, ?)");
@@ -181,23 +195,24 @@ tasks.put("/:id", (c) => {
     const status = body.status ?? existing.status;
     const priority = body.priority ?? existing.priority;
     const dueDate = body.dueDate !== undefined ? body.dueDate : existing.dueDate;
-    let remindAt = body.remindAt !== undefined ? body.remindAt : existing.remindAt;
+    let calculatedRemindAt = body.remindAt !== undefined ? body.remindAt : existing.remindAt;
     const noteId = body.noteId !== undefined ? body.noteId : existing.noteId;
     const parentId = body.parentId !== undefined ? body.parentId : existing.parentId;
     const sortOrder = body.sortOrder ?? existing.sortOrder;
     const isRecurring = body.isRecurring ?? existing.isRecurring;
     const recurrenceRule = body.recurrenceRule !== undefined ? body.recurrenceRule : existing.recurrenceRule;
+    const finalOffsetValue = body.reminderOffsetValue !== undefined ? body.reminderOffsetValue : existing.reminderOffsetValue;
+    const finalOffsetUnit = body.reminderOffsetUnit !== undefined ? body.reminderOffsetUnit : existing.reminderOffsetUnit;
+    const recurrenceEndDate = body.recurrenceEndDate !== undefined ? body.recurrenceEndDate : existing.recurrenceEndDate;
     const tagIds = body.tagIds;
     const dependencies = body.dependencies;
 
-    if (dueDate && !remindAt && body.dueDate !== undefined) {
-      try {
-        const date = new Date(dueDate);
-        date.setDate(date.getDate() - 1);
-        remindAt = date.toISOString().split("T")[0];
-      } catch {}
-    } else if (!dueDate) {
-      remindAt = null;
+    if (dueDate && body.dueDate !== undefined && (!calculatedRemindAt || isRecurring)) {
+        try {
+           calculatedRemindAt = calculateRemindAt(dueDate, finalOffsetValue, finalOffsetUnit);
+        } catch(e) { console.warn("Failed to update calculated remind at", e); }
+    } else if (!dueDate && body.dueDate === null) {
+      calculatedRemindAt = null;
     }
 
     // Enforce task dependency constraint
@@ -258,9 +273,9 @@ tasks.put("/:id", (c) => {
     const tx = db.transaction(() => {
       db.prepare(`
         UPDATE tasks SET title = ?, isCompleted = ?, status = ?, priority = ?, dueDate = ?, remindAt = ?,
-          noteId = ?, parentId = ?, sortOrder = ?, isRecurring = ?, recurrenceRule = ?, updatedAt = datetime('now')
+          noteId = ?, parentId = ?, sortOrder = ?, isRecurring = ?, recurrenceRule = ?, reminderOffsetValue = ?, reminderOffsetUnit = ?, recurrenceEndDate = ?, updatedAt = datetime('now')
         WHERE id = ?
-      `).run(title, isCompleted, status, priority, dueDate, remindAt, noteId, parentId, sortOrder, isRecurring, recurrenceRule, id);
+      `).run(title, isCompleted, status, priority, dueDate, calculatedRemindAt, noteId, parentId, sortOrder, isRecurring, typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule), finalOffsetValue, finalOffsetUnit, recurrenceEndDate, id);
 
       if (tagIds !== undefined && Array.isArray(tagIds)) {
         db.prepare("DELETE FROM task_tags WHERE taskId = ?").run(id);
