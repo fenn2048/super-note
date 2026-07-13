@@ -83,6 +83,8 @@ export function getNextOccurrence(baseDate: Date, rule: RecurrenceRule): Date {
   return next;
 }
 
+import { calculateRemindAt } from './reminders.js';
+
 export function getNextOccurrenceString(baseStr: string, rule: RecurrenceRule): string {
   if (!baseStr) return "";
   const isIso = baseStr.includes("T") || baseStr.includes("Z");
@@ -128,46 +130,73 @@ export function handleRecurringTask(db: any, taskId: string, isProjectTask: bool
       if (!task.endDate) return;
 
       const nextEndDate = getNextOccurrenceString(task.endDate, rule);
+
+      if (task.recurrenceEndDate) {
+          const recurEnd = new Date(task.recurrenceEndDate).getTime();
+          const nextEnd = new Date(nextEndDate).getTime();
+          if (!isNaN(recurEnd) && !isNaN(nextEnd) && nextEnd > recurEnd) {
+             return;
+          }
+      }
+
       let nextRemindAt = null;
 
       if (task.remindAt) {
-        const dueTime = new Date(task.endDate).getTime();
-        const remindTime = new Date(task.remindAt).getTime();
-        const diff = dueTime - remindTime;
-        if (!isNaN(diff)) {
-          const nextDueTime = new Date(nextEndDate).getTime();
-          const remDate = new Date(nextDueTime - diff);
-          if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
-            nextRemindAt = remDate.toISOString();
-          } else if (task.remindAt.includes(' ')) {
-            const yyyy = remDate.getFullYear();
-            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(remDate.getDate()).padStart(2, '0');
-            const hh = String(remDate.getHours()).padStart(2, '0');
-            const mm = String(remDate.getMinutes()).padStart(2, '0');
-            nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
+          if (task.reminderOffsetValue !== undefined && task.reminderOffsetValue !== null && task.reminderOffsetUnit) {
+               nextRemindAt = calculateRemindAt(nextEndDate, task.reminderOffsetValue, task.reminderOffsetUnit);
           } else {
-            const yyyy = remDate.getFullYear();
-            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(remDate.getDate()).padStart(2, '0');
-            nextRemindAt = `${yyyy}-${MM}-${dd}`;
+              const dueTime = new Date(task.endDate).getTime();
+              const remindTime = new Date(task.remindAt).getTime();
+              const diff = dueTime - remindTime;
+              if (!isNaN(diff)) {
+                const nextDueTime = new Date(nextEndDate).getTime();
+                const remDate = new Date(nextDueTime - diff);
+                if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
+                  nextRemindAt = remDate.toISOString();
+                } else if (task.remindAt.includes(' ')) {
+                  const yyyy = remDate.getFullYear();
+                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(remDate.getDate()).padStart(2, '0');
+                  const hh = String(remDate.getHours()).padStart(2, '0');
+                  const mm = String(remDate.getMinutes()).padStart(2, '0');
+                  nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
+                } else {
+                  const yyyy = remDate.getFullYear();
+                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(remDate.getDate()).padStart(2, '0');
+                  nextRemindAt = `${yyyy}-${MM}-${dd}`;
+                }
+              }
           }
-        }
       }
 
       const newId = crypto.randomUUID();
 
+      let targetStageId = task.stageId;
+      const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(task.projectId) as any[];
+      if (stages && stages.length > 0) {
+         const inProgressStage = stages.find(s => s.name === '进行中');
+         if (inProgressStage) {
+            targetStageId = inProgressStage.id;
+         } else {
+            const firstValidStage = stages.find(s => s.name !== '已完成');
+            if (firstValidStage) {
+               targetStageId = firstValidStage.id;
+            }
+         }
+      }
+
       // Copy project_task
       db.prepare(`
         INSERT INTO project_tasks (
-          id, projectId, stageId, title, isCompleted, assigneeId, startDate, endDate,
+          id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate,
           description, cover, sortOrder, creatorId, modifierId, priority, remindAt,
-          titleColor, progress, isRecurring, recurrenceRule, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, datetime('now'), datetime('now'))
+          titleColor, progress, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `).run(
-        newId, task.projectId, task.stageId, task.title, task.assigneeId, task.startDate,
+        newId, task.projectId, targetStageId, task.title, task.assigneeId, task.startDate,
         nextEndDate, task.description, task.cover, task.sortOrder, task.creatorId,
-        task.modifierId, task.priority, nextRemindAt, task.titleColor, task.recurrenceRule
+        task.modifierId, task.priority, nextRemindAt, task.titleColor, task.recurrenceRule, task.reminderOffsetValue, task.reminderOffsetUnit, task.recurrenceEndDate
       );
 
       // Copy participants
@@ -205,31 +234,44 @@ export function handleRecurringTask(db: any, taskId: string, isProjectTask: bool
       if (!task.dueDate) return;
 
       const nextDueDate = getNextOccurrenceString(task.dueDate, rule);
+
+      if (task.recurrenceEndDate) {
+          const recurEnd = new Date(task.recurrenceEndDate).getTime();
+          const nextEnd = new Date(nextDueDate).getTime();
+          if (!isNaN(recurEnd) && !isNaN(nextEnd) && nextEnd > recurEnd) {
+             return;
+          }
+      }
+
       let nextRemindAt = null;
 
       if (task.remindAt) {
-        const dueTime = new Date(task.dueDate).getTime();
-        const remindTime = new Date(task.remindAt).getTime();
-        const diff = dueTime - remindTime;
-        if (!isNaN(diff)) {
-          const nextDueTime = new Date(nextDueDate).getTime();
-          const remDate = new Date(nextDueTime - diff);
-          if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
-            nextRemindAt = remDate.toISOString();
-          } else if (task.remindAt.includes(' ')) {
-            const yyyy = remDate.getFullYear();
-            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(remDate.getDate()).padStart(2, '0');
-            const hh = String(remDate.getHours()).padStart(2, '0');
-            const mm = String(remDate.getMinutes()).padStart(2, '0');
-            nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
+          if (task.reminderOffsetValue !== undefined && task.reminderOffsetValue !== null && task.reminderOffsetUnit) {
+               nextRemindAt = calculateRemindAt(nextDueDate, task.reminderOffsetValue, task.reminderOffsetUnit);
           } else {
-            const yyyy = remDate.getFullYear();
-            const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(remDate.getDate()).padStart(2, '0');
-            nextRemindAt = `${yyyy}-${MM}-${dd}`;
+              const dueTime = new Date(task.dueDate).getTime();
+              const remindTime = new Date(task.remindAt).getTime();
+              const diff = dueTime - remindTime;
+              if (!isNaN(diff)) {
+                const nextDueTime = new Date(nextDueDate).getTime();
+                const remDate = new Date(nextDueTime - diff);
+                if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
+                  nextRemindAt = remDate.toISOString();
+                } else if (task.remindAt.includes(' ')) {
+                  const yyyy = remDate.getFullYear();
+                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(remDate.getDate()).padStart(2, '0');
+                  const hh = String(remDate.getHours()).padStart(2, '0');
+                  const mm = String(remDate.getMinutes()).padStart(2, '0');
+                  nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
+                } else {
+                  const yyyy = remDate.getFullYear();
+                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(remDate.getDate()).padStart(2, '0');
+                  nextRemindAt = `${yyyy}-${MM}-${dd}`;
+                }
+              }
           }
-        }
       }
 
       const newId = crypto.randomUUID();
@@ -237,12 +279,12 @@ export function handleRecurringTask(db: any, taskId: string, isProjectTask: bool
       // Copy task
       db.prepare(`
         INSERT INTO tasks (
-          id, userId, workspaceId, title, isCompleted, priority, dueDate, remindAt,
-          noteId, parentId, sortOrder, isRecurring, recurrenceRule, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
+          id, userId, workspaceId, title, isCompleted, status, priority, dueDate, remindAt,
+          noteId, parentId, sortOrder, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `).run(
         newId, task.userId, task.workspaceId, task.title, task.priority, nextDueDate,
-        nextRemindAt, task.noteId, task.parentId, task.sortOrder, task.recurrenceRule
+        nextRemindAt, task.noteId, task.parentId, task.sortOrder, task.recurrenceRule, task.reminderOffsetValue, task.reminderOffsetUnit, task.recurrenceEndDate
       );
 
       // Copy tags

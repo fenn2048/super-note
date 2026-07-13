@@ -1969,6 +1969,29 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 31,
+    name: "add-reminder-offset-and-recurrence-end",
+    up: (db) => {
+      const tasksCols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      if (!tasksCols.some(c => c.name === "reminderOffsetValue")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN reminderOffsetValue INTEGER DEFAULT 1;");
+        db.exec("ALTER TABLE tasks ADD COLUMN reminderOffsetUnit TEXT DEFAULT 'day';");
+      }
+      if (!tasksCols.some(c => c.name === "recurrenceEndDate")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN recurrenceEndDate TEXT;");
+      }
+
+      const projectTasksCols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!projectTasksCols.some(c => c.name === "reminderOffsetValue")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN reminderOffsetValue INTEGER DEFAULT 1;");
+        db.exec("ALTER TABLE project_tasks ADD COLUMN reminderOffsetUnit TEXT DEFAULT 'day';");
+      }
+      if (!projectTasksCols.some(c => c.name === "recurrenceEndDate")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN recurrenceEndDate TEXT;");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

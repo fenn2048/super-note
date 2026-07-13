@@ -369,6 +369,9 @@ export interface Task {
   updatedAt: string;
   isRecurring?: number;
   recurrenceRule?: string | null;
+  reminderOffsetValue?: number;
+  reminderOffsetUnit?: 'minute' | 'hour' | 'day' | 'month' | 'year';
+  recurrenceEndDate?: string | null;
   tags?: Tag[];
   children?: Task[];
   /** 创建者用户名；仅 list/single read 时由后端 LEFT JOIN 返回。 */
@@ -664,6 +667,9 @@ export interface ProjectTask {
   checklistCompleted?: number;
   isRecurring?: number;
   recurrenceRule?: string | null;
+  reminderOffsetValue?: number;
+  reminderOffsetUnit?: 'minute' | 'hour' | 'day' | 'month' | 'year';
+  recurrenceEndDate?: string | null;
   participants?: Array<{ userId: string; username: string; displayName: string | null; avatarUrl: string | null }>;
   tags?: Array<{ id: string; name: string; color: string }>;
   checklists?: ProjectTaskChecklist[];
