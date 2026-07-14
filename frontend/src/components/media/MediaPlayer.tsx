@@ -4,6 +4,8 @@ import { useMediaStore } from "@/store/mediaStore";
 import { api } from "@/lib/api";
 import { Loader2, Play, Pause, AlertTriangle } from "lucide-react";
 
+const PlayerComponent = ReactPlayer as any;
+
 interface MediaPlayerProps {
   mediaId: string;
   onDuration?: (duration: number) => void;
@@ -11,7 +13,7 @@ interface MediaPlayerProps {
 }
 
 export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPlayerProps) {
-  const playerRef = useRef<ReactPlayer>(null);
+  const playerRef = useRef<any>(null);
   const [playUrl, setPlayUrl] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -141,9 +143,9 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
 
   return (
     <div className="w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl relative group border border-app-border">
-      <ReactPlayer
+      <PlayerComponent
         ref={playerRef}
-        url={playUrl}
+        src={playUrl}
         playing={isPlaying}
         controls={true}
         volume={volume}
@@ -156,18 +158,12 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
         onEnded={handleEnded}
         onPlay={resumeMedia}
         onPause={pauseMedia}
-        onError={(err) => {
+        onError={(err: any) => {
           console.error("ReactPlayer error:", err);
           setError("视频流载入失败。这通常是因为网盘（如夸克/阿里）设置了防盗链或跨域(CORS)阻挡。请前往 AList 后台管理 -> 存储 -> 编辑对应网盘 -> 开启「Web代理」或「本地代理」中转选项，然后重试。");
         }}
-        config={{
-          file: {
-            attributes: {
-              controlsList: "nodownload",
-              disablePictureInPicture: true,
-            }
-          }
-        }}
+        controlsList="nodownload"
+        disablePictureInPicture={true}
       />
     </div>
   );

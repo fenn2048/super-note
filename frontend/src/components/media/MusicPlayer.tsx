@@ -192,8 +192,7 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
             onPlay={resumeMedia}
             onPause={pauseMedia}
             onListen={handleListen}
-            onListenLoop={handleListen}
-            onLoadedMetadata={handleLoadedMetadata}
+            onLoadedMetaData={handleLoadedMetadata}
             onEnded={handleEnded}
             onClickNext={nextMedia}
             onClickPrevious={prevMedia}

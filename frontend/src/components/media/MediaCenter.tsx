@@ -25,6 +25,7 @@ interface Collection {
   description?: string;
   recommendation?: string;
   item_count: number;
+  sort_order?: number;
 }
 
 interface MediaItem {
@@ -59,7 +60,10 @@ interface Review {
 
 export default function MediaCenter() {
   const { t } = useTranslation();
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(() => {
+    const ws = getCurrentWorkspace();
+    return !ws || ws === "personal" ? null : ws;
+  });
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   
   // States
@@ -92,6 +96,12 @@ export default function MediaCenter() {
   const [jsonImportText, setJsonImportText] = useState<string>("");
   const [importError, setImportError] = useState<string>("");
 
+  // Batch deletion states
+  const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [fetchingMetadata, setFetchingMetadata] = useState<boolean>(false);
+  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
+
   const [colForm, setColForm] = useState({ title: "", type: "video", cover_url: "", description: "", recommendation: "", sort_order: 0 });
   const [itemForm, setItemForm] = useState({ title: "", type: "video", collection_id: "", cover_url: "", description: "", alist_path: "", artist: "", duration: 0, year: new Date().getFullYear(), genre: "", sort_order: 0, tags: "" });
 
@@ -100,11 +110,21 @@ export default function MediaCenter() {
   // Load scope and roles
   useEffect(() => {
     const ws = getCurrentWorkspace();
-    setWorkspaceId(ws === "personal" ? null : ws);
+    setWorkspaceId(!ws || ws === "personal" ? null : ws);
     
     // Check if user is admin
-    api.getMe().then((me) => {
-      setIsAdmin(me.role === "admin" || (ws !== "personal" && me.workspaceRole === "owner"));
+    api.getMe().then(async (me) => {
+      let isWsOwner = false;
+      if (ws !== "personal") {
+        try {
+          const list = await api.getWorkspaces();
+          const currentWs = list.find(w => w.id === ws);
+          isWsOwner = currentWs?.role === "owner";
+        } catch (e) {
+          console.error("Failed to load workspace role:", e);
+        }
+      }
+      setIsAdmin(me.role === "admin" || isWsOwner);
     }).catch(() => setIsAdmin(false));
   }, []);
 
@@ -172,7 +192,8 @@ export default function MediaCenter() {
     setImportError("");
     try {
       const parsed = JSON.parse(jsonImportText);
-      const res = await api.request<{ success: boolean; message: string }>("/media/import/json", {
+      const q = workspaceId ? `?workspaceId=${workspaceId}` : "";
+      const res = await api.request<{ success: boolean; message: string }>(`/media/import/json${q}`, {
         method: "POST",
         body: JSON.stringify(parsed)
       });
@@ -186,19 +207,82 @@ export default function MediaCenter() {
     }
   };
 
-  // Handle Collection Creation
-  const handleCreateCollection = async () => {
+  // Handle Open Add Collection Modal
+  const handleOpenAddCollection = () => {
+    setColForm({
+      title: "",
+      type: mediaType,
+      cover_url: "",
+      description: "",
+      recommendation: "",
+      sort_order: 0
+    });
+    setEditingCollectionId(null);
+    setShowAddCollection(true);
+  };
+
+  // Handle Open Edit Collection Modal
+  const handleOpenEditCollection = (col: Collection) => {
+    setColForm({
+      title: col.title || "",
+      type: col.type || "video",
+      cover_url: col.cover_url || "",
+      description: col.description || "",
+      recommendation: col.recommendation || "",
+      sort_order: col.sort_order || 0
+    });
+    setEditingCollectionId(col.id);
+    setShowAddCollection(true);
+  };
+
+  // Handle Save Collection (Create or Edit)
+  const handleSaveCollection = async () => {
     try {
       const q = workspaceId ? `?workspaceId=${workspaceId}` : "";
-      await api.request(`/media/collections${q}`, {
-        method: "POST",
-        body: JSON.stringify({ ...colForm, type: mediaType })
-      });
-      setShowAddCollection(false);
-      setColForm({ title: "", type: "video", cover_url: "", description: "", recommendation: "", sort_order: 0 });
-      fetchData();
+      if (editingCollectionId) {
+        // Edit mode
+        const res = await api.request<Collection>(`/media/collections/${editingCollectionId}${q}`, {
+          method: "PUT",
+          body: JSON.stringify(colForm)
+        });
+        if (res) {
+          setShowAddCollection(false);
+          if (selectedCollection?.id === editingCollectionId) {
+            setSelectedCollection(res);
+          }
+          fetchData();
+        }
+      } else {
+        // Create mode
+        await api.request(`/media/collections${q}`, {
+          method: "POST",
+          body: JSON.stringify({ ...colForm, type: mediaType })
+        });
+        setShowAddCollection(false);
+        setColForm({ title: "", type: "video", cover_url: "", description: "", recommendation: "", sort_order: 0 });
+        fetchData();
+      }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Handle Delete Collection
+  const handleDeleteCollection = async (col: Collection) => {
+    if (!window.confirm(`确定要删除合集《${col.title}》吗？关联的单品不会被删除，仅解除绑定关系。`)) {
+      return;
+    }
+    try {
+      const q = workspaceId ? `?workspaceId=${workspaceId}` : "";
+      await api.request(`/media/collections/${col.id}${q}`, {
+        method: "DELETE"
+      });
+      if (selectedCollection?.id === col.id) {
+        setSelectedCollection(null);
+      }
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete collection:", err);
     }
   };
 
@@ -515,30 +599,30 @@ export default function MediaCenter() {
               
               {/* Type Switcher */}
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-tx-tertiary uppercase tracking-wider select-none">媒体类型</span>
+                <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider select-none">媒体类型</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => { setMediaType("video"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all",
+                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
                       mediaType === "video" 
                         ? "bg-accent-primary border-accent-primary text-white shadow-lg shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
                     )}
                   >
-                    <Film size={14} />
+                    <Film size={16} />
                     视频库
                   </button>
                   <button
                     onClick={() => { setMediaType("audio"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all",
+                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
                       mediaType === "audio" 
                         ? "bg-accent-primary border-accent-primary text-white shadow-lg shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
                     )}
                   >
-                    <Music size={14} />
+                    <Music size={16} />
                     音乐库
                   </button>
                 </div>
@@ -547,14 +631,14 @@ export default function MediaCenter() {
               {/* Collections Navigation list */}
               <div className="flex flex-col gap-2 flex-1 min-h-[150px]">
                 <div className="flex items-center justify-between select-none">
-                  <span className="text-[10px] font-bold text-tx-tertiary uppercase tracking-wider">全部合集</span>
+                  <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider">全部合集</span>
                   {isAdmin && (
                     <button 
-                      onClick={() => setShowAddCollection(true)}
-                      className="text-accent-primary hover:bg-accent-primary/10 p-1 rounded transition-colors"
+                      onClick={handleOpenAddCollection}
+                      className="text-accent-primary hover:bg-accent-primary/10 p-1.5 rounded transition-colors"
                       title="新建合集"
                     >
-                      <PlusCircle size={14} />
+                      <PlusCircle size={16} />
                     </button>
                   )}
                 </div>
@@ -563,7 +647,7 @@ export default function MediaCenter() {
                   <button
                     onClick={() => setSelectedCollection(null)}
                     className={cn(
-                      "w-full text-left py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors",
+                      "w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center justify-between transition-colors",
                       selectedCollection === null 
                         ? "bg-accent-primary/10 text-accent-primary" 
                         : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
@@ -576,14 +660,14 @@ export default function MediaCenter() {
                       key={col.id}
                       onClick={() => setSelectedCollection(col)}
                       className={cn(
-                        "w-full text-left py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors",
+                        "w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center justify-between transition-colors",
                         selectedCollection?.id === col.id 
                           ? "bg-accent-primary/10 text-accent-primary" 
                           : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
                       )}
                     >
                       <span className="truncate">{col.title}</span>
-                      <span className="text-[9px] px-1 bg-app-border/40 text-tx-tertiary rounded">
+                      <span className="text-xs px-1.5 py-0.5 bg-app-border/40 text-tx-tertiary rounded font-normal">
                         {col.item_count}
                       </span>
                     </button>
@@ -607,9 +691,9 @@ export default function MediaCenter() {
                         console.error("Failed to load Alist config:", err);
                       }
                     }}
-                    className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-xs text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                    className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
                   >
-                    <Settings size={14} />
+                    <Settings size={16} />
                     Alist 挂载配置
                   </button>
                 </div>
@@ -626,19 +710,19 @@ export default function MediaCenter() {
                 {/* Search & Sort */}
                 <div className="flex items-center gap-2 flex-1 max-w-md">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-tx-tertiary" />
+                    <Search className="absolute left-3 top-2.5 w-4.5 h-4.5 text-tx-tertiary" />
                     <input
                       type="text"
                       placeholder="搜索标题、标签、介绍..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 bg-app-sidebar border border-app-border text-xs rounded-xl outline-none text-tx-primary focus:border-accent-primary transition-colors"
+                      className="w-full pl-9 pr-4 py-2 bg-app-sidebar border border-app-border text-sm rounded-xl outline-none text-tx-primary focus:border-accent-primary transition-colors"
                     />
                   </div>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="bg-app-sidebar border border-app-border text-xs rounded-xl p-2 text-tx-secondary outline-none"
+                    className="bg-app-sidebar border border-app-border text-sm rounded-xl p-2 text-tx-secondary outline-none"
                   >
                     <option value="sort_order">自定义排序</option>
                     <option value="newest">最新上传</option>
@@ -652,25 +736,40 @@ export default function MediaCenter() {
                 {isAdmin && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => setShowAlistBrowser(true)}
-                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-xs font-bold py-2 px-3.5 rounded-xl shadow-lg shadow-accent-primary/10 flex items-center gap-1.5 transition-all"
+                      onClick={() => {
+                        setIsBatchMode(!isBatchMode);
+                        setSelectedItemIds(new Set());
+                      }}
+                      className={cn(
+                        "text-sm font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all border",
+                        isBatchMode 
+                          ? "bg-accent-danger/10 border-accent-danger/25 text-accent-danger hover:bg-accent-danger/20"
+                          : "bg-app-sidebar border-app-border hover:bg-app-hover text-tx-secondary"
+                      )}
                     >
-                      <Plus size={14} />
+                      <SlidersHorizontal size={16} />
+                      {isBatchMode ? "退出管理" : "批量管理"}
+                    </button>
+                    <button
+                      onClick={() => setShowAlistBrowser(true)}
+                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-2 px-4 rounded-xl shadow-lg shadow-accent-primary/10 flex items-center gap-1.5 transition-all"
+                    >
+                      <Plus size={16} />
                       网盘导入
                     </button>
                     <button
                       onClick={() => setShowImportJson(true)}
-                      className="bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-xs font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all"
+                      className="bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all"
                     >
-                      <Upload size={14} />
+                      <Upload size={16} />
                       JSON 导入
                     </button>
                     <a
                       href="/api/media/import/template"
                       download="template.json"
-                      className="bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-xs font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all"
+                      className="bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all"
                     >
-                      <Download size={14} />
+                      <Download size={16} />
                       下载模板
                     </a>
                   </div>
@@ -681,13 +780,35 @@ export default function MediaCenter() {
               <div className="flex-1 overflow-y-auto p-4 md:p-6">
                 
                 {selectedCollection && (
-                  <div className="mb-6 p-4 bg-app-sidebar/20 border border-app-border/40 rounded-2xl flex flex-col gap-2">
-                    <h2 className="text-base font-bold text-tx-primary">{selectedCollection.title}</h2>
+                  <div className="mb-6 p-4 bg-app-sidebar/20 border border-app-border/40 rounded-2xl flex flex-col gap-2 relative group">
+                    <div className="flex items-center justify-between gap-4">
+                      <h2 className="text-lg font-bold text-tx-primary">{selectedCollection.title}</h2>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2 select-none">
+                          <button
+                            onClick={() => handleOpenEditCollection(selectedCollection)}
+                            className="p-1 px-2 text-[11px] font-semibold text-tx-secondary hover:text-tx-primary border border-app-border hover:bg-app-hover rounded-lg flex items-center gap-1 transition-all"
+                            title="编辑合集"
+                          >
+                            <Edit3 size={12} />
+                            编辑合集
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCollection(selectedCollection)}
+                            className="p-1 px-2 text-[11px] font-semibold text-accent-danger hover:text-white hover:bg-accent-danger border border-accent-danger/20 rounded-lg flex items-center gap-1 transition-all"
+                            title="删除合集"
+                          >
+                            <Trash2 size={12} />
+                            删除合集
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {selectedCollection.description && (
-                      <p className="text-xs text-tx-secondary leading-relaxed">{selectedCollection.description}</p>
+                      <p className="text-sm text-tx-secondary leading-relaxed">{selectedCollection.description}</p>
                     )}
                     {selectedCollection.recommendation && (
-                      <div className="text-[10px] text-accent-primary font-medium bg-accent-primary/5 p-2 rounded-lg border border-accent-primary/10">
+                      <div className="text-xs text-accent-primary font-medium bg-accent-primary/5 p-2 rounded-lg border border-accent-primary/10">
                         合集评语: {selectedCollection.recommendation}
                       </div>
                     )}
@@ -697,22 +818,50 @@ export default function MediaCenter() {
                 {loading ? (
                   <div className="h-64 flex flex-col items-center justify-center">
                     <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
-                    <span className="text-xs text-tx-secondary">正在载入媒体文件...</span>
+                    <span className="text-sm text-tx-secondary">正在载入媒体文件...</span>
                   </div>
                 ) : items.length === 0 ? (
                   <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-app-sidebar/10 rounded-2xl border border-dashed border-app-border/60">
                     <Film className="w-10 h-10 text-tx-tertiary mb-3 animate-pulse" />
-                    <h4 className="text-xs font-bold text-tx-primary mb-1">暂无媒体文件</h4>
-                    <p className="text-[10px] text-tx-tertiary">点击上方的“网盘导入”或“JSON 导入”录入第一批音视频！</p>
+                    <h4 className="text-sm font-bold text-tx-primary mb-1">暂无媒体文件</h4>
+                    <p className="text-xs text-tx-tertiary">点击上方的“网盘导入”或“JSON 导入”录入第一批音视频！</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {items.map(item => (
                       <div
                         key={item.id}
-                        onClick={() => setSelectedItem(item)}
-                        className="bg-app-sidebar/20 hover:bg-app-sidebar/40 border border-app-border/40 rounded-xl overflow-hidden shadow group cursor-pointer transition-all hover:scale-[1.02] flex flex-col"
+                        onClick={() => {
+                          if (isBatchMode) {
+                            const newSelected = new Set(selectedItemIds);
+                            if (newSelected.has(item.id)) {
+                              newSelected.delete(item.id);
+                            } else {
+                              newSelected.add(item.id);
+                            }
+                            setSelectedItemIds(newSelected);
+                          } else {
+                            setSelectedItem(item);
+                          }
+                        }}
+                        className={cn(
+                          "bg-app-sidebar/20 border rounded-xl overflow-hidden shadow group cursor-pointer transition-all hover:scale-[1.02] flex flex-col relative",
+                          selectedItemIds.has(item.id) && isBatchMode
+                            ? "border-accent-primary shadow-lg shadow-accent-primary/5"
+                            : "border-app-border/40 hover:bg-app-sidebar/40"
+                        )}
                       >
+                        {/* Batch selection checkbox overlay */}
+                        {isBatchMode && (
+                          <div className="absolute top-2 left-2 z-10 bg-black/60 backdrop-blur rounded-full p-1 border border-white/10 shadow-lg animate-fade-in">
+                            {selectedItemIds.has(item.id) ? (
+                              <CheckCircle className="w-5 h-5 text-accent-primary fill-accent-primary" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full border-2 border-white/60" />
+                            )}
+                          </div>
+                        )}
+
                         {/* Cover image container */}
                         <div className="aspect-[2/3] bg-black/40 border-b border-app-border/20 relative flex items-center justify-center overflow-hidden">
                           {item.cover_url ? (
@@ -723,21 +872,26 @@ export default function MediaCenter() {
                               loading="lazy"
                             />
                           ) : (
-                            <div className="w-12 h-12 rounded-full bg-accent-primary/5 border border-accent-primary/15 flex items-center justify-center text-accent-primary">
-                              {item.type === "video" ? <Film className="w-6 h-6" /> : <Disc className="w-6 h-6 animate-spin-slow" />}
-                            </div>
+                            <img
+                              src={item.type === "video" ? "/default_video_cover.jpg" : "/default_audio_cover.jpg"}
+                              alt={item.title}
+                              className="w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
                           )}
                           
                           {/* Hover Play icon overlay */}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <div className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/30 transform scale-90 group-hover:scale-100 transition-transform">
-                              <Play size={18} className="fill-white translate-x-0.5" />
+                          {!isBatchMode && (
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <div className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/30 transform scale-90 group-hover:scale-100 transition-transform">
+                                <Play size={20} className="fill-white translate-x-0.5" />
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           {/* Duration tag */}
                           {item.duration && (
-                            <span className="absolute bottom-2 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[9px] font-semibold text-white tracking-wide">
+                            <span className="absolute bottom-2 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[11px] font-semibold text-white tracking-wide">
                               {formatDuration(item.duration)}
                             </span>
                           )}
@@ -746,14 +900,14 @@ export default function MediaCenter() {
                         {/* Text info */}
                         <div className="p-3 flex-1 flex flex-col justify-between">
                           <div>
-                            <h4 className="text-xs font-bold text-tx-primary line-clamp-2 leading-snug tracking-tight mb-0.5">
+                            <h4 className="text-sm font-bold text-tx-primary line-clamp-2 leading-snug tracking-tight mb-0.5">
                               {item.title}
                             </h4>
                             {item.artist && (
-                              <p className="text-[10px] text-tx-tertiary truncate">{item.artist}</p>
+                              <p className="text-xs text-tx-tertiary truncate">{item.artist}</p>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-[9px] text-tx-tertiary mt-2">
+                          <div className="flex items-center justify-between text-[11px] text-tx-tertiary mt-2">
                             <span>{item.play_count} 次播放</span>
                             {item.year && <span>{item.year}</span>}
                           </div>
@@ -928,10 +1082,49 @@ export default function MediaCenter() {
               className="border border-app-border rounded-2xl w-full max-w-md p-6 flex flex-col gap-4 shadow-2xl"
               style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
             >
-              <h3 className="text-md font-bold text-tx-primary">新建媒体合集</h3>
+              <h3 className="text-md font-bold text-tx-primary">
+                {editingCollectionId ? "编辑媒体合集" : "新建媒体合集"}
+              </h3>
               
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-tx-secondary font-semibold">合集标题</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-tx-secondary font-semibold">合集标题</label>
+                  {colForm.title && (
+                    <button
+                      type="button"
+                      disabled={fetchingMetadata}
+                      onClick={async () => {
+                        setFetchingMetadata(true);
+                        try {
+                          const res = await api.request<{ cover_url: string; description: string }>(
+                            `/media/collections/fetch-metadata?title=${encodeURIComponent(colForm.title)}`
+                          );
+                          if (res) {
+                            setColForm(prev => ({
+                              ...prev,
+                              cover_url: res.cover_url || prev.cover_url,
+                              description: res.description || prev.description
+                            }));
+                          }
+                        } catch (err) {
+                          console.error("Auto fetch failed:", err);
+                        } finally {
+                          setFetchingMetadata(false);
+                        }
+                      }}
+                      className="text-[10px] text-accent-primary hover:bg-accent-primary/10 px-2 py-0.5 rounded-lg border border-accent-primary/20 transition-all font-semibold flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {fetchingMetadata ? (
+                        <>
+                          <Loader2 size={11} className="animate-spin" />
+                          获取中...
+                        </>
+                      ) : (
+                        "自动获取海报及简介"
+                      )}
+                    </button>
+                  )}
+                </div>
                 <input 
                   type="text" 
                   value={colForm.title}
@@ -970,14 +1163,85 @@ export default function MediaCenter() {
                   取消
                 </button>
                 <button
-                  onClick={handleCreateCollection}
+                  onClick={handleSaveCollection}
                   className="flex-1 py-2 bg-accent-primary text-white text-xs rounded-xl font-bold hover:bg-accent-primary-hover shadow"
                 >
-                  创建合集
+                  {editingCollectionId ? "保存修改" : "创建合集"}
                 </button>
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Batch Action Bar */}
+      <AnimatePresence>
+        {isBatchMode && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-app-sidebar border border-app-border rounded-2xl py-3.5 px-6 shadow-2xl z-40 flex items-center gap-4 min-w-[320px] max-w-lg select-none"
+            style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
+          >
+            <div className="flex-1 text-xs text-tx-secondary font-semibold">
+              已选中 <span className="text-accent-primary font-bold">{selectedItemIds.size}</span> 个媒体
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (selectedItemIds.size === items.length) {
+                    setSelectedItemIds(new Set());
+                  } else {
+                    setSelectedItemIds(new Set(items.map(item => item.id)));
+                  }
+                }}
+                className="py-1.5 px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all"
+              >
+                {selectedItemIds.size === items.length ? "取消全选" : "全选"}
+              </button>
+              
+              <button
+                onClick={async () => {
+                  if (selectedItemIds.size === 0) return;
+                  if (window.confirm(`确认要删除选中的 ${selectedItemIds.size} 个单品吗？`)) {
+                    try {
+                      await api.request("/media/items/batch-delete", {
+                        method: "POST",
+                        body: JSON.stringify({ ids: Array.from(selectedItemIds) })
+                      });
+                      setSelectedItemIds(new Set());
+                      setIsBatchMode(false);
+                      fetchData();
+                    } catch (err) {
+                      console.error("Batch delete failed:", err);
+                    }
+                  }
+                }}
+                disabled={selectedItemIds.size === 0}
+                className={cn(
+                  "py-1.5 px-3.5 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 shadow",
+                  selectedItemIds.size > 0
+                    ? "bg-accent-danger hover:bg-accent-danger-hover text-white"
+                    : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed"
+                )}
+              >
+                <Trash2 size={13} />
+                批量删除
+              </button>
+              
+              <button
+                onClick={() => {
+                  setIsBatchMode(false);
+                  setSelectedItemIds(new Set());
+                }}
+                className="py-1.5 px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all text-tx-secondary"
+              >
+                取消
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

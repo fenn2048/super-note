@@ -21,7 +21,7 @@ const QuickLoginGate = React.lazy(() => import("@/components/QuickLoginGate"));
 const QuickLoginEnrollDialog = React.lazy(() => import("@/components/QuickLoginEnrollDialog"));
 const WhatsNewModal = React.lazy(() => import("@/components/WhatsNewModal"));
 const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
-const SpaceshipReminder = React.lazy(() => import("@/components/SpaceshipReminder"));
+const BrowserScreensaver = React.lazy(() => import("@/components/BrowserScreensaver"));
 const MobileMorePage = React.lazy(() => import("@/components/MobileMorePage"));
 const DiaryComposeModal = React.lazy(() => import("@/components/DiaryComposeModal"));
 const EditorPane = React.lazy(() => import("@/components/EditorPane"));
@@ -375,6 +375,14 @@ function AppLayout() {
         actions.setViewMode("tasks");
       } else if (hash === "#/files") {
         actions.setViewMode("files");
+      } else if (hash === "#/media") {
+        actions.setViewMode("media");
+      } else if (hash === "#/projects") {
+        actions.setViewMode("projects");
+      } else if (hash === "#/plans") {
+        actions.setViewMode("plans");
+      } else if (hash === "#/mindmaps") {
+        actions.setViewMode("mindmaps");
       } else if (hash === "#/home" || hash === "#/") {
         actions.setViewMode("home");
       }
@@ -410,6 +418,8 @@ function AppLayout() {
     if (showReminder) return;
     const intervalMs = userPrefs.reminderInterval * 60 * 1000;
     const timer = setTimeout(() => {
+      // Auto-save edited content before showing screensaver
+      window.dispatchEvent(new CustomEvent("super:save-all"));
       setShowReminder(true);
     }, intervalMs);
     return () => clearTimeout(timer);
@@ -1335,7 +1345,7 @@ function AppLayout() {
       <Suspense fallback={null}>
         <AnimatePresence>
           {showReminder && (
-            <SpaceshipReminder
+            <BrowserScreensaver
               isOpen={showReminder}
               onClose={() => {
                 setShowReminder(false);

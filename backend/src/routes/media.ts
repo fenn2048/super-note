@@ -14,6 +14,7 @@ import {
   isSystemAdmin
 } from "../middleware/acl";
 import { getAuthUserId } from "../lib/auth-security";
+import { getAISettings } from "./ai";
 
 const media = new Hono();
 
@@ -250,6 +251,106 @@ media.get("/collections", requireWorkspaceFeature("media"), async (c) => {
 
   const rows = db.prepare(sql).all(...params);
   return c.json(rows);
+});
+
+media.get("/screensaver/bing", async (c) => {
+  try {
+    const res = await fetch("https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1");
+    const data = await res.json() as any;
+    const path = data?.images?.[0]?.url;
+    if (path) {
+      return c.redirect(`https://cn.bing.com${path}`);
+    }
+  } catch (err) {
+    console.error("Failed to fetch Bing daily wallpaper:", err);
+  }
+  return c.redirect("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?fit=crop&w=1920&q=80");
+});
+
+media.get("/collections/fetch-metadata", requireWorkspaceFeature("media"), async (c) => {
+  const userId = getAuthUserId(c);
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  const title = c.req.query("title");
+  if (!title) {
+    return c.json({ error: "请输入影视名称", code: "BAD_REQUEST" }, 400);
+  }
+
+  try {
+    const suggestRes = await fetch(`https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(title)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://movie.douban.com/"
+      }
+    });
+
+    let coverUrl = "";
+    let subTitle = "";
+    let year = "";
+    let type = "";
+
+    if (suggestRes.ok) {
+      const list = await suggestRes.json() as any[];
+      if (list && list.length > 0) {
+        const match = list[0];
+        coverUrl = match.img || "";
+        subTitle = match.sub_title || "";
+        year = match.year || "";
+        type = match.type || "";
+      }
+    }
+
+    let description = "";
+    try {
+      const settings = getAISettings();
+      if (settings && settings.ai_api_url) {
+        const baseUrl = settings.ai_api_url.replace(/\/+$/, "");
+        const url = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (settings.ai_api_key) {
+          headers["Authorization"] = `Bearer ${settings.ai_api_key}`;
+        }
+
+        const messages = [
+          { role: "system", content: "你是一个专业的影视库助理，请为用户提供的影视作品写一段100字以内的中文剧情简介。不要包含任何标题、年份、导演或演员等其他元信息，直接输出剧情简介内容。" },
+          { role: "user", content: `作品名称：《${title}》${year ? `（${year}年）` : ""}${subTitle ? `，原名：${subTitle}` : ""}` }
+        ];
+
+        const aiRes = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: settings.ai_model,
+            messages,
+            temperature: 0.7,
+            max_tokens: 150
+          })
+        });
+
+        if (aiRes.ok) {
+          const data = await aiRes.json() as any;
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            description = content.trim();
+          }
+        }
+      }
+    } catch (aiErr) {
+      console.warn("AI description generation failed:", aiErr);
+    }
+
+    if (!description && year) {
+      description = `《${title}》是 ${year} 年上映的${type === "movie" ? "电影" : type === "tv" ? "电视剧" : "影视作品"}${subTitle ? `（原名：${subTitle}）` : ""}。`;
+    }
+
+    return c.json({
+      success: true,
+      cover_url: coverUrl,
+      description: description
+    });
+  } catch (err: any) {
+    return c.json({ error: `自动获取影视信息失败: ${err.message}`, code: "FETCH_METADATA_ERROR" }, 500);
+  }
 });
 
 media.get("/collections/:id", requireWorkspaceFeature("media"), async (c) => {
@@ -567,7 +668,21 @@ media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => 
   try {
     const cachedUrl = await redis.get(cacheKey);
     if (cachedUrl) {
-      return c.json({ url: cachedUrl, expires_in: 2700 });
+      let finalCachedUrl = cachedUrl;
+      if (finalCachedUrl && finalCachedUrl.startsWith("http")) {
+        try {
+          const parsedRaw = new URL(finalCachedUrl);
+          const parsedAlist = new URL(alistUrl);
+          if (parsedRaw.hostname === parsedAlist.hostname) {
+            const clientRequestUrl = new URL(c.req.url);
+            parsedRaw.hostname = clientRequestUrl.hostname;
+            finalCachedUrl = parsedRaw.toString();
+          }
+        } catch (e) {
+          console.warn("Failed to rewrite cached Alist play URL:", e);
+        }
+      }
+      return c.json({ url: finalCachedUrl, expires_in: 2700 });
     }
   } catch (redisErr) {
     console.warn("[media] Redis connection error, skipping cache:", redisErr);
@@ -602,11 +717,56 @@ media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => 
       // Ignore Redis caching failures
     }
 
-    return c.json({ url: rawUrl, expires_in: 2700 });
+    let finalUrl = rawUrl;
+    if (finalUrl && finalUrl.startsWith("http")) {
+      try {
+        const parsedRaw = new URL(finalUrl);
+        const parsedAlist = new URL(alistUrl);
+        if (parsedRaw.hostname === parsedAlist.hostname) {
+          const clientRequestUrl = new URL(c.req.url);
+          parsedRaw.hostname = clientRequestUrl.hostname;
+          finalUrl = parsedRaw.toString();
+        }
+      } catch (e) {
+        console.warn("Failed to rewrite Alist play URL:", e);
+      }
+    }
+
+    return c.json({ url: finalUrl, expires_in: 2700 });
   } catch (err: any) {
     return c.json({ error: `连接 Alist 失败: ${err.message}`, code: "ALIST_CONN_ERROR" }, 502);
   }
 });
+
+media.post("/items/batch-delete", requireWorkspaceFeature("media"), async (c) => {
+  const userId = getAuthUserId(c);
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  const { ids } = await c.req.json() as { ids: string[] };
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return c.json({ error: "无效的单品 ID 列表", code: "BAD_REQUEST" }, 400);
+  }
+
+  const db = getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  
+  // Fetch items to verify permissions
+  const items = db.prepare(`SELECT * FROM media_items WHERE id IN (${placeholders})`).all(...ids) as any[];
+  
+  for (const item of items) {
+    if (!canUserManageMedia(item.workspace_id, userId)) {
+      return c.json({ error: "权限不足，包含无法删除的单品", code: "FORBIDDEN" }, 403);
+    }
+  }
+
+  db.transaction(() => {
+    db.prepare(`DELETE FROM media_items WHERE id IN (${placeholders})`).run(...ids);
+  })();
+
+  return c.json({ success: true, message: `成功删除 ${items.length} 个单品` });
+});
+
+
 
 // Update play progress & increment play count
 media.post("/items/:id/play", requireWorkspaceFeature("media"), async (c) => {

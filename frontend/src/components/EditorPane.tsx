@@ -537,14 +537,23 @@ export default function EditorPane() {
     };
     // beforeunload 在桌面浏览器关闭/刷新时触发；移动端不一定可靠，故组合 pagehide
     const onBeforeUnload = () => flushToLocal();
+    const onGlobalSave = () => {
+      try {
+        editorHandleRef.current?.flushSave();
+      } catch (e) {
+        console.warn("[EditorPane] Global save flush failed:", e);
+      }
+    };
 
     window.addEventListener("pagehide", onPageHide);
     window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("super:save-all", onGlobalSave);
     return () => {
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("super:save-all", onGlobalSave);
     };
   }, []);
 

@@ -143,7 +143,8 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
     setError("");
     
     try {
-      const res = await api.request<{ success: boolean; message: string }>("/media/import", {
+      const q = workspaceId ? `?workspaceId=${workspaceId}` : "";
+      const res = await api.request<{ success: boolean; message: string }>(`/media/import${q}`, {
         method: "POST",
         body: JSON.stringify({
           collection_id: selectedCollectionId || null,
