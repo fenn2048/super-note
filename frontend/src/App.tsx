@@ -33,6 +33,7 @@ const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
 const BookReader = React.lazy(() => import("@/components/books/BookReader"));
 const MediaCenter = React.lazy(() => import("@/components/media/MediaCenter"));
 import MobileCameraModal from "@/components/MobileCameraModal";
+import GlobalMusicPlayer from "@/components/media/GlobalMusicPlayer";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
 import FirstRunWizard from "@/components/FirstRunWizard";
 import { AppProvider, useApp, useAppActions, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from "@/store/AppContext";
@@ -1251,6 +1252,7 @@ function AppLayout() {
             )}
           </motion.div>
         </AnimatePresence>
+        <GlobalMusicPlayer />
       </div>
 
       {showMobileTabBar && <MobileTabBar visible={barsVisible && !keyboardVisible} />}

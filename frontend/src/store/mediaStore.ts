@@ -10,6 +10,8 @@ export interface MediaPlayItem {
   duration?: number;
 }
 
+export type PlayMode = "sequence" | "random" | "loop";
+
 export interface MediaState {
   isPlaying: boolean;
   currentMedia: MediaPlayItem | null;
@@ -20,6 +22,7 @@ export interface MediaState {
   isMuted: boolean;
   playlist: MediaPlayItem[];
   currentIndex: number;
+  playMode: PlayMode;
 
   // Actions
   playMedia: (media: MediaPlayItem, list?: MediaPlayItem[]) => void;
@@ -33,7 +36,8 @@ export interface MediaState {
   setVolume: (volume: number) => void;
   setMuted: (isMuted: boolean) => void;
   setPlaylist: (list: MediaPlayItem[]) => void;
-  nextMedia: () => void;
+  setPlayMode: (mode: PlayMode) => void;
+  nextMedia: (auto?: boolean) => void;
   prevMedia: () => void;
 }
 
@@ -47,6 +51,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   isMuted: false,
   playlist: [],
   currentIndex: -1,
+  playMode: "sequence",
 
   playMedia: (media, list = []) => {
     const playlist = list.length > 0 ? list : [media];
@@ -73,11 +78,37 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   setVolume: (volume) => set({ volume }),
   setMuted: (isMuted) => set({ isMuted }),
   setPlaylist: (playlist) => set({ playlist }),
+  setPlayMode: (playMode) => set({ playMode }),
 
-  nextMedia: () => {
-    const { playlist, currentIndex } = get();
+  nextMedia: (auto = false) => {
+    const { playlist, currentIndex, playMode, currentMedia } = get();
     if (playlist.length === 0 || currentIndex === -1) return;
-    const nextIndex = (currentIndex + 1) % playlist.length;
+
+    let nextIndex = currentIndex;
+
+    // Handle auto end vs manual skip
+    if (auto && playMode === "loop") {
+      // Replay current song
+      set({
+        currentTime: 0,
+        seekTime: 0,
+        isPlaying: true,
+      });
+      return;
+    }
+
+    if (playMode === "random") {
+      if (playlist.length > 1) {
+        while (nextIndex === currentIndex) {
+          nextIndex = Math.floor(Math.random() * playlist.length);
+        }
+      } else {
+        nextIndex = 0;
+      }
+    } else {
+      nextIndex = (currentIndex + 1) % playlist.length;
+    }
+
     const nextMediaItem = playlist[nextIndex];
     set({
       currentMedia: nextMediaItem,
@@ -90,9 +121,23 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   },
 
   prevMedia: () => {
-    const { playlist, currentIndex } = get();
+    const { playlist, currentIndex, playMode } = get();
     if (playlist.length === 0 || currentIndex === -1) return;
-    const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+
+    let prevIndex = currentIndex;
+
+    if (playMode === "random") {
+      if (playlist.length > 1) {
+        while (prevIndex === currentIndex) {
+          prevIndex = Math.floor(Math.random() * playlist.length);
+        }
+      } else {
+        prevIndex = 0;
+      }
+    } else {
+      prevIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+    }
+
     const prevMediaItem = playlist[prevIndex];
     set({
       currentMedia: prevMediaItem,

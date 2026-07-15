@@ -9,13 +9,14 @@ import MediaPlayer from "./MediaPlayer";
 import MusicPlayer from "./MusicPlayer";
 import AlistBrowser from "./AlistBrowser";
 import {
-  Film, Music, Plus, Search, Grid, List as ListIcon, Trash2, Edit3, Play,
+  Film, Music, Plus, Search, Grid, List as ListIcon, Trash2, Edit3, Play, Pause, Info,
   Settings, ChevronRight, Download, Upload, CheckCircle, MessageSquare, Clock,
   User, Tag, ChevronLeft, PlusCircle, Globe, Lock, ShieldAlert, SlidersHorizontal,
   X, AlertTriangle, Disc, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
+import { AudioCover } from "@/lib/id3";
 
 interface Collection {
   id: string;
@@ -730,6 +731,34 @@ export default function MediaCenter() {
                     <option value="play_count">最常播放</option>
                     <option value="title">拼音顺序</option>
                   </select>
+
+                  {/* Layout Switcher */}
+                  <div className="flex items-center bg-app-sidebar border border-app-border rounded-xl p-0.5 shrink-0">
+                    <button
+                      onClick={() => setViewStyle("grid")}
+                      className={cn(
+                        "p-1.5 rounded-lg transition-colors",
+                        viewStyle === "grid" 
+                          ? "bg-accent-primary text-white" 
+                          : "text-tx-secondary hover:text-tx-primary"
+                      )}
+                      title="网格视图"
+                    >
+                      <Grid size={16} />
+                    </button>
+                    <button
+                      onClick={() => setViewStyle("list")}
+                      className={cn(
+                        "p-1.5 rounded-lg transition-colors",
+                        viewStyle === "list" 
+                          ? "bg-accent-primary text-white" 
+                          : "text-tx-secondary hover:text-tx-primary"
+                      )}
+                      title="列表视图"
+                    >
+                      <ListIcon size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Import actions (admin/owner only) */}
@@ -826,8 +855,183 @@ export default function MediaCenter() {
                     <h4 className="text-sm font-bold text-tx-primary mb-1">暂无媒体文件</h4>
                     <p className="text-xs text-tx-tertiary">点击上方的“网盘导入”或“JSON 导入”录入第一批音视频！</p>
                   </div>
+                ) : viewStyle === "list" ? (
+                  /* TEXT LIST VIEW MODE */
+                  <div className="flex flex-col border border-app-border/40 rounded-2xl bg-app-sidebar/5 overflow-hidden select-none">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-app-border/40 bg-app-sidebar/30 text-tx-tertiary font-semibold select-none">
+                          <th className="p-3 w-12 text-center">操作</th>
+                          <th className="p-3 w-16">封面</th>
+                          <th className="p-3">标题</th>
+                          {mediaType === "audio" && <th className="p-3 w-40">歌手</th>}
+                          <th className="p-3 w-40 hidden md:table-cell">合集</th>
+                          <th className="p-3 w-28 hidden sm:table-cell">播放次数</th>
+                          <th className="p-3 w-24">时长</th>
+                          {isAdmin && <th className="p-3 w-16 text-center">管理</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((item, idx) => (
+                          <tr 
+                            key={item.id} 
+                            onClick={() => {
+                              if (isBatchMode) {
+                                const newSelected = new Set(selectedItemIds);
+                                if (newSelected.has(item.id)) {
+                                  newSelected.delete(item.id);
+                                } else {
+                                  newSelected.add(item.id);
+                                }
+                                setSelectedItemIds(newSelected);
+                              } else {
+                                if (item.type === "audio") {
+                                  playMedia(item, items);
+                                } else {
+                                  playMedia(item, items);
+                                  setSelectedItem(item);
+                                }
+                              }
+                            }}
+                            className={cn(
+                              "border-b border-app-border/20 hover:bg-app-hover/50 cursor-pointer transition-colors",
+                              selectedItemIds.has(item.id) && isBatchMode && "bg-accent-primary/5 hover:bg-accent-primary/10"
+                            )}
+                          >
+                            {/* Play/Pause icon column */}
+                            <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                              {isBatchMode ? (
+                                <button
+                                  onClick={() => {
+                                    const newSelected = new Set(selectedItemIds);
+                                    if (newSelected.has(item.id)) {
+                                      newSelected.delete(item.id);
+                                    } else {
+                                      newSelected.add(item.id);
+                                    }
+                                    setSelectedItemIds(newSelected);
+                                  }}
+                                >
+                                  {selectedItemIds.has(item.id) ? (
+                                    <CheckCircle className="w-5 h-5 text-accent-primary fill-accent-primary" />
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full border-2 border-app-border" />
+                                  )}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    if (item.type === "audio") {
+                                      if (useMediaStore.getState().currentMedia?.id === item.id) {
+                                        if (useMediaStore.getState().isPlaying) {
+                                          useMediaStore.getState().pauseMedia();
+                                        } else {
+                                          useMediaStore.getState().resumeMedia();
+                                        }
+                                      } else {
+                                        playMedia(item, items);
+                                      }
+                                    } else {
+                                      playMedia(item, items);
+                                      setSelectedItem(item);
+                                    }
+                                  }}
+                                  className="w-7 h-7 rounded-full bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary flex items-center justify-center transition-all"
+                                >
+                                  {item.type === "audio" && useMediaStore.getState().currentMedia?.id === item.id && useMediaStore.getState().isPlaying ? (
+                                    <Pause size={12} className="fill-accent-primary" />
+                                  ) : (
+                                    <Play size={12} className="fill-accent-primary translate-x-0.5" />
+                                  )}
+                                </button>
+                              )}
+                            </td>
+
+                            {/* Cover */}
+                            <td className="p-3">
+                              <div className={cn(
+                                "bg-black/20 rounded overflow-hidden flex items-center justify-center border border-app-border/30",
+                                item.type === "video" ? "w-12 h-8 aspect-[16/10]" : "w-10 h-10 aspect-square"
+                              )}>
+                                {item.type === "audio" ? (
+                                  <AudioCover item={item} className="w-full h-full object-cover" fallbackIconSize={14} />
+                                ) : item.cover_url ? (
+                                  <img src={item.cover_url} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-accent-primary/5 text-accent-primary">
+                                    <Film size={14} />
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Title */}
+                            <td className="p-3 font-semibold text-tx-primary">
+                              <div>
+                                <p className="hover:text-accent-primary transition-colors line-clamp-1">{item.title}</p>
+                                {item.artist && <p className="text-[10px] text-tx-tertiary font-normal md:hidden mt-0.5">{item.artist}</p>}
+                                {item.collection_title && <p className="text-[9px] text-tx-tertiary font-normal md:hidden mt-0.5">合集: {item.collection_title}</p>}
+                              </div>
+                            </td>
+
+                            {/* Artist */}
+                            {mediaType === "audio" && (
+                              <td className="p-3 text-tx-secondary font-medium md:table-cell">
+                                {item.artist || "-"}
+                              </td>
+                            )}
+
+                            {/* Collection */}
+                            <td className="p-3 text-tx-tertiary hidden md:table-cell">
+                              {item.collection_title || "-"}
+                            </td>
+
+                            {/* Play count */}
+                            <td className="p-3 text-tx-secondary hidden sm:table-cell">
+                              {item.play_count} 次
+                            </td>
+
+                            {/* Duration */}
+                            <td className="p-3 text-tx-secondary">
+                              {formatDuration(item.duration)}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1.5">
+                                {item.type === "audio" && (
+                                  <button
+                                    onClick={() => setSelectedItem(item)}
+                                    className="text-tx-secondary hover:text-accent-primary p-1.5 rounded transition-colors"
+                                    title="详情介绍"
+                                  >
+                                    <Info size={14} />
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    onClick={async () => {
+                                      if (window.confirm("确认要删除这个单品吗？")) {
+                                        await api.request(`/media/items/${item.id}`, { method: "DELETE" });
+                                        fetchData();
+                                      }
+                                    }}
+                                    className="text-accent-danger hover:bg-accent-danger/10 p-1.5 rounded transition-colors"
+                                    title="删除"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  /* GRID VIEW MODE */
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
                     {items.map(item => (
                       <div
                         key={item.id}
@@ -841,7 +1045,12 @@ export default function MediaCenter() {
                             }
                             setSelectedItemIds(newSelected);
                           } else {
-                            setSelectedItem(item);
+                            if (item.type === "audio") {
+                              playMedia(item, items);
+                            } else {
+                              playMedia(item, items);
+                              setSelectedItem(item);
+                            }
                           }
                         }}
                         className={cn(
@@ -863,8 +1072,13 @@ export default function MediaCenter() {
                         )}
 
                         {/* Cover image container */}
-                        <div className="aspect-[2/3] bg-black/40 border-b border-app-border/20 relative flex items-center justify-center overflow-hidden">
-                          {item.cover_url ? (
+                        <div className={cn(
+                          "bg-black/40 border-b border-app-border/20 relative flex items-center justify-center overflow-hidden",
+                          item.type === "video" ? "aspect-[2/3]" : "aspect-square"
+                        )}>
+                          {item.type === "audio" ? (
+                            <AudioCover item={item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" fallbackIconSize={16} />
+                          ) : item.cover_url ? (
                             <img
                               src={item.cover_url}
                               alt={item.title}
@@ -873,41 +1087,61 @@ export default function MediaCenter() {
                             />
                           ) : (
                             <img
-                              src={item.type === "video" ? "/default_video_cover.jpg" : "/default_audio_cover.jpg"}
+                              src="/default_video_cover.jpg"
                               alt={item.title}
                               className="w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-300"
                               loading="lazy"
                             />
                           )}
+
+                          {/* Info 'i' button overlay (only for audio, and not in batch mode) */}
+                          {item.type === "audio" && !isBatchMode && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItem(item);
+                              }}
+                              className="absolute top-1.5 right-1.5 z-10 bg-black/60 backdrop-blur text-white hover:bg-accent-primary p-1 rounded-full shadow transition-colors"
+                              title="详情介绍"
+                            >
+                              <Info size={11} />
+                            </button>
+                          )}
                           
                           {/* Hover Play icon overlay */}
                           {!isBatchMode && (
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                              <div className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/30 transform scale-90 group-hover:scale-100 transition-transform">
-                                <Play size={20} className="fill-white translate-x-0.5" />
+                              <div className={cn(
+                                "rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/30 transform scale-90 group-hover:scale-100 transition-transform",
+                                item.type === "video" ? "w-7 h-7" : "w-10 h-10"
+                              )}>
+                                <Play size={item.type === "video" ? 14 : 20} className="fill-white translate-x-0.5" />
                               </div>
                             </div>
                           )}
 
                           {/* Duration tag */}
                           {item.duration && (
-                            <span className="absolute bottom-2 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[11px] font-semibold text-white tracking-wide">
+                            <span className={cn(
+                              "absolute bottom-2 right-2 bg-black/75 rounded text-white tracking-wide font-semibold",
+                              item.type === "video" ? "px-1 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[11px]"
+                            )}>
                               {formatDuration(item.duration)}
                             </span>
                           )}
                         </div>
 
                         {/* Text info */}
-                        <div className="p-3 flex-1 flex flex-col justify-between">
+                        <div className="p-2 flex-1 flex flex-col justify-between">
                           <div>
-                            <h4 className="text-sm font-bold text-tx-primary line-clamp-2 leading-snug tracking-tight mb-0.5">
+                            <h4 className="font-bold text-tx-primary line-clamp-2 leading-snug tracking-tight mb-0.5 text-[11px]">
                               {item.title}
                             </h4>
                             {item.artist && (
-                              <p className="text-xs text-tx-tertiary truncate">{item.artist}</p>
+                              <p className="text-tx-tertiary truncate text-[9px]">{item.artist}</p>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-[11px] text-tx-tertiary mt-2">
+                          <div className="flex items-center justify-between text-tx-tertiary mt-2 text-[9px]">
                             <span>{item.play_count} 次播放</span>
                             {item.year && <span>{item.year}</span>}
                           </div>
