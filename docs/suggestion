@@ -1,0 +1,201 @@
+将 Alist 通过子域名（如  https://alist.foolish.asia ）暴露到公网并配上
+  HTTPS，安全性在合理配置下是完全有保证的。
+  
+  但是，因为服务暴露在了公网，我们需要对潜在风险点和防范手段进行全面的安全评估：
+  ──────
+  ### 一、 架构上的安全防线（已实现的防线）
+  
+  1. 传输层加密 (HTTPS)：
+  所有的播放流量、API 请求、管理员 Token 都在 HTTPS 隧道中传输，防止公网中间人嗅探和劫持。       
+  2. 鉴权壁垒：
+   super-note  与 Alist 之间的 API 交互使用的是您配置的 AList Admin Token。只有拥有该 Token 的   
+  super-note  后端才能列出或解析文件。
+  3. 临时直链防盗链：
+  当用户点击视频时，后端通过 Token 获取的临时直链（即使使用的是 Alist 代理直链）在网盘和 Alist   
+  侧通常都有 1小时的生命周期。即使直链在客户端被抓包截获，也会在 1 小时内失效，无法进行长期盗播。
+  ──────
+  ### 二、 暴露公网后的三大安全隐患 & 应对策略
+  
+  为了确保绝对安全，建议您完成子域名配置后，在 Alist 后台执行以下三项安全加固配置：
+  
+  #### 🛡️ 加固一：关闭 Alist 的游客（匿名）访问权限（最重要）
+  
+  • 隐患：默认情况下，如果未作配置，游客访问  https://alist.foolish.asia 
+  时，可能会直接看到您挂载的网盘目录。
+  • 配置方法：
+      1. 登录 AList 后台 -> 「设置」 (Settings) -> 「全局」 (Global)。
+      2. 找到 「启用游客预览/访问」 选项，将其关闭（False）。
+      3.
+      (加固后：普通网民或搜索引擎爬虫直接访问该域名，只会看到一个白色的登录框，无法查看任何文件列
+      表。)
+  
+
+  #### 🛡️ 加固二：修改 Alist 的管理员默认密码（防爆破）
+  
+  • 隐患：我们在本地开发调试时，把密码设为了  admin123
+  。这如果直接搬到生产环境，极易被扫号脚本爆破。
+  • 配置方法：
+      1. 登录 AList 后台 -> 点击右上角头像 -> 「个人资料」。
+      2. 将管理员密码修改为一个强密码（包含大小写字母、数字及特殊字符）。
+      3. 注意：修改密码不需要在  super-note  重新配置，因为  super-note  是用 Token
+      与其通信的，密码修改不影响 Token。
+  
+
+  #### 🛡️ 加固三：在 Nginx 层限制敏感路径（如管理后台）
+  
+  如果您希望更极致的安全（即彻底杜绝外网进入 Alist 的管理页面，仅允许外网访问播放流  /p/*  和    
+  /d/* ）：
+  可以在 Nginx 的  alist.foolish.asia  配置块中拦截  / （登录页）和  /manage
+  （后台管理区），仅允许特定 IP（例如您自己的内网/VPN）或干脆直接屏蔽：
+  
+    # 仅允许外网下载和拉流
+    location ~ ^/(p|d|api/fs/get)/ {
+        proxy_pass http://localhost:5244;
+        # ... 保留原有 proxy_set_header 参数
+    }
+  
+    # 限制外网访问后台登录及管理系统（返回 403）
+    location ~ ^/(@manage|@login|manage|login|api/admin|api/auth)/ {
+        # 如果您使用了 Tailscale，可以只允许 Tailscale IP 访问，或者直接 return 403
+        # allow 100.112.117.0/24; 
+        # deny all;
+        return 403;
+    }
+    ──────
+  ### 总结建议
+  
+  “子域名 + 开启 HTTPS + 禁用游客访问 + 强管理员密码”
+  是影视资源站最通用且主流的部署方案。在完成上述加固后，您的视频文件实际上非常安全，普通外网用户 
+  既扫不到、也看不了，安全性可以得到极佳的保障。
+
+  同时，为了支持您的子域名方案，后端  media.ts 
+  针对公共域名的“放行保护”修改被安全保留。(因为如果回退这部分，后端会把您配置的 
+  https://alist.foolish.asia  的视频直链强制重写为  https://note.foolish.asia  导致播放时报 404
+  错误)。
+  ──────  能proxy_read_timeout 3600s;   将新子域名加入证书：
+  ### 配置子域名方案指引-d alist.foolish.asia 
+  
+  请在您的云服务器上进行以下两步配置：
+                                      ertbot
+  #### 第一步：在 Nginx 中为 Alist 增加服务器配置块sh.asia/fullchain.pem; # managed by Certbot
+                                                   oolish.asia/privkey.pem; # managed by Certbot
+  您可以编辑服务器上的  /etc/nginx/sites-available/websites  文件，在最下方追加以下 Server 配置：
+  
+  3.# ========== Alist HTTPS 反向代理 ==========
+
+  Edit(/Users/fenn/code/super-note/frontend/index.html)
+● Bash(npx tsc --noEmit) (ctrl+o to expand) 地代理」中转模式。此时浏览器会通过安全的             
+
+▸ Thought for 5s, 902 tokens//localhost:5244; # 指向您宿主机映射的 Alist 端口
+  Initiating Core Analysis
+  已为您回退了前端项目的混淆 Referer 修改（即撤销了  index.html  中的  no-referrer 
+  配置，避免影响其他正常业务）。orwarded-For $proxy_add_x_forwarded_for;
+                                               $scheme;
+▸ 同时，为了支持您的子域名方案，后端  media.ts 
+  针对公共域名的“放行保护”修改被安全保留。(因为如果回退这部分，后端会把您配置的 
+  https://alist.foolish.asia  的视频直链强制重写为  https://note.foolish.asia  导致播放时报 404
+  错误)。 果client_max_body_size 10000M; 没有包含通配符（ *.foolish.asia
+  ──────                imeout 3600s;   将新子域名加入证书：            
+  ### 配置子域名方案指引-d alist.foolish.asia               进行全面的安全评估：
+  
+  请在您的云服务器上进行以下两步配置： 线）
+  
+  #### 第一步：在 Nginx 中为 Alist 增加服务器配置块sh.asia/fullchain.pem; # managed by Certbot
+  
+  您可以编辑服务器上的  /etc/nginx/sites-available/websites  文件，在最下方追加以下 Server 配置：
+  2.                                            s.pem; # managed by Certbot  有拥有该 Token 的   
+        server_name alist.foolish.asia;
+        return 404; # managed by Certbot
+    }
+  
+  • 注：如果您的 Let's Encrypt 证书申请时没有包含通配符（ *.foolish.asia                         ───
+  ），您可能需要在服务器上运行下述命令以将新子域名加入证书：
+   sudo certbot --nginx -d alist.foolish.asia 
+  • 修改保存后重新加载 Nginx：  eal-IP $remote_addr;
+   sudo nginx -s reload 有保证呢         For $proxy_add_x_forwarded_for;
+  ──────                                       $scheme;
+  #### 第二步：在 super-note 前端页面修改配置
+  
+  1. 登录  super-note  网页，进入 「Alist 挂载配置」 弹窗。 到公网并配上
+  2. 将原来的后端地址修改为： https://alist.foolish.asia 。.foolish.asia
+  3. 点击 「测试并保存」，确保状态变为  连接成功 。 入证书：            
+   sudo     proxy_send_timeout 3600s;ish.asia               进行全面的安全评估：
+  完成上述两步后，您就可以在 Alist    
+  存储的夸克网盘配置中放心地开启「Web代理/本地代理」中转模式。此时浏览器会通过安全的
+  https://alist.foolish.asia/p/...  获取视频流，彻底解决  ERR_SSL_PROTOCOL_ERROR 
+  问题，同时保证公网所有通信均经过 HTTPS 加密！oolish.asia/fullchain.pem; # managed by Certbo
+
+  请将服务器上的  alist.foolish.asia  Nginx 配置块升级为以下内容：                                                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                                                                                                    
+    server {                                                                                                                                                                                                                                                                                                        
+        server_name alist.foolish.asia;
+  
+        # ==========================================
+        # 核心安全区：仅对媒体流（/p/ 和 /d/ 路径）启用严格的防盗链与跨域
+        # ==========================================
+        location ~ ^/(p|d)/ {
+            # 1. Referer 校验（防盗链）
+            # - blocked: 允许被代理或抹除了 Referer 的客户端（某些本地播放器）
+            # - note.foolish.asia: 只允许来自您主站的请求
+            # - 注意：这里故意【去掉了 none】，意味着直接在浏览器地址栏敲入视频直链将直接返回 403！
+            valid_referers blocked note.foolish.asia *.note.foolish.asia;
+            
+            if ($invalid_referer) {
+                return 403;
+            }
+  
+            # 2. CORS 跨域限制
+            # 限制只有 note.foolish.asia 网页内的播放器组件才能读取该视频流
+            add_header 'Access-Control-Allow-Origin' 'https://note.foolish.asia' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Range,Authorization,Content-Type' always;
+            add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+  
+            if ($request_method = 'OPTIONS') {
+                add_header 'Access-Control-Allow-Origin' 'https://note.foolish.asia' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+                add_header 'Access-Control-Allow-Headers' 'Range,Authorization,Content-Type' always;
+                return 204;
+            }
+  
+            proxy_pass http://localhost:5244;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+  
+            # 视频拉流缓冲优化
+            proxy_buffering off;
+            client_max_body_size 10000M;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+  
+        # ==========================================
+        # 其他路径（API等）：交由 Alist 自身的 Token 鉴权保护
+        # ==========================================
+        location / {
+            proxy_pass http://localhost:5244;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            client_max_body_size 10000M;
+        }
+  
+        # ========== Certbot 自动生成的 SSL 证书段 ==========
+        listen 443 ssl; # managed by Certbot
+        ssl_certificate /etc/letsencrypt/live/foolish.asia/fullchain.pem; # managed by Certbot
+        ssl_certificate_key /etc/letsencrypt/live/foolish.asia/privkey.pem; # managed by Certbot
+        include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+    }
+    ──────
+  ### 💡 架构优化细节解释
+  
+  1. 为什么只对  /p/  和  /d/ （媒体流）作 Referer 校验？
+  因为  super-note  后端进程需要向 Alist 发起管理请求（如扫描目录  /api/fs/list ），而后端进程发出的 HTTP 请求默认是没有 Referer 头部的。
+  如果对根目录  /  限制 Referer 且不允许  none ， super-note  后端也会被拦截。将限制收窄到  /p/  和  /d/  之后，既保障了文件下载与视频流的安全性，又确保了后端管理接口通信顺畅。
+  2. 如果您想在第三方播放器（如 PotPlayer/VLC/Infuse）中挂载播放：
+  如果您未来有使用外部播放器直接连链接播放的需求，上述配置中的  valid_referers  必须加上  none  声明（即修改为  valid_referers none blocked note.foolish.asia; ），否则外部播放器由于没有 Referer header 会被阻断。如果不加  none ，则是最严格的沙盒环境，仅限主站网页内播放。
