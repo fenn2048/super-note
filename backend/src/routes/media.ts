@@ -645,6 +645,51 @@ media.delete("/items/:id", requireWorkspaceFeature("media"), async (c) => {
 // 5. Play Direct Link Resolving with Redis Caching
 // ===========================================================================
 
+async function getAlistRawUrl(item: any): Promise<string> {
+  const { url: alistUrl, token: alistToken } = getAlistConfig();
+  if (!alistUrl) {
+    throw Object.assign(new Error("Alist 未配置，无法播放"), { code: "ALIST_NOT_CONFIGURED", status: 400 });
+  }
+
+  const cacheKey = `media:link:${item.id}`;
+  try {
+    const cachedUrl = await redis.get(cacheKey);
+    if (cachedUrl) return cachedUrl;
+  } catch (redisErr) {
+    console.warn("[media] Redis connection error, skipping cache:", redisErr);
+  }
+
+  const res = await fetch(`${alistUrl}/api/fs/get`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": alistToken
+    },
+    body: JSON.stringify({
+      path: item.alist_path,
+      password: ""
+    })
+  });
+
+  const data = await res.json() as any;
+  if (data.code !== 200) {
+    throw Object.assign(new Error(data.message || "从 Alist 获取播放直链失败"), { code: "ALIST_ERROR", status: 502 });
+  }
+
+  const rawUrl = data.data?.raw_url;
+  if (!rawUrl) {
+    throw Object.assign(new Error("Alist 未返回播放直链"), { code: "NO_DIRECT_LINK", status: 502 });
+  }
+
+  try {
+    await redis.setex(cacheKey, 2700, rawUrl);
+  } catch {
+    // Ignore Redis caching failures
+  }
+
+  return rawUrl;
+}
+
 media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => {
   const userId = getAuthUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
@@ -659,82 +704,79 @@ media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => 
     if (!role) return c.json({ error: "无权访问该单品" }, 403);
   }
 
-  const { url: alistUrl, token: alistToken } = getAlistConfig();
-  if (!alistUrl) {
-    return c.json({ error: "Alist 未配置，无法播放" }, 400);
+  try {
+    await getAlistRawUrl(item);
+    return c.json({ url: `/api/media/items/${id}/proxy`, expires_in: 2700 });
+  } catch (err: any) {
+    const status = err.status || 502;
+    const code = err.code || "ALIST_CONN_ERROR";
+    return c.json({ error: err.message || "连接 Alist 失败", code }, status);
+  }
+});
+
+media.get("/items/:id/proxy", requireWorkspaceFeature("media"), async (c) => {
+  const userId = getAuthUserId(c);
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  const id = c.req.param("id");
+  const db = getDb();
+  const item = db.prepare("SELECT * FROM media_items WHERE id = ?").get(id) as any;
+  if (!item) return c.json({ error: "单品不存在" }, 404);
+
+  if (item.workspace_id) {
+    const role = getUserWorkspaceRole(item.workspace_id, userId);
+    if (!role) return c.json({ error: "无权访问该单品" }, 403);
   }
 
-  const cacheKey = `media:link:${id}`;
+  let rawUrl: string;
   try {
-    const cachedUrl = await redis.get(cacheKey);
-    if (cachedUrl) {
-      let finalCachedUrl = cachedUrl;
-      if (finalCachedUrl && finalCachedUrl.startsWith("http")) {
-        try {
-          const parsedRaw = new URL(finalCachedUrl);
-          const parsedAlist = new URL(alistUrl);
-          if (parsedRaw.hostname === parsedAlist.hostname) {
-            const clientRequestUrl = new URL(c.req.url);
-            parsedRaw.hostname = clientRequestUrl.hostname;
-            finalCachedUrl = parsedRaw.toString();
-          }
-        } catch (e) {
-          console.warn("Failed to rewrite cached Alist play URL:", e);
-        }
-      }
-      return c.json({ url: finalCachedUrl, expires_in: 2700 });
-    }
-  } catch (redisErr) {
-    console.warn("[media] Redis connection error, skipping cache:", redisErr);
+    rawUrl = await getAlistRawUrl(item);
+  } catch (err: any) {
+    const status = err.status || 502;
+    const code = err.code || "ALIST_CONN_ERROR";
+    return c.json({ error: err.message || "连接 Alist 失败", code }, status);
   }
 
+  const rangeHeader = c.req.header("Range") || c.req.header("range");
+  const { token: alistToken } = getAlistConfig();
+  const fetchHeaders: Record<string, string> = {};
+  if (rangeHeader) fetchHeaders.Range = rangeHeader;
+  if (alistToken) fetchHeaders.Authorization = alistToken;
+
   try {
-    const res = await fetch(`${alistUrl}/api/fs/get`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": alistToken
-      },
-      body: JSON.stringify({
-        path: item.alist_path,
-        password: ""
-      })
+    const remoteRes = await fetch(rawUrl, {
+      method: "GET",
+      headers: fetchHeaders,
+      redirect: "follow"
     });
 
-    const data = await res.json() as any;
-    if (data.code !== 200) {
-      return c.json({ error: data.message || "从 Alist 获取播放直链失败", code: "ALIST_ERROR" }, 502);
-    }
+    const allowedHeaders = new Set([
+      "content-type",
+      "content-length",
+      "content-range",
+      "accept-ranges",
+      "content-disposition",
+      "last-modified",
+      "etag",
+    ]);
 
-    const rawUrl = data.data?.raw_url;
-    if (!rawUrl) {
-      return c.json({ error: "Alist 未返回播放直链", code: "NO_DIRECT_LINK" }, 502);
-    }
+    const responseHeaders: Record<string, string> = {
+      "Cache-Control": "private, no-cache",
+    };
 
-    try {
-      await redis.setex(cacheKey, 2700, rawUrl);
-    } catch (redisErr) {
-      // Ignore Redis caching failures
-    }
-
-    let finalUrl = rawUrl;
-    if (finalUrl && finalUrl.startsWith("http")) {
-      try {
-        const parsedRaw = new URL(finalUrl);
-        const parsedAlist = new URL(alistUrl);
-        if (parsedRaw.hostname === parsedAlist.hostname) {
-          const clientRequestUrl = new URL(c.req.url);
-          parsedRaw.hostname = clientRequestUrl.hostname;
-          finalUrl = parsedRaw.toString();
-        }
-      } catch (e) {
-        console.warn("Failed to rewrite Alist play URL:", e);
+    for (const [key, value] of remoteRes.headers) {
+      if (!value) continue;
+      if (allowedHeaders.has(key.toLowerCase())) {
+        responseHeaders[key] = value;
       }
     }
 
-    return c.json({ url: finalUrl, expires_in: 2700 });
+    return new Response(remoteRes.body, {
+      status: remoteRes.status,
+      headers: responseHeaders,
+    });
   } catch (err: any) {
-    return c.json({ error: `连接 Alist 失败: ${err.message}`, code: "ALIST_CONN_ERROR" }, 502);
+    return c.json({ error: `代理播放资源失败: ${err.message}`, code: "PROXY_ERROR" }, 502);
   }
 });
 
