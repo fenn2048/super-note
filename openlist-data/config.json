@@ -2,7 +2,7 @@
   "force": false,
   "site_url": "",
   "cdn": "",
-  "jwt_secret": "9XddS0eyyWPYRzgb",
+  "jwt_secret": "T8fUhjevvH3pNGqs",
   "token_expires_in": 48,
   "database": {
     "type": "sqlite3",
