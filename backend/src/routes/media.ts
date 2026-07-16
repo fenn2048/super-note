@@ -41,14 +41,30 @@ function canUserManageMedia(workspaceId: string | null, userId: string): boolean
   return role === "owner" || role === "admin";
 }
 
-// Get Alist config helper
+// Get storage backend config (OpenList/Alist compatible)
 function getAlistConfig() {
   const db = getDb();
-  const urlRow = db.prepare("SELECT value FROM system_settings WHERE key = 'alist_url'").get() as { value?: string } | undefined;
-  const tokenRow = db.prepare("SELECT value FROM system_settings WHERE key = 'alist_token'").get() as { value?: string } | undefined;
+
+  const readSetting = (key: string) => {
+    const row = db.prepare("SELECT value FROM system_settings WHERE key = ?").get(key) as { value?: string } | undefined;
+    return row?.value?.trim() || "";
+  };
+
+  const envUrl = [process.env.OPENLIST_URL, process.env.MEDIA_STORAGE_URL, process.env.ALIST_URL]
+    .find((value) => Boolean(value && value.trim()));
+  const envToken = [process.env.OPENLIST_TOKEN, process.env.MEDIA_STORAGE_TOKEN, process.env.ALIST_TOKEN]
+    .find((value) => Boolean(value && value.trim()));
+
+  const dbUrl = [readSetting("openlist_url"), readSetting("media_storage_url"), readSetting("alist_url")]
+    .find((value) => Boolean(value));
+  const dbToken = [readSetting("openlist_token"), readSetting("media_storage_token"), readSetting("alist_token")]
+    .find((value) => Boolean(value));
+
+  const normalizedUrl = (value?: string) => value ? value.trim().replace(/\/+$/, "") : "";
+
   return {
-    url: urlRow?.value || "",
-    token: tokenRow?.value || "",
+    url: normalizedUrl(envUrl || dbUrl),
+    token: envToken || dbToken || "",
   };
 }
 
@@ -69,7 +85,7 @@ function cleanFilename(filename: string): string {
 media.get("/settings/alist", (c) => {
   const userId = getAuthUserId(c);
   if (!userId || !isSystemAdmin(userId)) {
-    return c.json({ error: "仅管理员可查看 Alist 配置", code: "FORBIDDEN" }, 403);
+    return c.json({ error: "仅管理员可查看存储服务配置", code: "FORBIDDEN" }, 403);
   }
   const { url, token } = getAlistConfig();
   return c.json({ url, token });
@@ -78,19 +94,29 @@ media.get("/settings/alist", (c) => {
 media.put("/settings/alist", async (c) => {
   const userId = getAuthUserId(c);
   if (!userId || !isSystemAdmin(userId)) {
-    return c.json({ error: "仅管理员可配置 Alist", code: "FORBIDDEN" }, 403);
+    return c.json({ error: "仅管理员可配置存储服务", code: "FORBIDDEN" }, 403);
   }
 
   const { url, token } = await c.req.json() as { url: string; token: string };
   if (!url) {
-    return c.json({ error: "Alist 地址不能为空", code: "BAD_REQUEST" }, 400);
+    return c.json({ error: "存储服务地址不能为空", code: "BAD_REQUEST" }, 400);
   }
 
+  const normalizedUrl = url.trim().replace(/\/$/, "");
+  const normalizedToken = token ? token.trim() : "";
   const db = getDb();
-  db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updatedAt) VALUES (?, ?, datetime('now'))").run("alist_url", url.trim().replace(/\/$/, ""));
-  db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updatedAt) VALUES (?, ?, datetime('now'))").run("alist_token", token ? token.trim() : "");
+  for (const [key, value] of [
+    ["openlist_url", normalizedUrl],
+    ["media_storage_url", normalizedUrl],
+    ["alist_url", normalizedUrl],
+    ["openlist_token", normalizedToken],
+    ["media_storage_token", normalizedToken],
+    ["alist_token", normalizedToken],
+  ] as Array<[string, string]>) {
+    db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updatedAt) VALUES (?, ?, datetime('now'))").run(key, value);
+  }
 
-  return c.json({ success: true, message: "Alist 配置已保存" });
+  return c.json({ success: true, message: "存储服务配置已保存" });
 });
 
 media.get("/settings/alist/status", async (c) => {
@@ -101,7 +127,7 @@ media.get("/settings/alist/status", async (c) => {
 
   const { url, token } = getAlistConfig();
   if (!url) {
-    return c.json({ configured: false, status: "error", message: "Alist 未配置" });
+    return c.json({ configured: false, status: "error", message: "存储服务未配置" });
   }
 
   try {
@@ -123,7 +149,7 @@ media.get("/settings/alist/status", async (c) => {
     if (data.code === 200) {
       return c.json({ configured: true, status: "ok", message: "连接成功" });
     } else {
-      return c.json({ configured: true, status: "error", message: data.message || "Alist 认证失败" });
+      return c.json({ configured: true, status: "error", message: data.message || "存储服务认证失败" });
     }
   } catch (err: any) {
     return c.json({ configured: true, status: "error", message: `连接超时或失败: ${err.message}` });
@@ -144,7 +170,7 @@ media.get("/alist/list", async (c) => {
   const pathParam = c.req.query("path") || "/";
   const { url, token } = getAlistConfig();
   if (!url) {
-    return c.json({ error: "Alist 服务尚未配置", code: "ALIST_NOT_CONFIGURED" }, 400);
+    return c.json({ error: "存储服务尚未配置", code: "ALIST_NOT_CONFIGURED" }, 400);
   }
 
   try {
@@ -177,7 +203,7 @@ media.get("/alist/list", async (c) => {
       }))
     });
   } catch (err: any) {
-    return c.json({ error: `Alist 连接错误: ${err.message}`, code: "ALIST_CONN_ERROR" }, 502);
+    return c.json({ error: `存储服务连接错误: ${err.message}`, code: "ALIST_CONN_ERROR" }, 502);
   }
 });
 
@@ -645,16 +671,27 @@ media.delete("/items/:id", requireWorkspaceFeature("media"), async (c) => {
 // 5. Play Direct Link Resolving with Redis Caching
 // ===========================================================================
 
-async function getAlistRawUrl(item: any): Promise<string> {
+interface AlistLinkInfo {
+  url: string;
+  headers?: Record<string, string[]>;
+}
+
+async function getAlistRawUrl(item: any): Promise<AlistLinkInfo> {
   const { url: alistUrl, token: alistToken } = getAlistConfig();
   if (!alistUrl) {
-    throw Object.assign(new Error("Alist 未配置，无法播放"), { code: "ALIST_NOT_CONFIGURED", status: 400 });
+    throw Object.assign(new Error("存储服务未配置，无法播放"), { code: "ALIST_NOT_CONFIGURED", status: 400 });
   }
 
   const cacheKey = `media:link:${item.id}`;
   try {
-    const cachedUrl = await redis.get(cacheKey);
-    if (cachedUrl) return cachedUrl;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        return { url: cached };
+      }
+    }
   } catch (redisErr) {
     console.warn("[media] Redis connection error, skipping cache:", redisErr);
   }
@@ -673,21 +710,24 @@ async function getAlistRawUrl(item: any): Promise<string> {
 
   const data = await res.json() as any;
   if (data.code !== 200) {
-    throw Object.assign(new Error(data.message || "从 Alist 获取播放直链失败"), { code: "ALIST_ERROR", status: 502 });
+    throw Object.assign(new Error(data.message || "从存储服务获取播放直链失败"), { code: "ALIST_ERROR", status: 502 });
   }
 
   const rawUrl = data.data?.raw_url;
   if (!rawUrl) {
-    throw Object.assign(new Error("Alist 未返回播放直链"), { code: "NO_DIRECT_LINK", status: 502 });
+    throw Object.assign(new Error("存储服务未返回播放直链"), { code: "NO_DIRECT_LINK", status: 502 });
   }
 
+  const headers = data.data?.headers;
+  const linkInfo: AlistLinkInfo = { url: rawUrl, headers };
+
   try {
-    await redis.setex(cacheKey, 2700, rawUrl);
+    await redis.setex(cacheKey, 2700, JSON.stringify(linkInfo));
   } catch {
     // Ignore Redis caching failures
   }
 
-  return rawUrl;
+  return linkInfo;
 }
 
 media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => {
@@ -705,16 +745,18 @@ media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => 
   }
 
   try {
-    await getAlistRawUrl(item);
-    return c.json({ url: `/api/media/items/${id}/proxy`, expires_in: 2700 });
+    const linkInfo = await getAlistRawUrl(item);
+    const isHLS = linkInfo.url.includes(".m3u8");
+    const filename = isHLS ? "video.m3u8" : "video.mp4";
+    return c.json({ url: `/api/media/items/${id}/proxy/${filename}`, expires_in: 2700 });
   } catch (err: any) {
     const status = err.status || 502;
     const code = err.code || "ALIST_CONN_ERROR";
-    return c.json({ error: err.message || "连接 Alist 失败", code }, status);
+    return c.json({ error: err.message || "连接存储服务失败", code }, status);
   }
 });
 
-media.get("/items/:id/proxy", requireWorkspaceFeature("media"), async (c) => {
+const handleProxy = async (c: Context) => {
   const userId = getAuthUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
 
@@ -728,26 +770,83 @@ media.get("/items/:id/proxy", requireWorkspaceFeature("media"), async (c) => {
     if (!role) return c.json({ error: "无权访问该单品" }, 403);
   }
 
-  let rawUrl: string;
+  let linkInfo: AlistLinkInfo;
   try {
-    rawUrl = await getAlistRawUrl(item);
+    linkInfo = await getAlistRawUrl(item);
   } catch (err: any) {
     const status = err.status || 502;
     const code = err.code || "ALIST_CONN_ERROR";
-    return c.json({ error: err.message || "连接 Alist 失败", code }, status);
+    return c.json({ error: err.message || "连接存储服务失败", code }, status);
   }
 
+  // 针对局域网/移动端访问，若播放链接域名与 Alist 配置域名一致，则自动重写为客户端当前访问的 Hostname/IP
+  const { url: alistUrl, token: alistToken } = getAlistConfig();
+  let finalUrl = linkInfo.url;
+  if (finalUrl && finalUrl.startsWith("http") && alistUrl) {
+    try {
+      const parsedRaw = new URL(finalUrl);
+      const parsedAlist = new URL(alistUrl);
+      if (parsedRaw.hostname === parsedAlist.hostname) {
+        const clientRequestUrl = new URL(c.req.url);
+        parsedRaw.hostname = clientRequestUrl.hostname;
+        finalUrl = parsedRaw.toString();
+      }
+    } catch (e) {
+      console.warn("Failed to rewrite Alist play URL:", e);
+    }
+  }
+
+  const isHLS = linkInfo.url.includes(".m3u8");
+
+  // 对于 HLS (.m3u8) 视频流，使用 302 重定向由前端 hls.js (fetch) 处理，它能正确遵守 Referrer-Policy 抹除 Referer
+  if (item.type === "video" && isHLS) {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        "Location": finalUrl,
+        "Referrer-Policy": "no-referrer"
+      }
+    });
+  }
+
+  // 对于常规视频文件（如 .mp4），由于 Chrome 浏览器原生媒体引擎跟随 302 时存在忽略 Referer 策略的 Bug，
+  // 我们通过后端代理中转视频流以绕过防盗链拦截。
   const rangeHeader = c.req.header("Range") || c.req.header("range");
-  const { token: alistToken } = getAlistConfig();
   const fetchHeaders: Record<string, string> = {};
   if (rangeHeader) fetchHeaders.Range = rangeHeader;
-  if (alistToken) fetchHeaders.Authorization = alistToken;
+
+  // Forward the headers returned by OpenList/AList
+  if (linkInfo.headers) {
+    for (const [key, values] of Object.entries(linkInfo.headers)) {
+      if (values && values.length > 0) {
+        fetchHeaders[key] = values[0];
+      }
+    }
+  }
+
+  // 仅在向 Alist 服务器发送请求时携带 Authorization Token，避免向第三方 CDN 泄露 Token 并防止部分 CDN 报 400 错误
+  if (alistToken && finalUrl.startsWith(alistUrl)) {
+    fetchHeaders.Authorization = alistToken;
+  }
+
+  // Add fallback Referer and User-Agent if not already present
+  if (!fetchHeaders["Referer"] && !fetchHeaders["referer"]) {
+    if (finalUrl.includes("quark.cn")) {
+      fetchHeaders["Referer"] = "https://pan.quark.cn/";
+    } else if (finalUrl.includes("uc.cn")) {
+      fetchHeaders["Referer"] = "https://drive.uc.cn/";
+    }
+  }
+  if (!fetchHeaders["User-Agent"] && !fetchHeaders["user-agent"]) {
+    fetchHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, fill Gecko) Chrome/120.0.0.0 Safari/537.36";
+  }
 
   try {
-    const remoteRes = await fetch(rawUrl, {
+    const remoteRes = await fetch(finalUrl, {
       method: "GET",
       headers: fetchHeaders,
-      redirect: "follow"
+      redirect: "follow",
+      signal: c.req.raw.signal // 客户端断开连接时自动终止 fetch 避免资源及连接泄漏
     });
 
     const allowedHeaders = new Set([
@@ -778,7 +877,10 @@ media.get("/items/:id/proxy", requireWorkspaceFeature("media"), async (c) => {
   } catch (err: any) {
     return c.json({ error: `代理播放资源失败: ${err.message}`, code: "PROXY_ERROR" }, 502);
   }
-});
+};
+
+media.get("/items/:id/proxy", requireWorkspaceFeature("media"), handleProxy);
+media.get("/items/:id/proxy/:filename", requireWorkspaceFeature("media"), handleProxy);
 
 media.post("/items/batch-delete", requireWorkspaceFeature("media"), async (c) => {
   const userId = getAuthUserId(c);

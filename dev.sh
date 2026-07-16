@@ -63,30 +63,48 @@ if ! nc -z 127.0.0.1 6379 >/dev/null 2>&1; then
   fi
 fi
 
-# 检查 Alist 状态，若未运行则自动尝试启动
+# 检查 OpenList 状态，若未运行则自动尝试启动
+export MEDIA_STORAGE_URL=${MEDIA_STORAGE_URL:-http://127.0.0.1:5244}
+export OPENLIST_URL=${OPENLIST_URL:-$MEDIA_STORAGE_URL}
+export MEDIA_STORAGE_TOKEN=${MEDIA_STORAGE_TOKEN:-}
+export OPENLIST_TOKEN=${OPENLIST_TOKEN:-$MEDIA_STORAGE_TOKEN}
+
 if ! nc -z 127.0.0.1 5244 >/dev/null 2>&1; then
-  echo "⚠️  检测到 Alist (port 5244) 未运行，正在尝试启动本地 Alist 服务..."
+  echo "⚠️  检测到 OpenList (port 5244) 未运行，正在尝试启动本地 OpenList 服务..."
   if command -v docker &>/dev/null; then
-    if docker ps -a --format '{{.Names}}' | grep -q "^super-note-alist$"; then
-      echo "🔄 检测到已存在的 Docker Alist 容器，正在启动..."
-      docker start super-note-alist
+    # 提前创建本地数据目录并授权
+    mkdir -p ./openlist-data
+    sudo chown $(id -u):$(id -g) ./openlist-data
+    chmod 775 ./openlist-data
+
+    if docker ps -a --format '{{.Names}}' | grep -q "^super-note-openlist$"; then
+      echo "🔄 检测到已存在的 Docker OpenList 容器，正在启动..."
+      UID=$(id -u) GID=$(id -g) docker start super-note-openlist
     else
-      echo "📥 正在拉取并启动 Docker Alist 容器..."
-      docker run -d --name super-note-alist -v super-note-alist-data:/opt/alist/data -p 5244:5244 docker.m.daocloud.io/xhofe/alist:latest || \
-      docker run -d --name super-note-alist -v super-note-alist-data:/opt/alist/data -p 5244:5244 xhofe/alist:latest
+      echo "📥 正在拉取并启动 Docker OpenList 容器..."
+      UID=$(id -u) GID=$(id -g) docker run -d \
+        --name super-note-openlist \
+        --user ${UID}:${GID} \
+        -v ./openlist-data:/opt/openlist/data \
+        -p 5244:5244 \
+        -e UMASK=022 \
+        docker.m.daocloud.io/openlistteam/openlist:latest || \
+      UID=$(id -u) GID=$(id -g) docker run -d \
+        --name super-note-openlist \
+        --user ${UID}:${GID} \
+        -v ./openlist-data:/opt/openlist/data \
+        -p 5244:5244 \
+        -e UMASK=022 \
+        openlistteam/openlist:latest
     fi
     sleep 3
-    
-    # 统一设置本地开发调试默认管理员密码为 admin123
-    echo "🔑 正在初始化 Alist 默认管理员密码 (设置为 admin123)..."
-    docker exec super-note-alist ./alist admin set admin123
   fi
 
-  # 再次确认 Alist 是否成功启动
+  # 再次确认 OpenList 是否成功启动
   if ! nc -z 127.0.0.1 5244 >/dev/null 2>&1; then
-    echo "❌ 无法自动启动 Alist 服务，请确保已安装并运行 Docker。"
+    echo "❌ 无法自动启动 OpenList 服务，请确保已安装并运行 Docker。"
   else
-    echo "✅ Alist 服务已成功启动！地址: http://localhost:5244"
+    echo "✅ OpenList 服务已成功启动！地址: http://localhost:5244"
   fi
 fi
 

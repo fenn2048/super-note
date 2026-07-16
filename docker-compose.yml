@@ -62,6 +62,11 @@ services:
       - OLLAMA_URL=http://ollama:11434
       # Redis 数据库连接地址
       - REDIS_URL=redis://redis:6379
+      # 后端访问 OpenList 的地址；容器内请使用服务名 openlist
+      - OPENLIST_URL=${OPENLIST_URL:-http://openlist:5244}
+      - MEDIA_STORAGE_URL=${MEDIA_STORAGE_URL:-http://openlist:5244}
+      - OPENLIST_TOKEN=${OPENLIST_TOKEN:-}
+      - MEDIA_STORAGE_TOKEN=${MEDIA_STORAGE_TOKEN:-}
     deploy:
       resources:
         limits:
@@ -122,16 +127,25 @@ services:
           memory: 256M
 
   # ============================================================================
-  # Alist 网盘挂载管理服务 (7x24 常驻)
+  # OpenList 网盘挂载管理服务 (7x24 常驻)
   # ----------------------------------------------------------------------------
-  alist:
-    image: docker.m.daocloud.io/xhofe/alist:latest
-    container_name: super-note-alist
+  openlist:
+    image: docker.m.daocloud.io/openlistteam/openlist:latest
+    container_name: super-note-openlist
     restart: unless-stopped
     ports:
       - "5244:5244"
+    user: ${UID:-501}:${GID:-20}
     volumes:
-      - alist-data:/opt/alist/data
+      - ./openlist-data:/opt/openlist/data
+    environment:
+      - UMASK=022
+    # entrypoint: /bin/sh
+    # command:
+    #   - -c
+    #   - |
+    #     chown -R 1000:1000 /opt/openlist/data
+    #     exec /opt/openlist/entrypoint.sh
     deploy:
       resources:
         limits:
@@ -149,5 +163,5 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  alist-data:
-    driver: local
+  # openlist-data:
+  #   driver: local
