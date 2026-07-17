@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, resolveAttachmentUrl } from "@/lib/api";
 import { Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -7,12 +7,18 @@ import { cn } from "@/lib/utils";
 const id3CoverCache = new Map<string, string>();
 
 /**
- * Streaming parser that fetches up to 1MB of an audio file and extracts
+ * Streaming parser that fetches up to 4MB of an audio file and extracts
  * the embedded ID3v2 cover art (PIC or APIC frames).
  */
 export async function getID3CoverUrl(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url);
+    const absoluteUrl = resolveAttachmentUrl(url);
+    const token = localStorage.getItem("super-token");
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const response = await fetch(absoluteUrl, { headers });
     if (!response.ok) return null;
 
     const reader = response.body?.getReader();
@@ -20,7 +26,7 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
 
     const chunks: Uint8Array[] = [];
     let receivedLength = 0;
-    const maxBytes = 1024 * 1024; // Up to 1MB is more than enough for metadata + APIC
+    const maxBytes = 4 * 1024 * 1024; // Up to 4MB is more than enough for metadata + APIC
 
     while (true) {
       const { done, value } = await reader.read();
@@ -59,7 +65,9 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
 
     // Skip extended header if present
     if ((flags & 0x40) !== 0) {
-      const extSize = (buffer[10] << 24) | (buffer[11] << 16) | (buffer[12] << 8) | buffer[13];
+      const extSize = versionMajor === 4
+        ? (((buffer[10] << 21) | (buffer[11] << 14) | (buffer[12] << 7) | buffer[13]) >>> 0)
+        : (((buffer[10] << 24) | (buffer[11] << 16) | (buffer[12] << 8) | buffer[13]) >>> 0);
       offset += (versionMajor === 4 ? extSize : extSize + 4);
     }
 
@@ -80,10 +88,10 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
         frameId = String.fromCharCode(buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]);
         if (isV4) {
           // ID3v2.4 uses synchsafe size for frames as well
-          frameSize = (buffer[offset + 4] << 21) | (buffer[offset + 5] << 14) | (buffer[offset + 6] << 7) | buffer[offset + 7];
+          frameSize = ((buffer[offset + 4] << 21) | (buffer[offset + 5] << 14) | (buffer[offset + 6] << 7) | buffer[offset + 7]) >>> 0;
         } else {
           // ID3v2.3 uses regular size
-          frameSize = (buffer[offset + 4] << 24) | (buffer[offset + 5] << 16) | (buffer[offset + 6] << 8) | buffer[offset + 7];
+          frameSize = ((buffer[offset + 4] << 24) | (buffer[offset + 5] << 16) | (buffer[offset + 6] << 8) | buffer[offset + 7]) >>> 0;
         }
         headerSize = 10;
       } else {
@@ -112,7 +120,7 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
           while (mimeEnd < frameDataOffset + frameSize && buffer[mimeEnd] !== 0) {
             mimeEnd++;
           }
-          mimeType = String.fromCharCode.apply(null, Array.from(buffer.subarray(p, mimeEnd)));
+          mimeType = new TextDecoder().decode(buffer.subarray(p, mimeEnd));
           p = mimeEnd + 1;
         }
 
@@ -127,7 +135,7 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
           p += 1;
         } else {
           while (p + 1 < frameDataOffset + frameSize && !(buffer[p] === 0 && buffer[p + 1] === 0)) {
-            p++;
+            p += 2;
           }
           p += 2;
         }
