@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { prompt as appPrompt, confirm as confirmDialog } from "@/components/ui/confirm";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
 /* ===== Emoji 图标选择器 ===== */
 const EMOJI_GROUPS = [
@@ -1189,15 +1190,12 @@ function ProjectSidebar() {
  * Sidebar
  *
  * variant:
- *   - "mobile"（默认）：抽屉式主区——WorkspaceSwitcher + 搜索 + 笔记本 + 标签。
- *                      v16 P3 后续：移动端也已对齐桌面双层导航——导航 8 项 / 设置 /
- *                      登出 / 关闭按钮全部迁移到 NavRail variant="mobile"，主区不再渲染。
- *   - "desktop"：精简侧栏——仅 WorkspaceSwitcher + 搜索 + 笔记本 + 标签。
- *                导航、设置、登出、折叠按钮都迁移到 NavRail variant="desktop"。
+ *   - "mobile"：抽屉——关闭按钮 + WorkspaceSwitcher + 搜索 + 笔记本 + 标签 + 底栏设置/登出。
+ *              模块导航由底部 Tab /「更多」承担，抽屉内不再挂 NavRail。
+ *   - "desktop"：精简侧栏——搜索 + 笔记本 + 标签；导航/设置/登出/折叠在 NavRail。
  *
- * 桌面端：App.tsx 渲染 <NavRail variant="desktop"/> + <Sidebar variant="desktop"/>。
- * 移动端：App.tsx 渲染抽屉，内部为 <NavRail variant="mobile"/> + <Sidebar variant="mobile"/>。
- * 桌面折叠态（sidebarCollapsed=true）下 App.tsx 隐藏整个 Sidebar 但保留 NavRail。
+ * 桌面端：App.tsx 渲染 <NavRail/> + <Sidebar variant="desktop"/>。
+ * 移动端：App.tsx 抽屉内仅 <Sidebar variant="mobile"/>。
  */
 export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | "mobile" } = {}) {
   const { state } = useApp();
@@ -2299,59 +2297,70 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       className="w-full h-full vibrancy-sidebar bg-app-sidebar border-r border-app-border flex flex-col shrink-0 transition-colors"
       style={{ width: undefined }}
     >
-      {/* Header（v15 紧凑化：py-3 → py-2，给下方笔记本/标签腾出 ~8px）
-          v16：桌面变体下折叠按钮已迁移到 NavRail，Header 仅保留 Title +（移动）关闭按钮
-          v16 P3 后续：桌面变体右侧加 Rail 模式切换按钮——单按钮循环切换三档
-          icon → label → hidden → icon …，tooltip 提示下一档名称。
-          单按钮循环的好处：无需新增菜单组件、无需占用 Header 多余空间；
-          代价：用户首次发现需要点 2 次才到目标态——属于可接受的学习成本。
-          v16 P3 后续 (mobile 双层化)：移动变体的关闭按钮也迁到 NavRail 顶部，
-          Header 这里只剩纯标题。 */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-app-border" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
-        <h1 className="text-sm font-semibold text-tx-primary tracking-wide">{siteConfig.title}</h1>
-        <div className="flex items-center gap-1">
-          {isDesktop && (() => {
-            const next = nextRailMode(railMode);
-            // 当前态对应的图标（提示"现在是几栏"），点击后切到 next：
-            //   icon   → Columns3（3 列：Rail+Sidebar+Editor，纯图标 Rail）
-            //   label  → 在 Columns3 基础上加底部小条暗示"带文字"——lucide 没有正好的图标，
-            //           复用 Columns3 但 tooltip 不一样，足够区分（实测优于硬塞个不准的图标）
-            //   hidden → Columns2（2 列：仅 Sidebar+Editor）
-            const CurrentIcon = railMode === "hidden" ? Columns2 : Columns3;
-            return (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setRailMode(next)}
-                title={t(`sidebar.railMode.switchTo.${next}`)}
-                aria-label={t(`sidebar.railMode.switchTo.${next}`)}
-              >
-                <CurrentIcon size={16} />
-              </Button>
-            );
-          })()}
+      {/* Header：移动端关闭；桌面端 Rail 模式切换 */}
+      <div
+        className="flex items-center justify-between px-3 py-2 border-b border-app-border shrink-0"
+        style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
+      >
+        <h1 className="text-sm font-semibold text-tx-primary tracking-wide truncate pl-1">
+          {siteConfig.title}
+        </h1>
+        <div className="flex items-center gap-0.5">
+          {isDesktop &&
+            (() => {
+              const next = nextRailMode(railMode);
+              const CurrentIcon = railMode === "hidden" ? Columns2 : Columns3;
+              return (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setRailMode(next)}
+                  title={t(`sidebar.railMode.switchTo.${next}`)}
+                  aria-label={t(`sidebar.railMode.switchTo.${next}`)}
+                >
+                  <CurrentIcon size={16} />
+                </Button>
+              );
+            })()}
+          {!isDesktop && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="min-w-[40px] min-h-[40px]"
+              onClick={() => actions.setMobileSidebar(false)}
+              title={t("common.close")}
+              aria-label={t("common.close")}
+            >
+              <X size={18} />
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* 工作区切换：移动抽屉必备；桌面也可放侧栏顶 */}
+      <div className="px-3 pt-2 pb-1.5 shrink-0">
+        <WorkspaceSwitcher
+          variant="sidebar"
+          onWorkspaceChange={() => {
+            actions.refreshNotebooks();
+            actions.refreshNotes();
+          }}
+        />
+      </div>
 
       {/* Search */}
       {state.viewMode !== "projects" && state.viewMode !== "plans" && (
-        <div className="px-3 pb-1.5">
+        <div className="px-3 pb-1.5 shrink-0">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
             <Input
-              placeholder={t('sidebar.searchPlaceholder')}
-              className="pl-8 h-8 text-xs bg-app-bg border-app-border"
+              placeholder={t("sidebar.searchPlaceholder")}
+              className="pl-8 h-9 text-xs bg-app-bg border-app-border rounded-input"
               value={searchInput}
-              /* data-sidebar-search：Electron 原生"搜索"菜单 / Dock Quick Action 的
-               * 聚焦目标。见 App.tsx 的 onOpenSearch。本应用没有全局搜索弹窗，
-               * "搜索"语义就是聚焦此输入框。 */
               data-sidebar-search=""
               onChange={(e) => {
                 const query = e.target.value;
                 setSearchInput(query);
-                
-                // 其他视图：笔记搜索逻辑
                 if (query.trim()) {
                   actions.setViewMode("search");
                   actions.setSearchQuery(query);
@@ -2364,14 +2373,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
           </div>
         </div>
       )}
-
-      {/* ===== Navigation =====
-          v16 P3 后续：移动端也已下沉到 NavRail variant="mobile"，主区不再渲染。
-          桌面端早在 v16 主版本就迁出。本组件仅保留 navItemsRaw/navItems 定义
-          以便后续清理（短期内这段死代码无运行时副作用——React 不会渲染未引用的项）。 */}
-
-      {/* Separator——已移除：移动端导航迁出后无需在主区上方加分隔；
-          WorkspaceSwitcher + 搜索 与笔记本的视觉间距已经足够。 */}
 
       {state.viewMode === "projects" || state.viewMode === "plans" ? (
         <ProjectSidebar />
@@ -2649,8 +2650,32 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         </>
       )}
 
-      {/* Footer：v16 桌面端 / v16 P3 后续移动端，设置 + 登出 都迁到 NavRail。
-          本组件不再渲染任何 Footer。 */}
+      {/* Footer：移动端抽屉恢复设置/登出（桌面由 NavRail 承担） */}
+      {!isDesktop && (
+        <div className="mt-auto border-t border-app-border shrink-0 px-2 py-2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("super:open-settings"));
+            }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-button text-xs font-medium text-tx-secondary hover:bg-app-hover hover:text-tx-primary transition-colors min-h-[44px]"
+          >
+            <Settings size={16} />
+            {t("sidebar.settings")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              broadcastLogout("user_logout");
+              window.location.reload();
+            }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-button text-xs font-medium text-tx-secondary hover:bg-accent-danger/10 hover:text-accent-danger transition-colors min-h-[44px]"
+          >
+            <LogOut size={16} />
+            {t("sidebar.logout")}
+          </button>
+        </div>
+      )}
 
 
 
