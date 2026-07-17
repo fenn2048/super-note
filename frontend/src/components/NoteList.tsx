@@ -17,6 +17,7 @@ import { exportSingleNote, exportSingleNoteAsPDF, exportSingleNoteAsImage } from
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { realtime } from "@/lib/realtime";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
+import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 // "导入 Word 文档" 走 dynamic import（见 createNoteInNotebook），减少首屏 bundle 体积。
 
 /* ===== 排序模式 ===== */
@@ -1108,6 +1109,9 @@ function VirtualNoteList({
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
+  // PR5：虚拟列表滚动隐栏
+  useScrollHideBars(containerRef, true, [notes.length]);
+
   const totalHeight = notes.length * ITEM_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
   const endIndex = Math.min(notes.length, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + OVERSCAN);
@@ -1425,6 +1429,9 @@ export default function NoteList() {
       return cmp * dir || a.id.localeCompare(b.id);
     });
   }, [state.notes, sortPref.by, sortPref.dir, state.viewMode]);
+
+  // PR5：非虚拟列表 ScrollArea 滚动隐栏
+  useScrollHideBars(scrollAreaRef, true, [sortedNotes.length, state.viewMode]);
 
   const handleCardRef = useCallback((id: string, el: HTMLDivElement | null) => {
     if (el) noteCardRefs.current.set(id, el);

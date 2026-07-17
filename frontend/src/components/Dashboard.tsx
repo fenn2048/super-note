@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
@@ -25,6 +25,7 @@ import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from
 import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
+import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import { renderDiaryContent } from "./DiaryCenter";
 
 // ---------------------------------------------------------------------------
@@ -635,6 +636,9 @@ export default function Dashboard() {
     window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
   };
 
+  const homeScrollRef = useRef<HTMLDivElement>(null);
+  useScrollHideBars(homeScrollRef, true, [loading, hasWorkspaces]);
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
       {/* 首页顶栏：移动端统一 Chrome；桌面保留工作区切换 */}
@@ -648,7 +652,7 @@ export default function Dashboard() {
         <WorkspaceSwitcher variant="header" />
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={homeScrollRef} className="flex-1 overflow-y-auto">
         <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
           {/* ===== 欢迎区域 ===== */}
           <motion.div

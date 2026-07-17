@@ -38,6 +38,7 @@ import {
 import { api, getCurrentWorkspace, getBaseUrl, getServerUrl } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { toast } from "@/lib/toast";
+import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import { Diary, DiaryStats, Tag, DiaryComment, User } from "@/types";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { cn, detectSuMention, getTagColor } from "@/lib/utils";
@@ -3554,6 +3555,8 @@ export default function DiaryCenter() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [filterMode, setFilterMode] = useState<"all" | "public" | "private" | "liked" | string>("all");
+  // PR5：说说时间线滚动隐栏
+  useScrollHideBars(scrollRef, true, [loading, items.length, filterMode]);
 
   const [preset, setPreset] = useState<RangePreset>("all");
   const [customRange, setCustomRange] = useState<DateRange>({});

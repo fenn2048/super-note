@@ -43,7 +43,7 @@ import {
   Indent, Outdent, AlignLeft, AlignCenter, AlignRight, Trash2,
   FileType, Check, AlertCircle, Info, ArrowUp, Link as LinkIcon,
   ExternalLink, Unlink2, Workflow, Sigma, BookOpen, Download,
-  Type, Palette, Eraser, ChevronDown, Search,
+  Type, Palette, Eraser, ChevronDown, Search, MoreHorizontal,
   // 表格气泡菜单图标
   Rows3, Columns3, Merge, Split, Heading,
 } from "lucide-react";
@@ -53,6 +53,7 @@ import { toast } from "@/lib/toast";
 import { prompt as promptDialog } from "@/components/ui/confirm";
 import { Note, Tag } from "@/types";
 import TagInput from "@/components/TagInput";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import AIWritingAssistant from "@/components/AIWritingAssistant";
 import type { NoteEditorHandle, NoteEditorHeading, NoteEditorProps } from "@/components/editors/types";
 import type { FormatMenuPayload } from "@/lib/desktopBridge";
@@ -4011,13 +4012,14 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
       />
 
       {/* Editor content
-          paddingBottom 仅吃键盘高度即可（避光标被键盘遮）。
-          v2026-05-18 起移除底部移动浮动工具栏，由顶部 sticky 主工具栏统一承担
-          所有格式化命令。 */}
+          底部预留：移动工具栏(~52px) + 键盘高度，避免光标被挡。 */}
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-auto px-4 md:px-8 pb-12"
-        style={{ paddingBottom: "calc(3rem + var(--keyboard-height, 0px))" }}
+        style={{
+          paddingBottom:
+            "calc(3rem + 3.25rem + var(--keyboard-height, 0px))",
+        }}
       >
         <EditorContent editor={editor} />
         {tiptapMention && (
@@ -4258,66 +4260,201 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         )}
       </AnimatePresence>
 
-      {/* 移动端底部工具栏：固定在最下方，仅手机端可见 */}
-      <div className="md:hidden sticky bottom-0 z-20 flex items-center justify-center gap-1 px-2 py-1.5 border-t border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 overflow-x-auto hide-scrollbar">
-        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="撤销">
-          <Undo size={14} />
-        </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="重做">
-          <Redo size={14} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => toggleHeadingSmart(editor, 2)}
-          isActive={editor.isActive("heading", { level: 2 })}
-          title="标题"
-          compact
-        >
-          <Heading2 size={14} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          isActive={editor.isActive("bold")}
-          title="加粗"
-          compact
-        >
-          <Bold size={14} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          isActive={editor.isActive("italic")}
-          title="斜体"
-          compact
-        >
-          <Italic size={14} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={editor.isActive("underline")}
-          title="下划线"
-          compact
-        >
-          <UnderlineIcon size={14} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          isActive={editor.isActive("bulletList")}
-          title="无序列表"
-          compact
-        >
-          <List size={14} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          isActive={editor.isActive("orderedList")}
-          title="有序列表"
-          compact
-        >
-          <ListOrdered size={14} />
-        </ToolbarButton>
-      </div>
+      {/* PR5 移动端底部工具栏：fixed 贴键盘上方，主排 + 更多 */}
+      <MobileEditorToolbar
+        editor={editor}
+        onImage={handleImageUpload}
+        onAI={openAIAssistant}
+        toggleHeadingSmart={toggleHeadingSmart}
+      />
     </div>
   );
 });
+
+/** PR5：移动端编辑器格式栏 */
+function MobileEditorToolbar({
+  editor,
+  onImage,
+  onAI,
+  toggleHeadingSmart,
+}: {
+  editor: any;
+  onImage: () => void;
+  onAI: () => void;
+  toggleHeadingSmart: (editor: any, level: 1 | 2 | 3 | 4 | 5 | 6) => void;
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
+  const [vvInset, setVvInset] = useState(0);
+
+  // Web 调试：visualViewport 近似键盘高度
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setVvInset(inset > 40 ? inset : 0);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
+
+  const bottomPad = kbVisible && kbHeight > 0 ? kbHeight : vvInset;
+
+  // 编辑器聚焦时隐藏全局 Tab/FAB，腾出读写空间
+  useEffect(() => {
+    if (!editor) return;
+    const onFocus = () => {
+      try {
+        window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
+      } catch { /* ignore */ }
+    };
+    const onBlur = () => {
+      // 延迟，避免点工具栏按钮时误 show
+      window.setTimeout(() => {
+        if (!editor.isFocused) {
+          try {
+            window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
+          } catch { /* ignore */ }
+        }
+      }, 180);
+    };
+    editor.on("focus", onFocus);
+    editor.on("blur", onBlur);
+    return () => {
+      editor.off("focus", onFocus);
+      editor.off("blur", onBlur);
+    };
+  }, [editor]);
+
+  if (!editor) return null;
+
+  const btn = (
+    onClick: () => void,
+    active: boolean | undefined,
+    title: string,
+    child: React.ReactNode,
+    disabled?: boolean
+  ) => (
+    <ToolbarButton
+      onClick={onClick}
+      isActive={!!active}
+      disabled={disabled}
+      title={title}
+      compact
+    >
+      {child}
+    </ToolbarButton>
+  );
+
+  return (
+    <div
+      className="md:hidden fixed left-0 right-0 z-40 border-t border-app-border bg-app-elevated/95 backdrop-blur-md supports-[backdrop-filter]:bg-app-elevated/80 shadow-[0_-4px_20px_rgba(28,25,23,0.08)]"
+      style={{
+        bottom: bottomPad,
+        paddingBottom: bottomPad > 0 ? 4 : "var(--safe-area-bottom)",
+      }}
+      data-swipe-blocker
+    >
+      {moreOpen && (
+        <div className="flex items-center justify-center gap-1 px-2 py-1.5 border-b border-app-border/60 overflow-x-auto hide-scrollbar">
+          {btn(
+            () => editor.chain().focus().toggleUnderline().run(),
+            editor.isActive("underline"),
+            "下划线",
+            <UnderlineIcon size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleStrike().run(),
+            editor.isActive("strike"),
+            "删除线",
+            <span className="text-[11px] font-semibold line-through px-0.5">S</span>
+          )}
+          {btn(
+            () => editor.chain().focus().toggleOrderedList().run(),
+            editor.isActive("orderedList"),
+            "有序列表",
+            <ListOrdered size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleBlockquote().run(),
+            editor.isActive("blockquote"),
+            "引用",
+            <Quote size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleCode().run(),
+            editor.isActive("code"),
+            "行内代码",
+            <Code size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().setHorizontalRule().run(),
+            false,
+            "分隔线",
+            <Minus size={16} />
+          )}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-0.5 px-1.5 py-1.5">
+        <div className="flex items-center gap-0.5 overflow-x-auto hide-scrollbar flex-1 min-w-0">
+          {btn(
+            () => editor.chain().focus().undo().run(),
+            false,
+            "撤销",
+            <Undo size={16} />,
+            !editor.can().undo()
+          )}
+          {btn(
+            () => toggleHeadingSmart(editor, 2 as 2),
+            editor.isActive("heading", { level: 2 }),
+            "标题",
+            <Heading2 size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleBold().run(),
+            editor.isActive("bold"),
+            "加粗",
+            <Bold size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleItalic().run(),
+            editor.isActive("italic"),
+            "斜体",
+            <Italic size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleBulletList().run(),
+            editor.isActive("bulletList"),
+            "列表",
+            <List size={16} />
+          )}
+          {btn(
+            () => editor.chain().focus().toggleTaskList().run(),
+            editor.isActive("taskList"),
+            "待办",
+            <CheckSquare size={16} />
+          )}
+          {btn(onImage, false, "图片", <ImagePlus size={16} />)}
+          {btn(
+            () => setMoreOpen((v) => !v),
+            moreOpen,
+            "更多",
+            <MoreHorizontal size={16} />
+          )}
+        </div>
+        <div className="shrink-0 pl-1 border-l border-app-border/50 ml-0.5">
+          {btn(onAI, false, "AI 写作", <Sparkles size={16} className="text-violet-500" />)}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * 把附件信息渲染成一段「可粘附进 Tiptap 内容」的 HTML 链接。

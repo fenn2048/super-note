@@ -26,6 +26,7 @@ import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/Recu
 import { syncTaskNotification, syncAllTaskNotifications } from "@/hooks/useCapacitor";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
+import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 
 
 /* ===========================================================================
@@ -1451,30 +1452,8 @@ export default function TaskCenter() {
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (viewMode !== "list") {
-      window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
-      return;
-    }
-    const viewport = scrollRef.current;
-    if (!viewport) return;
-    
-    let lastScrollTop = 0;
-    const handleScroll = () => {
-      const scrollTop = viewport.scrollTop;
-      if (scrollTop <= 0) {
-        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
-      } else if (scrollTop > lastScrollTop + 10) {
-        window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
-      } else if (scrollTop < lastScrollTop - 10) {
-        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
-      }
-      lastScrollTop = scrollTop;
-    };
-    
-    viewport.addEventListener("scroll", handleScroll);
-    return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [viewMode, tasks]);
+  // PR5：统一滚动隐栏
+  useScrollHideBars(scrollRef, viewMode === "list", [viewMode, tasks.length]);
   // pendingOrphans 由 QuickAdd 在提交瞬间回传，主组件在 createTask 成功后
   // 把这些孤儿附件 bind 到新 task；提交失败时孤儿留在表里由清理脚本处理。
   const pendingOrphansRef = useRef<string[]>([]);
