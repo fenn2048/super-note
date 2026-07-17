@@ -746,9 +746,25 @@ media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => 
 
   try {
     const linkInfo = await getAlistRawUrl(item);
-    const isHLS = linkInfo.url.includes(".m3u8");
-    const filename = isHLS ? "video.m3u8" : "video.mp4";
-    return c.json({ url: `/api/media/items/${id}/proxy/${filename}`, expires_in: 2700 });
+    
+    // 针对局域网/移动端访问，若播放链接域名与 Alist 配置域名一致，则自动重写为客户端当前访问的 Hostname/IP
+    const { url: alistUrl } = getAlistConfig();
+    let finalUrl = linkInfo.url;
+    if (finalUrl && finalUrl.startsWith("http") && alistUrl) {
+      try {
+        const parsedRaw = new URL(finalUrl);
+        const parsedAlist = new URL(alistUrl);
+        if (parsedRaw.hostname === parsedAlist.hostname) {
+          const clientRequestUrl = new URL(c.req.url);
+          parsedRaw.hostname = clientRequestUrl.hostname;
+          finalUrl = parsedRaw.toString();
+        }
+      } catch (e) {
+        console.warn("Failed to rewrite Alist play URL:", e);
+      }
+    }
+
+    return c.json({ url: finalUrl, expires_in: 2700, headers: linkInfo.headers });
   } catch (err: any) {
     const status = err.status || 502;
     const code = err.code || "ALIST_CONN_ERROR";
