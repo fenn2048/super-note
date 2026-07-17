@@ -722,19 +722,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     const isMobile = window.innerWidth < 768;
 
     if (isMobile) {
-      if (clickTimeoutRef.current) {
-        clearTimeout(clickTimeoutRef.current);
-        clickTimeoutRef.current = null;
+      if (ratio >= 0.3 && ratio <= 0.7) {
         setIsImmersive(prev => !prev);
+      } else if (ratio < 0.3) {
+        viewRef.current?.prev();
       } else {
-        clickTimeoutRef.current = setTimeout(() => {
-          clickTimeoutRef.current = null;
-          if (ratio < 0.5) {
-            viewRef.current?.prev();
-          } else {
-            viewRef.current?.next();
-          }
-        }, 250);
+        viewRef.current?.next();
       }
     } else {
       if (ratio >= 0.3 && ratio <= 0.7) {
@@ -743,11 +736,43 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     }
   }, []);
 
+  const touchStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (e.touches.length > 0) {
+      touchStartY.current = e.touches[0].clientY;
+      touchStartX.current = e.touches[0].clientX;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (touchStartY.current !== null && touchStartX.current !== null && e.changedTouches.length > 0) {
+      const endY = e.changedTouches[0].clientY;
+      const endX = e.changedTouches[0].clientX;
+      const deltaY = endY - touchStartY.current;
+      const deltaX = endX - touchStartX.current;
+      
+      // 竖直滑动翻页 (仅在水平偏移较小的情况下判定)
+      if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50) {
+        if (deltaY > 0) {
+          viewRef.current?.prev(); // 向下滑动，上一页
+        } else {
+          viewRef.current?.next(); // 向上滑动，下一页
+        }
+      }
+    }
+    touchStartY.current = null;
+    touchStartX.current = null;
+  }, []);
+
   // Refs to hold the latest version of listeners to avoid stale closures
   const handleMouseUpListenerRef = useRef(handleMouseUpListener);
   const handleMouseDownListenerRef = useRef(handleMouseDownListener);
   const handleHoverMouseMoveListenerRef = useRef(handleHoverMouseMoveListener);
   const handleClickListenerRef = useRef(handleClickListener);
+  const handleTouchStartRef = useRef(handleTouchStart);
+  const handleTouchEndRef = useRef(handleTouchEnd);
 
   useEffect(() => {
     handleMouseUpListenerRef.current = handleMouseUpListener;
@@ -764,6 +789,14 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   useEffect(() => {
     handleClickListenerRef.current = handleClickListener;
   }, [handleClickListener]);
+
+  useEffect(() => {
+    handleTouchStartRef.current = handleTouchStart;
+  }, [handleTouchStart]);
+
+  useEffect(() => {
+    handleTouchEndRef.current = handleTouchEnd;
+  }, [handleTouchEnd]);
 
   // Stable wrappers that delegate execution to the latest ref callbacks
   const mouseUpWrapper = useCallback((e: MouseEvent) => {
@@ -782,6 +815,14 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     handleClickListenerRef.current(e);
   }, []);
 
+  const touchStartWrapper = useCallback((e: TouchEvent) => {
+    handleTouchStartRef.current(e);
+  }, []);
+
+  const touchEndWrapper = useCallback((e: TouchEvent) => {
+    handleTouchEndRef.current(e);
+  }, []);
+
   // Re-attach listeners when activeSidebar changes
   useEffect(() => {
     const attach = () => {
@@ -792,17 +833,21 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         doc.removeEventListener("mousedown", mouseDownWrapper);
         doc.removeEventListener("mousemove", mouseMoveWrapper);
         doc.removeEventListener("click", clickWrapper);
+        doc.removeEventListener("touchstart", touchStartWrapper);
+        doc.removeEventListener("touchend", touchEndWrapper);
 
         doc.addEventListener("mouseup", mouseUpWrapper);
         doc.addEventListener("mousedown", mouseDownWrapper);
         doc.addEventListener("mousemove", mouseMoveWrapper);
         doc.addEventListener("click", clickWrapper);
+        doc.addEventListener("touchstart", touchStartWrapper, { passive: true });
+        doc.addEventListener("touchend", touchEndWrapper, { passive: true });
       }
     };
     attach();
     const timer = setTimeout(attach, 350);
     return () => clearTimeout(timer);
-  }, [activeSidebar, mouseUpWrapper, mouseDownWrapper, mouseMoveWrapper, clickWrapper]);
+  }, [activeSidebar, mouseUpWrapper, mouseDownWrapper, mouseMoveWrapper, clickWrapper, touchStartWrapper, touchEndWrapper]);
 
   const drawAnnotationsOnCurrentSection = useCallback(() => {
     if (!viewRef.current) return;
