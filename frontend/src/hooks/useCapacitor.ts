@@ -31,54 +31,93 @@ if (typeof document !== "undefined") {
 }
 
 /**
- * P0: Android 返回键处理
- * 按层级依次关闭：编辑器 → 侧边栏 → 确认退出
+ * P0 / PR2: Android 返回键 + Web Escape
+ *
+ * 优先走 useMobileBackStack 注册的层（设置/撰写/侧栏/编辑器/子页…）；
+ * 无层可关时：原生双击退出 App；Web 上 Escape 不退出。
+ *
+ * 旧签名 useBackButton({ mobileView, ... }) 已废弃——层由各处
+ * useRegisterBackLayer 声明，本 hook 只负责按键入口。
  */
-export function useBackButton({
-  mobileView,
-  mobileSidebarOpen,
-  onBackToList,
-  onCloseSidebar,
-}: {
-  mobileView: "list" | "editor";
-  mobileSidebarOpen: boolean;
-  onBackToList: () => void;
-  onCloseSidebar: () => void;
+export function useMobileBackButton(options?: {
+  /** 再按退出时的提示文案；传 null 则只震动不 toast */
+  exitHint?: string | null;
 }) {
-  // 用于双击返回退出的时间戳
   const lastBackPress = useRef(0);
+  const exitHint = options?.exitHint === undefined ? "再按一次退出应用" : options.exitHint;
 
   useEffect(() => {
-    if (!isNativePlatform()) return;
+    let cancelled = false;
 
-    const handler = CapApp.addListener("backButton", ({ canGoBack }) => {
-      // 层级 1：侧边栏打开 → 关闭侧边栏
-      if (mobileSidebarOpen) {
-        onCloseSidebar();
-        return;
-      }
+    const handleBack = async () => {
+      const { tryDismissTopBackLayer } = await import("@/hooks/useMobileBackStack");
+      if (tryDismissTopBackLayer()) return;
 
-      // 层级 2：编辑器视图 → 返回笔记列表
-      if (mobileView === "editor") {
-        onBackToList();
-        return;
-      }
+      if (!isNativePlatform()) return;
 
-      // 层级 3：已经在列表视图 → 双击退出 App
       const now = Date.now();
       if (now - lastBackPress.current < 2000) {
         CapApp.exitApp();
-      } else {
-        lastBackPress.current = now;
-        // 触觉反馈提示用户再按一次退出
-        haptic.warning();
+        return;
       }
-    });
+      lastBackPress.current = now;
+      haptic.warning();
+      if (exitHint) {
+        try {
+          const { toast } = await import("@/lib/toast");
+          toast.info(exitHint);
+        } catch {
+          /* toast 不可用时忽略 */
+        }
+      }
+    };
+
+    const cleanups: Array<() => void> = [];
+
+    if (isNativePlatform()) {
+      const handlerPromise = CapApp.addListener("backButton", () => {
+        if (!cancelled) void handleBack();
+      });
+      cleanups.push(() => {
+        handlerPromise.then((h) => h.remove());
+      });
+    }
+
+    // Web / 桌面调试：Escape 只关层，不退出
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // 输入框内 Escape 交给业务（关闭搜索等），不抢
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        return;
+      }
+      void import("@/hooks/useMobileBackStack").then(({ tryDismissTopBackLayer }) => {
+        if (tryDismissTopBackLayer()) {
+          e.preventDefault();
+        }
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    cleanups.push(() => window.removeEventListener("keydown", onKey));
 
     return () => {
-      handler.then((h) => h.remove());
+      cancelled = true;
+      cleanups.forEach((fn) => fn());
     };
-  }, [mobileView, mobileSidebarOpen, onBackToList, onCloseSidebar]);
+  }, [exitHint]);
+}
+
+/**
+ * @deprecated 使用 useMobileBackButton + useRegisterBackLayer
+ * 保留薄包装，避免外部旧调用直接炸；内部忽略参数，依赖全局栈。
+ */
+export function useBackButton(_opts?: {
+  mobileView?: "list" | "editor";
+  mobileSidebarOpen?: boolean;
+  onBackToList?: () => void;
+  onCloseSidebar?: () => void;
+}) {
+  useMobileBackButton();
 }
 
 /**

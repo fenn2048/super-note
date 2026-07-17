@@ -47,7 +47,8 @@ import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
+import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
+import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import CommandPalette from "@/components/common/CommandPalette";
@@ -748,20 +749,92 @@ function AppLayout() {
   }, [actions]);
 
 
-  // P0: Android 返回键处理
-  const handleBackToList = useCallback(() => {
-    actions.setMobileView("list");
-  }, [actions]);
-  const handleCloseSidebar = useCallback(() => {
-    actions.setMobileSidebar(false);
-  }, [actions]);
+  // ── PR2: 移动端返回栈（priority 高者先关）──
+  // 全屏屏保 / 设置 / 命令面板 / 撰写类 modal / 侧栏 / 编辑器 / 书籍 / 项目详情 / 更多子页
+  useRegisterBackLayer(
+    "reminder-screensaver",
+    showReminder,
+    () => {
+      setShowReminder(false);
+      setReminderTrigger((prev) => prev + 1);
+    },
+    1000
+  );
+  useRegisterBackLayer(
+    "settings",
+    showSettings,
+    () => setShowSettings(false),
+    900
+  );
+  useRegisterBackLayer(
+    "command-palette",
+    commandPaletteOpen,
+    () => setCommandPaletteOpen(false),
+    880
+  );
+  useRegisterBackLayer(
+    "camera-modal",
+    showCameraModal,
+    () => setShowCameraModal(false),
+    820
+  );
+  useRegisterBackLayer(
+    "diary-composer",
+    showDiaryComposer,
+    () => {
+      setShowDiaryComposer(false);
+      setComposerInitialImages([]);
+    },
+    810
+  );
+  useRegisterBackLayer(
+    "task-composer",
+    showTaskComposer,
+    () => setShowTaskComposer(false),
+    800
+  );
+  useRegisterBackLayer(
+    "mobile-sidebar",
+    state.mobileSidebarOpen,
+    () => actions.setMobileSidebar(false),
+    600
+  );
+  // 笔记编辑器：笔记相关视图 + editor 态
+  useRegisterBackLayer(
+    "note-editor",
+    isNotesView && state.mobileView === "editor",
+    () => actions.setMobileView("list"),
+    500
+  );
+  useRegisterBackLayer(
+    "book-reader",
+    state.viewMode === "books" && !!activeBookHash,
+    () => setActiveBookHash(null),
+    400
+  );
 
-  useBackButton({
-    mobileView: state.mobileView,
-    mobileSidebarOpen: state.mobileSidebarOpen,
-    onBackToList: handleBackToList,
-    onCloseSidebar: handleCloseSidebar,
-  });
+  // 从「更多」进入的子页 → 回更多
+  // （项目详情层在 projectFilter 声明后单独注册）
+  const moreStackModes = new Set([
+    "files",
+    "ai-chat",
+    "favorites",
+    "trash",
+    "mentions",
+    "tasks",
+  ]);
+  useRegisterBackLayer(
+    "more-stack",
+    moreStackModes.has(state.viewMode),
+    () => {
+      actions.setViewMode("more");
+      actions.setMobileView("list");
+    },
+    200
+  );
+
+  // Android 返回键 / Escape 入口
+  useMobileBackButton();
 
   // P2: 状态栏与主题同步
   useStatusBarSync();
@@ -791,10 +864,13 @@ function AppLayout() {
   const handleSwipeOpen = useCallback(() => {
     actions.setMobileSidebar(true);
   }, [actions]);
+  const handleSwipeClose = useCallback(() => {
+    actions.setMobileSidebar(false);
+  }, [actions]);
 
   useSwipeGesture({
     onSwipeRight: handleSwipeOpen,
-    onSwipeLeft: handleCloseSidebar,
+    onSwipeLeft: handleSwipeClose,
     mobileSidebarOpen: state.mobileSidebarOpen,
   });
 
@@ -1015,6 +1091,21 @@ function AppLayout() {
   }, []);
 
   const isProjectDetailOpen = isProjectsView && projectFilter?.type === "detail";
+
+  // 项目详情返回层（依赖 projectFilter，须在其后注册）
+  useRegisterBackLayer(
+    "project-detail",
+    isProjectDetailOpen,
+    () => {
+      const filter = { type: "my-tasks" };
+      try {
+        sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+      } catch { /* ignore */ }
+      setProjectFilter(filter);
+      window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
+    },
+    350
+  );
 
   const isRootPageOfTabBar =
     (state.viewMode === "home") ||
