@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, FolderPlus } from "lucide-react";
+import { Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, FolderPlus, Film, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
@@ -53,6 +53,7 @@ import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import CommandPalette from "@/components/common/CommandPalette";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
+import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import { realtime } from "@/lib/realtime";
 
 import { App as CapApp } from "@capacitor/app";
@@ -355,10 +356,16 @@ function AppLayout() {
     return null;
   });
 
+  const viewModeRef = useRef(state.viewMode);
+  useEffect(() => {
+    viewModeRef.current = state.viewMode;
+  }, [state.viewMode]);
+
   // Sync hash changes -> App State
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
+      const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
       if (hash.startsWith("#/books/")) {
         const bookHash = hash.replace("#/books/", "");
         if (bookHash) {
@@ -371,7 +378,9 @@ function AppLayout() {
       } else if (hash === "#/diary") {
         actions.setViewMode("diary");
       } else if (hash === "#/notes") {
-        actions.setViewMode("all");
+        if (!notesViewModes.includes(viewModeRef.current)) {
+          actions.setViewMode("all");
+        }
       } else if (hash === "#/tasks") {
         actions.setViewMode("tasks");
       } else if (hash === "#/files") {
@@ -1012,6 +1021,8 @@ function AppLayout() {
     (state.viewMode === "projects" && !isProjectDetailOpen) ||
     (isNotesView && state.mobileView === "list") ||
     (state.viewMode === "diary") ||
+    (state.viewMode === "media") ||
+    (state.viewMode === "books") ||
     (state.viewMode === "more");
 
   const { visible: keyboardVisible } = useKeyboardVisible();
@@ -1380,6 +1391,10 @@ function MobileTopBar() {
         return t("projects.myTasks") || "我的待办";
       case "trash":
         return "回收站";
+      case "files":
+        return t("sidebar.fileManager") || "文件管理";
+      case "mentions":
+        return "消息盒子";
       default:
         return siteConfig.title || "星空笔记";
     }
@@ -1400,77 +1415,65 @@ function MobileTopBar() {
     return null;
   }
 
-  const isFiles = state.viewMode === "files";
-  const isMentions = state.viewMode === "mentions";
+  const closeToMore = () => {
+    actions.setViewMode("more");
+    actions.setMobileView("list");
+  };
 
-  return (
-    <header
-      className={cn(
-        "flex items-center px-4 py-3 border-b border-app-border/40 bg-app-surface/80 backdrop-blur-lg md:hidden transition-all duration-300 ease-in-out overflow-hidden shrink-0",
-        visible ? "min-h-[56px] h-auto opacity-100 mt-0" : "h-0 min-h-0 opacity-0 -mt-14 pointer-events-none"
-      )}
-      style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}
-    >
-      {isFiles ? (
-        <div className="flex-1 flex justify-end">
-          <button
-            onClick={() => {
-              actions.setViewMode("more");
-              actions.setMobileView("list");
-            }}
-            className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-            title="关闭"
-          >
-            <X size={18} />
-          </button>
-        </div>
-      ) : isMentions ? (
-        <div className="flex-1 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell size={18} className="text-accent-primary" />
-            <span className="text-sm font-bold text-tx-primary">消息盒子</span>
+  if (state.viewMode === "files") {
+    return (
+      <MobileChromeHeader
+        variant="stack"
+        stackAction="close"
+        title={getTitle()}
+        onLeadingClick={closeToMore}
+        visible={visible}
+      />
+    );
+  }
+
+  if (state.viewMode === "mentions") {
+    return (
+      <MobileChromeHeader
+        variant="stack"
+        stackAction="close"
+        title={
+          <span className="flex items-center gap-2 min-w-0">
+            <Bell size={16} className="text-accent-primary shrink-0" />
+            <span className="text-[15px] font-bold text-tx-primary truncate">消息盒子</span>
             {state.unreadMentionCount > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-bold">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-danger text-white font-bold shrink-0">
                 {state.unreadMentionCount}
               </span>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            {state.unreadMentionCount > 0 && (
-              <button
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent("super:mark-all-mentions-read"));
-                }}
-                className="flex items-center gap-1 text-xs text-accent-primary hover:underline font-medium mr-1"
-              >
-                <CheckCheck size={14} />
-                全部已读
-              </button>
-            )}
+          </span>
+        }
+        onLeadingClick={closeToMore}
+        visible={visible}
+        right={
+          state.unreadMentionCount > 0 ? (
             <button
+              type="button"
               onClick={() => {
-                actions.setViewMode("more");
-                actions.setMobileView("list");
+                window.dispatchEvent(new CustomEvent("super:mark-all-mentions-read"));
               }}
-              className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-              title="关闭"
+              className="flex items-center gap-1 text-xs text-accent-primary hover:underline font-medium px-2 min-h-[40px]"
             >
-              <X size={18} />
+              <CheckCheck size={14} />
+              全部已读
             </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <button
-            onClick={() => actions.setMobileSidebar(true)}
-            className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active"
-          >
-            <Menu size={24} />
-          </button>
-          <span className="ml-3 text-sm font-semibold text-tx-primary">{getTitle()}</span>
-        </>
-      )}
-    </header>
+          ) : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <MobileChromeHeader
+      variant="root"
+      title={getTitle()}
+      visible={visible}
+    />
   );
 }
 
@@ -1496,22 +1499,10 @@ function MobileTabBar({ visible }: { visible: boolean }) {
 
   const tabs = [
     {
-      id: "home",
-      label: t("sidebar.home") || "首页",
-      icon: <Home size={20} />,
-      active: state.viewMode === "home",
-    },
-    {
       id: "projects",
-      label: t("sidebar.projects") || "项目",
+      label: "任务",
       icon: <Briefcase size={20} />,
       active: state.viewMode === "projects",
-    },
-    {
-      id: "all",
-      label: t("sidebar.allNotes") || "笔记",
-      icon: <BookOpen size={20} />,
-      active: ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode),
     },
     {
       id: "diary",
@@ -1520,17 +1511,23 @@ function MobileTabBar({ visible }: { visible: boolean }) {
       active: state.viewMode === "diary",
     },
     {
+      id: "books",
+      label: "书库",
+      icon: <BookOpen size={20} />,
+      active: state.viewMode === "books",
+    },
+    {
       id: "more",
-      label: t("common.more") || "更多",
-      icon: <MoreHorizontal size={20} />,
-      active: state.viewMode === "more",
+      label: "我的",
+      icon: <UserIcon size={20} />,
+      active: state.viewMode === "more" || ["media", "trash", "favorites", "ai-chat", "mentions"].includes(state.viewMode),
     },
   ];
 
   return (
     <div 
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-35 md:hidden bg-app-surface/80 backdrop-blur-lg border-t border-app-border/40 flex items-center justify-around transition-all duration-300 ease-in-out",
+        "mobile-tab-bar fixed bottom-0 left-0 right-0 z-35 md:hidden flex items-center justify-around transition-all duration-300 ease-soft",
         visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
       )}
       style={{ 
@@ -1549,28 +1546,30 @@ function MobileTabBar({ visible }: { visible: boolean }) {
             }
           }}
           className={cn(
-            "flex flex-col items-center justify-center flex-1 h-16 relative transition-colors duration-150 active:scale-95",
-            tab.active ? "text-accent-primary" : "text-tx-secondary hover:text-tx-primary"
+            "flex flex-col items-center justify-center flex-1 h-16 relative transition-all duration-fast ease-soft active:scale-95",
+            tab.active ? "text-accent-primary" : "text-tx-tertiary hover:text-tx-primary"
           )}
         >
           <div className={cn(
-            "p-1 rounded-md transition-transform duration-200 relative",
-            tab.active ? "scale-110" : ""
+            "relative flex items-center justify-center w-11 h-7 rounded-full transition-all duration-fast ease-soft",
+            tab.active && "bg-accent-primary/12"
           )}>
             {tab.icon}
             {tab.id === "more" && state.unreadMentionCount > 0 && (
-              <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500 border border-app-surface shadow-sm" />
+              <span className="absolute top-0.5 right-1 w-2 h-2 rounded-full bg-red-500 border border-app-elevated shadow-sm" />
             )}
             {tab.id === "projects" && state.reminderActiveCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-[2.5px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
+              <span className="absolute -top-1 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
                 {state.reminderActiveCount}
               </span>
             )}
           </div>
-          <span className="text-[11px] font-medium tracking-wide mt-0.5">{tab.label}</span>
-          {tab.active && (
-            <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-accent-primary" />
-          )}
+          <span className={cn(
+            "text-[10px] tracking-wide mt-0.5",
+            tab.active ? "font-semibold" : "font-medium"
+          )}>
+            {tab.label}
+          </span>
         </button>
       ))}
     </div>
@@ -1638,10 +1637,10 @@ function MobileFAB({
                   setOpen(false);
                   onNewNote();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建笔记</span>
-                <div className="w-8 h-8 rounded-button bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-amber-500/12 text-amber-500 flex items-center justify-center">
                   <BookOpen size={16} />
                 </div>
               </button>
@@ -1651,10 +1650,10 @@ function MobileFAB({
                   setOpen(false);
                   onNewDiary();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建说说</span>
-                <div className="w-8 h-8 rounded-button bg-violet-500/10 text-violet-500 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-violet-500/12 text-violet-500 flex items-center justify-center">
                   <NotebookPen size={16} />
                 </div>
               </button>
@@ -1664,10 +1663,10 @@ function MobileFAB({
                   setOpen(false);
                   onNewTask();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建待办</span>
-                <div className="w-8 h-8 rounded-button bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/12 text-emerald-500 flex items-center justify-center">
                   <ListTodo size={16} />
                 </div>
               </button>
@@ -1677,36 +1676,24 @@ function MobileFAB({
                   setOpen(false);
                   onNewNotebook();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>新建笔记本</span>
-                <div className="w-8 h-8 rounded-button bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-amber-500/12 text-amber-500 flex items-center justify-center">
                   <FolderPlus size={16} />
                 </div>
               </button>
-              <button
-                onClick={() => {
-                  haptic.light();
-                  setOpen(false);
-                  onNewProject();
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-              >
-                <span>新建项目</span>
-                <div className="w-8 h-8 rounded-button bg-blue-500/10 text-blue-500 flex items-center justify-center">
-                  <Briefcase size={16} />
-                </div>
-              </button>
+
               <button
                 onClick={() => {
                   haptic.light();
                   setOpen(false);
                   onCameraClick();
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-button bg-app-surface border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
               >
                 <span>拍照</span>
-                <div className="w-8 h-8 rounded-button bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-sky-500/12 text-sky-500 flex items-center justify-center">
                   <Camera size={16} />
                 </div>
               </button>
@@ -1722,7 +1709,7 @@ function MobileFAB({
           whileTap={{ scale: 0.9 }}
           whileDrag={{ scale: 1.1 }}
           transition={{ type: "spring", stiffness: 400, damping: 15 }}
-          className="w-14 h-14 rounded-button bg-primary text-primary-foreground flex items-center justify-center shadow-xl z-40 hover:opacity-90 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing"
+          className="btn-primary-glow w-14 h-14 rounded-full flex items-center justify-center shadow-fab z-40 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing"
         >
           <motion.div
             animate={{ rotate: open ? 45 : 0 }}

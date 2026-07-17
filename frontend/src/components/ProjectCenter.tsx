@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import {
   Plus, Calendar, ListTodo, Briefcase, Star, Search, Filter, Loader2,
-  ChevronRight, ChevronDown, ArrowLeft, MoreVertical, Edit2, Trash2, Eye, EyeOff, FolderOpen,
+  ChevronRight, ChevronDown, ChevronLeft, AlertCircle, ArrowLeft, MoreVertical, Edit2, Trash2, Eye, EyeOff, FolderOpen,
   CheckCircle2, Clock, Globe, Lock, Check, Grid, List as ListIcon, MessageSquare,
   Bookmark, Award, Circle, Bell, X, User, Maximize2, Menu
 } from "lucide-react";
@@ -146,6 +146,20 @@ function DateBadge({ dateStr }: { dateStr: string | null }) {
   const dateLocale = i18n.language === "zh-CN" ? zhCN : enUS;
   if (!dateStr) return null;
   const date = toLocalDate(dateStr);
+  
+  if (isPast(date) && !isToday(date)) {
+    return (
+      <span className="flex items-center text-red-500 shrink-0" title={(t('tasks.overdue') || "逾期") + " " + format(date, "MM/dd")}>
+        <AlertCircle size={14} strokeWidth={2.5} />
+      </span>
+    );
+  }
+
+  // On mobile, hide the normal non-overdue date badge to maximize text area space
+  if (window.innerWidth < 768) {
+    return null;
+  }
+
   let className = "text-tx-tertiary";
   let text = format(date, "MM/dd", { locale: dateLocale });
 
@@ -155,15 +169,12 @@ function DateBadge({ dateStr }: { dateStr: string | null }) {
   } else if (isTomorrow(date)) {
     className = "text-accent-primary";
     text = t('tasks.tomorrow') || "明天";
-  } else if (isPast(date)) {
-    className = "text-red-500";
-    text = (t('tasks.overdue') || "逾期") + " " + format(date, "MM/dd");
   } else if (isThisWeek(date, { weekStartsOn: 1 })) {
     text = format(date, "EEEE", { locale: dateLocale });
   }
 
   return (
-    <span className={`flex items-center gap-1 text-xs whitespace-nowrap ${className}`}>
+    <span className={`flex items-center gap-1 text-[10px] md:text-xs whitespace-nowrap ${className}`}>
       <Calendar size={12} />
       {text}
     </span>
@@ -187,12 +198,33 @@ function TaskRow({
   onPauseTask?: (task: ProjectTask) => void;
   showProjectName?: boolean;
 }) {
+  const [showActionSheet, setShowActionSheet] = React.useState(false);
+  const touchTimer = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleTouchStart = () => {
+    if (window.innerWidth >= 768) return;
+    touchTimer.current = setTimeout(() => {
+      setShowActionSheet(true);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+      touchTimer.current = null;
+    }
+  };
+
   return (
+    <>
     <div
       onClick={() => {
         window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
       }}
-      className="group flex items-center justify-between p-3.5 hover:bg-app-hover/20 transition-all gap-4 cursor-pointer"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchEnd}
+      className="group flex items-center justify-between p-3 px-3.5 pr-2.5 md:pr-3.5 hover:bg-app-hover/20 transition-all gap-2 md:gap-4 cursor-pointer select-none"
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Checkbox button */}
@@ -213,7 +245,7 @@ function TaskRow({
         {/* Title and Subtitle */}
         <div className="min-w-0 flex-1">
           <div
-            className={`font-semibold text-tx-secondary text-sm truncate ${
+            className={`font-semibold text-tx-secondary text-[13px] md:text-sm truncate ${
               task.isCompleted === 1 ? "line-through opacity-50 text-tx-tertiary" : ""
             }`}
           >
@@ -231,58 +263,60 @@ function TaskRow({
       {/* Due Date & Assignee & Actions */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Start / Pause / Complete / Resume Action Buttons */}
-        {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划") && onStartTask && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartTask(task);
-            }}
-            className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-all shrink-0"
-            title="启动任务"
-          >
-            <Play size={11} fill="currentColor" />
-          </button>
-        )}
-
-        {task.isCompleted !== 1 && task.status === "paused" && onStartTask && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartTask(task);
-            }}
-            className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
-            title="恢复任务"
-          >
-            <Play size={11} fill="currentColor" />
-          </button>
-        )}
-
-        {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && (
-          <div className="flex items-center gap-1 shrink-0">
-            {onPauseTask && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPauseTask(task);
-                }}
-                className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-all shrink-0"
-                title="暂停任务"
-              >
-                <Pause size={11} fill="currentColor" />
-              </button>
-            )}
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划") && onStartTask && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleComplete(task.id, task.isCompleted);
+                onStartTask(task);
+              }}
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-all shrink-0"
+              title="启动任务"
+            >
+              <Play size={11} fill="currentColor" />
+            </button>
+          )}
+
+          {task.isCompleted !== 1 && task.status === "paused" && onStartTask && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartTask(task);
               }}
               className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
-              title="完成任务"
+              title="恢复任务"
             >
-              <Check size={11} />
+              <Play size={11} fill="currentColor" />
             </button>
-          </div>
-        )}
+          )}
+
+          {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && (
+            <div className="flex items-center gap-1 shrink-0">
+              {onPauseTask && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPauseTask(task);
+                  }}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-all shrink-0"
+                  title="暂停任务"
+                >
+                  <Pause size={11} fill="currentColor" />
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleComplete(task.id, task.isCompleted);
+                }}
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
+                title="完成任务"
+              >
+                <Check size={11} />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Due Date Badge */}
         {task.endDate && <DateBadge dateStr={task.endDate} />}
@@ -312,12 +346,78 @@ function TaskRow({
             e.stopPropagation();
             onDelete(task.id);
           }}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-all shrink-0"
+          className="hidden md:block opacity-0 group-hover:opacity-100 p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-all shrink-0"
         >
           <Trash2 size={14} />
         </button>
       </div>
     </div>
+    
+    <AnimatePresence>
+      {showActionSheet && (
+        <div className="md:hidden">
+          <div className="fixed inset-0 z-[100] bg-black/40" onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); }} />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed bottom-0 left-0 right-0 z-[101] bg-app-bg rounded-t-3xl border-t border-app-border/40 shadow-xl pb-[var(--safe-area-bottom)]"
+          >
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-12 h-1.5 bg-app-border/60 rounded-full" />
+            </div>
+            <div className="px-6 py-4 space-y-2">
+              <div className="text-sm font-bold text-tx-secondary text-center mb-4 truncate">{task.title}</div>
+              
+              {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划" || task.status === "paused") && onStartTask && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onStartTask(task); }}
+                  className="w-full py-4 bg-app-elevated rounded-xl font-bold text-accent-primary flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                >
+                  <Play size={18} />
+                  启动任务
+                </button>
+              )}
+              
+              {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && onPauseTask && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onPauseTask(task); }}
+                  className="w-full py-4 bg-app-elevated rounded-xl font-bold text-amber-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                >
+                  <Pause size={18} />
+                  暂停任务
+                </button>
+              )}
+              
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onToggleComplete(task.id, task.isCompleted); }}
+                className="w-full py-4 bg-app-elevated rounded-xl font-bold text-green-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              >
+                <CheckCircle2 size={18} />
+                {task.isCompleted === 1 ? "标记为未完成" : "完成任务"}
+              </button>
+              
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onDelete(task.id); }}
+                className="w-full py-4 bg-app-elevated rounded-xl font-bold text-accent-danger flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              >
+                <Trash2 size={18} />
+                删除任务
+              </button>
+              
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); }}
+                className="w-full py-4 bg-app-hover rounded-xl font-bold text-tx-tertiary flex items-center justify-center gap-2 active:scale-[0.98] transition-transform mt-2"
+              >
+                取消
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
 
@@ -378,6 +478,7 @@ export default function ProjectCenter() {
 
   const [showMobileMyTasksSearch, setShowMobileMyTasksSearch] = useState(false);
   const [showMobileRoleSelector, setShowMobileRoleSelector] = useState(false);
+  const [showProjectFilterSheet, setShowProjectFilterSheet] = useState(false);
 
   // Make workspaceId a reactive state
   const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
@@ -1585,38 +1686,30 @@ export default function ProjectCenter() {
                     </motion.div>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <button
-                          onClick={() => actions.setMobileSidebar(true)}
-                          className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active shrink-0"
-                        >
-                          <Menu size={20} />
-                        </button>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <h1 className="text-base font-bold text-tx-primary shrink-0">项目管理</h1>
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <h1 className="text-base font-bold text-tx-primary shrink-0">任务</h1>
                           <button
-                            onClick={() => setShowMobileRoleSelector(true)}
-                            className="flex items-center gap-0.5 text-xs font-semibold text-accent-primary py-1 px-1.5 rounded-lg hover:bg-accent-primary/5 active:scale-95 transition-all"
+                            onClick={() => setShowProjectFilterSheet(true)}
+                            className="flex items-center gap-1 bg-app-hover hover:bg-app-hover/80 px-2.5 py-1.5 rounded-lg text-xs font-bold text-tx-secondary shrink-0 max-w-[150px] truncate transition-colors active:scale-95"
                           >
-                            <span>
-                              {roleFilter === "favorites"
-                                ? "我收藏的"
-                                : roleFilter === "assigned"
-                                ? "我负责的"
-                                : roleFilter === "created"
-                                ? "我创建的"
-                                : "我参与的"}
+                            <span className="truncate">
+                              {myTasksProjectFilter === "all"
+                                ? "全部项目"
+                                : projects.find((p) => p.id === myTasksProjectFilter)?.name || "全部项目"}
                             </span>
-                            <ChevronDown size={14} className="mt-0.5" />
+                            <ChevronDown size={12} className="opacity-60 shrink-0" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setShowMobileMyTasksSearch(true)}
+                            className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
+                          >
+                            <Search size={18} />
                           </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setShowMobileMyTasksSearch(true)}
-                        className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
-                      >
-                        <Search size={18} />
-                      </button>
                     </>
                   )}
                 </header>
@@ -1625,7 +1718,7 @@ export default function ProjectCenter() {
               {/* Scrollable Container */}
               <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0 bg-app-bg dark:bg-[#121214]">
                 <ScrollContainer className="h-full">
-                  <div className="flex-1 p-4 md:p-6 space-y-6">
+                  <div className="flex-1 p-4 pt-0 md:p-6 space-y-6">
                     {/* 顶部标题 (仅在桌面端展示) */}
                     {window.innerWidth >= 768 && (
                       <div className="flex items-center gap-2.5 mb-4 max-w-[640px] mx-auto w-full">
@@ -1869,7 +1962,7 @@ export default function ProjectCenter() {
                         </div>
 
                         {/* Project Select Dropdown (Right side) */}
-                        <div className="flex items-center gap-1.5 bg-app-elevated border border-app-border/40 px-3 py-1.5 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors shadow-sm shrink-0">
+                        <div className="hidden md:flex items-center gap-1.5 bg-app-elevated border border-app-border/40 px-3 py-1.5 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors shadow-sm shrink-0">
                           <select
                             value={myTasksProjectFilter}
                             onChange={(e) => setMyTasksProjectFilter(e.target.value)}
@@ -1901,7 +1994,7 @@ export default function ProjectCenter() {
                               >
                                 <div className="flex items-center gap-2">
                                   {expandedSections.overdue ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                  <span className="text-xs font-bold text-red-500 uppercase tracking-wider">{t("projects.overdueTasks") || "逾期任务"}</span>
+                                  <span className="text-[10px] md:text-xs font-bold text-red-500 uppercase tracking-wider">{t("projects.overdueTasks") || "逾期任务"}</span>
                                   <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 font-mono">
                                     {myTasksCategorized.overdue.length}
                                   </span>
@@ -1948,7 +2041,7 @@ export default function ProjectCenter() {
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.today ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                <span className="text-xs font-bold text-red-500 uppercase tracking-wider">{t("projects.todayTasks") || "今日到期"}</span>
+                                <span className="text-[10px] md:text-xs font-bold text-red-500 uppercase tracking-wider">{t("projects.todayTasks") || "今日到期"}</span>
                                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 font-mono">
                                   {myTasksCategorized.today.length}
                                 </span>
@@ -2000,7 +2093,7 @@ export default function ProjectCenter() {
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.notStarted ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                <span className="text-xs font-bold text-sky-500 uppercase tracking-wider">待启动</span>
+                                <span className="text-[10px] md:text-xs font-bold text-sky-500 uppercase tracking-wider">待启动</span>
                                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono">
                                   {myTasksCategorized.notStarted.length}
                                 </span>
@@ -2052,7 +2145,7 @@ export default function ProjectCenter() {
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.pending ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">{t("projects.pendingTasks") || "待完成"}</span>
+                                <span className="text-[10px] md:text-xs font-bold text-amber-500 uppercase tracking-wider">{t("projects.pendingTasks") || "待完成"}</span>
                                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">
                                   {myTasksCategorized.pending.length}
                                 </span>
@@ -2104,7 +2197,7 @@ export default function ProjectCenter() {
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.paused ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">已暂停</span>
+                                <span className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">已暂停</span>
                                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/10 text-gray-400 border border-gray-500/20 font-mono">
                                   {myTasksCategorized.paused.length}
                                 </span>
@@ -2156,7 +2249,7 @@ export default function ProjectCenter() {
                             >
                               <div className="flex items-center gap-2">
                                 {expandedSections.completed ? <ChevronDown size={14} className="text-tx-tertiary" /> : <ChevronRight size={14} className="text-tx-tertiary" />}
-                                <span className="text-xs font-bold text-green-500 uppercase tracking-wider">{t("projects.completedTasks") || "已完成"}</span>
+                                <span className="text-[10px] md:text-xs font-bold text-green-500 uppercase tracking-wider">{t("projects.completedTasks") || "已完成"}</span>
                                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 font-mono">
                                   {myTasksCategorized.completed.length}
                                 </span>
@@ -2366,10 +2459,18 @@ export default function ProjectCenter() {
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2">
-                <Calendar size={18} className="text-accent-primary" />
+                {window.innerWidth < 768 && (
+                  <button
+                    onClick={() => setActiveFilter({ type: "my" })}
+                    className="p-1 -ml-1 mr-1 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active shrink-0"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                )}
+                <Calendar size={18} className="text-accent-primary shrink-0" />
                 <div>
                   <h1 className="text-base font-bold text-tx-primary">{t("projects.calendar") || "日历"}</h1>
-                  <p className="text-xs text-tx-tertiary">{t("projects.calendarDesc") || "按标签与标题搜索任务"}</p>
+                  <p className="text-xs text-tx-tertiary hidden md:block">{t("projects.calendarDesc") || "按标签与标题搜索任务"}</p>
                 </div>
               </div>
               <div className="relative w-full lg:w-80">
@@ -3092,6 +3193,60 @@ export default function ProjectCenter() {
           showProjectName={true}
         />
       )}
+
+      {/* Project Filter Bottom Sheet for Mobile */}
+      <AnimatePresence>
+        {showProjectFilterSheet && (
+          <div className="md:hidden">
+            <div className="fixed inset-0 z-[100] bg-black/40" onClick={() => setShowProjectFilterSheet(false)} />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed bottom-0 left-0 right-0 z-[101] bg-app-bg rounded-t-3xl border-t border-app-border/40 shadow-xl pb-[calc(1.5rem+var(--safe-area-bottom))] select-none"
+            >
+              <div className="flex justify-center pt-3 pb-2">
+                <div className="w-12 h-1.5 bg-app-border/60 rounded-full" />
+              </div>
+              <div className="px-6 py-4 space-y-2">
+                <div className="text-sm font-bold text-tx-secondary text-center mb-4">筛选项目</div>
+                <div className="max-h-[60vh] overflow-y-auto space-y-1.5 pr-1">
+                  <button
+                    onClick={() => {
+                      setMyTasksProjectFilter("all");
+                      setShowProjectFilterSheet(false);
+                    }}
+                    className={cn(
+                      "w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-between active:scale-[0.98] transition-transform text-xs",
+                      myTasksProjectFilter === "all" ? "bg-accent-primary/10 text-accent-primary" : "bg-app-elevated text-tx-secondary"
+                    )}
+                  >
+                    <span>全部项目</span>
+                    {myTasksProjectFilter === "all" && <Check size={14} />}
+                  </button>
+                  {projects.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setMyTasksProjectFilter(p.id);
+                        setShowProjectFilterSheet(false);
+                      }}
+                      className={cn(
+                        "w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-between active:scale-[0.98] transition-transform text-xs",
+                        myTasksProjectFilter === p.id ? "bg-accent-primary/10 text-accent-primary" : "bg-app-elevated text-tx-secondary"
+                      )}
+                    >
+                      <span className="truncate">{p.name}</span>
+                      {myTasksProjectFilter === p.id && <Check size={14} />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

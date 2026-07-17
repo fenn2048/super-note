@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CheckCircle2, Circ
 import { Button } from "@/components/ui/button";
 import { Lunar, Solar, HolidayUtil } from "lunar-javascript";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 
 interface ProjectCalendarProps {
@@ -16,6 +17,7 @@ interface ProjectCalendarProps {
 export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter }: ProjectCalendarProps) {
   const { t } = useTranslation();
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
@@ -136,8 +138,10 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
     t("calendar.saturday") || "六",
   ];
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   return (
-    <div className="flex flex-col h-full bg-app-bg text-tx-primary pb-20">
+    <div className="flex flex-col h-full bg-app-bg text-tx-primary pb-20 select-none">
       {/* Calendar Header */}
       <div className="flex items-center justify-between p-4 border-b border-app-border shrink-0">
         <div className="flex items-center gap-2">
@@ -196,7 +200,7 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
       </div>
 
       {/* Grid Days */}
-      <div className="grid grid-cols-7 grid-rows-6 flex-1 min-h-0 divide-x divide-y divide-app-border border-b border-app-border">
+      <div className={cn("grid grid-cols-7 grid-rows-6 divide-x divide-y divide-app-border border-b border-app-border shrink-0", isMobile ? "h-64" : "flex-1 min-h-0")}>
         {calendarCells.map((cell, idx) => {
           const dayTasks = getTasksForDate(cell.date);
           const isToday = cell.date.toDateString() === new Date().toDateString();
@@ -242,9 +246,15 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
           return (
             <div
               key={idx}
+              onClick={() => {
+                if (isMobile) {
+                  setSelectedDate(cell.date);
+                }
+              }}
               className={cn(
-                "min-h-0 flex flex-col p-1.5 space-y-1 transition-colors",
-                cell.isCurrentMonth ? "bg-app-bg" : "bg-app-sidebar/45 opacity-55"
+                "min-h-0 flex flex-col p-1.5 space-y-1 transition-colors cursor-pointer",
+                cell.isCurrentMonth ? "bg-app-bg" : "bg-app-sidebar/45 opacity-55",
+                isMobile && cell.date.toDateString() === selectedDate.toDateString() && "bg-accent-primary/10 border-accent-primary/40 border-2"
               )}
             >
               {/* Header: Lunar Date on Left, Solar Date on Right */}
@@ -267,7 +277,7 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
               </div>
 
               {/* Holidays, Solar Terms and Festivals list */}
-              {labels.length > 0 && (
+              {labels.length > 0 && !isMobile && (
                 <div className="flex flex-col gap-0.5 shrink-0">
                   {labels.map((lbl, lIdx) => (
                     <div
@@ -294,36 +304,87 @@ export default function ProjectCalendar({ stages, onTaskClick, showProjectFilter
               )}
 
               {/* Tasks list for this day */}
-              <div className="flex-1 overflow-y-auto space-y-1 max-h-[100px] scrollbar-none">
-                {dayTasks.slice(0, 3).map((task) => (
-                  <div
-                    key={task.id}
-                    className={`group/cal-task relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] cursor-pointer border transition-colors truncate font-medium ${
-                      task.isCompleted === 1
-                        ? "bg-green-500/10 border-green-500/20 text-green-600 line-through decoration-green-600/50"
-                        : "bg-accent-primary/10 border-accent-primary/20 text-accent-primary hover:bg-accent-primary/20"
-                    }`}
-                    onClick={() => onTaskClick?.(task)}
-                    title={task.title}
-                  >
-                    {task.isCompleted === 1 ? (
-                      <CheckCircle2 size={10} className="shrink-0 text-green-500" />
-                    ) : (
-                      <Circle size={10} className="shrink-0 text-accent-primary" />
-                    )}
-                    <span className="truncate">{task.title}</span>
+              {!isMobile ? (
+                <div className="flex-1 overflow-y-auto space-y-1 max-h-[100px] scrollbar-none">
+                  {dayTasks.slice(0, 3).map((task) => (
+                    <div
+                      key={task.id}
+                      className={`group/cal-task relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] cursor-pointer border transition-colors truncate font-medium ${
+                        task.isCompleted === 1
+                          ? "bg-green-500/10 border-green-500/20 text-green-600 line-through decoration-green-600/50"
+                          : "bg-accent-primary/10 border-accent-primary/20 text-accent-primary hover:bg-accent-primary/20"
+                      }`}
+                      onClick={() => onTaskClick?.(task)}
+                      title={task.title}
+                    >
+                      {task.isCompleted === 1 ? (
+                        <CheckCircle2 size={10} className="shrink-0 text-green-500" />
+                      ) : (
+                        <Circle size={10} className="shrink-0 text-accent-primary" />
+                      )}
+                      <span className="truncate">{task.title}</span>
+                    </div>
+                  ))}
+                  {dayTasks.length > 3 && (
+                    <div className="text-[9px] text-tx-tertiary text-center font-medium">
+                      +{dayTasks.length - 3} ...
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Compact dot indicators on Mobile */
+                dayTasks.length > 0 && (
+                  <div className="flex justify-center items-center mt-1 select-none pointer-events-none">
+                    <div className="w-1.5 h-1.5 rounded-full bg-accent-primary" />
                   </div>
-                ))}
-                {dayTasks.length > 3 && (
-                  <div className="text-[9px] text-tx-tertiary text-center font-medium">
-                    +{dayTasks.length - 3} ...
-                  </div>
-                )}
-              </div>
+                )
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Mobile Task List for Selected Date */}
+      {isMobile && (
+        <div className="flex-1 flex flex-col min-h-0 bg-app-bg border-t border-app-border/40 select-text overflow-hidden">
+          <div className="px-4 py-2.5 bg-app-sidebar/20 border-b border-app-border/30 flex items-center justify-between shrink-0">
+            <span className="text-[11px] font-bold text-tx-secondary">
+              {format(selectedDate, "yyyy年MM月dd日")} ({
+                ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][selectedDate.getDay()]
+              }) 的任务
+            </span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary font-mono">
+              {getTasksForDate(selectedDate).length}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-app-border/10 p-2">
+            {getTasksForDate(selectedDate).map((task) => (
+              <div
+                key={task.id}
+                onClick={() => onTaskClick?.(task)}
+                className="flex items-center justify-between p-3 active:bg-app-hover/10 rounded-xl cursor-pointer"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className={cn(
+                    "text-xs font-semibold truncate text-tx-secondary",
+                    task.isCompleted === 1 && "line-through opacity-50"
+                  )}>
+                    {task.title}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-tx-tertiary shrink-0">
+                  <span>{(task as any).projectName || "个人TODO"}</span>
+                </div>
+              </div>
+            ))}
+            {getTasksForDate(selectedDate).length === 0 && (
+              <div className="text-center py-8 text-xs text-tx-tertiary select-none">
+                这一天没有安排任何任务
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2734,7 +2734,7 @@ function DiaryCard({
                           }
                         }
                       }}
-                      className="w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0 resize-none max-h-32 min-h-[18px] overflow-y-auto"
+                      className="flex-1 min-w-0 w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0 resize-none max-h-32 min-h-[18px] overflow-y-auto"
                       style={{ height: "auto" }}
                     />
 
@@ -3974,7 +3974,9 @@ export default function DiaryCenter() {
 
               {/* 发布框 — 列表模式下显示 */}
               {viewMode === "list" && (
-                <ComposeBox onPost={handlePost} />
+                <div className="hidden md:block">
+                  <ComposeBox onPost={handlePost} />
+                </div>
               )}
 
               {/* 过滤状态指示器 */}

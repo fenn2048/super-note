@@ -38,10 +38,10 @@ const SKINS: SkinDescriptor[] = [
     descKey: "appearance.skinObsidianDesc",
     descDefault: "Obsidian 安静深色模式与极简无干扰编辑，几何硬朗圆角",
     swatch: {
-      bg: "#1e1e1e",
-      sidebar: "#161616",
-      accent: "#7a52f4",
-      text: "#dadada",
+      bg: "#16131c",
+      sidebar: "#13101a",
+      accent: "#b794ff",
+      text: "#ebe6f5",
     },
   },
 

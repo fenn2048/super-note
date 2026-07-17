@@ -16,6 +16,7 @@ import { toast } from "@/lib/toast";
 import { exportSingleNote, exportSingleNoteAsPDF, exportSingleNoteAsImage } from "@/lib/exportService";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { realtime } from "@/lib/realtime";
+import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 // "导入 Word 文档" 走 dynamic import（见 createNoteInNotebook），减少首屏 bundle 体积。
 
 /* ===== 排序模式 ===== */
@@ -941,23 +942,17 @@ const NoteCard = React.memo(function NoteCard({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       className={cn(
-        "relative rounded-lg cursor-pointer border transition-all group overflow-hidden",
-        isSelected
-          ? "bg-accent-primary/10 border-accent-primary/40 shadow-sm"
-          : isActive
-          ? "bg-app-active border-accent-primary/30 shadow-sm"
-          : isContextTarget
-          ? "bg-app-hover border-accent-primary/20"
-          : "bg-transparent border-transparent hover:bg-app-hover",
-        isDragOver && "border-accent-primary/50 bg-accent-primary/5"
+        "note-card-shell relative cursor-pointer group overflow-hidden",
+        isSelected && "is-selected",
+        isActive && "is-active",
+        isContextTarget && "bg-app-hover border-accent-primary/20",
+        isDragOver && "border-accent-primary/50 bg-accent-primary/5 shadow-md"
       )}
     >
       {/* 左侧彩色指示条 */}
       <div className={cn(
-        "absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg transition-colors",
-        isSelected
-          ? "bg-accent-primary"
-          : isActive
+        "absolute left-0 top-2 bottom-2 w-[3px] rounded-full transition-colors",
+        isSelected || isActive
           ? "bg-accent-primary"
           : note.isFavorite === 1
           ? "bg-amber-400"
@@ -966,7 +961,7 @@ const NoteCard = React.memo(function NoteCard({
           : "bg-transparent group-hover:bg-app-border"
       )} />
 
-      <div className="pl-3.5 pr-3 py-2.5 min-w-0">
+      <div className="pl-3.5 pr-3 py-3 min-w-0 max-md:py-3.5">
         {/* 标题行 + 状态图标 */}
         <div className="flex items-center justify-between gap-2 min-w-0">
           {draggable && (
@@ -981,8 +976,8 @@ const NoteCard = React.memo(function NoteCard({
             // 和 CJK/英文/空格混排都稳定，并自带省略号。
             // break-all：兜底——遇到极长不可断词（连续超长英文/无空格 URL）也强制裁断，
             // 不让一行的"内容宽度"超过容器，导致 flex 容器再被撑变形。
-            "text-sm font-medium line-clamp-1 break-all flex-1 min-w-0 flex items-center gap-1",
-            isActive ? "text-tx-primary" : "text-tx-secondary group-hover:text-tx-primary"
+            "text-sm font-semibold line-clamp-1 break-all flex-1 min-w-0 flex items-center gap-1 tracking-tight",
+            isActive || isSelected ? "text-tx-primary" : "text-tx-secondary group-hover:text-tx-primary"
           )}>
             {note.visibility && note.workspaceId && (
               <span className="text-[10px] shrink-0" title={note.visibility === "WORKSPACE" ? "所有人可见" : "仅自己可见"}>
@@ -991,11 +986,11 @@ const NoteCard = React.memo(function NoteCard({
             )}
             <span className="truncate">{note.title || t('common.untitledNote')}</span>
           </h3>
-          <div className="flex items-center gap-1 shrink-0">
-            {isShared && <Share2 size={11} className="text-emerald-500" />}
-            {note.isLocked === 1 && <Lock size={11} className="text-orange-500" />}
-            {note.isPinned === 1 && <Pin size={11} className="text-accent-primary" />}
-            {note.isFavorite === 1 && <Star size={11} className="text-amber-400 fill-amber-400" />}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isShared && <Share2 size={12} className="text-emerald-500" />}
+            {note.isLocked === 1 && <Lock size={12} className="text-orange-500" />}
+            {note.isPinned === 1 && <Pin size={12} className="text-accent-primary" />}
+            {note.isFavorite === 1 && <Star size={12} className="text-amber-400 fill-amber-400" />}
           </div>
         </div>
 
@@ -1013,21 +1008,21 @@ const NoteCard = React.memo(function NoteCard({
             - 左侧：更新时间（始终显示）
             - 右侧：工作区下显示创建者（最高优先级），否则 hover 时显示字数
             两者互斥渲染——卡片宽度有限，避免徽标挤压标题/预览。 */}
-        <div className="flex items-center justify-between mt-2 text-tx-tertiary gap-2">
+        <div className="flex items-center justify-between mt-2.5 text-tx-tertiary gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Clock size={10} />
-            <span className="text-[10px]">{formatTime(note.updatedAt, t)}</span>
+            <Clock size={11} className="opacity-70" />
+            <span className="text-[11px] tabular-nums">{formatTime(note.updatedAt, t)}</span>
           </div>
           {showCreator ? (
             <span
-              className="flex items-center gap-1 text-[10px] text-tx-secondary/80 truncate max-w-[40%]"
+              className="flex items-center gap-1 text-[11px] text-tx-secondary/80 truncate max-w-[40%]"
               title={t('common.createdBy', { name: note.creatorName })}
             >
               <UserIcon size={10} className="shrink-0" />
               <span className="truncate">{note.creatorName}</span>
             </span>
           ) : wordCount > 0 ? (
-            <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity tabular-nums">
+            <span className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity tabular-nums">
               {wordCount > 999 ? `${(wordCount / 1000).toFixed(1)}k` : wordCount} {t('common.chars')}
             </span>
           ) : null}
@@ -1039,7 +1034,7 @@ const NoteCard = React.memo(function NoteCard({
 NoteCard.displayName = "NoteCard";
 
 /* ===== 虚拟滚动笔记列表 ===== */
-const ITEM_HEIGHT = 90; // 每个笔记卡片的估算高度（px）
+const ITEM_HEIGHT = 96; // 每个笔记卡片的估算高度（px）——含圆角卡片间距
 const OVERSCAN = 8; // 上下额外渲染的条目数
 
 function VirtualNoteList({
@@ -1126,7 +1121,7 @@ function VirtualNoteList({
       onScroll={handleScroll}
     >
       <div style={{ height: totalHeight, position: "relative" }}>
-        <div className="px-2 space-y-1" style={{ position: "absolute", top: offsetY, left: 0, right: 0 }}>
+        <div className="px-2.5 space-y-1.5 max-md:px-3 max-md:space-y-2" style={{ position: "absolute", top: offsetY, left: 0, right: 0 }}>
           {visibleNotes.map((note) => (
             <NoteCard
               key={note.id}
@@ -2587,146 +2582,116 @@ export default function NoteList() {
   };
 
   return (
-    <div className="w-full h-full bg-app-surface border-r border-app-border flex flex-col transition-colors relative">
-      {/* Mobile Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-app-border md:hidden relative z-40" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
-        {mobileSearchOpen ? (
-          <div className="flex-1 flex items-center gap-2 h-11 px-3 bg-app-subtle rounded-xl">
-            <Search size={18} className="text-tx-tertiary" />
-            <input
-              type="text"
-              placeholder="搜索笔记..."
-              className="flex-1 min-w-0 bg-transparent border-none text-sm text-tx-primary focus:ring-0 placeholder:text-tx-tertiary p-0 no-focus-ring"
-              value={mobileSearchText}
-              onChange={(e) => {
-                setMobileSearchText(e.target.value);
-                actions.setViewMode("search");
-                actions.setSearchQuery(e.target.value);
-              }}
-              autoFocus
-            />
-            <button
-              onClick={() => {
-                setMobileSearchOpen(false);
-                setMobileSearchText("");
-                actions.setViewMode("all");
-                actions.setSearchQuery("");
-              }}
-              className="p-1 rounded text-tx-secondary hover:bg-app-hover"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ) : (
-          <>
-            <h2 className="text-base font-bold text-tx-primary pl-1">{viewTitles[state.viewMode]}</h2>
-            <div className="flex items-center gap-1.5 relative">
-              {state.viewMode === "favorites" ? (
-                <button
-                  onClick={() => {
-                    actions.setViewMode("more");
-                    actions.setMobileView("list");
-                  }}
-                  className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-                  title="关闭"
-                >
-                  <X size={18} />
-                </button>
-              ) : (
+    <div className="w-full h-full bg-app-surface border-r border-app-border/80 flex flex-col transition-colors relative">
+      {/* Mobile Header — 统一 MobileChromeHeader（含汉堡入口） */}
+      {mobileSearchOpen ? (
+        <MobileChromeHeader
+          variant="stack"
+          stackAction="close"
+          onLeadingClick={() => {
+            setMobileSearchOpen(false);
+            setMobileSearchText("");
+            actions.setViewMode("all");
+            actions.setSearchQuery("");
+          }}
+          leadingLabel="关闭搜索"
+          center={
+            <div className="flex items-center gap-2 h-10 w-full px-3 bg-app-surface rounded-full border border-app-border shadow-xs">
+              <Search size={16} className="text-tx-tertiary shrink-0" />
+              <input
+                type="text"
+                placeholder="搜索笔记..."
+                className="flex-1 min-w-0 bg-transparent border-none text-sm text-tx-primary focus:ring-0 placeholder:text-tx-quaternary p-0 no-focus-ring"
+                value={mobileSearchText}
+                onChange={(e) => {
+                  setMobileSearchText(e.target.value);
+                  actions.setViewMode("search");
+                  actions.setSearchQuery(e.target.value);
+                }}
+                autoFocus
+              />
+            </div>
+          }
+        />
+      ) : state.viewMode === "favorites" || state.viewMode === "trash" ? (
+        <MobileChromeHeader
+          variant="stack"
+          stackAction="close"
+          title={viewTitles[state.viewMode]}
+          onLeadingClick={() => {
+            actions.setViewMode("more");
+            actions.setMobileView("list");
+          }}
+          right={
+            state.viewMode === "trash" ? (
+              <MobileChromeIconButton
+                title={t("sidebar.emptyTrash")}
+                className="text-accent-danger hover:bg-accent-danger/10"
+                onClick={() => {
+                  try {
+                    window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
+                  } catch { /* ignore */ }
+                }}
+              >
+                <Trash2 size={18} />
+              </MobileChromeIconButton>
+            ) : undefined
+          }
+        />
+      ) : (
+        <MobileChromeHeader
+          variant="root"
+          title={viewTitles[state.viewMode]}
+          right={
+            <div className="flex items-center gap-0.5 relative">
+              {state.viewMode !== "search" && (
                 <>
-                  {/* 移动端排序按钮（搜索/回收站不显示） */}
-                  {state.viewMode !== "trash" && state.viewMode !== "search" && (
-                    <button
-                      ref={sortBtnMobileRef}
-                      onClick={() => setShowSortMenu((v) => !v)}
-                      className={cn(
-                        "p-1.5 rounded-md transition-colors relative",
-                        sortPref.by !== "manual"
-                          ? "text-accent-primary bg-accent-primary/10"
-                          : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-                      )}
-                      title={t("noteList.sortBy")}
-                    >
-                      <ArrowUpDown size={18} />
-                    </button>
-                  )}
-                  {/* 移动端日历筛选按钮 */}
-                  {state.viewMode !== "trash" && state.viewMode !== "search" && (
-                    <button
-                      onClick={() => setShowCalendar(!showCalendar)}
-                      className={cn(
-                        "p-1.5 rounded-md transition-colors relative",
-                        showCalendar || dateFilter
-                          ? "text-accent-primary bg-accent-primary/10"
-                          : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-                      )}
-                    >
-                      <CalendarDays size={18} />
-                      {dateFilter && (
-                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-primary" />
-                      )}
-                    </button>
-                  )}
-                  {state.viewMode === "trash" ? (
-                    // 回收站视图下用"一键清空"按钮替换"新建"；
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-accent-danger hover:bg-accent-danger/10"
-                      title={t('sidebar.emptyTrash')}
-                      aria-label={t('sidebar.emptyTrash')}
-                      onClick={() => {
-                        try {
-                          window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
-                        } catch { /* ignore */ }
-                      }}
-                    >
-                      <Trash2 size={18} />
-                    </Button>
-                  ) : (
-                    // split-button
-                    <div className="flex items-center">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreateNote("normal")}>
-                        <Plus size={18} />
-                      </Button>
-                      <button
-                        ref={createMenuAnchorMobileRef}
-                        type="button"
-                        aria-label="选择新建类型"
-                        onClick={() => {
-                          setCreateMenuSource("mobile");
-                          setCreateMenuOpen((v) => !v);
-                        }}
-                        className="h-8 w-5 flex items-center justify-center rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-                      >
-                        <ChevronDown size={12} />
-                      </button>
-                    </div>
-                  )}
-                  {/* 移动端搜索/关闭按钮 */}
-                  {state.viewMode === "trash" ? (
-                    <button
-                      onClick={() => {
-                        actions.setViewMode("more");
-                        actions.setMobileView("list");
-                      }}
-                      className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-                      title="关闭"
-                    >
-                      <X size={18} />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setMobileSearchOpen(true)}
-                      className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors"
-                      title="搜索"
-                    >
-                      <Search size={18} />
-                    </button>
-                  )}
+                  <MobileChromeIconButton
+                    ref={sortBtnMobileRef}
+                    title={t("noteList.sortBy")}
+                    active={sortPref.by !== "manual"}
+                    onClick={() => setShowSortMenu((v) => !v)}
+                  >
+                    <ArrowUpDown size={18} />
+                  </MobileChromeIconButton>
+                  <MobileChromeIconButton
+                    title={t("noteList.dateFilter")}
+                    active={!!(showCalendar || dateFilter)}
+                    onClick={() => setShowCalendar(!showCalendar)}
+                  >
+                    <CalendarDays size={18} />
+                    {dateFilter && (
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent-primary" />
+                    )}
+                  </MobileChromeIconButton>
                 </>
               )}
-              {/* 排序下拉（移动端） */}
+              <div className="flex items-center">
+                <MobileChromeIconButton
+                  title={t("common.new") || "新建"}
+                  onClick={() => handleCreateNote("normal")}
+                >
+                  <Plus size={18} />
+                </MobileChromeIconButton>
+                <button
+                  ref={createMenuAnchorMobileRef}
+                  type="button"
+                  aria-label="选择新建类型"
+                  onClick={() => {
+                    setCreateMenuSource("mobile");
+                    setCreateMenuOpen((v) => !v);
+                  }}
+                  className="min-h-[40px] w-6 flex items-center justify-center rounded-button text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors -ml-1"
+                >
+                  <ChevronDown size={12} />
+                </button>
+              </div>
+              <MobileChromeIconButton
+                title="搜索"
+                onClick={() => setMobileSearchOpen(true)}
+              >
+                <Search size={18} />
+              </MobileChromeIconButton>
               {showSortMenu && (
                 <SortMenu
                   value={sortPref}
@@ -2739,15 +2704,17 @@ export default function NoteList() {
                 />
               )}
             </div>
-          </>
-        )}
-      </header>
+          }
+        />
+      )}
 
       {/* Desktop Header */}
-      <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-app-border relative z-40">
-        <div className="flex items-center gap-2">
-          <FileText size={16} className="text-accent-primary" />
-          <h2 className="text-sm font-medium text-tx-primary">{viewTitles[state.viewMode]}</h2>
+      <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-app-border/70 bg-app-surface/40 relative z-40">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-accent-primary/10 text-accent-primary flex items-center justify-center">
+            <FileText size={14} />
+          </div>
+          <h2 className="text-sm font-semibold text-tx-primary tracking-tight">{viewTitles[state.viewMode]}</h2>
         </div>
         <div className="flex items-center gap-1 relative">
           {/* 折叠笔记列表面板（桌面专用；点击后中间整列隐藏，编辑器占满）。
@@ -2872,8 +2839,10 @@ export default function NoteList() {
       )}
 
       {/* Count */}
-      <div className="px-4 py-1.5">
-        <span className="text-[10px] text-tx-tertiary">{t('common.noteCount', { count: sortedNotes.length })}</span>
+      <div className="px-4 py-2">
+        <span className="text-[11px] text-tx-tertiary font-medium tracking-wide">
+          {t('common.noteCount', { count: sortedNotes.length })}
+        </span>
       </div>
 
       {/* 多选操作栏 */}
@@ -3273,7 +3242,7 @@ export default function NoteList() {
             />
           ) : (
             <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
-              <div className="px-2 pb-2 space-y-1">
+              <div className="px-2.5 pb-3 space-y-1.5 max-md:px-3 max-md:space-y-2">
                 <AnimatePresence>
                   {sortedNotes.map((note) => (
                     <NoteCard

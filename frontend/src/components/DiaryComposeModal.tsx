@@ -1488,19 +1488,21 @@ const handleEmojiSelect = (emoji: string) => {
             <button
               onClick={() => setVisibility((v) => (v === "PRIVATE" ? "PUBLIC" : "PRIVATE"))}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs transition-all border border-app-border/60 bg-app-surface shrink-0",
+                "flex items-center justify-center transition-all border border-app-border/60 bg-app-surface shrink-0",
+                isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-full text-xs",
                 visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
               )}
+              title={visibility === "PUBLIC" ? "公开可见" : "自己可见"}
             >
               {visibility === "PUBLIC" ? (
                 <>
-                  <Globe size={13} />
-                  <span>公开可见</span>
+                  <Globe size={isMobile ? 16 : 13} />
+                  {!isMobile && <span>公开可见</span>}
                 </>
               ) : (
                 <>
-                  <Lock size={13} />
-                  <span>自己可见</span>
+                  <Lock size={isMobile ? 16 : 13} />
+                  {!isMobile && <span>自己可见</span>}
                 </>
               )}
             </button>
@@ -1562,13 +1564,14 @@ const handleEmojiSelect = (emoji: string) => {
                 setIsMediaMenuOpen(!isMediaMenuOpen);
               }}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors font-medium border border-app-border bg-app-surface",
+                "flex items-center justify-center transition-colors font-medium border border-app-border bg-app-surface",
+                isMobile ? "w-10 h-10 rounded-xl" : "gap-1.5 px-2.5 py-1.5 rounded-xl text-xs",
                 isMediaMenuOpen ? "bg-accent-primary/15 text-accent-primary border-accent-primary/20" : "text-tx-secondary"
               )}
               title="媒体"
             >
-              <ImageIcon size={16} />
-              <span>媒体</span>
+              <ImageIcon size={isMobile ? 18 : 16} />
+              {!isMobile && <span>媒体</span>}
             </button>
             <AnimatePresence>
               {isMediaMenuOpen && (
@@ -1645,11 +1648,15 @@ const handleEmojiSelect = (emoji: string) => {
             <button
               type="button"
               onClick={handleUndoAIFormat}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20 transition-all font-semibold"
+              className={cn(
+                "flex items-center justify-center transition-all font-semibold",
+                isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-xl text-xs",
+                "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20"
+              )}
               title="撤销 AI 整理"
             >
-              <RotateCcw size={14} className="text-amber-500" />
-              <span>撤销</span>
+              <RotateCcw size={isMobile ? 16 : 14} className="text-amber-500" />
+              {!isMobile && <span>撤销</span>}
             </button>
           ) : (
             <button
@@ -1657,7 +1664,8 @@ const handleEmojiSelect = (emoji: string) => {
               onClick={handleAIFormat}
               disabled={!text.trim() || formatting}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs transition-all font-semibold",
+                "flex items-center justify-center transition-all font-semibold",
+                isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-xl text-xs",
                 text.trim() && !formatting
                   ? "bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20"
                   : "text-tx-tertiary bg-app-subtle cursor-not-allowed opacity-50",
@@ -1665,11 +1673,11 @@ const handleEmojiSelect = (emoji: string) => {
               title="AI 整理"
             >
               {formatting ? (
-                <Loader2 size={14} className="animate-spin text-accent-primary" />
+                <Loader2 size={isMobile ? 16 : 14} className="animate-spin text-accent-primary" />
               ) : (
-                <Sparkles size={14} className={text.trim() ? "text-accent-primary" : "text-tx-tertiary"} />
+                <Sparkles size={isMobile ? 16 : 14} className={text.trim() ? "text-accent-primary" : "text-tx-tertiary"} />
               )}
-              <span>AI整理</span>
+              {!isMobile && <span>AI整理</span>}
             </button>
           )}
         </div>

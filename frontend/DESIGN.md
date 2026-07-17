@@ -13,11 +13,12 @@ The global border-radius maps dynamically in `tailwind.config.cjs` using CSS var
 
 ## 3. Core Visual Skins
 
-### 1. Obsidian (Default base)
-- **Concept**: Quiet dark theme, high contrast but low visual fatigue, pure flat layout, distraction-free editing.
-- **Corner Radius**: Sharp geometric `4px` across all controls, buttons, cards, and windows.
-- **Accent Primary**: Quiet active purple (`#7a52f4` in dark mode, `#483699` in light mode).
-- **Background**: Dark charcoal `#1e1e1e` (main editor/canvas) and sidebar `#161616`.
+### 1. Obsidian (Default · 护眼纸感 + 浓彩点缀)
+- **Concept**: Paper-like workspace for long writing/reading; colorful chrome (nav, FAB, cards) without glare in the editor canvas.
+- **Corner Radius**: Soft modern radii — window `14px`, card `12px`, button/input `10px` (overridable per skin).
+- **Accent Primary**: Saturated violet (`#b794ff` dark / `#6d4aff` light) with purple→magenta primary gradients.
+- **Background**: Warm rice-paper light `#f3efe6` / warm night dark `#16131c`; elevated cream `#fffaf2` / `#252033` (no pure white).
+- **Elevation**: Colored soft shadows + multi-hue ambient wash (violet / rose / teal) at viewport corners only.
 
 
 ---

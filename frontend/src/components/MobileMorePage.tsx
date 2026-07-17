@@ -1,9 +1,10 @@
 import React from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { broadcastLogout } from "@/lib/api";
-import { FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2 } from "lucide-react";
+import { FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
+import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 
 export default function MobileMorePage() {
   const { t } = useTranslation();
@@ -18,6 +19,20 @@ export default function MobileMorePage() {
 
   const menuItems = [
     {
+      id: "all",
+      label: "所有笔记",
+      icon: <BookOpen className="w-6 h-6 text-indigo-500" />,
+      desc: "浏览和管理所有核心笔记",
+      onClick: () => handleNavigate("all"),
+    },
+    {
+      id: "media",
+      label: "媒体库",
+      icon: <Film className="w-6 h-6 text-sky-500" />,
+      desc: "浏览和管理云端媒体资源",
+      onClick: () => handleNavigate("media"),
+    },
+    {
       id: "trash",
       label: "回收站",
       icon: <Trash2 className="w-6 h-6 text-red-500" />,
@@ -26,13 +41,6 @@ export default function MobileMorePage() {
         actions.setViewMode("trash");
         actions.setMobileView("list");
       },
-    },
-    {
-      id: "files",
-      label: "文件管理",
-      icon: <FolderOpen className="w-6 h-6 text-indigo-500" />,
-      desc: "管理所有上传的文件与图片附件",
-      onClick: () => handleNavigate("files"),
     },
     {
       id: "favorites",
@@ -72,15 +80,20 @@ export default function MobileMorePage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-app-bg overflow-y-auto" style={{ paddingTop: "calc(var(--safe-area-top) + 16px)" }}>
-      {/* 头部装饰 */}
-      <div className="px-6 py-4">
-        <h1 className="text-2xl font-bold text-tx-primary leading-tight">更多功能</h1>
-        <p className="text-xs text-tx-tertiary mt-1">发现更多工具，定制你的个性化空间</p>
+    <div className="flex-1 flex flex-col h-full bg-app-bg overflow-y-auto">
+      <MobileChromeHeader
+        variant="root"
+        title="更多"
+        subtitle="发现更多工具，定制你的空间"
+      />
+      {/* 头部装饰（大标题区，顶栏已有汉堡） */}
+      <div className="px-6 pt-3 pb-2 md:pt-6">
+        <h1 className="text-xl font-bold text-tx-primary leading-tight tracking-tight md:text-2xl">更多功能</h1>
+        <p className="text-sm text-tx-tertiary mt-1">文件、收藏、AI 与设置都在这里</p>
       </div>
 
       {/* 宫格菜单 */}
-      <div className="px-4 py-2 grid grid-cols-2 gap-3 flex-1">
+      <div className="px-4 py-2 grid grid-cols-2 gap-3 flex-1 pb-6">
         {menuItems.map((item, idx) => (
           <motion.button
             key={item.id}
@@ -88,19 +101,19 @@ export default function MobileMorePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: idx * 0.05 }}
             onClick={item.onClick}
-            className="flex flex-col justify-between p-4 rounded-card border border-app-border/40 bg-app-surface/30 hover:bg-app-hover active:scale-[0.98] transition-all text-left group min-h-[120px]"
+            className="flex flex-col justify-between p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs hover:shadow-sm hover:border-app-border active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px]"
           >
-            <div className="w-10 h-10 rounded-button bg-app-surface border border-app-border flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform relative">
+            <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform duration-fast relative">
               {item.icon}
               {item.id === "mentions" && state.unreadMentionCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-surface">
+                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-elevated">
                   {state.unreadMentionCount}
                 </span>
               )}
             </div>
             <div className="mt-4">
-              <div className="text-sm font-semibold text-tx-primary">{item.label}</div>
-              <div className="text-[10px] text-tx-tertiary mt-1 line-clamp-2 leading-tight">{item.desc}</div>
+              <div className="text-sm font-semibold text-tx-primary tracking-tight">{item.label}</div>
+              <div className="text-[11px] text-tx-tertiary mt-1 line-clamp-2 leading-snug">{item.desc}</div>
             </div>
           </motion.button>
         ))}
@@ -111,7 +124,7 @@ export default function MobileMorePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: menuItems.length * 0.05 }}
           onClick={handleLogout}
-          className="col-span-2 flex items-center gap-4 p-4 rounded-card border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-[0.98] transition-all text-left mt-2 group"
+          className="col-span-2 flex items-center gap-4 p-4 rounded-card border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-[0.98] transition-all duration-fast ease-soft text-left mt-1 group shadow-xs"
         >
           <div className="w-10 h-10 rounded-button bg-red-500/10 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
             <LogOut className="w-5 h-5 text-red-500" />

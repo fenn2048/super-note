@@ -16,7 +16,6 @@ import {
   ShieldCheck,
   ShieldAlert,
   Link,
-  Menu,
 } from "lucide-react";
 import { api, setCurrentWorkspace, getServerUrl, getCurrentWorkspace } from "@/lib/api";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -25,6 +24,7 @@ import { toast } from "@/lib/toast";
 import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from "@/types";
 import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 import { renderDiaryContent } from "./DiaryCenter";
 
 // ---------------------------------------------------------------------------
@@ -48,19 +48,19 @@ function QuickStatCard({
       onClick={onClick}
       disabled={!onClick}
       className={cn(
-        "flex items-center gap-3 p-4 rounded-xl border border-app-border/60 bg-app-surface/50 transition-all",
-        onClick ? "hover:bg-app-hover hover:border-app-border cursor-pointer active:scale-[0.98]" : "",
+        "flex items-center gap-3 p-4 rounded-card border border-app-border/70 bg-app-elevated shadow-xs transition-all duration-fast ease-soft",
+        onClick ? "hover:bg-app-hover hover:shadow-sm hover:border-app-border cursor-pointer active:scale-[0.98]" : "",
       )}
     >
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-        style={{ backgroundColor: color + "15", color }}
+        className="w-11 h-11 rounded-card flex items-center justify-center shrink-0"
+        style={{ backgroundColor: color + "18", color }}
       >
         {icon}
       </div>
-      <div className="text-left">
-        <div className="text-lg font-bold text-tx-primary tabular-nums">{value}</div>
-        <div className="text-[11px] text-tx-tertiary">{label}</div>
+      <div className="text-left min-w-0">
+        <div className="text-xl font-bold text-tx-primary tabular-nums tracking-tight leading-none">{value}</div>
+        <div className="text-[11px] text-tx-tertiary mt-1 font-medium">{label}</div>
       </div>
     </button>
   );
@@ -637,38 +637,34 @@ export default function Dashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
-      {/* 首页顶栏 */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/20 shrink-0 select-none" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => actions.setMobileSidebar(true)}
-            className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active md:hidden"
-            title="菜单"
-          >
-            <Menu size={20} />
-          </button>
-          <span className="text-sm font-bold text-tx-primary">首页</span>
-        </div>
+      {/* 首页顶栏：移动端统一 Chrome；桌面保留工作区切换 */}
+      <MobileChromeHeader
+        variant="root"
+        title="首页"
+        right={<WorkspaceSwitcher variant="header" />}
+      />
+      <header className="hidden md:flex items-center justify-between px-4 py-3 border-b border-app-border/50 bg-app-elevated/40 shrink-0 select-none">
+        <span className="text-sm font-bold text-tx-primary tracking-tight">首页</span>
         <WorkspaceSwitcher variant="header" />
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
           {/* ===== 欢迎区域 ===== */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
-                <Sparkles size={20} className="text-white" />
+            <div className="flex items-center gap-3.5 mb-1">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-400 flex items-center justify-center shadow-accent">
+                <Sparkles size={22} className="text-white" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-tx-primary leading-tight">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-tx-primary leading-tight tracking-tight">
                   {greeting} {currentUser?.displayName || currentUser?.username || ""} 👋
                 </h1>
-                <p className="text-xs text-tx-tertiary mt-0.5">
+                <p className="text-xs sm:text-sm text-tx-tertiary mt-1">
                   {hasWorkspaces ? "选择一个空间开始协作" : "目前只有你一个人，创建家庭空间邀请家人吧"}
                 </p>
               </div>
@@ -681,43 +677,43 @@ export default function Dashboard() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.05 }}
-              className="rounded-2xl border border-app-border/40 bg-app-surface/20 p-4"
+              className="rounded-window border border-app-border/60 bg-app-elevated shadow-sm p-4 sm:p-5"
             >
-              <h2 className="text-[11px] font-semibold text-tx-tertiary uppercase tracking-wider mb-3 px-1">
+              <h2 className="text-[11px] font-semibold text-tx-tertiary uppercase tracking-wider mb-3.5 px-0.5">
                 快捷操作
               </h2>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                 <button
                   onClick={handleQuickCreateNote}
-                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border/60 bg-app-surface/50 hover:bg-app-hover hover:border-app-border transition-all active:scale-[0.97] group cursor-pointer"
+                  className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                  <div className="w-11 h-11 rounded-card bg-gradient-to-br from-amber-400/25 to-orange-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
                     <FileText size={20} />
                   </div>
                   <span className="text-xs font-semibold text-tx-primary">记笔记</span>
-                  <span className="text-[10px] text-tx-tertiary mt-0.5">记录创意想法</span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5 hidden sm:block">记录创意想法</span>
                 </button>
 
                 <button
                   onClick={handleQuickWriteSays}
-                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border/60 bg-app-surface/50 hover:bg-app-hover hover:border-app-border transition-all active:scale-[0.97] group cursor-pointer"
+                  className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                  <div className="w-11 h-11 rounded-card bg-gradient-to-br from-violet-500/25 to-fuchsia-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
                     <MessageCircle size={20} />
                   </div>
                   <span className="text-xs font-semibold text-tx-primary">写说说</span>
-                  <span className="text-[10px] text-tx-tertiary mt-0.5">记录日常生活</span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5 hidden sm:block">记录日常生活</span>
                 </button>
 
                 <button
                   onClick={handleQuickAddTask}
-                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-app-border/60 bg-app-surface/50 hover:bg-app-hover hover:border-app-border transition-all active:scale-[0.97] group cursor-pointer"
+                  className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                  <div className="w-11 h-11 rounded-card bg-gradient-to-br from-emerald-400/25 to-teal-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
                     <ListTodo size={20} />
                   </div>
                   <span className="text-xs font-semibold text-tx-primary">加待办</span>
-                  <span className="text-[10px] text-tx-tertiary mt-0.5">管理计划日程</span>
+                  <span className="text-[10px] text-tx-tertiary mt-0.5 hidden sm:block">管理计划日程</span>
                 </button>
               </div>
             </motion.div>
@@ -835,16 +831,16 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
-                className="rounded-xl border border-app-border/60 bg-app-surface/30 overflow-hidden"
+                className="rounded-window border border-app-border/60 bg-app-elevated shadow-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/30">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/30">
                   <h2 className="text-xs font-semibold text-tx-primary flex items-center gap-2">
                     <MessageCircle size={14} className="text-violet-500" />
                     最新说说
                   </h2>
                   <button
                     onClick={() => actions.setViewMode("diary")}
-                    className="text-[10px] text-accent-primary hover:underline"
+                    className="text-[11px] font-medium text-accent-primary hover:underline"
                   >
                     查看全部
                   </button>
@@ -869,9 +865,9 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.2 }}
-                className="rounded-xl border border-app-border/60 bg-app-surface/30 overflow-hidden"
+                className="rounded-window border border-app-border/60 bg-app-elevated shadow-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/30">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/30">
                   <h2 className="text-xs font-semibold text-tx-primary flex items-center gap-2">
                     <Clock size={14} className="text-emerald-500" />
                     即将到期
@@ -917,16 +913,16 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.3 }}
-                className="rounded-xl border border-app-border/60 bg-app-surface/30 overflow-hidden"
+                className="rounded-window border border-app-border/60 bg-app-elevated shadow-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/30">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/30">
                   <h2 className="text-xs font-semibold text-tx-primary flex items-center gap-2">
                     <FileText size={14} className="text-amber-500" />
                     最近编辑
                   </h2>
                   <button
                     onClick={() => actions.setViewMode("all")}
-                    className="text-[10px] text-accent-primary hover:underline"
+                    className="text-[11px] font-medium text-accent-primary hover:underline"
                   >
                     查看全部
                   </button>

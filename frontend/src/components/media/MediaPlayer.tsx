@@ -177,7 +177,7 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
       "relative overflow-hidden bg-black select-none transition-all duration-300",
       isTheaterMode 
         ? "fixed inset-0 z-50 flex flex-col justify-center items-center" 
-        : "w-full aspect-video rounded-xl border border-app-border"
+        : "w-full aspect-video md:rounded-xl md:border md:border-app-border"
     )}>
       {isTheaterMode && (
         <button

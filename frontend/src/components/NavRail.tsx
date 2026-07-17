@@ -241,8 +241,8 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
   // label 模式：64px 宽栏 / 整宽纵向按钮（图标 + 文字两行）
   const railWidthClass = showLabel ? "w-16" : "w-12";
   const itemBaseClass = showLabel
-    ? "relative w-14 py-1.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-colors"
-    : "relative w-10 h-10 rounded-lg flex items-center justify-center transition-colors";
+    ? "relative w-14 py-1.5 rounded-button flex flex-col items-center justify-center gap-0.5 transition-all duration-fast ease-soft"
+    : "relative w-10 h-10 rounded-button flex items-center justify-center transition-all duration-fast ease-soft";
 
   const renderItem = (item: NavConfigItem) => {
     const active = isActive(item.mode, state.viewMode);
@@ -258,28 +258,21 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
         className={cn(
           itemBaseClass,
           active
-            ? "bg-accent-primary/12 text-accent-primary"
+            ? "nav-active-pill"
             : "text-tx-tertiary hover:bg-app-hover hover:text-tx-primary",
           // 回收站破坏性入口降级：未选中时再弱半度
           isTrashItem && !active && "opacity-70 hover:opacity-100",
         )}
       >
-        {/* Active 左侧 2px 高亮条——与主侧栏 v15 风格一致 */}
-        {active && (
-          <span
-            className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-accent-primary"
-            aria-hidden
-          />
-        )}
         {item.icon}
         {item.mode === "projects" && state.reminderActiveCount > 0 && (
-          <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent-danger text-[9px] font-bold text-white flex items-center justify-center leading-none z-10">
+          <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent-danger text-[9px] font-bold text-white flex items-center justify-center leading-none z-10 shadow-sm">
             {state.reminderActiveCount}
           </span>
         )}
         {showLabel && (
           // 文字限定单行，超长用 ellipsis；leading-none 让两行视觉间距更紧凑
-          <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1">
+          <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1 font-medium">
             {label}
           </span>
         )}
@@ -303,7 +296,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
         isMobile
           ? "flex md:hidden h-full"
           : "hidden md:flex h-full",
-        "vibrancy-sidebar bg-app-sidebar border-r border-app-border flex-col items-center shrink-0 transition-[width] duration-150",
+        "vibrancy-sidebar bg-app-sidebar border-r border-app-border/80 flex-col items-center shrink-0 transition-[width] duration-150",
         railWidthClass,
       )}
       style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)', paddingBottom: '8px' }}

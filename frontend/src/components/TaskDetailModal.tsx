@@ -347,14 +347,14 @@ export default function TaskDetailModal({
   if (!activeTask) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-text">
+    <div className="fixed inset-0 z-50 flex items-center justify-center md:p-4 select-text">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={() => handleSaveTaskDetail(true)}
       />
-      <div className="relative bg-app-elevated w-full max-w-2xl rounded-2xl border border-app-border shadow-2xl flex flex-col max-h-[85vh] animate-in scale-in duration-200 overflow-hidden">
+      <div className="relative bg-app-elevated w-full md:max-w-2xl h-[100dvh] md:h-auto rounded-none md:rounded-2xl border-0 md:border border-app-border shadow-2xl flex flex-col max-h-none md:max-h-[85vh] animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:scale-in duration-200 overflow-hidden">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -437,7 +437,7 @@ export default function TaskDetailModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-6 pt-3.5 pb-6 space-y-5">
+        <div className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 pt-3.5 pb-[calc(1.5rem+var(--safe-area-bottom))] md:pb-6 space-y-5">
           {/* Task Title and Color Selection */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">

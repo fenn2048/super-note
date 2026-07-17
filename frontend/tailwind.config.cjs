@@ -145,9 +145,27 @@ module.exports = {
         xl: "var(--radius-window)",
         "2xl": "var(--radius-window)",
       },
+      boxShadow: {
+        xs: "var(--shadow-xs)",
+        sm: "var(--shadow-sm)",
+        DEFAULT: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+        accent: "var(--shadow-accent)",
+        fab: "var(--shadow-fab)",
+      },
+      transitionTimingFunction: {
+        soft: "var(--ease-out-soft)",
+      },
+      transitionDuration: {
+        fast: "var(--duration-fast)",
+        normal: "var(--duration-normal)",
+      },
       animation: {
         "fade-in": "fadeIn 0.2s ease-out",
         "slide-in": "slideIn 0.3s ease-out",
+        "scale-in": "scaleIn 0.2s cubic-bezier(0.22, 1, 0.36, 1)",
       },
       keyframes: {
         fadeIn: {
@@ -157,6 +175,10 @@ module.exports = {
         slideIn: {
           "0%": { transform: "translateX(-10px)", opacity: "0" },
           "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        scaleIn: {
+          "0%": { opacity: "0", transform: "scale(0.96)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
         },
       },
     },

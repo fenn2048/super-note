@@ -409,10 +409,10 @@ export default function MediaCenter() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="flex-1 overflow-y-auto p-4 md:p-6 max-w-5xl mx-auto w-full flex flex-col gap-6"
+            className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full flex flex-col md:gap-6 pb-[calc(1.5rem+var(--safe-area-bottom))] md:pb-6"
           >
             {/* Navigation back */}
-            <div className="flex items-center justify-between shrink-0">
+            <div className="flex items-center justify-between shrink-0 px-4 pt-4 md:px-6 md:pt-6 mb-4 md:mb-0">
               <button 
                 onClick={() => setSelectedItem(null)}
                 className="flex items-center gap-1.5 text-xs font-semibold text-tx-secondary hover:text-tx-primary bg-app-sidebar/40 border border-app-border/40 px-3 py-1.5 rounded-lg transition-colors"
@@ -437,7 +437,7 @@ export default function MediaCenter() {
             </div>
 
             {/* Media Player wrapper */}
-            <div className="w-full">
+            <div className="w-full md:px-6">
               {selectedItem.type === "video" ? (
                 <MediaPlayer mediaId={selectedItem.id} />
               ) : (
@@ -446,7 +446,7 @@ export default function MediaCenter() {
             </div>
 
             {/* Details block */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4 md:px-6 mt-4 md:mt-0">
               
               {/* Left Column: Metadata */}
               <div className="md:col-span-2 flex flex-col gap-4 bg-app-sidebar/10 border border-app-border/40 rounded-2xl p-5">
@@ -595,44 +595,44 @@ export default function MediaCenter() {
             className="flex-1 flex flex-col min-h-0 md:flex-row overflow-hidden"
           >
             
-            {/* Sidebar filter lists */}
-            <div className="w-full md:w-56 bg-app-sidebar border-b md:border-b-0 md:border-r border-app-border shrink-0 p-4 flex flex-col gap-4 overflow-y-auto">
+            {/* Sidebar / Top filter list for mobile */}
+            <div className="w-full md:w-56 bg-app-sidebar border-b md:border-b-0 md:border-r border-app-border shrink-0 p-3 md:p-4 flex flex-row md:flex-col gap-3 md:gap-4 overflow-x-auto md:overflow-y-auto max-md:whitespace-nowrap items-center md:items-stretch">
               
               {/* Type Switcher */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider select-none">媒体类型</span>
+              <div className="flex md:flex-col gap-1.5 shrink-0">
+                <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider select-none max-md:hidden">媒体类型</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => { setMediaType("video"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
+                      "flex-1 py-1.5 md:py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
                       mediaType === "video" 
                         ? "bg-accent-primary border-accent-primary text-white shadow-lg shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
                     )}
                   >
                     <Film size={16} />
-                    视频库
+                    <span className="max-md:hidden">视频库</span>
                   </button>
                   <button
                     onClick={() => { setMediaType("audio"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
+                      "flex-1 py-1.5 md:py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
                       mediaType === "audio" 
                         ? "bg-accent-primary border-accent-primary text-white shadow-lg shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
                     )}
                   >
                     <Music size={16} />
-                    音乐库
+                    <span className="max-md:hidden">音乐库</span>
                   </button>
                 </div>
               </div>
 
               {/* Collections Navigation list */}
-              <div className="flex flex-col gap-2 flex-1 min-h-[150px]">
-                <div className="flex items-center justify-between select-none">
-                  <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider">全部合集</span>
+              <div className="flex flex-row md:flex-col gap-2 flex-1 items-center md:items-stretch">
+                <div className="flex items-center justify-between select-none shrink-0">
+                  <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider max-md:hidden">全部合集</span>
                   {isAdmin && (
                     <button 
                       onClick={handleOpenAddCollection}
@@ -644,11 +644,11 @@ export default function MediaCenter() {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-1 overflow-y-auto max-h-[300px] md:max-h-none">
+                <div className="flex flex-row md:flex-col gap-2 md:gap-1 overflow-x-auto md:overflow-y-auto max-md:pb-1 max-md:scrollbar-hide">
                   <button
                     onClick={() => setSelectedCollection(null)}
                     className={cn(
-                      "w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center justify-between transition-colors",
+                      "w-auto md:w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center justify-between transition-colors shrink-0",
                       selectedCollection === null 
                         ? "bg-accent-primary/10 text-accent-primary" 
                         : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
@@ -661,14 +661,14 @@ export default function MediaCenter() {
                       key={col.id}
                       onClick={() => setSelectedCollection(col)}
                       className={cn(
-                        "w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center justify-between transition-colors",
+                        "w-auto md:w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 md:justify-between transition-colors shrink-0",
                         selectedCollection?.id === col.id 
                           ? "bg-accent-primary/10 text-accent-primary" 
                           : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
                       )}
                     >
-                      <span className="truncate">{col.title}</span>
-                      <span className="text-xs px-1.5 py-0.5 bg-app-border/40 text-tx-tertiary rounded font-normal">
+                      <span className="truncate max-w-[150px]">{col.title}</span>
+                      <span className="text-xs px-1.5 py-0.5 bg-app-border/40 text-tx-tertiary rounded font-normal shrink-0">
                         {col.item_count}
                       </span>
                     </button>
@@ -678,7 +678,7 @@ export default function MediaCenter() {
 
               {/* Settings direct access for System admin */}
               {isAdmin && (
-                <div className="border-t border-app-border/40 pt-3 select-none">
+                <div className="md:border-t border-app-border/40 md:pt-3 select-none shrink-0 max-md:ml-auto">
                   <button
                     onClick={async () => {
                       setShowAlistSettings(true);
@@ -692,10 +692,10 @@ export default function MediaCenter() {
                         console.error("Failed to load Alist config:", err);
                       }
                     }}
-                    className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                    className="w-auto md:w-full py-1.5 md:py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
                   >
                     <Settings size={16} />
-                    Alist 挂载配置
+                    <span className="max-md:hidden">Alist 挂载配置</span>
                   </button>
                 </div>
               )}

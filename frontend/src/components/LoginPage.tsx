@@ -597,21 +597,21 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
         //     WKWebView 下会出现上下不对称）。
         className={`relative w-full max-w-[420px] mx-4 py-6 flex-shrink-0 ${keyboardHeight > 0 ? 'mt-auto' : 'my-auto'}`}
       >
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl dark:shadow-2xl dark:shadow-black/20 p-8">
+        <div className="bg-app-elevated border border-app-border rounded-window shadow-xl dark:shadow-2xl dark:shadow-black/30 p-7 sm:p-8 backdrop-blur-sm">
           {/* Logo & Title */}
           <div className="text-center mb-6">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.1, duration: 0.4 }}
-              className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/15 mb-4"
+              className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-accent mb-4"
             >
-              <BookOpen size={24} className="text-indigo-600 dark:text-indigo-400" />
+              <BookOpen size={26} className="text-white" />
             </motion.div>
-            <h1 className="text-xl font-bold text-tx-primary tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-tx-primary tracking-tight">
               {t("auth.appTitle")}
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5">
+            <p className="text-sm text-tx-tertiary mt-1.5">
               {isRegister
                 ? t("auth.registerSubtitle")
                 : isClientMode
@@ -622,14 +622,14 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
 
           {/* 登录/注册 Tab（2FA 阶段时隐藏） */}
           {!twoFactor && (
-          <div className="flex items-center gap-1 p-1 mb-5 rounded-lg bg-zinc-100 dark:bg-zinc-800">
+          <div className="flex items-center gap-1 p-1 mb-5 rounded-button bg-app-surface border border-app-border/60">
             <button
               type="button"
               onClick={() => switchMode("login")}
-              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`flex-1 py-2 rounded-button text-xs font-semibold transition-all duration-fast ease-soft ${
                 mode === "login"
-                  ? "bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  ? "bg-app-elevated text-accent-primary shadow-sm"
+                  : "text-tx-tertiary hover:text-tx-primary"
               }`}
             >
               {t("auth.loginTab")}
@@ -639,10 +639,10 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
               onClick={() => allowRegistration && switchMode("register")}
               disabled={!allowRegistration}
               title={!allowRegistration ? t("auth.registerDisabled") : undefined}
-              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`flex-1 py-2 rounded-button text-xs font-semibold transition-all duration-fast ease-soft ${
                 mode === "register"
-                  ? "bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  ? "bg-app-elevated text-accent-primary shadow-sm"
+                  : "text-tx-tertiary hover:text-tx-primary disabled:opacity-40 disabled:cursor-not-allowed"
               }`}
             >
               {t("auth.registerTab")}
@@ -948,7 +948,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             <button
               type="submit"
               disabled={submitDisabled}
-              className="w-full flex items-center justify-center py-2.5 px-4 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              className="btn-primary-glow w-full flex items-center justify-center py-3 px-4 rounded-button text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:filter-none transition-all"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

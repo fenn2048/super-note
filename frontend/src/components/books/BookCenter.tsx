@@ -497,7 +497,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
+            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
               {filteredBooks.map((book) => {
                 const coverBg = getHashColor(book.title);
                 let coverUrl: string | null = null;
@@ -578,7 +578,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                     </div>
 
                     {/* Hover Actions Menu overlay */}
-                    <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
+                    <div className="absolute top-1 left-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
                       <button
                         onClick={(e) => handleEditClick(book, e)}
                         className="p-0.5 text-white hover:text-accent-primary hover:bg-white/10 rounded transition-all"
