@@ -1193,7 +1193,11 @@
     "skinObsidian": "Obsidian (Default)",
     "skinObsidianDesc": "Obsidian quiet dark mode, minimalist style with sharp geometric corners",
     "skinEink": "E-Ink",
-    "skinEinkDesc": "E-Ink style, eye-care soft e-paper texture, monochrome high-contrast minimalism"
+    "skinEinkDesc": "E-Ink style, eye-care soft e-paper texture, monochrome high-contrast minimalism",
+    "skinClaude": "Claude",
+    "skinClaudeDesc": "Warm sand canvas with terracotta accents and a refined reading feel",
+    "skinMono": "Mono",
+    "skinMonoDesc": "Black, white and gray only — minimal, calm, architectural"
   },
   "export": {
     "fetchingData": "Fetching note data...",

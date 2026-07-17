@@ -2910,6 +2910,160 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   --pm-selection: rgba(224, 224, 224, 0.15);
 }
 
+/* ============================================================================
+ * Mono 黑白灰外观（Skin）
+ * ----------------------------------------------------------------------------
+ * 简约大气、无彩色干扰：纯黑 / 白 / 灰层级，适合长读写与极简审美。
+ * 与明暗模式正交：data-skin="mono" × .dark
+ * ========================================================================= */
+
+/* ---------- Mono Light ---------- */
+:root[data-skin="mono"] {
+  --color-bg: #f4f4f5;
+  --color-surface: #eaeaec;
+  --color-sidebar: #e4e4e7;
+  --color-sidebar-solid: #e4e4e7;
+  --color-elevated: #ffffff;
+  --color-elevated-solid: #ffffff;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.14);
+  --color-hover: rgba(0, 0, 0, 0.045);
+  --color-active: rgba(0, 0, 0, 0.08);
+
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #71717a;
+  --color-text-quaternary: #a1a1aa;
+  --color-text-inverse: #fafafa;
+
+  --color-accent-primary: #18181b;
+  --color-accent-primary-hover: #09090b;
+  --color-accent-secondary: #3f3f46;
+  --color-accent-warning: #52525b;
+  --color-accent-danger: #27272a;
+  --color-accent-muted: rgba(24, 24, 27, 0.35);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.05), 0 10px 28px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 18px 44px rgba(0, 0, 0, 0.09);
+  --shadow-xl: 0 8px 20px rgba(0, 0, 0, 0.07), 0 28px 60px rgba(0, 0, 0, 0.11);
+  --shadow-accent: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --shadow-fab: 0 6px 22px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  --radius-window: 14px;
+  --radius-card: 12px;
+  --radius-button: 10px;
+  --radius-input: 10px;
+
+  --pm-text: #27272a;
+  --pm-heading: #18181b;
+  --pm-code-bg: #f4f4f5;
+  --pm-code-text: #3f3f46;
+  --pm-pre-bg: #fafafa;
+  --pm-pre-border: rgba(0, 0, 0, 0.08);
+  --pm-pre-text: #27272a;
+  --pm-blockquote-border: #18181b;
+  --pm-blockquote-text: #52525b;
+  --pm-hr: rgba(0, 0, 0, 0.1);
+  --pm-placeholder: #a1a1aa;
+  --pm-task-done: #a1a1aa;
+  --pm-scrollbar: rgba(0, 0, 0, 0.12);
+  --pm-scrollbar-hover: rgba(0, 0, 0, 0.22);
+  --pm-selection: rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Mono Dark ---------- */
+:root[data-skin="mono"].dark {
+  --color-bg: #0c0c0e;
+  --color-surface: #141416;
+  --color-sidebar: #101012;
+  --color-sidebar-solid: #101012;
+  --color-elevated: #1a1a1d;
+  --color-elevated-solid: #1a1a1d;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --color-hover: rgba(255, 255, 255, 0.055);
+  --color-active: rgba(255, 255, 255, 0.1);
+
+  --color-text-primary: #f4f4f5;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-text-quaternary: #52525b;
+  --color-text-inverse: #0c0c0e;
+
+  --color-accent-primary: #fafafa;
+  --color-accent-primary-hover: #ffffff;
+  --color-accent-secondary: #d4d4d8;
+  --color-accent-warning: #a1a1aa;
+  --color-accent-danger: #e4e4e7;
+  --color-accent-muted: rgba(250, 250, 250, 0.4);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 3px 12px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 4px 14px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 8px 22px rgba(0, 0, 0, 0.5), 0 30px 64px rgba(0, 0, 0, 0.45);
+  --shadow-accent: 0 4px 18px rgba(255, 255, 255, 0.12);
+  --shadow-fab: 0 6px 22px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(255, 255, 255, 0.06);
+
+  --radius-window: 14px;
+  --radius-card: 12px;
+  --radius-button: 10px;
+  --radius-input: 10px;
+
+  --pm-text: #e4e4e7;
+  --pm-heading: #fafafa;
+  --pm-code-bg: #27272a;
+  --pm-code-text: #d4d4d8;
+  --pm-pre-bg: #101012;
+  --pm-pre-border: rgba(255, 255, 255, 0.08);
+  --pm-pre-text: #e4e4e7;
+  --pm-blockquote-border: #fafafa;
+  --pm-blockquote-text: #a1a1aa;
+  --pm-hr: rgba(255, 255, 255, 0.1);
+  --pm-placeholder: #52525b;
+  --pm-task-done: #52525b;
+  --pm-scrollbar: rgba(255, 255, 255, 0.1);
+  --pm-scrollbar-hover: rgba(255, 255, 255, 0.2);
+  --pm-selection: rgba(255, 255, 255, 0.16);
+}
+
+/* Mono：中性环境光（去掉默认紫/绿彩晕） */
+:root[data-skin="mono"] body::before {
+  background:
+    radial-gradient(1000px 520px at 10% -8%, rgba(0, 0, 0, 0.04), transparent 55%),
+    radial-gradient(800px 400px at 100% 0%, rgba(0, 0, 0, 0.03), transparent 50%);
+}
+:root[data-skin="mono"].dark body::before {
+  background:
+    radial-gradient(1000px 520px at 10% -8%, rgba(255, 255, 255, 0.04), transparent 55%),
+    radial-gradient(800px 400px at 100% 0%, rgba(255, 255, 255, 0.03), transparent 50%);
+}
+
+/* Mono：主按钮黑白渐变 */
+:root[data-skin="mono"] .btn-primary-glow {
+  background: linear-gradient(145deg, #3f3f46 0%, #18181b 55%, #09090b 100%);
+  color: #fafafa;
+  box-shadow: var(--shadow-accent);
+}
+:root[data-skin="mono"].dark .btn-primary-glow {
+  background: linear-gradient(145deg, #ffffff 0%, #f4f4f5 48%, #d4d4d8 100%);
+  color: #0c0c0e;
+  box-shadow: var(--shadow-accent);
+}
+
+/* Mono：导航激活胶囊灰阶 */
+:root[data-skin="mono"] .nav-active-pill {
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-accent-primary);
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.14);
+}
+:root[data-skin="mono"].dark .nav-active-pill {
+  background: rgba(250, 250, 250, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(250, 250, 250, 0.16);
+}
+
 
 /* ============================================================================
  * macOS 外观风格重设计与圆角阴影微调

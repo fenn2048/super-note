@@ -1201,7 +1201,11 @@
     "skinObsidian": "Obsidian (默认)",
     "skinObsidianDesc": "Obsidian 安静深色模式与极简无干扰编辑，几何硬朗直角",
     "skinEink": "墨水屏",
-    "skinEinkDesc": "墨水屏风格，护眼柔和纸质感，无彩色高对比极简"
+    "skinEinkDesc": "墨水屏风格，护眼柔和纸质感，无彩色高对比极简",
+    "skinClaude": "Claude",
+    "skinClaudeDesc": "温润乳沙色底色，陶土橙高亮，书卷气质",
+    "skinMono": "Mono 黑白",
+    "skinMonoDesc": "简约黑白灰，极简大气，无彩色干扰"
   },
   "export": {
     "fetchingData": "正在获取笔记数据...",

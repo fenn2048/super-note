@@ -71,6 +71,19 @@ const SKINS: SkinDescriptor[] = [
       text: "#191919",
     },
   },
+  {
+    key: "mono",
+    titleKey: "appearance.skinMono",
+    titleDefault: "Mono 黑白",
+    descKey: "appearance.skinMonoDesc",
+    descDefault: "简约黑白灰，极简大气，无彩色干扰",
+    swatch: {
+      bg: "#f4f4f5",
+      sidebar: "#e4e4e7",
+      accent: "#18181b",
+      text: "#18181b",
+    },
+  },
 ];
 
 export default function SkinSwitcher() {

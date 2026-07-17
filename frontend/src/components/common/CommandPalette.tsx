@@ -293,6 +293,16 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           setSkin("eink");
         },
       },
+      {
+        id: "skin-mono",
+        type: "command",
+        title: "外观皮肤: Mono 黑白",
+        subtitle: "切换为简约黑白灰极简大气皮肤",
+        icon: Palette,
+        handler: () => {
+          setSkin("mono");
+        },
+      },
 
     ];
   }, [theme, setTheme, setSkin, actions]);

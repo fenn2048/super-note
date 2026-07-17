@@ -20,6 +20,12 @@ The global border-radius maps dynamically in `tailwind.config.cjs` using CSS var
 - **Background**: Warm rice-paper light `#f3efe6` / warm night dark `#16131c`; elevated cream `#fffaf2` / `#252033` (no pure white).
 - **Elevation**: Colored soft shadows + multi-hue ambient wash (violet / rose / teal) at viewport corners only.
 
+### 2. Mono（黑白灰 · 简约大气）
+- **Concept**: Pure monochrome workspace — no brand color noise; architectural hierarchy via gray steps only.
+- **Corner Radius**: window `14px`, card `12px`, button/input `10px`.
+- **Accent Primary**: Near-black `#18181b` (light) / near-white `#fafafa` (dark).
+- **Background**: Cool zinc light `#f4f4f5` / ink dark `#0c0c0e`; elevated pure white / `#1a1a1d`.
+- **Elevation**: Neutral black shadows only; ambient wash is gray, no hue.
 
 ---
 
