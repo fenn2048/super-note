@@ -103,6 +103,11 @@ export default function MediaCenter() {
   const [fetchingMetadata, setFetchingMetadata] = useState<boolean>(false);
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
 
+  const selectedItemRef = React.useRef<MediaItem | null>(null);
+  useEffect(() => {
+    selectedItemRef.current = selectedItem;
+  }, [selectedItem]);
+
   const [colForm, setColForm] = useState({ title: "", type: "video", cover_url: "", description: "", recommendation: "", sort_order: 0 });
   const [itemForm, setItemForm] = useState({ title: "", type: "video", collection_id: "", cover_url: "", description: "", alist_path: "", artist: "", duration: 0, year: new Date().getFullYear(), genre: "", sort_order: 0, tags: "" });
 
@@ -165,6 +170,51 @@ export default function MediaCenter() {
   useEffect(() => {
     if (selectedItem) {
       api.request<Review[]>(`/media/items/${selectedItem.id}/reviews`).then(setReviews).catch(() => setReviews([]));
+    }
+  }, [selectedItem]);
+
+  // Handle hash change to open specific media item
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith("#/media/items/")) {
+        const id = hash.replace("#/media/items/", "");
+        if (!selectedItemRef.current || selectedItemRef.current.id !== id) {
+          api.request<MediaItem>(`/media/items/${id}`).then(item => {
+            setSelectedItem(item);
+            setMediaType(item.type);
+          }).catch(err => {
+            console.error("Failed to load item from hash:", err);
+            setSelectedItem(null);
+            if (window.location.hash !== "#/media") {
+              window.location.hash = "#/media";
+            }
+          });
+        }
+      } else if (hash === "#/media" || hash === "#/media/") {
+        if (selectedItemRef.current) {
+          setSelectedItem(null);
+        }
+      }
+    };
+
+    window.addEventListener("hashchange", handleHashChange);
+    // Call once on mount to handle initial load
+    handleHashChange();
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []); // Run only once to prevent re-binding and loops
+
+  // Sync selected item state back to URL hash
+  useEffect(() => {
+    if (selectedItem) {
+      const targetHash = `#/media/items/${selectedItem.id}`;
+      if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+      }
+    } else {
+      if (window.location.hash.startsWith("#/media/items/")) {
+        window.location.hash = "#/media";
+      }
     }
   }, [selectedItem]);
 
@@ -336,6 +386,28 @@ export default function MediaCenter() {
 
   const [reviewType, setReviewType] = useState<"long_review" | "short_comment" | "recommendation">("short_comment");
   const [reviewTitle, setReviewTitle] = useState<string>("");
+  const [showReviewInput, setShowReviewInput] = useState<boolean>(false);
+
+  // Inline edit states
+  const [editingTitle, setEditingTitle] = useState<boolean>(false);
+  const [editTitleValue, setEditTitleValue] = useState<string>("");
+  const [editingDescription, setEditingDescription] = useState<boolean>(false);
+  const [editDescValue, setEditDescValue] = useState<string>("");
+
+  const handleUpdateItem = async (updates: Partial<MediaItem>) => {
+    if (!selectedItem) return;
+    try {
+      await api.request(`/media/items/${selectedItem.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...selectedItem, ...updates })
+      });
+      setSelectedItem({ ...selectedItem, ...updates });
+      setItems(items.map(item => item.id === selectedItem.id ? { ...item, ...updates } : item));
+    } catch (err) {
+      console.error("Failed to update item:", err);
+      alert("更新失败");
+    }
+  };
 
   const handleInsertTimestamp = () => {
     if (!reviewEditor) return;
@@ -364,6 +436,7 @@ export default function MediaCenter() {
       });
       reviewEditor.commands.setContent("");
       setReviewTitle("");
+      setShowReviewInput(false);
       // Reload reviews
       const freshReviews = await api.request<Review[]>(`/media/items/${selectedItem.id}/reviews`);
       setReviews(freshReviews || []);
@@ -446,141 +519,231 @@ export default function MediaCenter() {
             </div>
 
             {/* Details block */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4 md:px-6 mt-4 md:mt-0">
+            <div className="flex flex-col gap-6 px-4 md:px-6 mt-4 md:mt-0 max-w-5xl mx-auto w-full mb-10">
               
-              {/* Left Column: Metadata */}
-              <div className="md:col-span-2 flex flex-col gap-4 bg-app-sidebar/10 border border-app-border/40 rounded-2xl p-5">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    {selectedItem.year && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-app-hover border border-app-border rounded-md text-tx-secondary">
-                        {selectedItem.year} 年
-                      </span>
-                    )}
-                    {selectedItem.genre && (() => {
-                      try {
-                        const parsed = JSON.parse(selectedItem.genre || "[]");
-                        return parsed.map((g: string, idx: number) => (
-                          <span key={idx} className="text-[10px] font-bold px-1.5 py-0.5 bg-accent-primary/10 border border-accent-primary/20 rounded-md text-accent-primary">
-                            {g}
-                          </span>
-                        ));
-                      } catch {
-                        return null;
-                      }
-                    })()}
-                  </div>
-                  <h2 className="text-xl font-bold tracking-tight text-tx-primary">{selectedItem.title}</h2>
-                  {selectedItem.artist && (
-                    <p className="text-xs text-tx-secondary font-medium">歌手: {selectedItem.artist}</p>
-                  )}
-                  {selectedItem.collection_title && (
-                    <p className="text-xs text-tx-tertiary mt-0.5">合集: <span className="font-semibold">{selectedItem.collection_title}</span></p>
-                  )}
-                </div>
-
-                <div className="border-t border-app-border/30 pt-3 flex flex-col gap-2">
-                  <span className="text-[10px] font-bold uppercase text-tx-tertiary tracking-wider">描述介绍</span>
-                  <p className="text-xs text-tx-secondary leading-relaxed bg-app-bg/40 p-3 rounded-xl border border-app-border/30">
-                    {selectedItem.description || "无详细描述介绍。"}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-4 text-[10px] text-tx-tertiary select-none">
-                  <span className="flex items-center gap-1"><Play size={12} /> 播放次数: {selectedItem.play_count}</span>
-                  <span className="flex items-center gap-1"><Clock size={12} /> 时长: {formatDuration(selectedItem.duration)}</span>
-                </div>
-              </div>
-
-              {/* Right Column: Mini Interactive Reviews */}
-              <div className="flex flex-col gap-4 bg-app-sidebar/20 border border-app-border/40 rounded-2xl p-5 max-h-[500px]">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase text-tx-tertiary tracking-wider flex items-center gap-1">
-                    <MessageSquare size={14} /> 影评与讨论
-                  </h3>
-                  {selectedItem.type === "video" && isPlaying && (
-                    <button
-                      onClick={handleInsertTimestamp}
-                      className="text-[10px] font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2 py-1 rounded transition-colors"
-                    >
-                      打点 {formatDuration(currentTime)}
-                    </button>
-                  )}
-                </div>
-
-                {/* Review listing */}
-                <div 
-                  onClick={handleTimestampClick}
-                  className="flex-1 overflow-y-auto flex flex-col gap-3 min-h-[150px] pr-1"
-                >
-                  {reviews.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-[10px] text-tx-tertiary text-center p-4">
-                      暂无评论或影评，点击下方发布首条评论吧！
+              {/* Metadata & Reviews Container */}
+              <div className="flex flex-col bg-app-sidebar/10 border border-app-border/40 rounded-2xl p-5 md:p-6">
+                
+                {/* 1. Metadata Section */}
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      {selectedItem.year && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-app-hover border border-app-border rounded-md text-tx-secondary">
+                          {selectedItem.year} 年
+                        </span>
+                      )}
+                      {selectedItem.genre && (() => {
+                        try {
+                          const parsed = JSON.parse(selectedItem.genre || "[]");
+                          return parsed.map((g: string, idx: number) => (
+                            <span key={idx} className="text-[10px] font-bold px-1.5 py-0.5 bg-accent-primary/10 border border-accent-primary/20 rounded-md text-accent-primary">
+                              {g}
+                            </span>
+                          ));
+                        } catch {
+                          return null;
+                        }
+                      })()}
                     </div>
-                  ) : (
-                    reviews.map((rev) => (
-                      <div key={rev.id} className="p-3 bg-app-bg border border-app-border rounded-xl flex flex-col gap-1.5 relative group">
-                        <div className="flex items-center justify-between text-[10px] text-tx-tertiary select-none">
-                          <span className="font-semibold text-tx-secondary flex items-center gap-1">
-                            <User size={10} /> {rev.username}
-                          </span>
-                          <span>{rev.created_at.substring(5, 16)}</span>
-                        </div>
-                        {rev.title && (
-                          <h5 className="text-xs font-bold text-tx-primary">{rev.title}</h5>
-                        )}
-                        <div 
-                          className="text-xs text-tx-secondary leading-relaxed break-words"
-                          dangerouslySetInnerHTML={{ __html: rev.content }}
+                    {editingTitle ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="text"
+                          value={editTitleValue}
+                          onChange={(e) => setEditTitleValue(e.target.value)}
+                          className="flex-1 bg-app-sidebar border border-accent-primary text-xl font-bold tracking-tight text-tx-primary rounded-lg px-2 py-1 outline-none"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleUpdateItem({ title: editTitleValue });
+                              setEditingTitle(false);
+                            } else if (e.key === 'Escape') {
+                              setEditingTitle(false);
+                            }
+                          }}
                         />
+                        <button onClick={() => { handleUpdateItem({ title: editTitleValue }); setEditingTitle(false); }} className="text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover px-3 py-1.5 rounded-lg shadow">保存</button>
+                        <button onClick={() => setEditingTitle(false)} className="text-xs font-semibold text-tx-secondary hover:text-tx-primary bg-app-sidebar hover:bg-app-hover border border-app-border px-3 py-1.5 rounded-lg">取消</button>
+                      </div>
+                    ) : (
+                      <h2 className="text-xl font-bold tracking-tight text-tx-primary group/title flex items-center gap-2">
+                        {selectedItem.title}
                         {isAdmin && (
-                          <button 
-                            onClick={() => handleDeleteReview(rev.id)}
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-accent-danger hover:bg-accent-danger/10 rounded"
+                          <button
+                            onClick={() => {
+                              setEditTitleValue(selectedItem.title);
+                              setEditingTitle(true);
+                            }}
+                            className="opacity-0 group-hover/title:opacity-100 transition-opacity text-tx-tertiary hover:text-accent-primary p-1"
+                            title="编辑标题"
                           >
-                            <Trash2 size={12} />
+                            <Edit3 size={14} />
                           </button>
                         )}
-                      </div>
-                    ))
-                  )}
-                </div>
+                      </h2>
+                    )}
+                    {selectedItem.artist && (
+                      <p className="text-xs text-tx-secondary font-medium">歌手: {selectedItem.artist}</p>
+                    )}
+                    {selectedItem.collection_title && (
+                      <p className="text-xs text-tx-tertiary mt-0.5">合集: <span className="font-semibold">{selectedItem.collection_title}</span></p>
+                    )}
+                  </div>
 
-                {/* Quick Editor Box */}
-                {reviewEditor && (
-                  <div className="flex flex-col gap-2 border-t border-app-border/30 pt-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <select 
-                        value={reviewType}
-                        onChange={(e) => setReviewType(e.target.value as any)}
-                        className="bg-app-bg border border-app-border text-[10px] rounded p-1 text-tx-secondary outline-none"
-                      >
-                        <option value="short_comment">短评</option>
-                        <option value="long_review">影评 / 乐评</option>
-                        <option value="recommendation">推荐语</option>
-                      </select>
-                      {reviewType === "long_review" && (
-                        <input 
-                          type="text"
-                          placeholder="影评标题..."
-                          value={reviewTitle}
-                          onChange={(e) => setReviewTitle(e.target.value)}
-                          className="flex-1 bg-app-bg border border-app-border text-[10px] rounded p-1 text-tx-primary outline-none focus:border-accent-primary"
-                        />
+                  <div className="border-t border-app-border/30 pt-3 flex flex-col gap-2 group/desc relative">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase text-tx-tertiary tracking-wider">描述介绍</span>
+                      {isAdmin && !editingDescription && (
+                        <button
+                          onClick={() => {
+                            setEditDescValue(selectedItem.description || "");
+                            setEditingDescription(true);
+                          }}
+                          className="opacity-0 group-hover/desc:opacity-100 transition-opacity text-tx-tertiary hover:text-accent-primary p-1 flex items-center gap-1 text-[10px] font-semibold"
+                        >
+                          <Edit3 size={12} /> 编辑描述
+                        </button>
                       )}
                     </div>
-
-                    <EditorContent editor={reviewEditor} />
-
-                    <button
-                      onClick={handlePostReview}
-                      className="w-full py-1.5 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-xs rounded-xl shadow transition-all"
-                    >
-                      发布互动
-                    </button>
+                    {editingDescription ? (
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          value={editDescValue}
+                          onChange={(e) => setEditDescValue(e.target.value)}
+                          className="w-full bg-app-sidebar border border-accent-primary text-xs text-tx-primary rounded-xl p-3 outline-none min-h-[100px] resize-y"
+                          autoFocus
+                          placeholder="添加视频/音频的详细描述..."
+                        />
+                        <div className="flex items-center gap-2 self-end">
+                          <button onClick={() => setEditingDescription(false)} className="text-xs font-semibold text-tx-secondary hover:text-tx-primary bg-app-sidebar hover:bg-app-hover border border-app-border px-4 py-1.5 rounded-lg">取消</button>
+                          <button onClick={() => { handleUpdateItem({ description: editDescValue }); setEditingDescription(false); }} className="text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover px-4 py-1.5 rounded-lg shadow">保存描述</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-tx-secondary leading-relaxed bg-app-bg/40 p-3 rounded-xl border border-app-border/30">
+                        {selectedItem.description || "无详细描述介绍。"}
+                      </p>
+                    )}
                   </div>
-                )}
 
+                  <div className="flex items-center gap-4 text-[10px] text-tx-tertiary select-none">
+                    <span className="flex items-center gap-1"><Play size={12} /> 播放次数: {selectedItem.play_count}</span>
+                    <span className="flex items-center gap-1"><Clock size={12} /> 时长: {formatDuration(selectedItem.duration)}</span>
+                  </div>
+                </div>
+
+                {/* 2. Reviews Section (Moved here, taking full width of the container) */}
+                <div className="mt-6 pt-6 border-t border-app-border/40 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase text-tx-tertiary tracking-wider flex items-center gap-1.5">
+                      <MessageSquare size={16} /> 影评与讨论
+                    </h3>
+                    {selectedItem.type === "video" && isPlaying && (
+                      <button
+                        onClick={handleInsertTimestamp}
+                        className="text-xs font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-1.5 rounded-lg transition-colors"
+                      >
+                        打点 {formatDuration(currentTime)}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Review listing */}
+                  <div 
+                    onClick={handleTimestampClick}
+                    className="flex flex-col gap-3 min-h-[100px]"
+                  >
+                    {reviews.length === 0 ? (
+                      <div className="h-[100px] flex items-center justify-center text-xs text-tx-tertiary text-center p-4 bg-app-sidebar/5 rounded-xl border border-app-border/20 border-dashed">
+                        暂无评论或影评，点击下方发布首条评论吧！
+                      </div>
+                    ) : (
+                      reviews.map((rev) => (
+                        <div key={rev.id} className="p-4 bg-app-bg/50 hover:bg-app-bg border border-app-border rounded-xl flex flex-col gap-2 relative group transition-colors">
+                          <div className="flex items-center justify-between text-xs text-tx-tertiary select-none">
+                            <span className="font-semibold text-tx-secondary flex items-center gap-1.5">
+                              <User size={12} /> {rev.username}
+                            </span>
+                            <span>{rev.created_at.substring(5, 16)}</span>
+                          </div>
+                          {rev.title && (
+                            <h5 className="text-sm font-bold text-tx-primary">{rev.title}</h5>
+                          )}
+                          <div 
+                            className="text-sm text-tx-secondary leading-relaxed break-words mt-1"
+                            dangerouslySetInnerHTML={{ __html: rev.content }}
+                          />
+                          {isAdmin && (
+                            <button 
+                              onClick={() => handleDeleteReview(rev.id)}
+                              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-accent-danger hover:bg-accent-danger/10 rounded"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Quick Editor Box */}
+                  {!showReviewInput ? (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setShowReviewInput(true)}
+                        className="px-6 py-2.5 bg-app-sidebar border border-app-border hover:bg-app-hover hover:border-accent-primary/50 text-tx-secondary hover:text-accent-primary font-bold text-sm rounded-xl shadow-sm flex items-center gap-2 transition-all group"
+                      >
+                        <MessageSquare size={16} className="group-hover:scale-110 transition-transform" />
+                        写评论 / 影评
+                      </button>
+                    </div>
+                  ) : reviewEditor && (
+                    <div className="flex flex-col gap-3 border-t border-app-border/30 pt-4 mt-2 animate-fade-in">
+                      <div className="flex items-center justify-between gap-3">
+                        <select 
+                          value={reviewType}
+                          onChange={(e) => setReviewType(e.target.value as any)}
+                          className="bg-app-bg border border-app-border text-xs rounded-lg p-1.5 text-tx-secondary outline-none"
+                        >
+                          <option value="short_comment">短评</option>
+                          <option value="long_review">影评 / 乐评</option>
+                          <option value="recommendation">推荐语</option>
+                        </select>
+                        {reviewType === "long_review" && (
+                          <input 
+                            type="text"
+                            placeholder="影评标题..."
+                            value={reviewTitle}
+                            onChange={(e) => setReviewTitle(e.target.value)}
+                            className="flex-1 bg-app-bg border border-app-border text-xs rounded-lg p-1.5 text-tx-primary outline-none focus:border-accent-primary"
+                          />
+                        )}
+                      </div>
+
+                      <EditorContent editor={reviewEditor} />
+
+                      <div className="flex items-center justify-end gap-3 mt-1">
+                        <button
+                          onClick={() => {
+                            setShowReviewInput(false);
+                            reviewEditor.commands.setContent("");
+                            setReviewTitle("");
+                          }}
+                          className="px-5 py-2 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl transition-all"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={handlePostReview}
+                          className="px-6 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow transition-all"
+                        >
+                          发布互动
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
             </div>
@@ -1177,8 +1340,8 @@ export default function MediaCenter() {
                 workspaceId={workspaceId} 
                 collections={collections}
                 onImportSuccess={(msg) => {
-                  alert(msg);
                   setShowAlistBrowser(false);
+                  setTimeout(() => alert(msg), 10);
                   fetchData();
                 }}
                 onClose={() => setShowAlistBrowser(false)}

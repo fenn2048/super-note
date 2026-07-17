@@ -3,7 +3,7 @@ import { useMediaStore, PlayMode, MediaPlayItem } from "@/store/mediaStore";
 import { api } from "@/lib/api";
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, 
-  Volume2, VolumeX, ListMusic, ChevronDown, Music, Loader2, X 
+  Volume2, VolumeX, ListMusic, ChevronDown, Music, Loader2, X, Minimize2 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
@@ -42,8 +42,16 @@ export default function GlobalMusicPlayer() {
   const [error, setError] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [showQueue, setShowQueue] = useState<boolean>(false);
+  const [isMiniMode, setIsMiniMode] = useState<boolean>(false);
+  const [currentHash, setCurrentHash] = useState<string>(window.location.hash);
 
-  const { coverUrl: id3Cover } = useID3Cover(currentMedia?.id, currentMedia?.cover_url);
+  useEffect(() => {
+    const handleHash = () => setCurrentHash(window.location.hash);
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
+  const { coverUrl: id3Cover } = useID3Cover(currentMedia?.id, currentMedia?.cover_url, currentMedia?.type);
   const coverToUse = id3Cover || currentMedia?.cover_url;
 
   // 1. Fetch play URL when currentMedia changes (only for audio)
@@ -92,9 +100,12 @@ export default function GlobalMusicPlayer() {
     if (!audio || !playUrl) return;
 
     if (isPlaying && currentMedia?.type === "audio") {
-      audio.play().catch((err) => {
-        console.warn("Global audio playback failed:", err);
-      });
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Global audio playback failed:", err);
+        });
+      }
     } else {
       audio.pause();
     }
@@ -194,16 +205,19 @@ export default function GlobalMusicPlayer() {
     const active =
       !!currentMedia &&
       currentMedia.type === "audio" &&
-      !isExpanded;
+      !isExpanded &&
+      !isMiniMode;
     // 迷你条高度约 56 + 间距 8 ≈ 64
     root.style.setProperty("--mobile-extra-bottom", active ? "64px" : "0px");
     return () => {
       root.style.setProperty("--mobile-extra-bottom", "0px");
     };
-  }, [currentMedia?.id, currentMedia?.type, isExpanded]);
+  }, [currentMedia?.id, currentMedia?.type, isExpanded, isMiniMode]);
 
   // If no audio is loaded, do not render player components
   if (!currentMedia || currentMedia.type !== "audio") return null;
+
+  const isOnCurrentAudioDetailsPage = currentHash === `#/media/items/${currentMedia.id}`;
 
   return (
     <>
@@ -219,10 +233,66 @@ export default function GlobalMusicPlayer() {
         onPlay={resumeMedia}
       />
 
+      {/* Hide UI if we are viewing the details page of the currently playing audio */}
+      {!isOnCurrentAudioDetailsPage && (
+        <>
+          {/* ----------------------------------------------------------------------- */}
+          {/* MINI MODE DRAGGABLE CD PLAYER */}
+          {/* ----------------------------------------------------------------------- */}
+          <AnimatePresence>
+        {isMiniMode && (
+          <motion.div
+            drag
+            dragMomentum={false}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed z-[100] top-24 right-6 w-16 h-16 rounded-full border border-app-border/40 shadow-2xl overflow-hidden cursor-move group bg-black/40 backdrop-blur-sm"
+          >
+            <AudioCover
+              item={currentMedia}
+              className={cn(
+                "w-full h-full object-cover rounded-full pointer-events-none select-none",
+                "animate-[spin_10s_linear_infinite]",
+                !isPlaying && "[animation-play-state:paused]"
+              )}
+              fallbackIconSize={24}
+            />
+            {/* Hover overlay with play/pause */}
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  isPlaying ? pauseMedia() : resumeMedia();
+                }}
+                className="text-white hover:scale-110 active:scale-95 transition-transform"
+              >
+                {isPlaying ? <Pause size={20} className="fill-white" /> : <Play size={20} className="fill-white translate-x-0.5" />}
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setIsMiniMode(false);
+                }}
+                className="absolute top-0 right-0 w-5 h-5 bg-accent-primary/80 hover:bg-accent-primary rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-md transition-all z-10"
+                title="恢复完整播放器"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ----------------------------------------------------------------------- */}
       {/* PERSISTENT BOTTOM BAR — 移动端贴 Tab 上方通栏矮条，避免与 FAB 抢右下角 */}
       {/* ----------------------------------------------------------------------- */}
-      <div 
+      {!isMiniMode && (
+        <div 
         className={cn(
           "z-40 bg-app-sidebar/85 dark:bg-[#181824]/85 backdrop-blur-xl border border-app-border/60 shadow-xl flex items-center justify-between select-none transition-all duration-300",
           // 移动：通栏迷你条，bottom 用 --mobile-music-bottom（Tab 上方）
@@ -286,7 +356,10 @@ export default function GlobalMusicPlayer() {
 
             {/* Play/Pause */}
             <button
-              onClick={isPlaying ? pauseMedia : resumeMedia}
+              onClick={(e) => {
+                e.stopPropagation();
+                isPlaying ? pauseMedia() : resumeMedia();
+              }}
               className="w-8 h-8 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all"
             >
               {loading ? (
@@ -336,7 +409,10 @@ export default function GlobalMusicPlayer() {
           {/* Mobile playback buttons */}
           <div className="flex md:hidden items-center gap-2">
             <button
-              onClick={isPlaying ? pauseMedia : resumeMedia}
+              onClick={(e) => {
+                e.stopPropagation();
+                isPlaying ? pauseMedia() : resumeMedia();
+              }}
               className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
             >
               {loading ? (
@@ -374,19 +450,36 @@ export default function GlobalMusicPlayer() {
             />
           </div>
 
-          {/* Close Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              useMediaStore.getState().stopMedia();
-            }}
-            className="p-1.5 rounded-full text-tx-secondary hover:text-accent-danger hover:bg-accent-danger/10 transition-colors shrink-0 ml-1"
-            title="关闭播放器"
-          >
-            <X size={16} />
-          </button>
+          {/* Controls */}
+          <div className="flex items-center ml-2">
+            {/* Minimize Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setIsMiniMode(true);
+              }}
+              className="p-1.5 rounded-full text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors shrink-0"
+              title="最小化为悬浮窗"
+            >
+              <Minimize2 size={16} />
+            </button>
+
+            {/* Close Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                useMediaStore.getState().stopMedia();
+              }}
+              className="p-1.5 rounded-full text-tx-secondary hover:text-accent-danger hover:bg-accent-danger/10 transition-colors shrink-0 ml-1"
+              title="关闭播放器"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       </div>
+      )}
 
       {/* Floating Queue Drawer Panel (Desktop) */}
       <AnimatePresence>
@@ -502,7 +595,8 @@ export default function GlobalMusicPlayer() {
                       item={currentMedia} 
                       className={cn(
                         "w-full h-full object-cover select-none",
-                        isPlaying ? "animate-spin-slow" : ""
+                        "animate-[spin_10s_linear_infinite]",
+                        !isPlaying && "[animation-play-state:paused]"
                       )}
                       fallbackIconSize={64}
                     />
@@ -566,7 +660,10 @@ export default function GlobalMusicPlayer() {
 
                   {/* Large Play/Pause */}
                   <button
-                    onClick={isPlaying ? pauseMedia : resumeMedia}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      isPlaying ? pauseMedia() : resumeMedia();
+                    }}
                     className="w-18 h-18 rounded-full bg-accent-primary hover:bg-accent-primary-hover text-white flex items-center justify-center shadow-lg shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all"
                   >
                     {loading ? (
@@ -615,6 +712,8 @@ export default function GlobalMusicPlayer() {
           </motion.div>
         )}
       </AnimatePresence>
+        </>
+      )}
     </>
   );
 }

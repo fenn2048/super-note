@@ -54,8 +54,10 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
       if (!active.current) return;
       
       let rawUrl = "";
+      let initialProgress = 0;
       if (res && res.url) {
         rawUrl = res.url;
+        initialProgress = res.progress || 0;
       } else if (res && res.data && res.data.raw_url) {
         rawUrl = res.data.raw_url;
       } else {
@@ -77,12 +79,21 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
         setting: true,
         hotkey: true,
         pip: true,
-        mutex: true,
         fullscreen: true,
-        fullscreenWeb: true,
         playsInline: true,
         theme: "#23ade5", // Accent Primary color from app theme
         type: rawUrl.includes(".m3u8") ? "m3u8" : "auto",
+        controls: [
+          {
+            name: 'lightsOut',
+            position: 'right',
+            html: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>',
+            tooltip: '关灯模式',
+            click: function () {
+              setIsTheaterMode(prev => !prev);
+            },
+          }
+        ],
         customType: {
           m3u8: function (video: HTMLMediaElement, url: string) {
             if (Hls.isSupported()) {
@@ -105,11 +116,10 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
       player.on("ready", () => {
         if (active.current) {
           setLoading(false);
+          if (initialProgress > 0) {
+            player.currentTime = initialProgress;
+          }
         }
-      });
-
-      player.on("fullscreenWeb", (state: boolean) => {
-        setIsTheaterMode(state);
       });
 
       player.on("video:timeupdate", () => {
@@ -172,26 +182,30 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
     }
   }, [seekTime, resetSeek]);
 
+  // Handle theater mode button UI toggle
+  useEffect(() => {
+    if (playerRef.current && playerRef.current.controls.lightsOut) {
+      const btn = playerRef.current.controls.lightsOut;
+      btn.setAttribute('data-balloon', isTheaterMode ? '开灯模式' : '关灯模式');
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.style.color = isTheaterMode ? '#ffeb3b' : 'currentColor';
+      }
+    }
+  }, [isTheaterMode]);
+
   return (
-    <div className={cn(
-      "relative overflow-hidden bg-black select-none transition-all duration-300",
-      isTheaterMode 
-        ? "fixed inset-0 z-50 flex flex-col justify-center items-center" 
-        : "w-full aspect-video md:rounded-xl md:border md:border-app-border"
-    )}>
+    <>
       {isTheaterMode && (
-        <button
-          onClick={() => {
-            if (playerRef.current) {
-              playerRef.current.fullscreenWeb = false;
-            }
-          }}
-          className="absolute top-5 right-5 z-20 bg-black/60 hover:bg-black/80 text-white/80 hover:text-white px-3.5 py-2 rounded-xl border border-white/10 text-xs font-bold flex items-center gap-2 transition-all backdrop-blur shadow-lg active:scale-95"
-        >
-          <X size={14} />
-          退出影院模式
-        </button>
+        <div 
+          className="fixed inset-0 z-40 bg-black/95 transition-opacity" 
+          onClick={() => setIsTheaterMode(false)}
+        />
       )}
+      <div className={cn(
+        "relative overflow-hidden bg-black select-none transition-all duration-300 w-full aspect-video md:rounded-xl md:border md:border-app-border",
+        isTheaterMode ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10"
+      )}>
 
       {loading && !error && (
         <div className="absolute inset-0 z-10 bg-black/95 flex flex-col items-center justify-center">
@@ -226,5 +240,6 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
         style={{ opacity: loading || error ? 0 : 1, transition: "opacity 0.3s" }}
       />
     </div>
+    </>
   );
 }

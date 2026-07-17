@@ -400,7 +400,7 @@ function AppLayout() {
         actions.setViewMode("tasks");
       } else if (hash === "#/files") {
         actions.setViewMode("files");
-      } else if (hash === "#/media") {
+      } else if (hash === "#/media" || hash.startsWith("#/media/")) {
         actions.setViewMode("media");
       } else if (hash === "#/projects") {
         actions.setViewMode("projects");
@@ -433,7 +433,10 @@ function AppLayout() {
     } else {
       const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
       const targetHash = notesViewModes.includes(state.viewMode) ? "#/notes" : `#/${state.viewMode}`;
-      if (window.location.hash !== targetHash) {
+      
+      if (state.viewMode === "media" && window.location.hash.startsWith("#/media")) {
+        // Let MediaCenter manage its own sub-routes
+      } else if (window.location.hash !== targetHash) {
         window.location.hash = targetHash;
       }
     }

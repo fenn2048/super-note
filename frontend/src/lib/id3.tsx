@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api, resolveAttachmentUrl } from "@/lib/api";
+import { api, resolveAttachmentUrl, getBaseUrl } from "@/lib/api";
 import { Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ const id3CoverCache = new Map<string, string>();
  * Streaming parser that fetches up to 4MB of an audio file and extracts
  * the embedded ID3v2 cover art (PIC or APIC frames).
  */
-export async function getID3CoverUrl(url: string): Promise<string | null> {
+export async function getID3CoverUrl(url: string): Promise<{ url: string, blob: Blob } | null> {
   try {
     const absoluteUrl = resolveAttachmentUrl(url);
     const token = localStorage.getItem("super-token");
@@ -142,7 +142,7 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
 
         const imgData = buffer.subarray(p, frameDataOffset + frameSize);
         const blob = new Blob([imgData], { type: mimeType });
-        return URL.createObjectURL(blob);
+        return { url: URL.createObjectURL(blob), blob };
       }
 
       offset += headerSize + frameSize;
@@ -156,12 +156,12 @@ export async function getID3CoverUrl(url: string): Promise<string | null> {
 /**
  * Custom React Hook to load and cache ID3 cover art dynamically
  */
-export function useID3Cover(itemId: string | undefined, dbCoverUrl: string | undefined) {
+export function useID3Cover(itemId: string | undefined, dbCoverUrl: string | undefined, mediaType?: string) {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!itemId) {
+    if (!itemId || mediaType?.startsWith("video")) {
       setCoverUrl(null);
       return;
     }
@@ -187,11 +187,42 @@ export function useID3Cover(itemId: string | undefined, dbCoverUrl: string | und
           return;
         }
 
-        const cover = await getID3CoverUrl(res.url);
+        const id3Data = await getID3CoverUrl(res.url);
         if (active) {
-          if (cover) {
-            id3CoverCache.set(activeItemId, cover);
-            setCoverUrl(cover);
+          if (id3Data) {
+            id3CoverCache.set(activeItemId, id3Data.url);
+            setCoverUrl(id3Data.url);
+
+            // Upload cover to server in the background
+            try {
+              const formData = new FormData();
+              formData.append("file", id3Data.blob, "cover.jpg");
+              
+              const token = localStorage.getItem("super-token");
+              const uploadResRaw = await fetch(`${getBaseUrl()}/media/upload-cover`, {
+                method: "POST",
+                body: formData,
+                headers: {
+                  ...(token ? { Authorization: `Bearer ${token}` } : {})
+                }
+              });
+              
+              if (uploadResRaw.ok) {
+                const uploadRes = await uploadResRaw.json();
+                if (uploadRes && uploadRes.url) {
+                  // Update the item's cover_url
+                  await api.request(`/media/items/${activeItemId}/cover`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ cover_url: uploadRes.url })
+                  });
+                  // Also update the in-memory cache to use the permanent URL
+                  id3CoverCache.set(activeItemId, uploadRes.url);
+                }
+              }
+            } catch (err) {
+              console.warn("Failed to upload ID3 cover to server:", err);
+            }
+
           } else {
             // Put null in cache to avoid re-fetching failed covers
             id3CoverCache.set(activeItemId, "");
@@ -228,7 +259,7 @@ interface AudioCoverProps {
  * Drop-in component to display the audio cover (dynamically reading ID3 if DB cover is missing)
  */
 export function AudioCover({ item, className, fallbackIconSize = 20 }: AudioCoverProps) {
-  const { coverUrl, loading } = useID3Cover(item.id, item.cover_url);
+  const { coverUrl, loading } = useID3Cover(item.id, item.cover_url, (item as any).type);
   const coverToUse = coverUrl || item.cover_url;
 
   if (coverToUse) {

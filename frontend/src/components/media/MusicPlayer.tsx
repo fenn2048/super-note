@@ -150,7 +150,8 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
             item={{ id: mediaItem.id, cover_url: mediaItem.cover_url, title: mediaItem.title }} 
             className={cn(
               "w-full h-full object-cover rounded-full select-none",
-              activeIsPlaying ? "animate-spin-slow" : ""
+              "animate-[spin_10s_linear_infinite]",
+              !activeIsPlaying && "[animation-play-state:paused]"
             )}
             fallbackIconSize={24}
           />

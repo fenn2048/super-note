@@ -602,6 +602,21 @@ media.get("/items/:id", requireWorkspaceFeature("media"), async (c) => {
   return c.json({ ...item, tags, history });
 });
 
+media.patch("/items/:id/cover", requireWorkspaceFeature("media"), async (c) => {
+  const userId = getAuthUserId(c);
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  const id = c.req.param("id");
+  const { cover_url } = await c.req.json() as { cover_url: string };
+
+  const db = getDb();
+  const item = db.prepare("SELECT * FROM media_items WHERE id = ?").get(id) as any;
+  if (!item) return c.json({ error: "单品不存在" }, 404);
+
+  db.prepare("UPDATE media_items SET cover_url = ?, updated_at = datetime('now') WHERE id = ?").run(cover_url, id);
+  return c.json({ success: true, cover_url });
+});
+
 media.put("/items/:id", requireWorkspaceFeature("media"), async (c) => {
   const userId = getAuthUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
@@ -764,7 +779,10 @@ media.get("/items/:id/play-url", requireWorkspaceFeature("media"), async (c) => 
       }
     }
 
-    return c.json({ url: finalUrl, expires_in: 2700, headers: linkInfo.headers });
+    const history = db.prepare("SELECT progress FROM media_play_history WHERE media_id = ? AND user_id = ? ORDER BY played_at DESC LIMIT 1").get(id, userId) as any;
+    const progress = history?.progress || 0;
+
+    return c.json({ url: finalUrl, expires_in: 2700, headers: linkInfo.headers, progress });
   } catch (err: any) {
     const status = err.status || 502;
     const code = err.code || "ALIST_CONN_ERROR";

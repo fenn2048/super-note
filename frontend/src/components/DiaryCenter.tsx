@@ -1980,6 +1980,7 @@ function DiaryCard({
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<DiaryComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [showMobileCommentInput, setShowMobileCommentInput] = useState(false);
   const [newCommentText, setNewCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentCursorPos, setCommentCursorPos] = useState(0);
@@ -2002,7 +2003,7 @@ function DiaryCard({
       commentInputRef.current.style.height = "auto";
       commentInputRef.current.style.height = `${commentInputRef.current.scrollHeight}px`;
     }
-  }, [newCommentText]);
+  }, [newCommentText, showMobileCommentInput]);
   const commentMentionTrigger = useMentionState(newCommentText, commentCursorPos);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const mountRef = useRef(true);
@@ -2429,7 +2430,13 @@ function DiaryCard({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setShowComments(!showComments);
+                    if (window.innerWidth < 768) {
+                      setShowComments(true);
+                      setShowMobileCommentInput(true);
+                      setTimeout(() => commentInputRef.current?.focus(), 100);
+                    } else {
+                      setShowComments(!showComments);
+                    }
                   }}
                   className="flex items-center gap-1 hover:text-accent-primary transition-colors font-medium py-1"
                 >
@@ -2568,7 +2575,10 @@ function DiaryCard({
                                 type="button"
                                 onClick={() => {
                                   setNewCommentText(`@${comment.username} `);
-                                  commentInputRef.current?.focus();
+                                  if (window.innerWidth < 768) {
+                                    setShowMobileCommentInput(true);
+                                  }
+                                  setTimeout(() => commentInputRef.current?.focus(), 50);
                                 }}
                                 className="hover:text-accent-primary transition-colors font-medium"
                               >
@@ -2643,7 +2653,10 @@ function DiaryCard({
                                         type="button"
                                         onClick={() => {
                                           setNewCommentText(`@${reply.username} `);
-                                          commentInputRef.current?.focus();
+                                          if (window.innerWidth < 768) {
+                                            setShowMobileCommentInput(true);
+                                          }
+                                          setTimeout(() => commentInputRef.current?.focus(), 50);
                                         }}
                                         className="hover:text-accent-primary transition-colors font-medium"
                                       >
@@ -2689,7 +2702,27 @@ function DiaryCard({
                 )}
                 
                 {/* 发表评论输入框 */}
-                <form onSubmit={handleAddComment} className="flex gap-2.5 items-center pt-2 w-full">
+                <div className={cn(
+                  window.innerWidth < 768 && showMobileCommentInput 
+                    ? "fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-fade-in"
+                    : (window.innerWidth < 768 ? "hidden" : "block")
+                )}>
+                  {window.innerWidth < 768 && showMobileCommentInput && (
+                    <div className="flex-1" onClick={() => setShowMobileCommentInput(false)} />
+                  )}
+                  <div className={cn(
+                    "flex gap-2.5 w-full",
+                    window.innerWidth < 768 && showMobileCommentInput
+                      ? "bg-app-bg p-4 pb-safe border-t border-app-border shadow-[0_-10px_40px_rgba(0,0,0,0.5)] items-end rounded-t-2xl"
+                      : "items-center pt-2"
+                  )}>
+                    <form 
+                      onSubmit={(e) => {
+                        void handleAddComment(e as any);
+                        if (window.innerWidth < 768) setShowMobileCommentInput(false);
+                      }} 
+                      className="flex gap-2.5 items-end w-full"
+                    >
                   {currentUser && (
                     currentUser.avatarUrl ? (
                       <img
@@ -2704,10 +2737,15 @@ function DiaryCard({
                     )
                   )}
 
-                  <div className="relative flex-1 min-w-0 bg-app-subtle border border-app-border/60 rounded-[18px] px-3.5 py-1.5 flex items-end gap-2 focus-within:border-accent-primary transition-all">
+                  <div className={cn(
+                    "relative flex-1 min-w-0 bg-app-subtle border border-app-border/60 flex gap-2 transition-all focus-within:border-accent-primary",
+                    (typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput)
+                      ? "rounded-xl px-3 py-2 items-start"
+                      : "rounded-[18px] px-3.5 py-1.5 items-end"
+                  )}>
                     <textarea
                       ref={commentInputRef}
-                      rows={1}
+                      rows={(typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput) ? 8 : 1}
                       placeholder="写下你的评论..."
                       value={newCommentText}
                       onChange={(e) => {
@@ -2735,12 +2773,16 @@ function DiaryCard({
                           }
                         }
                       }}
-                      className="flex-1 min-w-0 w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0 resize-none max-h-32 min-h-[18px] overflow-y-auto"
-                      style={{ height: "auto" }}
+                      className={cn(
+                        "flex-1 min-w-0 w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0 resize-none overflow-y-auto",
+                        (typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput)
+                          ? "max-h-[40vh]"
+                          : "max-h-32 min-h-[18px]"
+                      )}
                     />
 
                      {/* Smile Icon with Emoji Picker */}
-                    <div ref={commentEmojiRef} className="relative flex items-center shrink-0 mb-0.5">
+                    <div ref={commentEmojiRef} className="relative flex items-center shrink-0 mb-0.5 self-end">
                       <button
                         type="button"
                         onClick={() => setShowCommentEmojis(!showCommentEmojis)}
@@ -2843,7 +2885,9 @@ function DiaryCard({
                     {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                     <span>发送</span>
                   </button>
-                </form>
+                  </form>
+                  </div>
+                </div>
               </div>
             )}
           </div>
