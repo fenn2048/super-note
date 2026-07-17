@@ -490,6 +490,36 @@ body::before {
   }
 }
 
+/* ===== PR4: 移动端底部叠层避让 =====
+ * --mobile-tab-h: Tab 内容高度（不含 safe-area）
+ * --mobile-extra-bottom: 迷你播放器等额外占用（由 JS 写入）
+ * --mobile-fab-bottom: FAB 距视口底
+ * --mobile-content-pb: 主内容区底部内边距
+ */
+:root {
+  --mobile-tab-h: 64px;
+  --mobile-extra-bottom: 0px;
+  --mobile-fab-bottom: calc(
+    var(--mobile-tab-h) + var(--mobile-extra-bottom) + var(--safe-area-bottom) + 12px
+  );
+  --mobile-content-pb: calc(
+    var(--mobile-tab-h) + var(--mobile-extra-bottom) + var(--safe-area-bottom)
+  );
+  --mobile-music-bottom: calc(
+    var(--mobile-tab-h) + var(--safe-area-bottom) + 8px
+  );
+}
+
+.mobile-fab-anchor {
+  bottom: var(--mobile-fab-bottom);
+}
+.mobile-music-mini {
+  bottom: var(--mobile-music-bottom);
+}
+.mobile-content-pad {
+  padding-bottom: var(--mobile-content-pb);
+}
+
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */
 .ProseMirror {
   outline: none;

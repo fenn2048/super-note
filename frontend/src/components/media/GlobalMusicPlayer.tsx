@@ -188,6 +188,20 @@ export default function GlobalMusicPlayer() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // PR4：迷你条占用底部额外高度，抬升 FAB / 主内容 padding
+  useEffect(() => {
+    const root = document.documentElement;
+    const active =
+      !!currentMedia &&
+      currentMedia.type === "audio" &&
+      !isExpanded;
+    // 迷你条高度约 56 + 间距 8 ≈ 64
+    root.style.setProperty("--mobile-extra-bottom", active ? "64px" : "0px");
+    return () => {
+      root.style.setProperty("--mobile-extra-bottom", "0px");
+    };
+  }, [currentMedia?.id, currentMedia?.type, isExpanded]);
+
   // If no audio is loaded, do not render player components
   if (!currentMedia || currentMedia.type !== "audio") return null;
 
@@ -206,13 +220,14 @@ export default function GlobalMusicPlayer() {
       />
 
       {/* ----------------------------------------------------------------------- */}
-      {/* PERSISTENT BOTTOM BAR */}
+      {/* PERSISTENT BOTTOM BAR — 移动端贴 Tab 上方通栏矮条，避免与 FAB 抢右下角 */}
       {/* ----------------------------------------------------------------------- */}
       <div 
         className={cn(
-          "absolute left-4 right-4 z-40 bg-app-sidebar/80 dark:bg-[#181824]/80 backdrop-blur-xl border border-app-border/60 rounded-2xl shadow-xl flex items-center justify-between px-4 py-3 select-none transition-all duration-300 md:left-6 md:right-6 md:bottom-6 md:py-3.5",
-          // Calculate bottom dynamic spacing to avoid overlaying MobileTabBar
-          "bottom-[calc(76px+var(--safe-area-bottom))] md:bottom-6"
+          "z-40 bg-app-sidebar/85 dark:bg-[#181824]/85 backdrop-blur-xl border border-app-border/60 shadow-xl flex items-center justify-between select-none transition-all duration-300",
+          // 移动：通栏迷你条，bottom 用 --mobile-music-bottom（Tab 上方）
+          "fixed left-3 right-3 mobile-music-mini rounded-2xl px-3 py-2.5 md:absolute md:left-6 md:right-6 md:bottom-6 md:py-3.5 md:px-4",
+          isExpanded && "max-md:opacity-0 max-md:pointer-events-none"
         )}
       >
         {/* Left: Album cover & Song Details */}

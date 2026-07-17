@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, FolderPlus, Film, User as UserIcon } from "lucide-react";
+import { Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, Film, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
@@ -1234,7 +1234,7 @@ function AppLayout() {
       {/* ===== 主内容区 ===== */}
       <div className={cn(
         "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
-        showMobileTabBar ? "pb-[calc(64px+var(--safe-area-bottom))] md:pb-0" : "pb-0"
+        showMobileTabBar ? "mobile-content-pad md:pb-0" : "pb-0"
       )}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -1418,6 +1418,7 @@ function AppLayout() {
       <AnimatePresence>
         {showMobileFAB && barsVisible && !keyboardVisible && (
           <MobileFAB
+            viewMode={state.viewMode}
             onNewNote={quickCreateNote}
             onNewDiary={() => {
               setComposerInitialImages([]);
@@ -1429,8 +1430,6 @@ function AppLayout() {
             onCameraClick={() => {
               setShowCameraModal(true);
             }}
-            onNewNotebook={handleCreateNotebook}
-            onNewProject={handleCreateProject}
           />
         )}
       </AnimatePresence>
@@ -1723,22 +1722,73 @@ function MobileTabBar({ visible }: { visible: boolean }) {
   );
 }
 
+/**
+ * PR4 MobileFAB：主创建一等公民
+ * - 单击：按当前模块新建（笔记 / 说说 / 待办）
+ * - 长按 或 点「⋯」：展开次要入口（笔记/说说/待办/拍照）
+ * - 不再塞笔记本/项目创建；不拖拽，避免误触
+ */
 function MobileFAB({
+  viewMode,
   onNewNote,
   onNewDiary,
   onNewTask,
   onCameraClick,
-  onNewNotebook,
-  onNewProject,
 }: {
+  viewMode: ViewMode;
   onNewNote: () => void;
   onNewDiary: () => void;
   onNewTask: () => void;
   onCameraClick: () => void;
-  onNewNotebook: () => void;
-  onNewProject: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const primary =
+    viewMode === "diary"
+      ? { run: onNewDiary, label: "写说说", icon: <NotebookPen size={26} /> }
+      : viewMode === "projects"
+        ? { run: onNewTask, label: "加待办", icon: <ListTodo size={26} /> }
+        : { run: onNewNote, label: "新建笔记", icon: <Plus size={28} /> };
+
+  const clearLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const secondary = [
+    {
+      key: "note",
+      label: "新建笔记",
+      icon: <BookOpen size={16} />,
+      tone: "bg-amber-500/12 text-amber-500",
+      run: onNewNote,
+    },
+    {
+      key: "diary",
+      label: "新建说说",
+      icon: <NotebookPen size={16} />,
+      tone: "bg-violet-500/12 text-violet-500",
+      run: onNewDiary,
+    },
+    {
+      key: "task",
+      label: "新建待办",
+      icon: <ListTodo size={16} />,
+      tone: "bg-emerald-500/12 text-emerald-500",
+      run: onNewTask,
+    },
+    {
+      key: "camera",
+      label: "拍照",
+      icon: <Camera size={16} />,
+      tone: "bg-sky-500/12 text-sky-500",
+      run: onCameraClick,
+    },
+  ];
 
   return (
     <>
@@ -1749,7 +1799,7 @@ function MobileFAB({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-30 bg-black/10 backdrop-blur-[1px] md:hidden"
+            className="fixed inset-0 z-30 bg-black/15 backdrop-blur-[1px] md:hidden"
           />
         )}
       </AnimatePresence>
@@ -1759,112 +1809,92 @@ function MobileFAB({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.5, y: 20 }}
         transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-        drag
-        dragConstraints={{
-          left: -window.innerWidth + 72,
-          right: 0,
-          top: -window.innerHeight + 160,
-          bottom: 0,
-        }}
-        dragElastic={0.6}
-        dragMomentum={false}
-        className="fixed bottom-[calc(76px+var(--safe-area-bottom))] right-4 z-40 md:hidden flex flex-col items-end gap-2 touch-none select-none"
+        className="mobile-fab-anchor fixed right-4 z-40 md:hidden flex flex-col items-end gap-2 select-none"
       >
         <AnimatePresence>
           {open && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              initial={{ opacity: 0, scale: 0.88, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 10 }}
+              exit={{ opacity: 0, scale: 0.88, y: 10 }}
               className="flex flex-col gap-2 z-40 items-end mb-1"
             >
-              <button
-                onClick={() => {
-                  haptic.light();
-                  setOpen(false);
-                  onNewNote();
-                }}
-                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-              >
-                <span>新建笔记</span>
-                <div className="w-9 h-9 rounded-full bg-amber-500/12 text-amber-500 flex items-center justify-center">
-                  <BookOpen size={16} />
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  haptic.light();
-                  setOpen(false);
-                  onNewDiary();
-                }}
-                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-              >
-                <span>新建说说</span>
-                <div className="w-9 h-9 rounded-full bg-violet-500/12 text-violet-500 flex items-center justify-center">
-                  <NotebookPen size={16} />
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  haptic.light();
-                  setOpen(false);
-                  onNewTask();
-                }}
-                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-              >
-                <span>新建待办</span>
-                <div className="w-9 h-9 rounded-full bg-emerald-500/12 text-emerald-500 flex items-center justify-center">
-                  <ListTodo size={16} />
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  haptic.light();
-                  setOpen(false);
-                  onNewNotebook();
-                }}
-                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-              >
-                <span>新建笔记本</span>
-                <div className="w-9 h-9 rounded-full bg-amber-500/12 text-amber-500 flex items-center justify-center">
-                  <FolderPlus size={16} />
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  haptic.light();
-                  setOpen(false);
-                  onCameraClick();
-                }}
-                className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-              >
-                <span>拍照</span>
-                <div className="w-9 h-9 rounded-full bg-sky-500/12 text-sky-500 flex items-center justify-center">
-                  <Camera size={16} />
-                </div>
-              </button>
+              {secondary.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    haptic.light();
+                    setOpen(false);
+                    item.run();
+                  }}
+                  className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
+                >
+                  <span>{item.label}</span>
+                  <div className={cn("w-9 h-9 rounded-full flex items-center justify-center", item.tone)}>
+                    {item.icon}
+                  </div>
+                </button>
+              ))}
             </motion.div>
           )}
         </AnimatePresence>
 
-        <motion.button
-          onClick={() => {
-            haptic.light();
-            setOpen(!open);
-          }}
-          whileTap={{ scale: 0.9 }}
-          whileDrag={{ scale: 1.1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 15 }}
-          className="btn-primary-glow w-14 h-14 rounded-full flex items-center justify-center shadow-fab z-40 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing"
-        >
-          <motion.div
-            animate={{ rotate: open ? 45 : 0 }}
-            transition={{ duration: 0.2 }}
+        <div className="flex items-end gap-2">
+          {/* 次要入口：展开菜单 */}
+          <button
+            type="button"
+            title="更多创建"
+            aria-label="更多创建"
+            onClick={() => {
+              haptic.light();
+              setOpen((v) => !v);
+            }}
+            className="w-10 h-10 rounded-full bg-app-elevated border border-app-border shadow-md text-tx-secondary flex items-center justify-center active:scale-95"
           >
-            <Plus size={28} />
-          </motion.div>
-        </motion.button>
+            <MoreHorizontal size={18} />
+          </button>
+
+          {/* 主按钮：单击主创建，长按展开菜单 */}
+          <motion.button
+            type="button"
+            title={primary.label}
+            aria-label={primary.label}
+            onPointerDown={() => {
+              longPressFired.current = false;
+              clearLongPress();
+              longPressTimer.current = setTimeout(() => {
+                longPressFired.current = true;
+                haptic.medium();
+                setOpen(true);
+              }, 420);
+            }}
+            onPointerUp={clearLongPress}
+            onPointerLeave={clearLongPress}
+            onPointerCancel={clearLongPress}
+            onClick={() => {
+              if (longPressFired.current) {
+                longPressFired.current = false;
+                return;
+              }
+              if (open) {
+                setOpen(false);
+                return;
+              }
+              haptic.light();
+              primary.run();
+            }}
+            whileTap={{ scale: 0.92 }}
+            className="btn-primary-glow w-14 h-14 rounded-full flex items-center justify-center shadow-fab z-40"
+          >
+            <motion.div
+              animate={{ rotate: open ? 45 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {open ? <Plus size={28} /> : primary.icon}
+            </motion.div>
+          </motion.button>
+        </div>
       </motion.div>
     </>
   );
