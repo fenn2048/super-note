@@ -49,6 +49,7 @@ import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
 import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
+import { useEditorSwipeBack } from "@/hooks/useEditorSwipeBack";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import CommandPalette from "@/components/common/CommandPalette";
@@ -248,10 +249,13 @@ function useSwipeGesture({
   onSwipeRight,
   onSwipeLeft,
   mobileSidebarOpen,
+  /** PR3：编辑器打开时禁用「左缘开抽屉」，交给编辑器右滑返回 */
+  disableOpen = false,
 }: {
   onSwipeRight: () => void;
   onSwipeLeft: () => void;
   mobileSidebarOpen: boolean;
+  disableOpen?: boolean;
 }) {
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -279,6 +283,11 @@ function useSwipeGesture({
         isSwiping.current = false;
         return;
       }
+      // 编辑器态不跟踪「开抽屉」（关闭抽屉仍允许）
+      if (disableOpen && !mobileSidebarOpen) {
+        isSwiping.current = false;
+        return;
+      }
       // 仅在左边缘区域或侧边栏已打开时激活
       isSwiping.current = touch.clientX <= EDGE_THRESHOLD || mobileSidebarOpen;
     };
@@ -292,7 +301,12 @@ function useSwipeGesture({
       // 确保是水平滑动而非垂直滑动
       if (deltaY > Math.abs(deltaX) * SWIPE_MAX_Y_RATIO) return;
 
-      if (deltaX > SWIPE_MIN_DISTANCE && touchStartX.current <= EDGE_THRESHOLD && !mobileSidebarOpen) {
+      if (
+        deltaX > SWIPE_MIN_DISTANCE &&
+        touchStartX.current <= EDGE_THRESHOLD &&
+        !mobileSidebarOpen &&
+        !disableOpen
+      ) {
         onSwipeRight();
       } else if (deltaX < -SWIPE_MIN_DISTANCE && mobileSidebarOpen) {
         onSwipeLeft();
@@ -308,7 +322,7 @@ function useSwipeGesture({
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [mobileSidebarOpen, onSwipeRight, onSwipeLeft]);
+  }, [mobileSidebarOpen, onSwipeRight, onSwipeLeft, disableOpen]);
 }
 
 function AppLayout() {
@@ -868,10 +882,20 @@ function AppLayout() {
     actions.setMobileSidebar(false);
   }, [actions]);
 
+  // 笔记编辑器打开时禁用左缘开抽屉，避免与 PR3 右滑返回抢手势
+  const editorSwipeOpen =
+    isNotesView && state.mobileView === "editor" && !state.mobileSidebarOpen;
+
   useSwipeGesture({
     onSwipeRight: handleSwipeOpen,
     onSwipeLeft: handleSwipeClose,
     mobileSidebarOpen: state.mobileSidebarOpen,
+    disableOpen: editorSwipeOpen,
+  });
+
+  const editorSwipeBack = useEditorSwipeBack({
+    enabled: editorSwipeOpen && !showSettings && !showDiaryComposer && !showCameraModal && !showTaskComposer,
+    onBack: () => actions.setMobileView("list"),
   });
 
   const handleCreateNotebook = useCallback(async () => {
@@ -1324,28 +1348,60 @@ function AppLayout() {
               </div>
             ) : (
               <div className="flex-1 flex relative overflow-hidden">
-                {/* 笔记列表（仅笔记相关视图展示） */}
+                {/* 笔记列表
+                    PR3：编辑器态仍渲染在下层（右滑时可露出），但 inert 禁止误点 */}
                 {isNotesView && (
                   <div
                     className={cn(
-                      "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)] transition-transform duration-300 ease-in-out md:translate-x-0 md:opacity-100",
+                      "shrink-0 border-r border-app-border bg-app-bg w-full md:w-[var(--note-list-width)]",
+                      "md:relative md:translate-x-0 md:opacity-100 md:pointer-events-auto",
                       state.mobileView === "list"
-                        ? "translate-x-0 opacity-100"
-                        : "-translate-x-1/3 opacity-50 pointer-events-none absolute inset-y-0 left-0 md:relative md:translate-x-0 md:opacity-100 md:pointer-events-auto"
+                        ? "relative translate-x-0 z-10"
+                        : "absolute inset-y-0 left-0 z-0 pointer-events-none"
                     )}
                     style={{
                       "--note-list-width": `${state.noteListWidth}px`,
                     } as React.CSSProperties}
+                    {...(state.mobileView === "editor"
+                      ? ({ inert: "" } as React.HTMLAttributes<HTMLDivElement>)
+                      : {})}
+                    aria-hidden={state.mobileView === "editor"}
                   >
                     <NoteList />
                   </div>
                 )}
 
-                {/* 编辑器 — 移动端全屏覆盖 */}
-                <div className={cn(
-                  "absolute inset-0 z-20 md:static md:z-auto md:flex-1 flex flex-col min-w-0 transition-transform duration-300 ease-in-out md:translate-x-0 md:pointer-events-auto",
-                  state.mobileView === "editor" ? "translate-x-0 pointer-events-auto" : "translate-x-full pointer-events-none"
-                )}>
+                {/* 编辑器 — 移动端全屏；左缘右滑跟手返回列表 */}
+                <div
+                  className={cn(
+                    "flex flex-col min-w-0 bg-app-bg",
+                    "md:static md:z-auto md:flex-1 md:translate-x-0 md:pointer-events-auto",
+                    "absolute inset-0 z-20",
+                    // 移动端进出场（无跟手 offset 时）
+                    state.mobileView === "editor"
+                      ? "pointer-events-auto max-md:translate-x-0"
+                      : "pointer-events-none max-md:translate-x-full",
+                    !editorSwipeBack.dragging && "max-md:transition-transform max-md:duration-300 max-md:ease-out"
+                  )}
+                  style={
+                    state.mobileView === "editor" && editorSwipeBack.offsetX > 0
+                      ? {
+                          transform: `translate3d(${editorSwipeBack.offsetX}px, 0, 0)`,
+                          transition: editorSwipeBack.dragging
+                            ? "none"
+                            : "transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)",
+                          boxShadow: " -12px 0 32px rgba(28, 25, 23, 0.14)",
+                        }
+                      : undefined
+                  }
+                >
+                  {editorSwipeBack.offsetX > 6 && state.mobileView === "editor" && (
+                    <div
+                      className="absolute inset-y-0 left-0 w-0.5 bg-accent-primary/50 md:hidden z-30 pointer-events-none"
+                      style={{ opacity: Math.min(1, editorSwipeBack.offsetX / 64) }}
+                      aria-hidden
+                    />
+                  )}
                   <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
                     <EditorPane />
                   </Suspense>
