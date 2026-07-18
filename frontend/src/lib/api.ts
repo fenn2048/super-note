@@ -1062,10 +1062,17 @@ export const api = {
   },
   getTask: (id: string) => request<Task>(`/tasks/${id}`),
   createTask: (data: Partial<Task>) => {
-    const { workspaceId, ...rest } = data;
-    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
-    return request<Task>(`/tasks${qs}`, { method: "POST", body: JSON.stringify(rest) });
+    // 兼容层写入 project_tasks；workspaceId 放 body（后端亦接受 query 兜底）
+    const ws =
+      data.workspaceId !== undefined ? data.workspaceId : getCurrentWorkspace();
+    const payload = {
+      ...data,
+      workspaceId: ws && ws !== "" && ws !== "personal" ? ws : null,
+    };
+    return request<Task>(`/tasks`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateTask: (id: string, data: Partial<Task> & { tagIds?: string[] }) => request<Task>(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   toggleTask: (id: string) => request<Task>(`/tasks/${id}/toggle`, { method: "PATCH" }),

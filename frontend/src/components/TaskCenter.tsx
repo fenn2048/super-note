@@ -1,3 +1,10 @@
+/**
+ * TaskCenter（遗留清单 UI）
+ * ---------------------------------------------------------------------------
+ * P1 方案 A：主入口已重定向到 ProjectCenter「我的任务」（见 App TasksToProjectsRedirect）。
+ * 本文件保留供兼容/深链，读写经 /api/tasks 兼容层 → project_tasks。
+ * 新代码请用 createUnifiedTask / api.getMyTasks / ProjectCenter。
+ */
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {

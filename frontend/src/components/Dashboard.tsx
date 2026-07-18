@@ -385,7 +385,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [diaries, setDiaries] = useState<Diary[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [projectTasks, setProjectTasks] = useState<any[]>([]);
   const [notes, setNotes] = useState<NoteListItem[]>([]);
   const [stats, setStats] = useState({ diaryCount: 0, taskPending: 0, noteCount: 0 });
   const [greeting, setGreeting] = useState("");
@@ -459,30 +458,28 @@ export default function Dashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [diaryData, tasksData, notesData, myProjectTasks] = await Promise.all([
+      // P1 收尾：/api/tasks 已代理到 project_tasks，统一用 getTasks 即可，避免双重计数
+      const [diaryData, tasksData, notesData] = await Promise.all([
         api.getDiaryTimeline(undefined, 5).catch(() => ({ items: [] as Diary[], hasMore: false, nextCursor: null })),
         api.getTasks("all").catch(() => [] as Task[]),
         api.getNotes({ sortBy: "updatedAt", sortOrder: "desc", limit: "5", isTrashed: "0" }).catch(() => [] as NoteListItem[]),
-        api.getMyTasks().catch(() => [] as any[]),
       ]);
 
       const diaryItems = diaryData.items || [];
       setDiaries(diaryItems);
       setTasks(tasksData || []);
-      setProjectTasks(myProjectTasks || []);
       setNotes(notesData || []);
 
-      // 计算统计（合并普通任务与项目任务）
-      const pendingTasksFromTasks = (tasksData || []).filter(
-        (t: Task) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
-      );
-      const pendingFromProject = (myProjectTasks || []).filter(
-        (pt: any) => pt.isCompleted === 0 && pt.endDate && new Date(pt.endDate) <= new Date(Date.now() + 3 * 86400000),
+      const pendingSoon = (tasksData || []).filter(
+        (t: Task) =>
+          !t.isCompleted &&
+          t.dueDate &&
+          new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
       );
 
       setStats({
         diaryCount: diaryItems.length,
-        taskPending: pendingTasksFromTasks.length + pendingFromProject.length,
+        taskPending: pendingSoon.length,
         noteCount: (notesData || []).length,
       });
     } catch (e) {
@@ -506,55 +503,47 @@ export default function Dashboard() {
   }, [loadDashboard]);
 
 
-  // Combine simple tasks and project tasks for upcoming display
+  // 近期待办（/api/tasks 兼容层 → project_tasks）
   const upcomingTasks = (() => {
-    const soon = (tasks || []).filter(
-      (t) => !t.isCompleted && t.dueDate && new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
-    ).map((t) => ({ ...t, __source: "task" }));
-
-    const projSoon = (projectTasks || []).filter(
-      (pt) => pt.isCompleted === 0 && pt.endDate && new Date(pt.endDate) <= new Date(Date.now() + 3 * 86400000),
-    ).map((pt) => ({
-      id: pt.id,
-      title: pt.title,
-      isCompleted: pt.isCompleted,
-      dueDate: pt.endDate || null,
-      creatorName: pt.assigneeName || pt.assigneeDisplayName || pt.creatorId,
-      __source: "project",
-    } as Task & { __source: string }));
-
-    return [...soon, ...projSoon].slice(0, 5);
+    return (tasks || [])
+      .filter(
+        (t) =>
+          !t.isCompleted &&
+          t.dueDate &&
+          new Date(t.dueDate) <= new Date(Date.now() + 3 * 86400000),
+      )
+      .map((t) => ({ ...t, __source: "task" as const }))
+      .slice(0, 5);
   })();
 
-  const handleToggleTask = async (id: string, e: React.MouseEvent, source: "task" | "project" = "task") => {
-    e.stopPropagation(); // 阻止触发卡片点击跳转
+  const handleToggleTask = async (
+    id: string,
+    e: React.MouseEvent,
+    _source: "task" | "project" = "task",
+  ) => {
+    e.stopPropagation();
     haptic.light();
-    if (source === "task") {
-      // 乐观更新
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, isCompleted: t.isCompleted ? 0 : 1 } : t)));
-      try {
-        const updated = await api.toggleTask(id);
-        syncTaskNotification(updated);
-        window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
-        api.getTaskStats().then((s) => {
-          setStats((prev) => ({ ...prev, taskPending: s.activeReminders || prev.taskPending }));
-        }).catch(console.error);
-        loadDashboard(); // Fully reload to fetch any generated recurring task
-      } catch {
-        loadDashboard(); // 回滚
-      }
-    } else {
-      // project task
-      setProjectTasks((prev) => prev.map((pt) => (pt.id === id ? { ...pt, isCompleted: pt.isCompleted === 1 ? 0 : 1 } : pt)));
-      try {
-        const prev = projectTasks.find((p) => p.id === id);
-        const currentCompleted = prev ? prev.isCompleted : 0;
-        await api.updateProjectTask(id, { isCompleted: currentCompleted === 1 ? 0 : 1 });
-        window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
-        loadDashboard();
-      } catch {
-        loadDashboard();
-      }
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, isCompleted: t.isCompleted ? 0 : 1 } : t,
+      ),
+    );
+    try {
+      const updated = await api.toggleTask(id);
+      syncTaskNotification(updated);
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
+      api
+        .getTaskStats()
+        .then((s) => {
+          setStats((prev) => ({
+            ...prev,
+            taskPending: s.pending ?? prev.taskPending,
+          }));
+        })
+        .catch(console.error);
+      loadDashboard();
+    } catch {
+      loadDashboard();
     }
   };
 
@@ -570,11 +559,21 @@ export default function Dashboard() {
 
   const handleTaskClick = (taskId: string) => {
     haptic.light();
+    // 方案 A：进入项目「我的任务」
     sessionStorage.setItem("super:pending-navigate", JSON.stringify({
       sourceType: "task",
       sourceId: taskId,
     }));
-    actions.setViewMode("tasks");
+    sessionStorage.setItem(
+      "super-active-project-filter",
+      JSON.stringify({ type: "my-tasks" }),
+    );
+    actions.setViewMode("projects");
+    window.dispatchEvent(
+      new CustomEvent("super:project-filter-changed", {
+        detail: { type: "my-tasks" },
+      }),
+    );
     window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
   };
 
@@ -797,7 +796,7 @@ export default function Dashboard() {
             <QuickStatCard
               icon={<ListTodo size={18} />}
               label="全部待办"
-              value={tasks.length + projectTasks.length}
+              value={tasks.length}
               color="#10b981"
               onClick={() => {
                 haptic.light();
@@ -898,15 +897,8 @@ export default function Dashboard() {
                     <TaskItem
                       key={item.id}
                       item={item}
-                      onToggle={(id, e) => handleToggleTask(id, e, item.__source === "project" ? "project" : "task")}
-                      onClick={() => {
-                        if (item.__source === "project") {
-                          actions.setViewMode("projects");
-                          window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: item.id }));
-                        } else {
-                          handleTaskClick(item.id);
-                        }
-                      }}
+                      onToggle={(id, e) => handleToggleTask(id, e)}
+                      onClick={() => handleTaskClick(item.id)}
                     />
                   ))
                 )}
