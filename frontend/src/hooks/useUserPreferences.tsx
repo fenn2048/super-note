@@ -45,6 +45,8 @@ export interface UserPreferences {
   lockOnOpen: boolean;
   /** 阅读密度（cozy/compact）。默认 cozy，即与历史一致的宽松排版。 */
   readingDensity: ReadingDensity;
+  /** 是否启用健康休息提醒（飞船）。默认 false（P2-5）。 */
+  healthReminderEnabled: boolean;
   /** 太空飞船健康提醒间隔（单位：分钟）。默认 30。 */
   reminderInterval: number;
   /** 表情模仿秀：Good 相似度阈值。默认 70。 */
@@ -58,6 +60,7 @@ const DEFAULT_PREFS: UserPreferences = {
   outlineDefaultOpen: false,
   lockOnOpen: false,
   readingDensity: "cozy",
+  healthReminderEnabled: false,
   reminderInterval: 30,
   faceMimicGoodThreshold: 70,
   faceMimicWonderfulThreshold: 80,
@@ -82,6 +85,9 @@ function readFromStorage(): UserPreferences {
       readingDensity: parsed.readingDensity === "compact" || parsed.readingDensity === "cozy"
         ? parsed.readingDensity
         : DEFAULT_PREFS.readingDensity,
+      healthReminderEnabled: typeof parsed.healthReminderEnabled === "boolean"
+        ? parsed.healthReminderEnabled
+        : DEFAULT_PREFS.healthReminderEnabled,
       reminderInterval: typeof parsed.reminderInterval === "number"
         ? parsed.reminderInterval
         : DEFAULT_PREFS.reminderInterval,

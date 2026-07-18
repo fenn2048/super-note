@@ -53,6 +53,7 @@ import UpdateNotifier from "@/components/common/UpdateNotifier";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import { realtime } from "@/lib/realtime";
 import { openTasksEntry, openPlansEntry, setLibraryTab } from "@/lib/navigation.config";
+import AppSplashGate from "@/components/AppSplashGate";
 
 import { App as CapApp } from "@capacitor/app";
 
@@ -483,15 +484,16 @@ function AppLayout() {
   }, [state.viewMode, activeBookHash]);
 
   useEffect(() => {
+    // P2-5：健康提醒默认关闭，需用户在设置中显式开启
+    if (!userPrefs.healthReminderEnabled) return;
     if (showReminder) return;
-    const intervalMs = userPrefs.reminderInterval * 60 * 1000;
+    const intervalMs = Math.max(1, userPrefs.reminderInterval) * 60 * 1000;
     const timer = setTimeout(() => {
-      // Auto-save edited content before showing screensaver
       window.dispatchEvent(new CustomEvent("super:save-all"));
       setShowReminder(true);
     }, intervalMs);
     return () => clearTimeout(timer);
-  }, [userPrefs.reminderInterval, showReminder, reminderTrigger]);
+  }, [userPrefs.healthReminderEnabled, userPrefs.reminderInterval, showReminder, reminderTrigger]);
 
   // Listen to custom open-book event → 资料库书库 Tab（阅读器由 LibraryCenter 承接）
   useEffect(() => {
@@ -1925,6 +1927,8 @@ function AuthGate() {
   //   "skipped" / null：QuickLoginGate 决定不展示（不支持 / 未启用 / 已尝试过）
   //                    或用户取消，UI 应渲染 LoginPage 让用户输密码
   const [quickLoginState, setQuickLoginState] = useState<"pending" | "skipped">("pending");
+  /** 应用内启动门：auth 判定完成即可 ready；淡出后再真正卸门 */
+  const [splashDismissed, setSplashDismissed] = useState(false);
   const { t } = useTranslation();
 
   // Warm Resume Lock: Lock the app when returning from the background
@@ -2306,14 +2310,24 @@ function AuthGate() {
   };
 
   // 加载中
+  const splashGate = !splashDismissed ? (
+    <AppSplashGate
+      ready={isAuthenticated !== null}
+      onHidden={() => setSplashDismissed(true)}
+    />
+  ) : null;
+
   if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+      <>
+        {splashGate}
+        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -2325,30 +2339,35 @@ function AuthGate() {
     //   - 成功：onSettled(true, payload) 直接走 handleLogin 进主界面
     if (isClientMode && quickLoginState === "pending") {
       return (
-        <Suspense fallback={
-          <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+        <>
+          {splashGate}
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+              </div>
             </div>
-          </div>
-        }>
-          <QuickLoginGate
-            isClientMode={isClientMode}
-            onSettled={(used, payload) => {
-              if (used && payload) {
-                handleLogin(payload.token, payload.user);
-              } else {
-                setQuickLoginState("skipped");
-              }
-            }}
-          />
-        </Suspense>
+          }>
+            <QuickLoginGate
+              isClientMode={isClientMode}
+              onSettled={(used, payload) => {
+                if (used && payload) {
+                  handleLogin(payload.token, payload.user);
+                } else {
+                  setQuickLoginState("skipped");
+                }
+              }}
+            />
+          </Suspense>
+        </>
       );
     }
 
     return (
-      <Suspense fallback={
+      <>
+        {splashGate}
+        <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -2362,12 +2381,15 @@ function AuthGate() {
           onDisconnect={isClientMode ? handleDisconnect : undefined}
         />
       </Suspense>
+      </>
     );
   }
 
   // 已登录
   return (
-    <AppProvider>
+    <>
+      {splashGate}
+      <AppProvider>
       <TooltipProvider>
         <AppLayout />
         <Suspense fallback={null}>
@@ -2394,6 +2416,7 @@ function AuthGate() {
         </Suspense>
       </TooltipProvider>
     </AppProvider>
+    </>
   );
 }
 

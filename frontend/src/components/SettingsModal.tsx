@@ -15,6 +15,8 @@ import WorkspaceManagement from "@/components/WorkspaceManagement";
 import ManualPanel from "@/components/ManualPanel";
 import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { getCustomSplashDataUrl, saveCustomSplashFromFile, clearCustomSplash } from "@/lib/splashStorage";
+import BrandMark from "@/components/BrandMark";
 import { api, getServerUrl } from "@/lib/api";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
@@ -748,6 +750,11 @@ function SwitchesPanel() {
       label: t('settings.prefLockOnOpen'),
       hint: t('settings.prefLockOnOpenHint'),
     },
+    {
+      key: "healthReminderEnabled" as const,
+      label: t('settings.healthReminder', { defaultValue: '健康休息提醒' }),
+      hint: t('settings.healthReminderDesc', { defaultValue: '定时弹出休息引导。默认关闭。' }),
+    },
   ];
 
   return (
@@ -893,6 +900,15 @@ function AppearancePanel() {
   const { siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled } = useSiteSettings();
   const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
   const [title, setTitle] = useState(siteConfig.title);
+  const [splashPreview, setSplashPreview] = useState<string | null>(null);
+  const [splashBusy, setSplashBusy] = useState(false);
+  const [splashMsg, setSplashMsg] = useState("");
+  const splashInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getCustomSplashDataUrl().then((u) => { if (!cancelled) setSplashPreview(u); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [previewIcon, setPreviewIcon] = useState(siteConfig.favicon);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -1091,7 +1107,78 @@ function AppearancePanel() {
             </div>
           </div>
 
-          {/* 站点名称 */}
+          
+      {/* 启动闪屏自定义（本机） */}
+      <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-tx-primary">{t("settings.customSplash", { defaultValue: "启动闪屏图" })}</h3>
+          <p className="text-xs text-tx-tertiary mt-1">{t("settings.customSplashDesc", { defaultValue: "自定义 App 加载阶段显示的图片（本机保存）。" })}</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-28 rounded-lg border border-app-border overflow-hidden bg-[#F5F3EE] flex items-center justify-center shrink-0">
+            {splashPreview ? (
+              <img src={splashPreview} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <BrandMark size={40} />
+            )}
+          </div>
+          <div className="flex flex-col gap-2 min-w-0">
+            <input
+              ref={splashInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                setSplashBusy(true);
+                setSplashMsg("");
+                try {
+                  const url = await saveCustomSplashFromFile(f);
+                  setSplashPreview(url);
+                  setSplashMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
+                } catch (err: any) {
+                  setSplashMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
+                } finally {
+                  setSplashBusy(false);
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={splashBusy}
+              onClick={() => splashInputRef.current?.click()}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
+            >
+              {splashBusy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
+            </button>
+            {splashPreview && (
+              <button
+                type="button"
+                disabled={splashBusy}
+                onClick={async () => {
+                  setSplashBusy(true);
+                  try {
+                    await clearCustomSplash();
+                    setSplashPreview(null);
+                    setSplashMsg("");
+                  } finally {
+                    setSplashBusy(false);
+                  }
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
+              >
+                {t("settings.customSplashClear", { defaultValue: "恢复默认" })}
+              </button>
+            )}
+            <p className="text-[11px] text-tx-tertiary">{t("settings.customSplashHint", { defaultValue: "建议竖图，≤5MB" })}</p>
+            {splashMsg && <p className="text-[11px] text-accent-primary">{splashMsg}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* 站点名称 */}
           <div className="flex-1 space-y-3 w-full">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('settings.siteName')}</label>
