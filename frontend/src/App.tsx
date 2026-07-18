@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
+import React, { Suspense, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, Film, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,7 @@ import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import { realtime } from "@/lib/realtime";
-import { openTasksEntry, openPlansEntry, setLibraryTab } from "@/lib/navigation.config";
+import { openTasksEntry, openPlansEntry, setLibraryTab, getMobileTabModules } from "@/lib/navigation.config";
 import AppSplashGate from "@/components/AppSplashGate";
 import CreateMenu, { CreateFabButton } from "@/components/common/CreateMenu";
 
@@ -1677,6 +1677,30 @@ function MobileTabBar({ visible }: { visible: boolean }) {
   const { state } = useApp();
   const actions = useAppActions();
   const { t } = useTranslation();
+  const [features, setFeatures] = useState<import("@/types").WorkspaceFeatures | null>(null);
+  const [packTick, setPackTick] = useState(0);
+
+  useEffect(() => {
+    const load = () => {
+      const ws = getCurrentWorkspace();
+      if (!ws || ws === "personal") {
+        setFeatures(null);
+        return;
+      }
+      api.getWorkspaceFeatures(ws).then(setFeatures).catch(() => setFeatures(null));
+    };
+    load();
+    const onWs = () => load();
+    const onPack = () => setPackTick((n) => n + 1);
+    window.addEventListener("super:workspace-changed", onWs);
+    window.addEventListener("super:workspace-features-changed", onWs);
+    window.addEventListener("super:module-pack-changed", onPack);
+    return () => {
+      window.removeEventListener("super:workspace-changed", onWs);
+      window.removeEventListener("super:workspace-features-changed", onWs);
+      window.removeEventListener("super:module-pack-changed", onPack);
+    };
+  }, []);
 
   const handleTabClick = (mode: ViewMode, opts?: { openMyTasks?: boolean }) => {
     haptic.light();
@@ -1686,37 +1710,34 @@ function MobileTabBar({ visible }: { visible: boolean }) {
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
     actions.setMobileView("list");
-    if (mode === "books") {
+    if (mode === "books" || mode === "library") {
       window.dispatchEvent(new CustomEvent("super:close-book"));
     }
   };
 
-  // 家庭 OS 底栏：笔记 | 任务 | 说说 | 我的（书库/媒体进「我的」）
+  // 与 navigation.config + 模块包一致（P2 补完）
+  const tabModules = useMemo(() => getMobileTabModules(features), [features, packTick]);
+
+  const TAB_ICONS: Record<string, React.ReactNode> = {
+    notes: <BookOpen size={20} />,
+    tasks: <ListTodo size={20} />,
+    diary: <NotebookPen size={20} />,
+  };
+
   const tabs = [
-    {
-      id: "notes",
-      mode: "all" as ViewMode,
-      label: t("sidebar.allNotesShort", { defaultValue: "笔记" }),
-      icon: <BookOpen size={20} />,
-      active: ["all", "notebook", "search", "tag", "favorites"].includes(state.viewMode),
-      openMyTasks: false,
-    },
-    {
-      id: "tasks",
-      mode: "projects" as ViewMode,
-      label: t("sidebar.tasksShort", { defaultValue: "任务" }),
-      icon: <ListTodo size={20} />,
-      active: ["projects", "plans", "tasks"].includes(state.viewMode),
-      openMyTasks: true,
-    },
-    {
-      id: "diary",
-      mode: "diary" as ViewMode,
-      label: t("sidebar.diary") || "说说",
-      icon: <NotebookPen size={20} />,
-      active: state.viewMode === "diary",
-      openMyTasks: false,
-    },
+    ...tabModules.map((m) => ({
+      id: m.id,
+      mode: m.mode,
+      label: t(m.labelKey, { defaultValue: m.labelFallback }),
+      icon: TAB_ICONS[m.id] || <BookOpen size={20} />,
+      active:
+        m.id === "notes"
+          ? ["all", "notebook", "search", "tag", "favorites"].includes(state.viewMode)
+          : m.id === "tasks"
+            ? ["projects", "plans", "tasks"].includes(state.viewMode)
+            : state.viewMode === m.mode,
+      openMyTasks: m.action === "openMyTasks",
+    })),
     {
       id: "more",
       mode: "more" as ViewMode,
@@ -1724,7 +1745,7 @@ function MobileTabBar({ visible }: { visible: boolean }) {
       icon: <UserIcon size={20} />,
       active:
         state.viewMode === "more" ||
-        ["media", "trash", "ai-chat", "mentions", "files", "books", "home"].includes(state.viewMode),
+        ["media", "trash", "ai-chat", "mentions", "files", "books", "home", "library"].includes(state.viewMode),
       openMyTasks: false,
     },
   ];
