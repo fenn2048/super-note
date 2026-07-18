@@ -170,10 +170,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       {
         id: "new-task",
         type: "command",
-        title: "新建待办",
-        subtitle: "创建一条待办事项，支持设置提醒时间",
+        title: "新建任务",
+        subtitle: "在「我的任务」中创建一条任务（统一项目任务体系）",
         icon: ListTodo,
         handler: () => {
+          // 方案 A：进入项目任务域；具体创建由 ProjectCenter / FAB 承接
+          actions.setViewMode("projects");
+          const filter = { type: "my-tasks" };
+          sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+          window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
           window.dispatchEvent(new CustomEvent("super:quick-new-task"));
         },
       },
@@ -211,8 +216,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       {
         id: "go-projects",
         type: "command",
-        title: "前往 项目看板",
-        subtitle: "切换到工作、协作项目管理看板",
+        title: "前往 任务",
+        subtitle: "我的任务与家庭项目看板（统一任务入口）",
         icon: Briefcase,
         handler: () => {
           actions.setViewMode("projects");
@@ -335,20 +340,21 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             tagIds.push(matchedTag.id);
           }
 
-          await api.createTask({
+          const { createUnifiedTask } = await import("@/lib/taskEntry");
+          await createUnifiedTask({
             title: parsed.title,
-            isCompleted: 0,
             dueDate: parsed.dueDate,
             priority: 2,
             tagIds,
-          } as any);
+          });
 
-          toast.success("创建个人待办成功！");
+          toast.success("创建任务成功！");
           window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
           window.dispatchEvent(new CustomEvent("super:refresh-tasks"));
+          window.dispatchEvent(new CustomEvent("super:projects-refreshed"));
           onClose();
         } catch (err: any) {
-          toast.error(err?.message || "创建待办失败");
+          toast.error(err?.message || "创建任务失败");
         }
       }
     };

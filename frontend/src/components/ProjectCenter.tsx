@@ -40,6 +40,8 @@ import ProjectCalendar from "./ProjectCalendar";
 import ProjectGantt from "./ProjectGantt";
 import TaskDetailModal from "./TaskDetailModal";
 
+const PlanCenter = React.lazy(() => import("./PlanCenter"));
+
 const PRESET_COVERS = [
   "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
   "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
@@ -1637,6 +1639,19 @@ export default function ProjectCenter() {
               />
             )}
           </div>
+        </div>
+      ) : activeFilter.type === "plans" ? (
+        /* 2a. Plans list (P1-2：并入任务壳，不再独立 viewMode) */
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+          <React.Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 size={20} className="animate-spin text-accent-primary" />
+              </div>
+            }
+          >
+            <PlanCenter />
+          </React.Suspense>
         </div>
       ) : activeFilter.type === "my-tasks" ? (
         /* 2. Global "My Tasks" aggregated board */

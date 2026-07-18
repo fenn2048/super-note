@@ -953,15 +953,13 @@ function ProjectSidebar() {
         <div
           className={cn(
             "flex items-center justify-between group/my-plans px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
-            state.viewMode === "plans"
+            state.viewMode === "projects" && activeFilter.type === "plans"
               ? "bg-app-active text-tx-primary font-medium"
               : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
           )}
           onClick={() => {
-            actions.setViewMode("plans");
-            sessionStorage.setItem("super-active-plan-filter", JSON.stringify({ type: "all" }));
-            window.dispatchEvent(new CustomEvent("super:plan-filter-changed", { detail: { type: "all" } }));
-            actions.setMobileSidebar(false);
+            actions.setViewMode("projects");
+            selectFilter({ type: "plans" });
           }}
         >
           <div className="flex items-center gap-2">
@@ -973,7 +971,8 @@ function ProjectSidebar() {
             className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-plans:opacity-100 opacity-100 transition-all"
             onClick={(e) => {
               e.stopPropagation();
-              actions.setViewMode("plans");
+              actions.setViewMode("projects");
+              selectFilter({ type: "plans" });
               sessionStorage.setItem("super-pending-create-plan", "1");
               actions.setMobileSidebar(false);
               window.dispatchEvent(new CustomEvent("super:create-plan-trigger"));
@@ -2257,35 +2256,8 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   //     关掉 notes 相当于关掉整个工作区，产品上由 owner 在开关面板体现。
   //
   // v15 信息架构（方案 A）：扁平 8 项 → 3 个语义清晰的分组：
-  //   - workspace（工作台）：所有笔记 + 它的过滤视图（收藏 / 回收站）+ 横切资源（文件管理）。
-  //                        高频主入口，紧贴顶部，无分组标题，视觉权重最强。
-  //   - modules（内容模块）：说说 / 待办 / 思维导图——独立的内容类型。
-  //   - tools（工具）：AI 问答——功能性，与"内容"区分开。
-  // 顺序在数组里就是渲染顺序；分组渲染时按 group 字段切片。
-  const navItemsRaw: {
-    icon: React.ReactNode;
-    label: string;
-    mode: ViewMode;
-    active: boolean;
-    feature?: keyof WorkspaceFeatures;
-    group: "workspace" | "modules" | "tools";
-  }[] = [
-    // ─── 工作台 ───
-    { icon: <BookOpen size={16} />, label: t('sidebar.allNotes'), mode: "all", active: state.viewMode === "all", feature: "notes", group: "workspace" },
-    { icon: <Star size={16} />, label: t('sidebar.favorites'), mode: "favorites", active: state.viewMode === "favorites", feature: "favorites", group: "workspace" },
-    { icon: <FolderOpen size={16} />, label: t('sidebar.fileManager'), mode: "files", active: state.viewMode === "files", feature: "files", group: "workspace" },
-    { icon: <Trash size={16} />, label: t('sidebar.trash'), mode: "trash", active: state.viewMode === "trash", group: "workspace" },
-
-    // ─── 内容模块 ───
-    { icon: <NotebookPen size={16} />, label: t('sidebar.diary'), mode: "diary", active: state.viewMode === "diary", feature: "diaries", group: "modules" },
-    { icon: <ListTodo size={16} />, label: t('sidebar.tasks'), mode: "tasks", active: state.viewMode === "tasks", feature: "tasks", group: "modules" },
-
-    // ─── 工具 ───
-    { icon: <Sparkles size={16} />, label: t('sidebar.aiChat'), mode: "ai-chat", active: state.viewMode === "ai-chat", group: "tools" },
-  ];
-  const navItems = features
-    ? navItemsRaw.filter((it) => !it.feature || features[it.feature] !== false)
-    : navItemsRaw;
+  // 模块一级入口已迁至 NavRail / 移动底栏（navigation.config）。
+  // 侧栏专注：搜索、笔记本树、收藏、标签；独立「待办」入口已移除（任务方案 A）。
 
   // v16：桌面端折叠态由 App.tsx 控制（隐藏整个 Sidebar 但保留 NavRail）。
   // 移动端没有折叠概念（抽屉显隐由 mobileSidebarOpen 控制），所以这里无需任何分支。
@@ -2374,7 +2346,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         </div>
       )}
 
-      {state.viewMode === "projects" || state.viewMode === "plans" ? (
+      {state.viewMode === "projects" ? (
         <ProjectSidebar />
       ) : (
         <>

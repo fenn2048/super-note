@@ -1374,9 +1374,11 @@ function AppearancePanel() {
 const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
   function SettingsModal({ onClose, defaultTab = "security" }, ref) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
+  // prompts 已并入 ai（P1-5）
+  const initialTab: TabId = defaultTab === "prompts" ? "ai" : defaultTab;
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [currentMobilePage, setCurrentMobilePage] = useState<"menu" | TabId>(() => {
-    return window.innerWidth < 768 ? "menu" : defaultTab;
+    return window.innerWidth < 768 ? "menu" : initialTab;
   });
   const { siteConfig } = useSiteSettings();
   const [currentUser, setCurrentUser] = useState<{ id: string; role?: string } | null>(null);
@@ -1407,8 +1409,8 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     { id: "appearance" as const, label: t('settings.appearance'), icon: Palette },
     { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
     { id: "manual" as const, label: t('settings.userManual'), icon: BookOpen },
+    // P1-5：AI 服务商 + 提示词合并为一个 Tab
     { id: "ai" as const, label: t('settings.ai'), icon: Bot },
-    { id: "prompts" as const, label: t('settings.prompts', { defaultValue: 'AI 提示词' }), icon: SlidersHorizontal },
     // 【个人访问令牌】家庭场景用不到，仅管理员可见
     ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
@@ -1418,8 +1420,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     // 「开发者」面板：仅管理员可见，承载运行时调试开关（如 files-list 查询日志）。
     // 普通用户根本看不到这一项，与后端的 admin-only 写入闸门双层防御。
     ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench }] : []),
-    // 关于星空笔记
-    { id: "about" as const, label: t('settings.about', { defaultValue: '关于星空笔记' }), icon: Info },
+    { id: "about" as const, label: t('settings.about', { defaultValue: '关于蜉蝣' }), icon: Info },
   ];
 
   // 用 Portal 挂载到 body：
@@ -1574,8 +1575,17 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                   {activeTab === "appearance" && <AppearancePanel />}
                   {activeTab === "switches" && <SwitchesPanel />}
                   {activeTab === "manual" && <ManualPanel />}
-                  {activeTab === "ai" && <AISettingsPanel />}
-                  {activeTab === "prompts" && <AIPromptPanel />}
+                  {activeTab === "ai" && (
+                    <div className="space-y-8">
+                      <AISettingsPanel />
+                      <div className="border-t border-app-border pt-6">
+                        <h3 className="text-sm font-semibold text-tx-primary mb-3">
+                          {t("settings.prompts", { defaultValue: "AI 提示词" })}
+                        </h3>
+                        <AIPromptPanel />
+                      </div>
+                    </div>
+                  )}
                   {activeTab === "security" && <SecuritySettings />}
                   {activeTab === "tokens" && <TokenManagement />}
                   {activeTab === "users" && isAdmin && <UserManagement currentUserId={currentUser?.id ?? null} />}
@@ -1657,8 +1667,17 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                       {activeTab === "appearance" && <AppearancePanel />}
                       {activeTab === "switches" && <SwitchesPanel />}
                       {activeTab === "manual" && <ManualPanel />}
-                      {activeTab === "ai" && <AISettingsPanel />}
-                      {activeTab === "prompts" && <AIPromptPanel />}
+                      {activeTab === "ai" && (
+                        <div className="space-y-8">
+                          <AISettingsPanel />
+                          <div className="border-t border-app-border pt-6">
+                            <h3 className="text-sm font-semibold text-tx-primary mb-3">
+                              {t("settings.prompts", { defaultValue: "AI 提示词" })}
+                            </h3>
+                            <AIPromptPanel />
+                          </div>
+                        </div>
+                      )}
                       {activeTab === "security" && <SecuritySettings />}
                       {activeTab === "tokens" && <TokenManagement />}
                       {activeTab === "users" && isAdmin && <UserManagement currentUserId={currentUser?.id ?? null} />}

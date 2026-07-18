@@ -27,12 +27,11 @@
  *   Rail 上不再支持"右键清空"——这是低频破坏性操作，用户进入「回收站」视图后再清空更合理。
  *   不为了功能对齐而把 ~80 行复杂逻辑复制到这里。
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  BookOpen, Book, Star, Trash, Trash2, ListTodo, BrainCircuit,
-  Sparkles, NotebookPen, FolderOpen, Briefcase, Compass,
+  BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
-  Columns2, Columns3, Cloud, CloudOff, Bell, Home, Film,
+  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -44,47 +43,44 @@ import MigrationModal from "@/components/MigrationModal";
 import { useRailMode, nextRailMode, RailMode } from "@/hooks/useRailMode";
 import { getAppInfo, isDesktop as isDesktopApp, switchDesktopToFull, type AppInfo } from "@/lib/desktopBridge";
 import { clearLocalIdMap, clearQueue, getQueueLength } from "@/lib/offlineQueue";
-
-type NavGroup = "workspace" | "modules" | "tools";
-
-interface NavConfigItem {
-  icon: React.ReactNode;
-  labelKey: string;       // i18n key
-  mode: ViewMode;
-  feature?: keyof WorkspaceFeatures;
-  group: NavGroup;
-}
+import {
+  getDesktopRailModules,
+  isNotesViewMode,
+  isTasksViewMode,
+  openTasksEntry,
+  setLibraryTab,
+  type NavModule,
+} from "@/lib/navigation.config";
 
 // Rail 上图标统一 18px——比主侧栏 16px 略大，因为没有文字陪衬时需要更醒目；
 // label 模式下也保持 18px，配 10px 字号视觉层级正好。
 const RAIL_ICON_SIZE = 18;
 
-const NAV_CONFIG: NavConfigItem[] = [
-  // ─── 工作台 ───
-  { icon: <Home size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.home",       mode: "home",                                 group: "workspace" },
-  { icon: <Briefcase size={RAIL_ICON_SIZE} />,   labelKey: "sidebar.projects",    mode: "projects",   feature: "projects",  group: "workspace" },
-  { icon: <NotebookPen size={RAIL_ICON_SIZE} />, labelKey: "sidebar.diary",       mode: "diary",      feature: "diaries",   group: "workspace" },
-  { icon: <BookOpen size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.allNotes",    mode: "all",        feature: "notes",     group: "workspace" },
-  { icon: <Book size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.books",       mode: "books",                             group: "workspace" },
-  { icon: <Sparkles size={RAIL_ICON_SIZE} />,    labelKey: "sidebar.aiChat",      mode: "ai-chat",                           group: "workspace" },
-  { icon: <FolderOpen size={RAIL_ICON_SIZE} />,  labelKey: "sidebar.fileManager", mode: "files",      feature: "files",     group: "workspace" },
-  { icon: <Film size={RAIL_ICON_SIZE} />,        labelKey: "sidebar.mediaLibrary", mode: "media",     feature: "media",     group: "workspace" },
-];
+const RAIL_ICONS: Record<string, React.ReactNode> = {
+  home: <Home size={RAIL_ICON_SIZE} />,
+  notes: <BookOpen size={RAIL_ICON_SIZE} />,
+  tasks: <ListTodo size={RAIL_ICON_SIZE} />,
+  diary: <NotebookPen size={RAIL_ICON_SIZE} />,
+  ai: <Sparkles size={RAIL_ICON_SIZE} />,
+  library: <FolderOpen size={RAIL_ICON_SIZE} />,
+  files: <FolderOpen size={RAIL_ICON_SIZE} />,
+  books: <Book size={RAIL_ICON_SIZE} />,
+  media: <Film size={RAIL_ICON_SIZE} />,
+};
 
 /**
- * 判断 Rail 上某个 mode 是否处于"激活态"。
- * 产品决策：当用户选了某个具体的 notebook（viewMode="all" + selectedNotebookId 不为 null）
- * 或具体的 tag（viewMode="tag"）、搜索结果（viewMode="search"）时，Rail 应该高亮"所有笔记"——
- * 因为这些视图本质上都是笔记的派生视图。
+ * 判断 Rail 上某个模块是否处于激活态。
+ * 产品决策（家庭 OS + 任务方案 A）：
+ *   - 笔记及其派生视图高亮 notes
+ *   - projects / plans / 历史 tasks 高亮 tasks
  */
-function isActive(itemMode: ViewMode, viewMode: ViewMode): boolean {
-  if (itemMode === "all") {
-    return viewMode === "all" || viewMode === "search" || viewMode === "tag";
+function isModuleActive(mod: NavModule, viewMode: ViewMode): boolean {
+  if (mod.id === "notes") return isNotesViewMode(viewMode) || viewMode === "favorites" || viewMode === "trash";
+  if (mod.id === "tasks") return isTasksViewMode(viewMode);
+  if (mod.id === "library") {
+    return viewMode === "library" || viewMode === "files" || viewMode === "books" || viewMode === "media";
   }
-  if (itemMode === "projects") {
-    return viewMode === "projects" || viewMode === "plans";
-  }
-  return viewMode === itemMode;
+  return viewMode === mod.mode;
 }
 
 export default function NavRail({ variant = "desktop" }: { variant?: "desktop" | "mobile" } = {}) {
@@ -178,27 +174,42 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     && (usingDesktopLiteMode || !isLoopbackUrl(serverUrl) || (!!currentOrigin && normalizeUrl(serverUrl) !== normalizeUrl(currentOrigin)));
   const canSwitchBackToLocal = isDesktopApp() && (usingRemoteServer || usingDesktopLiteMode);
 
-  const items = features
-    ? NAV_CONFIG.filter((it) => !it.feature || features[it.feature] !== false)
-    : NAV_CONFIG;
+  const items = useMemo(() => getDesktopRailModules(features), [features]);
 
-  const handleClick = useCallback((mode: ViewMode) => {
-    actions.setViewMode(mode);
+  const handleClick = useCallback((mod: NavModule) => {
+    if (mod.action === "openMyTasks") {
+      openTasksEntry();
+    }
+    if (mod.action === "libraryTab" && mod.libraryTab) {
+      setLibraryTab(mod.libraryTab);
+    }
+    if (mod.id === "library") {
+      setLibraryTab("files");
+    }
+    actions.setViewMode(mod.mode);
     actions.setSelectedNotebook(null);
-    if (mode === "books") {
+    if (mod.mode === "books" || mod.mode === "library") {
       window.dispatchEvent(new CustomEvent("super:close-book"));
     }
-    
-    // 只要是笔记/项目相关视图（所有笔记、收藏、回收站、项目），中间栏默认显示；其他模块（如首页、说说等）默认隐藏中间栏
-    const isNoteOrProjectView = mode === "all" || mode === "favorites" || mode === "trash" || mode === "notebook" || mode === "tag" || mode === "search" || mode === "projects" || mode === "plans";
+
+    // 笔记 / 任务相关视图展开中间栏；资料库与 AI 等全宽模块收起侧栏
+    const isNoteOrProjectView =
+      mod.id === "notes" ||
+      mod.id === "tasks" ||
+      mod.mode === "all" ||
+      mod.mode === "favorites" ||
+      mod.mode === "trash" ||
+      mod.mode === "notebook" ||
+      mod.mode === "tag" ||
+      mod.mode === "search" ||
+      mod.mode === "projects" ||
+      mod.mode === "plans";
     if (isNoteOrProjectView) {
       actions.setSidebarCollapsed(false);
     } else {
       actions.setSidebarCollapsed(true);
     }
 
-    // mobile 变体：点击导航项后顺手关掉抽屉，符合"我已经选定要去哪"的预期。
-    // 与 Sidebar 内笔记本/标签点击关闭抽屉的行为保持一致。
     if (isMobile) actions.setMobileSidebar(false);
   }, [actions, isMobile]);
 
@@ -244,15 +255,14 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     ? "relative w-14 py-1.5 rounded-button flex flex-col items-center justify-center gap-0.5 transition-all duration-fast ease-soft"
     : "relative w-10 h-10 rounded-button flex items-center justify-center transition-all duration-fast ease-soft";
 
-  const renderItem = (item: NavConfigItem) => {
-    const active = isActive(item.mode, state.viewMode);
-    const isTrashItem = item.mode === "trash";
-    const label = t(item.labelKey);
+  const renderItem = (mod: NavModule) => {
+    const active = isModuleActive(mod, state.viewMode);
+    const label = t(mod.labelKey, { defaultValue: mod.labelFallback });
+    const icon = RAIL_ICONS[mod.id] || <Briefcase size={RAIL_ICON_SIZE} />;
     return (
       <button
-        key={item.mode}
-        onClick={() => handleClick(item.mode)}
-        // icon 模式靠 title 兜底识别；label 模式文字已显式呈现，无需 tooltip
+        key={mod.id}
+        onClick={() => handleClick(mod)}
         title={showLabel ? undefined : label}
         aria-label={label}
         className={cn(
@@ -260,18 +270,15 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
           active
             ? "nav-active-pill"
             : "text-tx-tertiary hover:bg-app-hover hover:text-tx-primary",
-          // 回收站破坏性入口降级：未选中时再弱半度
-          isTrashItem && !active && "opacity-70 hover:opacity-100",
         )}
       >
-        {item.icon}
-        {item.mode === "projects" && state.reminderActiveCount > 0 && (
+        {icon}
+        {mod.id === "tasks" && state.reminderActiveCount > 0 && (
           <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent-danger text-[9px] font-bold text-white flex items-center justify-center leading-none z-10 shadow-sm">
             {state.reminderActiveCount}
           </span>
         )}
         {showLabel && (
-          // 文字限定单行，超长用 ellipsis；leading-none 让两行视觉间距更紧凑
           <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1 font-medium">
             {label}
           </span>
@@ -280,8 +287,9 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     );
   };
 
-  // 分组之间用细分隔线（不要文字组标题——Rail 上分组标题 = 噪音）
-  const groups: NavGroup[] = ["workspace", "modules", "tools"];
+  // 主路径 / 次要工具之间用细分隔线
+  const primaryItems = items.filter((m) => m.group !== "secondary");
+  const secondaryItems = items.filter((m) => m.group === "secondary");
 
   // mobile 变体下 Rail 模式切换只在 icon ↔ label 之间循环（hidden 被强制忽略）。
   // 这样用户能在抽屉里调整图标紧凑度，但不会把自己折叠成无导航死局。
@@ -341,26 +349,18 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
 
 
-      {/* 主导航：3 组，组间细线分隔。
-          v16 P3 后续：用 .no-scrollbar 隐藏 native 滚动条——Rail 是极简导航栏，
-          滚动条会破坏视觉权重；label 模式下 8+ 项可能溢出窄屏视口，但鼠标滚轮/触摸板
-          仍可滚动。极端窄屏用户更倾向直接切到 hidden 模式，停留在 label 是少数场景。 */}
+      {/* 主导航：主路径 + 次要工具，组间细线分隔。来源：navigation.config */}
       <div className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar flex flex-col items-center gap-1 px-1">
-        {groups.map((g, idx) => {
-          const groupItems = items.filter((it) => it.group === g);
-          if (groupItems.length === 0) return null;
-          return (
-            <React.Fragment key={g}>
-              {idx > 0 && (
-                <div
-                  className={cn("my-1 border-t border-app-border/60", showLabel ? "w-8" : "w-6")}
-                  aria-hidden
-                />
-              )}
-              {groupItems.map(renderItem)}
-            </React.Fragment>
-          );
-        })}
+        {primaryItems.map(renderItem)}
+        {secondaryItems.length > 0 && (
+          <>
+            <div
+              className={cn("my-1 border-t border-app-border/60", showLabel ? "w-8" : "w-6")}
+              aria-hidden
+            />
+            {secondaryItems.map(renderItem)}
+          </>
+        )}
       </div>
 
       <div className={cn("my-2 border-t border-app-border/60", showLabel ? "w-8" : "w-6")} aria-hidden />
@@ -399,12 +399,17 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
       {/* 底部：消息盒子 + 设置 + 登出 */}
       <button
-        onClick={() => handleClick("mentions")}
-        title={showLabel ? undefined : "消息"}
-        aria-label="消息"
+        onClick={() => {
+          actions.setViewMode("mentions");
+          if (isMobile) actions.setMobileSidebar(false);
+        }}
+        title={showLabel ? undefined : t("sidebar.mentions", { defaultValue: "消息" })}
+        aria-label={t("sidebar.mentions", { defaultValue: "消息" })}
         className={cn(
           itemBaseClass,
-          "text-tx-tertiary hover:bg-app-hover hover:text-accent-primary relative",
+          state.viewMode === "mentions"
+            ? "nav-active-pill"
+            : "text-tx-tertiary hover:bg-app-hover hover:text-accent-primary relative",
         )}
       >
         <Bell size={16} />
@@ -415,7 +420,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
         )}
         {showLabel && (
           <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1">
-            消息
+            {t("sidebar.mentions", { defaultValue: "消息" })}
           </span>
         )}
       </button>

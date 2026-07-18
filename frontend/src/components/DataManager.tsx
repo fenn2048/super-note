@@ -53,6 +53,99 @@ const SUBTABS_BY_SCOPE: Record<Scope, ReadonlyArray<SubTab>> = {
   system: ["database", "backup", "danger"],
 };
 
+type ImportSourceId = "memos" | "url" | "micloud" | "oppo" | "icloud" | "youdao";
+
+const IMPORT_SOURCES: {
+  id: ImportSourceId;
+  label: string;
+  desc: string;
+  advanced?: boolean;
+}[] = [
+  { id: "memos", label: "Memos", desc: "从 Memos 导出导入说说/笔记" },
+  { id: "url", label: "网页 / 公众号", desc: "粘贴链接导入文章" },
+  { id: "youdao", label: "有道云笔记", desc: "有道笔记迁移" },
+  { id: "micloud", label: "小米云", desc: "小米云便签导入", advanced: true },
+  { id: "oppo", label: "OPPO 云", desc: "OPPO 云便签导入", advanced: true },
+  { id: "icloud", label: "iPhone 备忘录", desc: "iCloud 备忘录导入", advanced: true },
+];
+
+/** P1-6：导入来源向导 —— 先选卡片再挂载具体导入组件 */
+function ImportSourceWizard({ workspaceId }: { workspaceId?: string | null }) {
+  const [source, setSource] = useState<ImportSourceId | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  if (source) {
+    return (
+      <section className="mt-6">
+        <button
+          type="button"
+          onClick={() => setSource(null)}
+          className="text-xs text-accent-primary hover:underline mb-3"
+        >
+          ← 返回选择导入来源
+        </button>
+        {source === "memos" && <MemosImport workspaceId={workspaceId ?? undefined} />}
+        {source === "url" && <UrlImport />}
+        {source === "micloud" && <MiCloudImport />}
+        {source === "oppo" && <OppoCloudImport />}
+        {source === "icloud" && <ICloudImport />}
+        {source === "youdao" && <YoudaoImport />}
+      </section>
+    );
+  }
+
+  const primary = IMPORT_SOURCES.filter((s) => !s.advanced);
+  const advanced = IMPORT_SOURCES.filter((s) => s.advanced);
+
+  return (
+    <section className="mt-6">
+      <div className="flex items-center gap-2 mb-3">
+        <Upload size={16} className="text-emerald-500" />
+        <h4 className="text-sm font-semibold text-tx-primary">从其他平台导入</h4>
+      </div>
+      <p className="text-xs text-tx-tertiary mb-3">
+        选择来源后进入对应导入流程。上方可直接拖入 Markdown / ZIP / PDF。
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {primary.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSource(s.id)}
+            className="text-left rounded-xl border border-app-border bg-app-elevated px-3 py-3 hover:border-accent-primary/40 hover:bg-accent-primary/5 transition-colors"
+          >
+            <div className="text-sm font-medium text-tx-primary">{s.label}</div>
+            <div className="text-[11px] text-tx-tertiary mt-0.5">{s.desc}</div>
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((v) => !v)}
+        className="mt-3 text-xs text-tx-tertiary hover:text-tx-secondary flex items-center gap-1"
+      >
+        {showAdvanced ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        更多来源（小米 / OPPO / iCloud）
+      </button>
+      {showAdvanced && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+          {advanced.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSource(s.id)}
+              className="text-left rounded-xl border border-app-border bg-app-elevated px-3 py-3 hover:border-accent-primary/40 hover:bg-accent-primary/5 transition-colors"
+            >
+              <div className="text-sm font-medium text-tx-primary">{s.label}</div>
+              <div className="text-[11px] text-tx-tertiary mt-0.5">{s.desc}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function DataManager() {
   const { t } = useTranslation();
   const { state } = useApp();
@@ -1027,29 +1120,9 @@ export default function DataManager() {
         </div>
       </section>
 
-      {/* 第三方云/备忘录导入：同样受 personalImport 开关约束。
-          管理员关闭开关时，不应存在"主入口禁用但 MiCloud / OPPO / iCloud / 有道
-          还能用"的绕过漏洞；对普通用户 lock 时直接整体隐藏。 */}
+      {/* P1-6：第三方导入向导 —— 先选来源再展开具体导入器，避免首屏堆叠 */}
       {!personalImportLocked && (
-        <>
-          {/* ===== Memos 0.18.0 导入 ===== */}
-          <MemosImport workspaceId={effectiveWorkspaceId} />
-
-          {/* ===== URL 导入（微信公众号文章） ===== */}
-          <UrlImport />
-
-          {/* ===== 小米云服务导入 ===== */}
-          <MiCloudImport />
-
-          {/* ===== OPPO 云便签导入 ===== */}
-          <OppoCloudImport />
-
-          {/* ===== iPhone 备忘录导入 ===== */}
-          <ICloudImport />
-
-          {/* ===== 有道云笔记导入 ===== */}
-          <YoudaoImport />
-        </>
+        <ImportSourceWizard workspaceId={effectiveWorkspaceId} />
       )}
       </>
       )}

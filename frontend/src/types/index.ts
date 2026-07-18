@@ -204,7 +204,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library";
 
 export type MobileView = "list" | "editor";
 

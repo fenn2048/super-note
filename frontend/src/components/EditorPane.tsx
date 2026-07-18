@@ -1960,6 +1960,9 @@ export default function EditorPane() {
                         <FileCode size={15} className="text-violet-500" />
                         <span>{editorMode === "md" ? "切换为富文本模式" : "切换为 Markdown 模式"}</span>
                       </button>
+                      <p className="px-3 pb-2 text-[10px] text-tx-tertiary leading-snug">
+                        默认富文本写作。多人实时协同编辑目前在 Markdown 模式可用。
+                      </p>
                     </>
                   )}
                   {/* Markdown 预览 / 编辑切换 */}
@@ -2371,7 +2374,9 @@ export default function EditorPane() {
               )}
             >
               <FileCode size={12} />
-              <span>{editorMode === "md" ? "MD" : "RTE"}</span>
+              <span title={editorMode === "md" ? "Markdown（支持实时协同）" : "富文本（默认写作；协同请切 MD）"}>
+                {editorMode === "md" ? "MD·协同" : "RTE"}
+              </span>
             </button>
           )}
 

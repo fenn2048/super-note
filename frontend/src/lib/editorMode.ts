@@ -13,6 +13,10 @@
  *   - 读取优先级：URL `?md=1|0` → localStorage → 默认 `"tiptap"`
  *   - 写入只写 localStorage；URL 上的强制标记由 clearForcedModeFromUrl 显式清除
  *   - 所有方法对 SSR / 无 window 环境安全，读取失败时返回默认值
+ *
+ * 产品决策（已锁定）：编辑器主格式 = RTE（tiptap）优先。
+ *   - 默认 resolve 为 tiptap；MD 为高级/协同过渡模式
+ *   - 后续协同应收敛到 RTE 主路径（当前 Yjs 仍仅 MD，属 P1 技术债）
  */
 
 export type EditorMode = "md" | "tiptap";

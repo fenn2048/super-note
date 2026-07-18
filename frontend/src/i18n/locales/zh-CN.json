@@ -116,13 +116,13 @@
     "moveFailed": "移动失败",
     "dropAsChild": "放到此处作为子笔记本",
     "allNotes": "所有笔记",
-    "tasks": "个人待办 / 闪念清单",
+    "tasks": "任务",
     "mindMaps": "思维导图",
     "aiChat": "AI 问答",
     "diary": "说说",
     "books": "书库",
     "fileManager": "文件管理",
-    "projects": "项目管理",
+    "projects": "任务",
     "mediaLibrary": "媒体库",
     "favorites": "收藏",
     "trash": "回收站",
@@ -207,7 +207,11 @@
     "noBackground": "暂无背景说明",
     "noGoal": "暂无目标描述",
     "deletePlanFail": "删除计划失败",
-    "plans": "计划管理"
+    "plans": "计划管理",
+    "tasksShort": "任务",
+    "allNotesShort": "笔记",
+    "mentions": "消息",
+    "library": "资料库"
   },
   "noteList": {
     "moveTo": "移动到...",
@@ -536,7 +540,7 @@
     "userManual": "用户手册",
     "switches": "开关",
     "ai": "AI 助手",
-    "about": "关于星空笔记",
+    "about": "关于蜉蝣",
     "security": "账号安全",
     "tokens": "访问令牌",
     "users": "用户管理",
@@ -1634,8 +1638,8 @@
     }
   },
   "about": {
-    "title": "关于",
-    "appName": "星空笔记",
+    "title": "关于蜉蝣",
+    "appName": "蜉蝣",
     "slogan": "轻量级私有化知识管理平台",
     "version": "版本",
     "description": "一款开源、可自托管的笔记应用，专注于隐私与效率。支持 Markdown / 富文本编辑、AI 智能助手、Web 剪藏、思维导图、多端同步与团队协作。",
@@ -1780,7 +1784,7 @@
   },
   "projects": {
     "title": "项目管理",
-    "allProjects":"所有项目",
+    "allProjects": "所有项目",
     "myProjects": "我的项目",
     "myTasks": "我的任务",
     "noTags": "暂无标签",

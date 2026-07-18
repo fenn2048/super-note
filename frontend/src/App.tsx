@@ -11,9 +11,7 @@ import Dashboard from "@/components/Dashboard";
 import type { TabId } from "@/components/SettingsModal";
 
 // 延时加载的重型组件
-const TaskCenter = React.lazy(() => import("@/components/TaskCenter"));
 const DiaryCenter = React.lazy(() => import("@/components/DiaryCenter"));
-const FileManager = React.lazy(() => import("@/components/FileManager"));
 const MentionList = React.lazy(() => import("@/components/MentionList"));
 const SharedNoteView = React.lazy(() => import("@/components/SharedNoteView"));
 const LoginPage = React.lazy(() => import("@/components/LoginPage"));
@@ -28,10 +26,7 @@ const EditorPane = React.lazy(() => import("@/components/EditorPane"));
 const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
 const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
-const PlanCenter = React.lazy(() => import("@/components/PlanCenter"));
-const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
-const BookReader = React.lazy(() => import("@/components/books/BookReader"));
-const MediaCenter = React.lazy(() => import("@/components/media/MediaCenter"));
+const LibraryCenter = React.lazy(() => import("@/components/LibraryCenter"));
 import MobileCameraModal from "@/components/MobileCameraModal";
 import GlobalMusicPlayer from "@/components/media/GlobalMusicPlayer";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
@@ -57,10 +52,53 @@ import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import { realtime } from "@/lib/realtime";
+import { openTasksEntry, openPlansEntry, setLibraryTab } from "@/lib/navigation.config";
 
 import { App as CapApp } from "@capacitor/app";
 
 const AUTH_USER_CACHE_PREFIX = "super-auth-user:";
+
+/** 遗留 viewMode=tasks → 项目「我的任务」（任务模型方案 A） */
+function TasksToProjectsRedirect() {
+  const actions = useAppActions();
+  useEffect(() => {
+    openTasksEntry();
+    actions.setViewMode("projects");
+  }, [actions]);
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <Loader2 size={20} className="animate-spin text-accent-primary" />
+    </div>
+  );
+}
+
+/** 遗留 viewMode=plans → 项目壳内「我的计划」 */
+function PlansToProjectsRedirect() {
+  const actions = useAppActions();
+  useEffect(() => {
+    openPlansEntry();
+    actions.setViewMode("projects");
+  }, [actions]);
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <Loader2 size={20} className="animate-spin text-accent-primary" />
+    </div>
+  );
+}
+
+/** 遗留 files/books/media → library + tab */
+function LegacyLibraryRedirect({ tab }: { tab: "files" | "books" | "media" }) {
+  const actions = useAppActions();
+  useEffect(() => {
+    setLibraryTab(tab);
+    actions.setViewMode("library");
+  }, [actions, tab]);
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <Loader2 size={20} className="animate-spin text-accent-primary" />
+    </div>
+  );
+}
 
 function normalizeAuthUrl(url: string): string {
   return url.replace(/\/+$/, "").toLowerCase();
@@ -171,7 +209,7 @@ function WebUiDisabledPage() {
       <main className="max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-zinc-900 mb-3">网页端已被管理员关闭</h1>
         <p className="text-sm leading-7">
-          当前服务器仅提供 API 服务。请使用 星空笔记 桌面客户端连接该服务器。
+          当前服务器仅提供 API 服务。请使用 蜉蝣 桌面客户端连接该服务器。
         </p>
       </main>
     </div>
@@ -397,15 +435,21 @@ function AppLayout() {
           actions.setViewMode("all");
         }
       } else if (hash === "#/tasks") {
-        actions.setViewMode("tasks");
+        openTasksEntry();
+        actions.setViewMode("projects");
       } else if (hash === "#/files") {
-        actions.setViewMode("files");
+        setLibraryTab("files");
+        actions.setViewMode("library");
       } else if (hash === "#/media" || hash.startsWith("#/media/")) {
-        actions.setViewMode("media");
+        setLibraryTab("media");
+        actions.setViewMode("library");
+      } else if (hash === "#/library") {
+        actions.setViewMode("library");
       } else if (hash === "#/projects") {
         actions.setViewMode("projects");
       } else if (hash === "#/plans") {
-        actions.setViewMode("plans");
+        openPlansEntry();
+        actions.setViewMode("projects");
       } else if (hash === "#/mindmaps") {
         actions.setViewMode("mindmaps");
       } else if (hash === "#/home" || hash === "#/") {
@@ -420,15 +464,11 @@ function AppLayout() {
 
   // Sync App State -> URL Hash
   useEffect(() => {
-    if (state.viewMode === "books") {
-      if (activeBookHash) {
-        if (window.location.hash !== `#/books/${activeBookHash}`) {
-          window.location.hash = `#/books/${activeBookHash}`;
-        }
-      } else {
-        if (window.location.hash !== "#/books") {
-          window.location.hash = "#/books";
-        }
+    if (state.viewMode === "books" || state.viewMode === "library") {
+      // books 深链 / library 由 LibraryCenter 内部处理阅读器；hash 统一 #/library
+      const target = state.viewMode === "library" ? "#/library" : "#/books";
+      if (window.location.hash !== target && !window.location.hash.startsWith("#/books/")) {
+        window.location.hash = target;
       }
     } else {
       const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
@@ -453,13 +493,17 @@ function AppLayout() {
     return () => clearTimeout(timer);
   }, [userPrefs.reminderInterval, showReminder, reminderTrigger]);
 
-  // Listen to custom open-book event
+  // Listen to custom open-book event → 资料库书库 Tab（阅读器由 LibraryCenter 承接）
   useEffect(() => {
     const onOpenBook = (e: Event) => {
       const customEvent = e as CustomEvent<{ bookHash: string }>;
       const hash = customEvent.detail?.bookHash;
       if (hash) {
-        actions.setViewMode("books");
+        try {
+          sessionStorage.setItem("super-open-book-hash", hash);
+        } catch { /* ignore */ }
+        setLibraryTab("books");
+        actions.setViewMode("library");
         setActiveBookHash(hash);
       }
     };
@@ -554,6 +598,7 @@ function AppLayout() {
   const isMentionsView = state.viewMode === "mentions";
   const isBooksView = state.viewMode === "books";
   const isMediaView = state.viewMode === "media";
+  const isLibraryView = state.viewMode === "library";
 
   /**
    * Cmd-K 全局搜索面板开关
@@ -864,7 +909,7 @@ function AppLayout() {
   // useSiteSettings 是分享页/登录页等更外层场景也会用到的更基础 Provider。
   const { siteConfig } = useSiteSettings();
   useEffect(() => {
-    const baseTitle = siteConfig.title || "ark-notes";
+    const baseTitle = siteConfig.title || "蜉蝣";
     if (userPrefs.noteTitleAsAppTitle) {
       const noteTitle = (state.activeNote?.title || "").trim();
       document.title = noteTitle ? `${noteTitle} - ${baseTitle}` : baseTitle;
@@ -1284,48 +1329,21 @@ function AppLayout() {
                 </Suspense>
               </div>
             ) : isPlansView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <MobileTopBar />
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <PlanCenter />
-                </Suspense>
-              </div>
+              <PlansToProjectsRedirect />
             ) : isTasksView ? (
+              <TasksToProjectsRedirect />
+            ) : isLibraryView ? (
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <MobileTopBar />
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <TaskCenter />
+                  <LibraryCenter />
                 </Suspense>
               </div>
             ) : isFilesView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <FileManager />
-                </Suspense>
-              </div>
+              <LegacyLibraryRedirect tab="files" />
             ) : isBooksView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  {activeBookHash ? (
-                    <BookReader
-                      bookHash={activeBookHash}
-                      onBack={() => setActiveBookHash(null)}
-                      workspaceId={getCurrentWorkspace()}
-                    />
-                  ) : (
-                    <BookCenter
-                      onOpenBook={(hash) => setActiveBookHash(hash)}
-                      workspaceId={getCurrentWorkspace()}
-                    />
-                  )}
-                </Suspense>
-              </div>
+              <LegacyLibraryRedirect tab="books" />
             ) : isMediaView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <MediaCenter />
-                </Suspense>
-              </div>
+              <LegacyLibraryRedirect tab="media" />
             ) : state.viewMode === "more" ? (
               <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
                 <MobileMorePage />
@@ -1535,7 +1553,7 @@ function MobileTopBar() {
       case "mentions":
         return "消息盒子";
       default:
-        return siteConfig.title || "星空笔记";
+        return siteConfig.title || "蜉蝣";
     }
   };
 
@@ -1621,45 +1639,54 @@ function MobileTabBar({ visible }: { visible: boolean }) {
   const actions = useAppActions();
   const { t } = useTranslation();
 
-  const handleTabClick = (mode: ViewMode) => {
+  const handleTabClick = (mode: ViewMode, opts?: { openMyTasks?: boolean }) => {
     haptic.light();
+    if (opts?.openMyTasks) {
+      openTasksEntry();
+    }
     actions.setViewMode(mode);
     actions.setSelectedNotebook(null);
     actions.setMobileView("list");
     if (mode === "books") {
       window.dispatchEvent(new CustomEvent("super:close-book"));
     }
-    if (mode === "projects") {
-      const filter = { type: "my-tasks" };
-      sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
-      window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
-    }
   };
 
+  // 家庭 OS 底栏：笔记 | 任务 | 说说 | 我的（书库/媒体进「我的」）
   const tabs = [
     {
-      id: "projects",
-      label: "任务",
-      icon: <Briefcase size={20} />,
-      active: state.viewMode === "projects",
+      id: "notes",
+      mode: "all" as ViewMode,
+      label: t("sidebar.allNotesShort", { defaultValue: "笔记" }),
+      icon: <BookOpen size={20} />,
+      active: ["all", "notebook", "search", "tag", "favorites"].includes(state.viewMode),
+      openMyTasks: false,
+    },
+    {
+      id: "tasks",
+      mode: "projects" as ViewMode,
+      label: t("sidebar.tasksShort", { defaultValue: "任务" }),
+      icon: <ListTodo size={20} />,
+      active: ["projects", "plans", "tasks"].includes(state.viewMode),
+      openMyTasks: true,
     },
     {
       id: "diary",
+      mode: "diary" as ViewMode,
       label: t("sidebar.diary") || "说说",
       icon: <NotebookPen size={20} />,
       active: state.viewMode === "diary",
-    },
-    {
-      id: "books",
-      label: "书库",
-      icon: <BookOpen size={20} />,
-      active: state.viewMode === "books",
+      openMyTasks: false,
     },
     {
       id: "more",
+      mode: "more" as ViewMode,
       label: "我的",
       icon: <UserIcon size={20} />,
-      active: state.viewMode === "more" || ["media", "trash", "favorites", "ai-chat", "mentions"].includes(state.viewMode),
+      active:
+        state.viewMode === "more" ||
+        ["media", "trash", "ai-chat", "mentions", "files", "books", "home"].includes(state.viewMode),
+      openMyTasks: false,
     },
   ];
 
@@ -1678,11 +1705,7 @@ function MobileTabBar({ visible }: { visible: boolean }) {
         <button
           key={tab.id}
           onClick={() => {
-            if (tab.id === "more") {
-              handleTabClick("more");
-            } else {
-              handleTabClick(tab.id as ViewMode);
-            }
+            handleTabClick(tab.mode, { openMyTasks: tab.openMyTasks });
           }}
           className={cn(
             "flex flex-col items-center justify-center flex-1 h-16 relative transition-all duration-fast ease-soft active:scale-95",
@@ -1697,7 +1720,7 @@ function MobileTabBar({ visible }: { visible: boolean }) {
             {tab.id === "more" && state.unreadMentionCount > 0 && (
               <span className="absolute top-0.5 right-1 w-2 h-2 rounded-full bg-red-500 border border-app-elevated shadow-sm" />
             )}
-            {tab.id === "projects" && state.reminderActiveCount > 0 && (
+            {tab.id === "tasks" && state.reminderActiveCount > 0 && (
               <span className="absolute -top-1 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
                 {state.reminderActiveCount}
               </span>

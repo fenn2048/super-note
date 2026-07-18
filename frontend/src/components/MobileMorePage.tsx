@@ -1,71 +1,77 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
-import { broadcastLogout } from "@/lib/api";
-import { FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film } from "lucide-react";
+import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
+import {
+  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
+import { getMobileMoreModules, setLibraryTab, type NavModule } from "@/lib/navigation.config";
+import type { WorkspaceFeatures } from "@/types";
+
+const MORE_ICONS: Record<string, React.ReactNode> = {
+  notes: <BookOpen className="w-6 h-6 text-indigo-500" />,
+  library: <FolderOpen className="w-6 h-6 text-teal-500" />,
+  media: <Film className="w-6 h-6 text-sky-500" />,
+  trash: <Trash2 className="w-6 h-6 text-red-500" />,
+  favorites: <Heart className="w-6 h-6 text-red-500" fill="currentColor" />,
+  ai: <Bot className="w-6 h-6 text-violet-500" />,
+  mentions: <Bell className="w-6 h-6 text-amber-500" />,
+  files: <FolderOpen className="w-6 h-6 text-emerald-500" />,
+  books: <Book className="w-6 h-6 text-orange-500" />,
+};
 
 export default function MobileMorePage() {
   const { t } = useTranslation();
   const { state } = useApp();
   const actions = useAppActions();
+  const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
 
-  const handleNavigate = (mode: any) => {
-    actions.setViewMode(mode);
+  useEffect(() => {
+    const load = () => {
+      const ws = getCurrentWorkspace();
+      if (!ws || ws === "personal") {
+        setFeatures(null);
+        return;
+      }
+      api.getWorkspaceFeatures(ws).then(setFeatures).catch(() => setFeatures(null));
+    };
+    load();
+    const onChange = () => load();
+    window.addEventListener("super:workspace-changed", onChange);
+    window.addEventListener("super:workspace-features-changed", onChange);
+    return () => {
+      window.removeEventListener("super:workspace-changed", onChange);
+      window.removeEventListener("super:workspace-features-changed", onChange);
+    };
+  }, []);
+
+  const handleNavigate = (mod: NavModule) => {
+    if (mod.action === "libraryTab" && mod.libraryTab) {
+      setLibraryTab(mod.libraryTab);
+    }
+    if (mod.id === "library") {
+      setLibraryTab("files");
+    }
+    actions.setViewMode(mod.mode);
     actions.setSelectedNotebook(null);
     actions.setMobileView("list");
   };
 
+  const modules = getMobileMoreModules(features);
+
   const menuItems = [
-    {
-      id: "all",
-      label: "所有笔记",
-      icon: <BookOpen className="w-6 h-6 text-indigo-500" />,
-      desc: "浏览和管理所有核心笔记",
-      onClick: () => handleNavigate("all"),
-    },
-    {
-      id: "media",
-      label: "媒体库",
-      icon: <Film className="w-6 h-6 text-sky-500" />,
-      desc: "浏览和管理云端媒体资源",
-      onClick: () => handleNavigate("media"),
-    },
-    {
-      id: "trash",
-      label: "回收站",
-      icon: <Trash2 className="w-6 h-6 text-red-500" />,
-      desc: "查看和恢复已删除的笔记",
-      onClick: () => {
-        actions.setViewMode("trash");
-        actions.setMobileView("list");
-      },
-    },
-    {
-      id: "favorites",
-      label: "我的收藏",
-      icon: <Heart className="w-6 h-6 text-red-500" fill="currentColor" />,
-      desc: "快速查看收藏的笔记和说说",
-      onClick: () => handleNavigate("favorites"),
-    },
-    {
-      id: "ai-chat",
-      label: "AI 问答",
-      icon: <Bot className="w-6 h-6 text-violet-500" />,
-      desc: "开启智能问答，获取写作辅助",
-      onClick: () => handleNavigate("ai-chat"),
-    },
-    {
-      id: "mentions",
-      label: "消息中心",
-      icon: <Bell className="w-6 h-6 text-amber-500" />,
-      desc: "查看提及和工作区通知",
-      onClick: () => handleNavigate("mentions"),
-    },
+    ...modules.map((mod) => ({
+      id: mod.id,
+      label: t(mod.labelKey, { defaultValue: mod.labelFallback }),
+      icon: MORE_ICONS[mod.id] || <FolderOpen className="w-6 h-6 text-zinc-500" />,
+      desc: mod.moreDesc || "",
+      onClick: () => handleNavigate(mod),
+    })),
     {
       id: "settings",
-      label: "设置",
+      label: t("sidebar.settings", { defaultValue: "设置" }),
       icon: <Settings className="w-6 h-6 text-emerald-500" />,
       desc: "个性化外观、账户与数据同步设置",
       onClick: () => {
@@ -84,14 +90,13 @@ export default function MobileMorePage() {
       <MobileChromeHeader
         variant="bare"
         title="我的"
-        subtitle="文件、收藏、AI 与设置"
+        subtitle="资料库、AI、消息与设置"
       />
       <div className="px-6 pt-3 pb-2 md:pt-6">
         <h1 className="text-xl font-bold text-tx-primary leading-tight tracking-tight md:text-2xl">更多功能</h1>
-        <p className="text-sm text-tx-tertiary mt-1">文件、收藏、AI 与设置都在这里</p>
+        <p className="text-sm text-tx-tertiary mt-1">书库、媒体、收藏、AI 与设置</p>
       </div>
 
-      {/* 宫格菜单 */}
       <div className="px-4 py-2 grid grid-cols-2 gap-3 flex-1 pb-6">
         {menuItems.map((item, idx) => (
           <motion.button
@@ -117,25 +122,22 @@ export default function MobileMorePage() {
           </motion.button>
         ))}
 
-        {/* 退出登录 */}
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: menuItems.length * 0.05 }}
           onClick={handleLogout}
-          className="col-span-2 flex items-center gap-4 p-4 rounded-card border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-[0.98] transition-all duration-fast ease-soft text-left mt-1 group shadow-xs"
+          className="flex flex-col justify-between p-4 rounded-card border border-red-200/60 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 shadow-xs hover:shadow-sm active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px] col-span-2"
         >
-          <div className="w-10 h-10 rounded-button bg-red-500/10 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
-            <LogOut className="w-5 h-5 text-red-500" />
+          <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs">
+            <LogOut className="w-6 h-6 text-red-500" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-red-500">退出登录</div>
-            <div className="text-[10px] text-red-500/70 mt-0.5">安全退出当前账号的登录状态</div>
+          <div className="mt-4">
+            <div className="text-sm font-semibold text-red-600 dark:text-red-400 tracking-tight">退出登录</div>
+            <div className="text-[11px] text-tx-tertiary mt-1">安全退出当前账号</div>
           </div>
         </motion.button>
       </div>
-
-      <div className="h-6 shrink-0" />
     </div>
   );
 }

@@ -121,8 +121,8 @@
     "diary": "Diary",
     "books": "Book Library",
     "fileManager": "Files",
-    "projects": "Projects",
-    "mediaLibrary": "Media Library",
+    "projects": "Tasks",
+    "mediaLibrary": "Media",
     "favorites": "Favorites",
     "trash": "Trash",
     "searchPlaceholder": "Search notes...",
@@ -199,7 +199,11 @@
     "noBackground": "No background description",
     "noGoal": "No goal description",
     "deletePlanFail": "Failed to delete plan",
-    "plans": "Plan Management"
+    "plans": "Plan Management",
+    "tasksShort": "Tasks",
+    "allNotesShort": "Notes",
+    "mentions": "Inbox",
+    "library": "Library"
   },
   "noteList": {
     "moveTo": "Move to...",
@@ -528,7 +532,7 @@
     "userManual": "User Manual",
     "switches": "Switches",
     "ai": "AI Assistant",
-    "about": "About Super Note",
+    "about": "About 蜉蝣",
     "security": "Security",
     "tokens": "Access Tokens",
     "users": "Users",
@@ -1619,7 +1623,7 @@
     }
   },
   "about": {
-    "title": "About",
+    "title": "About 蜉蝣",
     "appName": "Ark Notes",
     "slogan": "Lightweight Self-Hosted Knowledge Platform",
     "version": "Version",
