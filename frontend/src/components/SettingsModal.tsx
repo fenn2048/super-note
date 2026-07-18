@@ -17,6 +17,7 @@ import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useS
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { getCustomSplashDataUrl, saveCustomSplashFromFile, clearCustomSplash } from "@/lib/splashStorage";
 import BrandMark from "@/components/BrandMark";
+import { MODULE_PACK_META, getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
 import { api, getServerUrl } from "@/lib/api";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
@@ -670,6 +671,45 @@ function AboutPanel() {
   );
 }
 
+function ModulePackSettings() {
+  const [pack, setPackState] = useState<ModulePackId>(() => getModulePack());
+  useEffect(() => {
+    const on = () => setPackState(getModulePack());
+    window.addEventListener("super:module-pack-changed", on);
+    return () => window.removeEventListener("super:module-pack-changed", on);
+  }, []);
+  return (
+    <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+      <div>
+        <h4 className="text-sm font-semibold text-tx-primary">功能模块包</h4>
+        <p className="text-xs text-tx-tertiary mt-0.5">控制侧栏与底栏显示的模块范围，可随时更改</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {MODULE_PACK_META.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => {
+              setModulePack(m.id);
+              setPackState(m.id);
+            }}
+            className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+              pack === m.id
+                ? "border-accent-primary bg-accent-primary/10"
+                : "border-app-border hover:bg-app-hover"
+            }`}
+          >
+            <div className="text-xs font-semibold text-tx-primary">
+              {m.label}{m.recommended ? " · 推荐" : ""}
+            </div>
+            <div className="text-[10px] text-tx-tertiary mt-0.5 leading-snug">{m.description}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SwitchesPanel() {
   const { t } = useTranslation();
   const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
@@ -767,6 +807,36 @@ function SwitchesPanel() {
           {t('settings.switchesDesc')}
         </p>
       </div>
+
+      <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+        <div>
+          <h4 className="text-sm font-semibold text-tx-primary">启动默认页</h4>
+          <p className="text-xs text-tx-tertiary mt-0.5">打开应用时进入的页面（深链优先）</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            ["last", "上次位置"],
+            ["home", "首页"],
+            ["notes", "笔记"],
+            ["tasks", "任务"],
+          ] as const).map(([code, label]) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setUserPref("startupLanding", code)}
+              className={`text-left text-xs font-medium px-3 py-2 rounded-lg border transition-colors ${
+                userPrefs.startupLanding === code
+                  ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                  : "border-app-border text-tx-secondary hover:bg-app-hover"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ModulePackSettings />
 
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
         {switches.map((item) => (

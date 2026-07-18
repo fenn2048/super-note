@@ -97,6 +97,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
   // 工作区功能开关——独立订阅一份（与 Sidebar 内部各自一份，互不干扰）。
   // 个人空间或加载失败时为 null = 全开。
   const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
+  const [packTick, setPackTick] = useState(0);
   useEffect(() => {
     const load = () => {
       const ws = getCurrentWorkspace();
@@ -108,11 +109,14 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     };
     load();
     const onChange = () => load();
+    const onPack = () => setPackTick((n) => n + 1);
     window.addEventListener("super:workspace-changed", onChange);
     window.addEventListener("super:workspace-features-changed", onChange);
+    window.addEventListener("super:module-pack-changed", onPack);
     return () => {
       window.removeEventListener("super:workspace-changed", onChange);
       window.removeEventListener("super:workspace-features-changed", onChange);
+      window.removeEventListener("super:module-pack-changed", onPack);
     };
   }, []);
 
@@ -174,7 +178,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     && (usingDesktopLiteMode || !isLoopbackUrl(serverUrl) || (!!currentOrigin && normalizeUrl(serverUrl) !== normalizeUrl(currentOrigin)));
   const canSwitchBackToLocal = isDesktopApp() && (usingRemoteServer || usingDesktopLiteMode);
 
-  const items = useMemo(() => getDesktopRailModules(features), [features]);
+  const items = useMemo(() => getDesktopRailModules(features), [features, packTick]);
 
   const handleClick = useCallback((mod: NavModule) => {
     if (mod.action === "openMyTasks") {

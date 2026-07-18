@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import {
@@ -27,6 +27,7 @@ export default function MobileMorePage() {
   const { state } = useApp();
   const actions = useAppActions();
   const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
+  const [packTick, setPackTick] = useState(0);
 
   useEffect(() => {
     const load = () => {
@@ -41,9 +42,12 @@ export default function MobileMorePage() {
     const onChange = () => load();
     window.addEventListener("super:workspace-changed", onChange);
     window.addEventListener("super:workspace-features-changed", onChange);
+    const onPack = () => setPackTick((n) => n + 1);
+    window.addEventListener("super:module-pack-changed", onPack);
     return () => {
       window.removeEventListener("super:workspace-changed", onChange);
       window.removeEventListener("super:workspace-features-changed", onChange);
+      window.removeEventListener("super:module-pack-changed", onPack);
     };
   }, []);
 
@@ -59,7 +63,7 @@ export default function MobileMorePage() {
     actions.setMobileView("list");
   };
 
-  const modules = getMobileMoreModules(features);
+  const modules = useMemo(() => getMobileMoreModules(features), [features, packTick]);
 
   const menuItems = [
     ...modules.map((mod) => ({

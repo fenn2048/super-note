@@ -8,12 +8,14 @@ import { toast } from "@/lib/toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import BrandMark from "@/components/BrandMark";
+import { MODULE_PACK_META, setModulePack, type ModulePackId } from "@/lib/modulePack";
 
 interface FirstRunWizardProps {
   onComplete: () => void;
 }
 
 export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
+  const [pack, setPack] = useState<ModulePackId>("family");
   const [creating, setCreating] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -29,6 +31,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
       });
       setCurrentWorkspace(ws.id);
       window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: ws.id } }));
+      setModulePack(pack);
       toast.success("家庭空间创建成功！");
       onComplete();
     } catch (e: any) {
@@ -36,7 +39,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     } finally {
       setCreating(false);
     }
-  }, [onComplete]);
+  }, [onComplete, pack]);
 
   const handleJoin = useCallback(async () => {
     if (!joinCode.trim()) return;
@@ -50,6 +53,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
       }
       setCurrentWorkspace(result.workspaceId);
       window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: result.workspaceId } }));
+      setModulePack(pack);
       toast.success("已加入空间！");
       onComplete();
     } catch (e: any) {
@@ -57,7 +61,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     } finally {
       setJoining(false);
     }
-  }, [joinCode, onComplete]);
+  }, [joinCode, onComplete, pack]);
 
   return (
     <div className="fixed inset-0 z-[200] bg-app-bg flex items-center justify-center p-4">
@@ -74,7 +78,35 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           创建或加入一个家庭空间，与家人一起使用笔记、说说、待办、思维导图等功能。
         </p>
 
+        <div className="grid grid-cols-2 gap-2 mb-5 text-left">
+          {MODULE_PACK_META.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setPack(m.id)}
+              className={`rounded-xl border px-3 py-2.5 transition-colors ${
+                pack === m.id
+                  ? "border-emerald-500 bg-emerald-500/10"
+                  : "border-app-border hover:border-app-border/80"
+              }`}
+            >
+              <div className="text-xs font-semibold text-tx-primary">
+                {m.label}
+                {m.recommended ? " · 推荐" : ""}
+              </div>
+              <div className="text-[10px] text-tx-tertiary mt-0.5 leading-snug">{m.description}</div>
+            </button>
+          ))}
+        </div>
+
         <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => { setModulePack(pack); onComplete(); }}
+            className="w-full py-2.5 rounded-xl text-sm font-medium border border-app-border text-tx-secondary hover:bg-app-hover"
+          >
+            仅个人使用，跳过家庭空间
+          </button>
           <button
             onClick={handleCreateFamily}
             disabled={creating}

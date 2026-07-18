@@ -35,6 +35,9 @@ const STORAGE_KEY = "super.user-prefs.v1";
  * 仅影响 .ProseMirror 下的 p / li，不动标题/代码块/表格，避免破坏视觉锚点。 */
 export type ReadingDensity = "cozy" | "compact";
 
+/** 启动落地页：last=上次 viewMode；home/notes/tasks 为固定入口 */
+export type StartupLanding = "last" | "home" | "notes" | "tasks";
+
 export interface UserPreferences {
   /** 标签页/Electron 窗口标题是否跟随当前笔记标题（关闭则用站点名）。默认 false。 */
   noteTitleAsAppTitle: boolean;
@@ -53,6 +56,8 @@ export interface UserPreferences {
   faceMimicGoodThreshold: number;
   /** 表情模仿秀：Wonderful 相似度阈值。默认 80。 */
   faceMimicWonderfulThreshold: number;
+  /** 启动默认页。默认 last（兼容历史）。 */
+  startupLanding: StartupLanding;
 }
 
 const DEFAULT_PREFS: UserPreferences = {
@@ -64,6 +69,7 @@ const DEFAULT_PREFS: UserPreferences = {
   reminderInterval: 30,
   faceMimicGoodThreshold: 70,
   faceMimicWonderfulThreshold: 80,
+  startupLanding: "last",
 };
 
 function readFromStorage(): UserPreferences {
@@ -97,6 +103,13 @@ function readFromStorage(): UserPreferences {
       faceMimicWonderfulThreshold: typeof parsed.faceMimicWonderfulThreshold === "number"
         ? parsed.faceMimicWonderfulThreshold
         : DEFAULT_PREFS.faceMimicWonderfulThreshold,
+      startupLanding:
+        parsed.startupLanding === "last" ||
+        parsed.startupLanding === "home" ||
+        parsed.startupLanding === "notes" ||
+        parsed.startupLanding === "tasks"
+          ? parsed.startupLanding
+          : DEFAULT_PREFS.startupLanding,
     };
   } catch {
     return DEFAULT_PREFS;

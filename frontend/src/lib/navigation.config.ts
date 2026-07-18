@@ -11,6 +11,7 @@
  */
 
 import type { ViewMode, WorkspaceFeatures } from "@/types";
+import { isModuleAllowedByPack } from "@/lib/modulePack";
 
 /** 模块分层：控制默认可见性与「设置里启用」 */
 export type NavTier = 0 | 1 | 2 | 3;
@@ -204,7 +205,7 @@ export function getDesktopRailModules(
   return NAV_MODULES.filter(
     (m) =>
       m.placements.includes("desktopRail") &&
-      isFeatureEnabled(m, features),
+      isModuleVisible(m, features),
   );
 }
 
@@ -215,7 +216,7 @@ export function getMobileTabModules(
   return NAV_MODULES.filter(
     (m) =>
       m.placements.includes("mobileTab") &&
-      isFeatureEnabled(m, features),
+      isModuleVisible(m, features),
   );
 }
 
@@ -226,7 +227,7 @@ export function getMobileMoreModules(
   return NAV_MODULES.filter(
     (m) =>
       m.placements.includes("mobileMore") &&
-      isFeatureEnabled(m, features),
+      isModuleVisible(m, features),
   );
 }
 
@@ -237,7 +238,7 @@ export function getSidebarSecondaryModules(
   return NAV_MODULES.filter(
     (m) =>
       m.placements.includes("sidebarSecondary") &&
-      isFeatureEnabled(m, features),
+      isModuleVisible(m, features),
   );
 }
 
@@ -247,6 +248,13 @@ function isFeatureEnabled(
 ): boolean {
   if (!m.feature || !features) return true;
   return features[m.feature] !== false;
+}
+
+function isModuleVisible(
+  m: NavModule,
+  features: WorkspaceFeatures | null,
+): boolean {
+  return isFeatureEnabled(m, features) && isModuleAllowedByPack(m.id);
 }
 
 /**
