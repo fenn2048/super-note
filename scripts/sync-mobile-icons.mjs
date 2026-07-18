@@ -28,7 +28,7 @@ const IOS_ICON = path.join(
   "AppIcon-512@2x.png",
 );
 
-const BACKGROUND = "#FFFFFF";
+const BACKGROUND = "#F5F3EE";
 const DENSITIES = [
   { dir: "mipmap-mdpi", size: 48 },
   { dir: "mipmap-hdpi", size: 72 },

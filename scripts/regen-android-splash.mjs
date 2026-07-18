@@ -34,21 +34,15 @@ const RES_DIR = path.join(
 
 // 与 app icon 保持一致的配色
 const BG = "#F5F3EE"; // 奶白
-const FG = "#4F6BED"; // 靛蓝
 
-// 居中品牌图（108×108 视口，透明底）—— 与 ic_launcher_foreground 同款便签 + N
-const brandSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
-  <path fill="${FG}"
-        d="M28,18 L78,18 L92,32 L92,84 Q92,90 86,90 L26,90 Q20,90 20,84 L20,24 Q20,18 26,18 Z
-           M78,18 L78,32 L92,32 Z"/>
-  <path fill="${BG}" d="M78,18 L78,32 L92,32 Z"/>
-  <path fill="none" stroke="${FG}" stroke-width="1.5"
-        d="M78,18 L78,32 L92,32"/>
-  <path fill="${BG}"
-        d="M34,36 L42,36 L70,68 L70,36 L78,36 L78,76 L70,76 L42,44 L42,76 L34,76 Z"/>
-</svg>
-`;
+// 居中品牌图：蜉蝣主标（方案 A）
+const BRAND_PNG = path.join(
+    REPO_ROOT,
+    "frontend",
+    "public",
+    "brand",
+    "fuyou-icon-1024.png",
+);
 
 // 目标尺寸清单（与现有项目中的 splash.png 尺寸严格一致，避免 Gradle 对 drawable
 // 名称冲突提示或 aapt2 产出尺寸不匹配）
@@ -74,9 +68,11 @@ async function renderSplash(w, h, outFile) {
     const minSide = Math.min(w, h);
     const brandSize = Math.round(minSide * 0.4);
 
-    // 先把 SVG 渲染成 brandSize×brandSize 的透明 PNG
-    const brandBuf = await sharp(Buffer.from(brandSvg))
-        .resize(brandSize, brandSize, { fit: "contain" })
+    if (!fs.existsSync(BRAND_PNG)) {
+        throw new Error(`[regen-android-splash] 找不到品牌图：${BRAND_PNG}`);
+    }
+    const brandBuf = await sharp(BRAND_PNG)
+        .resize(brandSize, brandSize, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .png()
         .toBuffer();
 

@@ -13,12 +13,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
 
+const srcBrandPng = path.join(root, "frontend/public/brand/fuyou-icon-1024.png");
 const srcSvg = path.join(root, "frontend/public/favicon.svg");
 const outPng = path.join(root, "electron/icon.png");
 
 const SIZE = 1024; // electron-builder 推荐的母图尺寸
 
 async function main() {
+  // 优先蜉蝣品牌主标 PNG（方案 A）
+  if (fs.existsSync(srcBrandPng)) {
+    await sharp(srcBrandPng)
+      .resize(SIZE, SIZE, { fit: "cover" })
+      .png({ compressionLevel: 9 })
+      .toFile(outPng);
+    const stat = fs.statSync(outPng);
+    console.log(`[build-icon] 已从 brand PNG 写出 ${outPng} (${(stat.size / 1024).toFixed(1)} KB)`);
+    return;
+  }
+
   if (!fs.existsSync(srcSvg)) {
     console.error(`[build-icon] 源 SVG 不存在：${srcSvg}`);
     process.exit(1);
@@ -26,12 +38,10 @@ async function main() {
 
   const svgBuffer = fs.readFileSync(srcSvg);
 
-  // favicon.svg 原始 viewBox 是 32x32，我们放大到 1024x1024
-  // density 设 96 * (1024/32) = 3072，让 sharp 按高 DPI 渲染保留锐利度
   await sharp(svgBuffer, { density: 96 * (SIZE / 32) })
     .resize(SIZE, SIZE, {
       fit: "contain",
-      background: { r: 0, g: 0, b: 0, alpha: 0 }, // 透明底
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png({ compressionLevel: 9 })
     .toFile(outPng);
