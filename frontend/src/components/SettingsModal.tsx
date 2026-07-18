@@ -1561,24 +1561,23 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
 
   const isMobile = window.innerWidth < 768;
 
-  const SETTING_TABS = [
-    { id: "security" as const, label: t('settings.security'), icon: Shield },
-    { id: "appearance" as const, label: t('settings.appearance'), icon: Palette },
-    { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
-    { id: "manual" as const, label: t('settings.userManual'), icon: BookOpen },
-    // P1-5：AI 服务商 + 提示词合并为一个 Tab
-    { id: "ai" as const, label: t('settings.ai'), icon: Bot },
-    // 【个人访问令牌】家庭场景用不到，仅管理员可见
-    ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
-    ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
-    ...(isAdmin ? [{ id: "workspaces" as const, label: t('settings.workspaces'), icon: Building2 }] : []),
-    // 「数据管理」面板：仅管理员且非移动端展示，避免移动端进行超大压缩包高负荷解压与迁移
-    ...(isAdmin && !isMobile ? [{ id: "data" as const, label: t('settings.dataManagement'), icon: Database }] : []),
-    // 「开发者」面板：仅管理员可见，承载运行时调试开关（如 files-list 查询日志）。
-    // 普通用户根本看不到这一项，与后端的 admin-only 写入闸门双层防御。
-    ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench }] : []),
-    { id: "about" as const, label: t('settings.about', { defaultValue: '关于蜉蝣' }), icon: Info },
+  /** 设置 Tab + 分组（P2-5 补完） */
+  type SettingsTabItem = { id: TabId; label: string; icon: typeof Shield; group: string };
+  const SETTING_TABS: SettingsTabItem[] = [
+    { id: "security", label: t('settings.security'), icon: Shield, group: "我的" },
+    { id: "appearance", label: t('settings.appearance'), icon: Palette, group: "我的" },
+    { id: "switches", label: t('settings.switches'), icon: ToggleLeft, group: "我的" },
+    { id: "ai", label: t('settings.ai'), icon: Bot, group: "AI" },
+    ...(isAdmin ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key, group: "数据" }] : []),
+    ...(isAdmin && !isMobile ? [{ id: "data" as const, label: t('settings.dataManagement'), icon: Database, group: "数据" }] : []),
+    ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users, group: "管理" }] : []),
+    ...(isAdmin ? [{ id: "workspaces" as const, label: t('settings.workspaces'), icon: Building2, group: "管理" }] : []),
+    ...(isAdmin ? [{ id: "developer" as const, label: t('settings.developer'), icon: Wrench, group: "管理" }] : []),
+    { id: "manual", label: t('settings.userManual'), icon: BookOpen, group: "其他" },
+    { id: "about", label: t('settings.about', { defaultValue: '关于蜉蝣' }), icon: Info, group: "其他" },
   ];
+
+  const SETTING_GROUPS = ["我的", "AI", "数据", "管理", "其他"] as const;
 
   // 用 Portal 挂载到 body：
   //   SettingsModal 调用点位于 Sidebar 组件内部（见 Sidebar.tsx 的 AnimatePresence）。
@@ -1656,32 +1655,43 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                 </button>
               </div>
 
-              {/* Menu List */}
+              {/* Menu List — 分组 */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#131722] overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                  {SETTING_TABS.map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveTab(tab.id);
-                          setCurrentMobilePage(tab.id);
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-left transition-colors active:bg-zinc-100 dark:active:bg-zinc-800"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-                            <Icon className="w-4 h-4" />
-                          </span>
-                          <span className="text-sm font-semibold text-tx-primary">{tab.label}</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-zinc-400" />
-                      </button>
-                    );
-                  })}
-                </div>
+                {SETTING_GROUPS.map((group) => {
+                  const tabs = SETTING_TABS.filter((t) => t.group === group);
+                  if (tabs.length === 0) return null;
+                  return (
+                    <div key={group}>
+                      <div className="px-1 mb-1.5 text-[11px] font-semibold text-zinc-400 dark:text-zinc-600">
+                        {group}
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#131722] overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                        {tabs.map((tab) => {
+                          const Icon = tab.icon;
+                          return (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(tab.id);
+                                setCurrentMobilePage(tab.id);
+                              }}
+                              className="w-full flex items-center justify-between px-4 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-left transition-colors active:bg-zinc-100 dark:active:bg-zinc-800"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                                  <Icon className="w-4 h-4" />
+                                </span>
+                                <span className="text-sm font-semibold text-tx-primary">{tab.label}</span>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-zinc-400" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Mobile Footer */}
@@ -1764,23 +1774,36 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                 <span className="font-bold text-sm text-tx-primary">{t('settings.title')}</span>
               </div>
 
-              <nav className="flex-1 space-y-0.5">
-                {SETTING_TABS.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
+              <nav className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
+                {SETTING_GROUPS.map((group) => {
+                  const tabs = SETTING_TABS.filter((t) => t.group === group);
+                  if (tabs.length === 0) return null;
                   return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                          ? "bg-accent-primary/10 text-accent-primary dark:bg-accent-primary/20 dark:text-indigo-400 font-bold"
-                          : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {tab.label}
-                    </button>
+                    <div key={group}>
+                      <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
+                        {group}
+                      </div>
+                      <div className="space-y-0.5">
+                        {tabs.map((tab) => {
+                          const Icon = tab.icon;
+                          const isActive = activeTab === tab.id;
+                          return (
+                            <button
+                              key={tab.id}
+                              onClick={() => setActiveTab(tab.id)}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                isActive
+                                  ? "bg-accent-primary/10 text-accent-primary dark:bg-accent-primary/20 dark:text-indigo-400 font-bold"
+                                  : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                              {tab.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </nav>
