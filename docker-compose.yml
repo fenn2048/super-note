@@ -1,3 +1,19 @@
+# ============================================================================
+# Super Note — Docker Compose
+# ----------------------------------------------------------------------------
+# 默认（core）：仅笔记服务本体，无需 Redis / Ollama / OpenList。
+# 可选能力通过 profile 启用：
+#
+#   docker compose up -d                              # 仅 core
+#   docker compose --profile ai up -d                 # + Redis + Ollama
+#   docker compose --profile media up -d              # + OpenList
+#   docker compose --profile full up -d               # 全家桶
+#
+# 多实例 / 跨进程广播与 AI 异步队列需要 Redis 时，请显式设置：
+#   REDIS_URL=redis://redis:6379
+# 并启用 ai 或 full profile。
+# ============================================================================
+
 services:
   super-note:
     build:
@@ -56,17 +72,27 @@ services:
       - DB_PATH=/app/data/super-note.db
       - PORT=3001
       - NODE_OPTIONS=--max-old-space-size=768
+      # CORS 白名单（逗号分隔完整 origin）。跨域前端 / 移动端 WebView 必填。
+      # - ALLOWED_ORIGINS=https://note.example.com,http://localhost:5173
       # 启用上面的独立备份卷后，**必须**同步设置以下变量，否则备份仍会写到 data 卷：
       #- BACKUP_DIR=/app/backups
-      # Ollama 地址（指向 compose 内的 ollama 服务）
-      - OLLAMA_URL=http://ollama:11434
-      # Redis 数据库连接地址
-      - REDIS_URL=redis://redis:6379
-      # 后端访问 OpenList 的地址；容器内请使用服务名 openlist
-      - OPENLIST_URL=${OPENLIST_URL:-http://openlist:5244}
-      - MEDIA_STORAGE_URL=${MEDIA_STORAGE_URL:-http://openlist:5244}
+      # --- 可选能力（启用对应 profile 时取消注释或写入 .env）---
+      # AI / 多实例：需要 redis + 可选 ollama
+      # - REDIS_URL=redis://redis:6379
+      # - OLLAMA_URL=http://ollama:11434
+      # 媒体库：需要 openlist
+      # - OPENLIST_URL=http://openlist:5244
+      # - MEDIA_STORAGE_URL=http://openlist:5244
+      # - OPENLIST_TOKEN=
+      # - MEDIA_STORAGE_TOKEN=
+      # 通过环境变量透传（用户在 .env 里配置时生效；未设则后端走 memory Redis / 无 Ollama）
+      - REDIS_URL=${REDIS_URL:-}
+      - OLLAMA_URL=${OLLAMA_URL:-}
+      - OPENLIST_URL=${OPENLIST_URL:-}
+      - MEDIA_STORAGE_URL=${MEDIA_STORAGE_URL:-}
       - OPENLIST_TOKEN=${OPENLIST_TOKEN:-}
       - MEDIA_STORAGE_TOKEN=${MEDIA_STORAGE_TOKEN:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     deploy:
       resources:
         limits:
@@ -74,13 +100,12 @@ services:
           memory: 1024M
 
   # ============================================================================
-  # Ollama 本地 LLM 服务 — Qwen2.5:1.8b（7×24 常驻）
-  #
-  # 提供 OpenAI 兼容接口（http://ollama:11434/v1），
-  # 已在 super-note 后端通过 OLLAMA_URL 自动对接。
-  # 首次启动会自动下载模型（约 1GB），之后缓存到 ollama-data 卷。
+  # Ollama 本地 LLM 服务 — Qwen2.5:1.8b
+  # 启用：docker compose --profile ai up -d
+  #       或 docker compose --profile full up -d
   # ----------------------------------------------------------------------------
   ollama:
+    profiles: ["ai", "full"]
     image: docker.m.daocloud.io/ollama/ollama:latest
     container_name: super-note-ollama
     restart: unless-stopped
@@ -108,16 +133,21 @@ services:
           cpus: '3.0'
           memory: 2048M
 
-
   # ============================================================================
-  # Redis 本地队列与广播服务（7×24 常驻）
+  # Redis — 多实例广播 / AI 异步任务队列
+  # 启用：docker compose --profile ai up -d
+  #       或 docker compose --profile full up -d
+  # 启用后请在 .env 设置：REDIS_URL=redis://redis:6379
+  # 注意：默认不暴露宿主机 6379，避免未授权访问。
   # ----------------------------------------------------------------------------
   redis:
+    profiles: ["ai", "full"]
     image: docker.m.daocloud.io/redis:7-alpine
     container_name: super-note-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # 仅容器网络内可达；需要宿主机调试时再取消 ports 注释
+    # ports:
+    #   - "6379:6379"
     volumes:
       - redis-data:/data
     deploy:
@@ -127,9 +157,13 @@ services:
           memory: 256M
 
   # ============================================================================
-  # OpenList 网盘挂载管理服务 (7x24 常驻)
+  # OpenList 网盘挂载（媒体库）
+  # 启用：docker compose --profile media up -d
+  #       或 docker compose --profile full up -d
+  # 启用后请在 .env 设置 OPENLIST_URL / MEDIA_STORAGE_URL 等
   # ----------------------------------------------------------------------------
   openlist:
+    profiles: ["media", "full"]
     image: docker.m.daocloud.io/openlistteam/openlist:latest
     container_name: super-note-openlist
     restart: unless-stopped
@@ -140,12 +174,6 @@ services:
       - ./openlist-data:/opt/openlist/data
     environment:
       - UMASK=022
-    # entrypoint: /bin/sh
-    # command:
-    #   - -c
-    #   - |
-    #     chown -R 1000:1000 /opt/openlist/data
-    #     exec /opt/openlist/entrypoint.sh
     deploy:
       resources:
         limits:
@@ -163,5 +191,3 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  # openlist-data:
-  #   driver: local
