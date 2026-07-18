@@ -20,6 +20,7 @@ super-note-*.zip
 dist-fpk/
 dist-upk/
 fnpack-1.2.1-*
+ugcli
 ugcli.exe
 ug-*.html
 ug-*.js
@@ -31,6 +32,8 @@ super*.zip
 docs/samples/
 *.note.attach/
 super-note-data/
+nowen-note-data/
+openlist-data/
 
 # 临时调试/排查输出（不应入库）
 _td_test.js
@@ -38,3 +41,11 @@ bt-detail.json
 bt-pkgs.json
 node-procs.txt
 vs-list.json
+dump.rdb
+*.rdb
+test-token.js
+*.patch
+*.orig
+*.rej
+fix_*.py
+Gitea.docx
