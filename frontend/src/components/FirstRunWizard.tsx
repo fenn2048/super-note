@@ -7,6 +7,7 @@ import { api, setCurrentWorkspace } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import BrandMark from "@/components/BrandMark";
 
 interface FirstRunWizardProps {
   onComplete: () => void;
@@ -65,10 +66,10 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         animate={{ opacity: 1, scale: 1 }}
         className="bg-app-elevated rounded-3xl shadow-2xl border border-app-border w-full max-w-[420px] overflow-hidden p-8 text-center"
       >
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mx-auto mb-4">
-          <Sparkles size={28} className="text-white" />
+        <div className="flex justify-center mb-4">
+          <BrandMark size={72} />
         </div>
-        <h1 className="text-xl font-bold text-tx-primary mb-2">欢迎来到 SuperNote</h1>
+        <h1 className="text-xl font-bold text-tx-primary mb-2">欢迎来到 蜉蝣</h1>
         <p className="text-sm text-tx-secondary mb-6 leading-relaxed">
           创建或加入一个家庭空间，与家人一起使用笔记、说说、待办、思维导图等功能。
         </p>

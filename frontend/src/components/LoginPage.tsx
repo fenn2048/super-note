@@ -7,6 +7,7 @@ import { buildServerUrl, parseServerUrl, type ServerAddressParts } from "@/lib/s
 import ServerAddressInput from "@/components/ServerAddressInput";
 import { useKeyboardLayout } from "@/hooks/useCapacitor";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
+import BrandMark from "@/components/BrandMark";
 import {
   loadRememberedCredentials,
   saveRememberedCredentials,
@@ -604,9 +605,9 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.1, duration: 0.4 }}
-              className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-accent mb-4"
+              className="inline-flex items-center justify-center mb-4"
             >
-              <BookOpen size={26} className="text-white" />
+              <BrandMark size={56} />
             </motion.div>
             <h1 className="text-xl sm:text-2xl font-bold text-tx-primary tracking-tight">
               {t("auth.appTitle")}

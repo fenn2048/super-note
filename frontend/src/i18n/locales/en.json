@@ -39,7 +39,7 @@
     "verifying": "Verifying identity...",
     "loginFailed": "Login failed",
     "networkError": "Network error, please check if the server is running",
-    "appTitle": "ark-note",
+    "appTitle": "蜉蝣",
     "subtitle": "Private Knowledge Base · Welcome Back",
     "subtitleClient": "Connect to your private knowledge base",
     "username": "Username",
@@ -593,7 +593,15 @@
     "fontUploadSuccess": "Successfully imported {{count}} fonts",
     "fontUploadFailed": "Upload failed",
     "interDefault": "Inter (Default)",
-    "download": "Downloads"
+    "download": "Downloads",
+    "customSplash": "Custom splash image",
+    "customSplashDesc": "Shown during app load (stored on this device). System cold-start still uses the default brand splash.",
+    "customSplashUpload": "Choose image",
+    "customSplashClear": "Reset default",
+    "customSplashHint": "Portrait recommended, max 5MB. JPG / PNG / WebP.",
+    "healthReminder": "Health break reminder",
+    "healthReminderDesc": "Periodic rest prompt (spaceship mini-games). Off by default.",
+    "healthReminderInterval": "Interval (minutes)"
   },
   "securitySettings": {
     "title": "Account & Security",

@@ -39,7 +39,7 @@
     "verifying": "正在验证身份...",
     "loginFailed": "登录失败",
     "networkError": "网络错误，请检查服务是否运行",
-    "appTitle": "星空笔记",
+    "appTitle": "蜉蝣",
     "subtitle": "私有化知识库 · 欢迎回来",
     "subtitleClient": "连接你的私有知识库",
     "username": "用户名",
@@ -601,7 +601,15 @@
     "fontUploadSuccess": "成功导入 {{count}} 个字体",
     "fontUploadFailed": "上传失败",
     "interDefault": "Inter (默认)",
-    "download": "下载客户端"
+    "download": "下载客户端",
+    "customSplash": "启动闪屏图",
+    "customSplashDesc": "自定义 App 加载阶段显示的图片（本机保存）。系统冷启动瞬间仍为默认品牌图。",
+    "customSplashUpload": "选择图片",
+    "customSplashClear": "恢复默认",
+    "customSplashHint": "建议竖图，≤5MB。JPG / PNG / WebP。",
+    "healthReminder": "健康休息提醒",
+    "healthReminderDesc": "定时弹出休息引导（含飞船小游戏）。默认关闭。",
+    "healthReminderInterval": "提醒间隔（分钟）"
   },
   "securitySettings": {
     "title": "账号与安全",
