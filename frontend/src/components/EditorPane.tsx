@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
 import { toast } from "@/lib/toast";
 import ShareModal from "@/components/ShareModal";
+import EditorCollabMenu from "@/components/EditorCollabMenu";
 import VisibilityToggle from "@/components/common/VisibilityToggle";
 import VersionHistoryPanel from "@/components/VersionHistoryPanel";
 import CommentPanel from "@/components/CommentPanel";
@@ -2299,32 +2300,18 @@ export default function EditorPane() {
             <ListTree size={14} className={cn(showOutline && "text-accent-primary")} />
           </Button>
 
-          {/* 分享 */}
-          <Button
-            variant="ghost" size="icon" className="h-7 w-7"
-            onClick={() => setShowShareModal(true)}
-            title="分享笔记"
-          >
-            <Share2 size={14} className="text-emerald-500" />
-          </Button>
-
-          {/* 版本历史 */}
-          <Button
-            variant="ghost" size="icon" className="h-7 w-7"
-            onClick={() => setShowVersionHistory(true)}
-            title="版本历史"
-          >
-            <History size={14} className="text-violet-500" />
-          </Button>
-
-          {/* 评论批注 */}
-          <Button
-            variant="ghost" size="icon" className="h-7 w-7"
-            onClick={() => setShowCommentPanel(true)}
-            title="评论批注"
-          >
-            <MessageCircle size={14} className="text-blue-500" />
-          </Button>
+          <EditorCollabMenu
+            presenceUsers={presenceUsers}
+            isConnected={isConnected}
+            onShare={() => setShowShareModal(true)}
+            onHistory={() => setShowVersionHistory(true)}
+            onComments={() => setShowCommentPanel(true)}
+            collabModeHint={
+              editorMode === "md"
+                ? "实时协同编辑已在 Markdown 模式启用"
+                : "实时协同编辑请切换到 Markdown 模式"
+            }
+          />
 
           {/* 附件目录 */}
           <Button
