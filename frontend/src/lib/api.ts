@@ -1032,6 +1032,17 @@ export const api = {
 
   // Search
   search: (q: string) => request<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
+  searchGlobal: (q: string) => {
+    const params = new URLSearchParams({ q });
+    const ws = getCurrentWorkspace();
+    if (ws && ws !== "") params.set("workspaceId", ws);
+    return request<{
+      notes: Array<{ id: string; title: string; notebookId?: string; updatedAt?: string; snippet?: string }>;
+      diaries: Array<{ id: string; snippet: string; createdAt?: string; mood?: string }>;
+      tasks: Array<{ id: string; title: string; projectId?: string; projectName?: string; isCompleted?: number }>;
+      books: Array<{ bookHash: string; title?: string; author?: string; format?: string }>;
+    }>(`/search/global?${params.toString()}`);
+  },
 
   // Tasks
   // Y3: 自动注入当前工作区——空字符串不带，workspace 带 ?workspaceId=<uuid>。

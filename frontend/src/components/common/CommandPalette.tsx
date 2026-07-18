@@ -34,7 +34,9 @@ import {
   Palette,
   Moon,
   Sun,
-  Sidebar as SidebarIcon
+  Sidebar as SidebarIcon,
+  Book,
+  BookOpen as BookOpenIcon,
 } from "lucide-react";
 import { useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
@@ -134,7 +136,12 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const { theme, setTheme } = useTheme();
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [globalResults, setGlobalResults] = useState<{
+    notes: Array<{ id: string; title: string; snippet?: string }>;
+    diaries: Array<{ id: string; snippet: string }>;
+    tasks: Array<{ id: string; title: string; projectName?: string }>;
+    books: Array<{ bookHash: string; title?: string; author?: string }>;
+  }>({ notes: [], diaries: [], tasks: [], books: [] });
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
 
@@ -312,8 +319,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     ];
   }, [theme, setTheme, setSkin, actions]);
 
-  // 合并计算出最终展示项 (DisplayItems)
-  const displayItems = useMemo(() => {
+  // 合并计算出最终展示项 (DisplayItems) — 含全局多域搜索结果
+  type Hit =
+    | (CommandItem & { section?: string })
+    | { id: string; type: "note"; title: string; snippet?: string; section: string }
+    | { id: string; type: "diary"; title: string; snippet?: string; section: string }
+    | { id: string; type: "task"; title: string; snippet?: string; section: string }
+    | { id: string; type: "book"; title: string; snippet?: string; section: string; bookHash: string };
+
+  const displayItems = useMemo((): Hit[] => {
     const q = query.trim().toLowerCase();
     if (!q) {
       return commands;
@@ -323,8 +337,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     const nlpItem: CommandItem = {
       id: "nlp-create-task",
       type: "command" as const,
-      title: `创建待办: "${parsed.title}"`,
-      subtitle: `智能解析 ➔ 📅 截止: ${parsed.dueDate || "无"} | 👤 指派: ${parsed.assignee || "无"} | 🏷️ 标签: ${parsed.tag || "无"}`,
+      title: `创建任务: "${parsed.title}"`,
+      subtitle: `智能解析 ➔ 截止: ${parsed.dueDate || "无"} | 标签: ${parsed.tag || "无"}`,
       icon: ListTodo,
       handler: async () => {
         try {
@@ -364,15 +378,45 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         cmd.title.toLowerCase().includes(q) ||
         (cmd.subtitle && cmd.subtitle.toLowerCase().includes(q))
     );
-    const noteItems = results.map((r) => ({ ...r, type: "note" as const }));
-    return [nlpItem, ...filteredCommands, ...noteItems];
-  }, [query, commands, results, actions, onClose]);
+
+    const noteItems: Hit[] = globalResults.notes.map((r) => ({
+      id: r.id,
+      type: "note" as const,
+      title: r.title || "无标题笔记",
+      snippet: r.snippet,
+      section: "笔记",
+    }));
+    const diaryItems: Hit[] = globalResults.diaries.map((r) => ({
+      id: r.id,
+      type: "diary" as const,
+      title: (r.snippet || "说说").slice(0, 40),
+      snippet: r.snippet,
+      section: "说说",
+    }));
+    const taskItems: Hit[] = globalResults.tasks.map((r) => ({
+      id: r.id,
+      type: "task" as const,
+      title: r.title || "未命名任务",
+      snippet: r.projectName,
+      section: "任务",
+    }));
+    const bookItems: Hit[] = globalResults.books.map((r) => ({
+      id: r.bookHash,
+      type: "book" as const,
+      title: r.title || "未命名书籍",
+      snippet: r.author,
+      section: "书库",
+      bookHash: r.bookHash,
+    }));
+
+    return [nlpItem, ...filteredCommands, ...noteItems, ...diaryItems, ...taskItems, ...bookItems];
+  }, [query, commands, globalResults, actions, onClose]);
 
   // 打开时：清空旧状态、focus 输入框
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    setResults([]);
+    setGlobalResults({ notes: [], diaries: [], tasks: [], books: [] });
     setActiveIdx(0);
     requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -397,7 +441,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
     const q = query.trim();
     if (!q) {
-      setResults([]);
+      setGlobalResults({ notes: [], diaries: [], tasks: [], books: [] });
       setLoading(false);
       return;
     }
@@ -409,14 +453,14 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       abortRef.current?.abort();
       abortRef.current = my;
       try {
-        const r = await api.search(q);
+        const r = await api.searchGlobal(q);
         if (my.signal.aborted) return;
-        setResults(r);
+        setGlobalResults(r);
         setActiveIdx(0);
       } catch (err) {
         if (my.signal.aborted) return;
         console.warn("[CommandPalette] search failed:", err);
-        setResults([]);
+        setGlobalResults({ notes: [], diaries: [], tasks: [], books: [] });
       } finally {
         if (!my.signal.aborted) setLoading(false);
       }
@@ -440,17 +484,37 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // 跳转到笔记
-  const jumpTo = useCallback(
-    async (id: string) => {
+  const activateHit = useCallback(
+    async (hit: any) => {
       try {
-        const note = await api.getNote(id);
-        if (note) {
-          actions.setActiveNote(note);
-          actions.setMobileView?.("editor");
+        if (hit.type === "command") {
+          hit.handler();
+          onClose();
+          return;
+        }
+        if (hit.type === "note") {
+          const note = await api.getNote(hit.id);
+          if (note) {
+            actions.setActiveNote(note);
+            actions.setViewMode("all");
+            actions.setMobileView?.("editor");
+          }
+        } else if (hit.type === "diary") {
+          actions.setViewMode("diary");
+          window.dispatchEvent(new CustomEvent("super:open-diary", { detail: { id: hit.id } }));
+        } else if (hit.type === "task") {
+          const { openTasksEntry } = await import("@/lib/navigation.config");
+          openTasksEntry();
+          actions.setViewMode("projects");
+          window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: hit.id }));
+        } else if (hit.type === "book") {
+          const { setLibraryTab } = await import("@/lib/navigation.config");
+          setLibraryTab("books");
+          actions.setViewMode("library");
+          window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash: hit.bookHash || hit.id } }));
         }
       } catch (err) {
-        console.error("[CommandPalette] open note failed:", err);
+        console.error("[CommandPalette] activate failed:", err);
       } finally {
         onClose();
       }
@@ -471,17 +535,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       } else if (e.key === "Enter") {
         e.preventDefault();
         const hit = displayItems[activeIdx];
-        if (hit) {
-          if (hit.type === "command") {
-            hit.handler();
-            onClose();
-          } else {
-            void jumpTo(hit.id);
-          }
-        }
+        if (hit) void activateHit(hit);
       }
     },
-    [displayItems, activeIdx, jumpTo, onClose],
+    [displayItems, activeIdx, activateHit],
   );
 
   // 滚动可视区同步
@@ -516,7 +573,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onInputKeyDown}
-              placeholder="搜索笔记或直接输入系统指令 (如: Claude, 新建)..."
+              placeholder="搜索笔记 / 说说 / 任务 / 书库，或输入指令..."
               className="flex-1 bg-transparent outline-none text-sm text-tx-primary placeholder:text-tx-tertiary"
               autoComplete="off"
               spellCheck={false}
@@ -537,7 +594,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             {displayItems.map((item, idx) => {
               const isActive = idx === activeIdx;
               const isCommand = item.type === "command";
-              const Icon = item.type === "command" ? item.icon : FileText;
+              const Icon = item.type === "command"
+                ? item.icon
+                : item.type === "task"
+                  ? ListTodo
+                  : item.type === "diary"
+                    ? NotebookPen
+                    : item.type === "book"
+                      ? Book
+                      : FileText;
 
               return (
                 <button
@@ -550,7 +615,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       item.handler();
                       onClose();
                     } else {
-                      void jumpTo(item.id);
+                      void activateHit(item);
                     }
                   }}
                   className={cn(
@@ -586,7 +651,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         </div>
       </div>
     );
-  }, [open, query, loading, displayItems, activeIdx, onInputKeyDown, jumpTo, onClose]);
+  }, [open, query, loading, displayItems, activeIdx, onInputKeyDown, activateHit, onClose]);
 
   if (typeof document === "undefined") return null;
   return createPortal(body, document.body);
