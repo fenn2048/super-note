@@ -35,7 +35,7 @@ import {
   Link,
   BookOpen,
 } from "lucide-react";
-import { api, getCurrentWorkspace, getBaseUrl, getServerUrl } from "@/lib/api";
+import { api, getCurrentWorkspace, getBaseUrl, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { toast } from "@/lib/toast";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
@@ -2207,7 +2207,7 @@ function DiaryCard({
     try {
       const meta = JSON.parse(item.bookMetadata);
       if (meta.coverAttachmentId) {
-        coverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+        coverUrl = resolveAttachmentUrl(`/api/attachments/${meta.coverAttachmentId}`);
       }
     } catch {}
   }
@@ -2249,12 +2249,25 @@ function DiaryCard({
                   </div>
                 ) : item.creatorAvatarUrl ? (
                   <img
-                    src={item.creatorAvatarUrl}
+                    src={resolveAttachmentUrl(item.creatorAvatarUrl)}
                     alt={item.creatorName || "avatar"}
                     className="w-9 h-9 rounded-full object-cover shrink-0 border border-app-border/45 shadow-sm"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      el.style.display = "none";
+                      const fb = el.parentElement?.querySelector("[data-avatar-fallback]") as HTMLElement | null;
+                      if (fb) fb.classList.remove("hidden");
+                    }}
                   />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs shrink-0 border border-app-border/45 shadow-sm">
+                ) : null}
+                {item.userId !== SU_USER_ID && (
+                  <div
+                    data-avatar-fallback
+                    className={cn(
+                      "w-9 h-9 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs shrink-0 border border-app-border/45 shadow-sm",
+                      item.creatorAvatarUrl ? "hidden" : ""
+                    )}
+                  >
                     {(item.creatorName || (currentUser && item.userId === currentUser.id ? currentUser.username : "User")).slice(0, 1).toUpperCase()}
                   </div>
                 )}
@@ -2549,12 +2562,21 @@ function DiaryCard({
                             </div>
                           ) : comment.avatarUrl ? (
                             <img
-                              src={comment.avatarUrl}
+                              src={resolveAttachmentUrl(comment.avatarUrl)}
                               alt={comment.username}
                               className="w-7 h-7 rounded-full object-cover mt-0.5 shrink-0 z-10"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                if (fb) fb.classList.remove("hidden");
+                              }}
                             />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs mt-0.5 shrink-0 z-10">
+                          ) : null}
+                          {comment.userId !== SU_USER_ID && (
+                            <div className={cn(
+                              "w-7 h-7 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-xs mt-0.5 shrink-0 z-10",
+                              comment.avatarUrl ? "hidden" : ""
+                            )}>
                               {comment.username.slice(0, 1).toUpperCase()}
                             </div>
                           )}
@@ -2619,12 +2641,21 @@ function DiaryCard({
                                     </div>
                                   ) : reply.avatarUrl ? (
                                     <img
-                                      src={reply.avatarUrl}
+                                      src={resolveAttachmentUrl(reply.avatarUrl)}
                                       alt={reply.username}
                                       className="w-5 h-5 rounded-full object-cover shrink-0 z-10"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                        const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                        if (fb) fb.classList.remove("hidden");
+                                      }}
                                     />
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-[9px] shrink-0 z-10">
+                                  ) : null}
+                                  {reply.userId !== SU_USER_ID && (
+                                    <div className={cn(
+                                      "w-5 h-5 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center font-bold text-[9px] shrink-0 z-10",
+                                      reply.avatarUrl ? "hidden" : ""
+                                    )}>
                                       {reply.username.slice(0, 1).toUpperCase()}
                                     </div>
                                   )}
@@ -2711,22 +2742,28 @@ function DiaryCard({
                     <div className="flex-1" onClick={() => setShowMobileCommentInput(false)} />
                   )}
                   <div className={cn(
-                    "flex gap-2.5 w-full",
+                    "flex w-full",
                     window.innerWidth < 768 && showMobileCommentInput
-                      ? "bg-app-bg p-4 pb-safe border-t border-app-border shadow-[0_-10px_40px_rgba(0,0,0,0.5)] items-end rounded-t-2xl"
-                      : "items-center pt-2"
+                      ? "bg-app-bg p-3 pb-safe border-t border-app-border shadow-[0_-10px_40px_rgba(0,0,0,0.5)] items-stretch rounded-t-2xl"
+                      : "items-center pt-2 gap-2.5"
                   )}>
                     <form 
                       onSubmit={(e) => {
                         void handleAddComment(e as any);
                         if (window.innerWidth < 768) setShowMobileCommentInput(false);
                       }} 
-                      className="flex gap-2.5 items-end w-full"
+                      className={cn(
+                        "flex w-full min-w-0",
+                        window.innerWidth < 768 && showMobileCommentInput
+                          ? "flex-col gap-0"
+                          : "flex-row gap-2.5 items-end"
+                      )}
                     >
-                  {currentUser && (
+                  {/* 桌面端保留头像；移动端去掉 */}
+                  {currentUser && !(window.innerWidth < 768 && showMobileCommentInput) && (
                     currentUser.avatarUrl ? (
                       <img
-                        src={currentUser.avatarUrl}
+                        src={resolveAttachmentUrl(currentUser.avatarUrl)}
                         alt={currentUser.username}
                         className="w-7 h-7 rounded-full object-cover shrink-0"
                       />
@@ -2738,14 +2775,14 @@ function DiaryCard({
                   )}
 
                   <div className={cn(
-                    "relative flex-1 min-w-0 bg-app-subtle border border-app-border/60 flex gap-2 transition-all focus-within:border-accent-primary",
+                    "relative flex-1 min-w-0 w-full bg-app-subtle border border-app-border/60 transition-all focus-within:border-accent-primary",
                     (typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput)
-                      ? "rounded-xl px-3 py-2 items-start"
-                      : "rounded-[18px] px-3.5 py-1.5 items-end"
+                      ? "rounded-xl px-3 pt-2.5 pb-2 flex flex-col gap-2"
+                      : "rounded-[18px] px-3.5 py-1.5 flex gap-2 items-end"
                   )}>
                     <textarea
                       ref={commentInputRef}
-                      rows={(typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput) ? 8 : 1}
+                      rows={(typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput) ? 4 : 1}
                       placeholder="写下你的评论..."
                       value={newCommentText}
                       onChange={(e) => {
@@ -2776,17 +2813,23 @@ function DiaryCard({
                       className={cn(
                         "flex-1 min-w-0 w-full bg-transparent border-none text-xs text-tx-primary focus:outline-none focus:ring-0 placeholder:text-tx-tertiary p-0 resize-none overflow-y-auto",
                         (typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput)
-                          ? "max-h-[40vh]"
+                          ? "max-h-[30vh] min-h-[72px]"
                           : "max-h-32 min-h-[18px]"
                       )}
                     />
 
-                     {/* Smile Icon with Emoji Picker */}
-                    <div ref={commentEmojiRef} className="relative flex items-center shrink-0 mb-0.5 self-end">
+                    {/* 工具行：表情/链接 左，发送 右下（移动）；桌面仍在右侧图标区 */}
+                    <div className={cn(
+                      "flex items-center shrink-0",
+                      (typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput)
+                        ? "justify-between w-full pt-0.5"
+                        : "self-end mb-0.5 gap-0"
+                    )}>
+                    <div ref={commentEmojiRef} className="relative flex items-center shrink-0">
                       <button
                         type="button"
                         onClick={() => setShowCommentEmojis(!showCommentEmojis)}
-                        className="text-tx-tertiary hover:text-tx-secondary transition-colors"
+                        className="text-tx-tertiary hover:text-tx-secondary transition-colors p-1"
                         title="选择表情"
                       >
                         <Smile size={16} />
@@ -2803,7 +2846,7 @@ function DiaryCard({
                           const after = newCommentText.substring(commentCursorPos);
                           setNewCommentText(before + formatted + after);
                         }}
-                        className="text-tx-tertiary hover:text-tx-secondary transition-colors ml-1.5"
+                        className="text-tx-tertiary hover:text-tx-secondary transition-colors p-1 ml-0.5"
                         title="插入超链接"
                       >
                         <Link size={16} />
@@ -2815,7 +2858,7 @@ function DiaryCard({
                             initial={{ opacity: 0, scale: 0.9, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                            className="absolute bottom-full right-0 mb-2 p-2 bg-app-elevated border border-app-border shadow-lg rounded-xl z-50"
+                            className="absolute bottom-full left-0 mb-2 p-2 bg-app-elevated border border-app-border shadow-lg rounded-xl z-50"
                           >
                             <EmojiPicker
                               onSelectTextEmoji={(emoji) => {
@@ -2860,6 +2903,19 @@ function DiaryCard({
                       </AnimatePresence>
                     </div>
 
+                    {/* 移动：发送在输入框右下；桌面：放在输入框外（见下方） */}
+                    {(typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput) && (
+                      <button
+                        type="submit"
+                        disabled={!newCommentText.trim() || submittingComment}
+                        className="px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-app-hover text-white disabled:text-tx-tertiary/50 disabled:opacity-50 rounded-full text-xs font-semibold transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                      >
+                        {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                        <span>发送</span>
+                      </button>
+                    )}
+                    </div>
+
                     {/* @提及选择器 */}
                     {commentMentionTrigger && (
                       <div className="absolute left-0 bottom-full mb-1 z-50">
@@ -2877,6 +2933,7 @@ function DiaryCard({
                       </div>
                     )}
                   </div>
+                  {!(window.innerWidth < 768 && showMobileCommentInput) && (
                   <button
                     type="submit"
                     disabled={!newCommentText.trim() || submittingComment}
@@ -2885,6 +2942,7 @@ function DiaryCard({
                     {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                     <span>发送</span>
                   </button>
+                  )}
                   </form>
                   </div>
                 </div>
@@ -3929,13 +3987,6 @@ export default function DiaryCenter() {
             {!showMobileSearch ? (
               <>
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <button
-                    onClick={() => actions.setMobileSidebar(true)}
-                    className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active shrink-0"
-                    title="菜单"
-                  >
-                    <Menu size={20} />
-                  </button>
                   <div className="w-8 h-8 rounded-lg bg-accent-primary flex items-center justify-center shrink-0">
                     <MessageCircle size={16} className="text-white" />
                   </div>

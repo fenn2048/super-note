@@ -3,22 +3,48 @@ import Artplayer from "artplayer";
 import Hls from "hls.js";
 import { useMediaStore } from "@/store/mediaStore";
 import { api } from "@/lib/api";
-import { Loader2, AlertTriangle, X } from "lucide-react";
+import { Loader2, AlertTriangle, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MediaPlayerProps {
   mediaId: string;
   onDuration?: (duration: number) => void;
   onProgress?: (progress: number) => void;
+  /** 全屏左上角返回：退出全屏并回到媒体列表 */
+  onExitFullscreen?: () => void;
 }
 
-export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPlayerProps) {
+async function lockLandscape() {
+  try {
+    const orient = (screen as any).orientation;
+    if (orient?.lock) {
+      await orient.lock("landscape");
+    }
+  } catch {
+    /* 部分浏览器仅允许全屏上下文，失败则忽略 */
+  }
+}
+
+async function unlockOrientation() {
+  try {
+    const orient = (screen as any).orientation;
+    if (orient?.unlock) {
+      orient.unlock();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFullscreen }: MediaPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Artplayer | null>(null);
+  const isFullscreenRef = useRef(false);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   const { 
     seekTime, 
@@ -40,6 +66,24 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
     } catch (err) {
       console.warn("Failed to report play progress:", err);
     }
+  };
+
+  const exitFullscreenAndBack = () => {
+    const player = playerRef.current;
+    try {
+      if (player?.fullscreen) {
+        player.fullscreen = false;
+      }
+    } catch { /* ignore */ }
+    try {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen();
+      }
+    } catch { /* ignore */ }
+    void unlockOrientation();
+    setIsFullscreen(false);
+    isFullscreenRef.current = false;
+    onExitFullscreen?.();
   };
 
   const fetchAndInitPlayer = async (active: { current: boolean }) => {
@@ -80,19 +124,20 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
         hotkey: true,
         pip: true,
         fullscreen: true,
+        fullscreenWeb: true,
         playsInline: true,
-        theme: "#23ade5", // Accent Primary color from app theme
+        theme: "#23ade5",
         type: rawUrl.includes(".m3u8") ? "m3u8" : "auto",
         controls: [
           {
-            name: 'lightsOut',
-            position: 'right',
+            name: "lightsOut",
+            position: "right",
             html: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>',
-            tooltip: '关灯模式',
+            tooltip: "关灯模式",
             click: function () {
-              setIsTheaterMode(prev => !prev);
+              setIsTheaterMode((prev) => !prev);
             },
-          }
+          },
         ],
         customType: {
           m3u8: function (video: HTMLMediaElement, url: string) {
@@ -113,6 +158,31 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
 
       playerRef.current = player;
 
+      const applyFullscreenUi = (fs: boolean) => {
+        isFullscreenRef.current = fs;
+        setIsFullscreen(fs);
+        // 全屏时隐藏关灯按钮
+        try {
+          const btn = player.controls?.lightsOut as HTMLElement | undefined;
+          if (btn) {
+            btn.style.display = fs ? "none" : "";
+          }
+        } catch { /* ignore */ }
+        // 全屏时显示左上角返回
+        try {
+          const layer = (player as any).layers?.fsBack as HTMLElement | undefined;
+          const backBtn = layer?.querySelector?.("button") as HTMLButtonElement | null;
+          if (backBtn) {
+            backBtn.style.display = fs ? "inline-flex" : "none";
+          }
+        } catch { /* ignore */ }
+        if (fs) {
+          void lockLandscape();
+        } else {
+          void unlockOrientation();
+        }
+      };
+
       player.on("ready", () => {
         if (active.current) {
           setLoading(false);
@@ -121,6 +191,35 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
           }
         }
       });
+
+      // 全屏返回按钮（挂在播放器 layer 内，保证 true fullscreen 可见）
+      try {
+        const backHtml =
+          '<button type="button" aria-label="返回" style="display:none;width:40px;height:40px;border-radius:9999px;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.15);align-items:center;justify-content:center;cursor:pointer">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>' +
+          "</button>";
+        (player as any).layers?.add?.({
+          name: "fsBack",
+          html: backHtml,
+          style: {
+            position: "absolute",
+            top: "max(12px, env(safe-area-inset-top))",
+            left: "12px",
+            zIndex: "100",
+            pointerEvents: "auto",
+          },
+          mounted: (el: HTMLElement) => {
+            const btn = el.querySelector("button") as HTMLButtonElement | null;
+            if (!btn) return;
+            btn.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              exitFullscreenAndBack();
+            });
+          },
+        });
+      } catch (err) {
+        console.warn("Failed to add fullscreen back layer:", err);
+      }
 
       player.on("video:timeupdate", () => {
         const currentTime = player.currentTime;
@@ -137,6 +236,12 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
         const duration = player.duration;
         setDuration(duration);
         if (onDuration) onDuration(duration);
+        if (duration && duration > 0) {
+          api.request(`/media/items/${mediaId}/metadata`, {
+            method: "PATCH",
+            body: JSON.stringify({ duration: Math.floor(duration) }),
+          }).catch(() => {});
+        }
       });
 
       player.on("play", () => resumeMedia());
@@ -148,6 +253,13 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
       player.on("error", (err: any) => {
          console.error("Artplayer error:", err);
          if (active.current) setError("视频流载入失败，请检查跨域限制或防盗链设置。");
+      });
+
+      player.on("fullscreen", (state: boolean) => {
+        applyFullscreenUi(!!state);
+      });
+      player.on("fullscreenWeb", (state: boolean) => {
+        applyFullscreenUi(!!state);
       });
 
     } catch (err: any) {
@@ -163,6 +275,7 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
 
     return () => {
       active.current = false;
+      void unlockOrientation();
       if (playerRef.current) {
         const time = playerRef.current.currentTime;
         if (time > 0) {
@@ -186,17 +299,17 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
   useEffect(() => {
     if (playerRef.current && playerRef.current.controls.lightsOut) {
       const btn = playerRef.current.controls.lightsOut;
-      btn.setAttribute('data-balloon', isTheaterMode ? '开灯模式' : '关灯模式');
-      const svg = btn.querySelector('svg');
+      btn.setAttribute("data-balloon", isTheaterMode ? "开灯模式" : "关灯模式");
+      const svg = btn.querySelector("svg");
       if (svg) {
-        svg.style.color = isTheaterMode ? '#ffeb3b' : 'currentColor';
+        svg.style.color = isTheaterMode ? "#ffeb3b" : "currentColor";
       }
     }
   }, [isTheaterMode]);
 
   return (
     <>
-      {isTheaterMode && (
+      {isTheaterMode && !isFullscreen && (
         <div 
           className="fixed inset-0 z-40 bg-black/95 transition-opacity" 
           onClick={() => setIsTheaterMode(false)}
@@ -204,8 +317,24 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress }: MediaPl
       )}
       <div className={cn(
         "relative overflow-hidden bg-black select-none transition-all duration-300 w-full aspect-video md:rounded-xl md:border md:border-app-border",
-        isTheaterMode ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10"
+        isTheaterMode && !isFullscreen ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10"
       )}>
+
+      {/* 全屏时左上角返回箭头 → 回媒体库列表 */}
+      {isFullscreen && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            exitFullscreenAndBack();
+          }}
+          className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-[10000] w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
+          title="返回媒体库"
+          aria-label="返回媒体库"
+        >
+          <ChevronLeft size={22} />
+        </button>
+      )}
 
       {loading && !error && (
         <div className="absolute inset-0 z-10 bg-black/95 flex flex-col items-center justify-center">

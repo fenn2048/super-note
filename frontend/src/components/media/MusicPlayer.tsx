@@ -6,7 +6,7 @@ import {
   Shuffle, Repeat, Repeat1, Volume2, VolumeX 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AudioCover } from "@/lib/id3";
+import { AudioCover, useID3Cover } from "@/lib/id3";
 
 interface MusicPlayerProps {
   mediaId: string;
@@ -75,6 +75,7 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
         type: "audio",
         alist_path: mediaItem.alist_path,
         artist: mediaItem.artist,
+        album: mediaItem.album,
         cover_url: mediaItem.cover_url,
         duration: mediaItem.duration
       });
@@ -112,6 +113,17 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // hooks must run before any early return
+  const { meta: id3Meta } = useID3Cover(mediaItem?.id, mediaItem?.cover_url, "audio");
+  const displayTitle = mediaItem?.title;
+  const displayArtist = mediaItem?.artist || id3Meta?.artist || "未知歌手";
+  const displayAlbum = mediaItem?.album || id3Meta?.album;
+
+  // Local values if not playing this track, global values if active
+  const activeTime = isCurrentActive ? currentTime : 0;
+  const activeDuration = isCurrentActive ? duration : (mediaItem?.duration || 0);
+  const activeIsPlaying = isCurrentActive && isPlaying;
+
   if (loading) {
     return (
       <div className="w-full py-12 flex flex-col items-center justify-center bg-app-sidebar/30 backdrop-blur border border-app-border rounded-2xl">
@@ -130,15 +142,6 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
       </div>
     );
   }
-
-  const displayTitle = mediaItem.title;
-  const displayArtist = mediaItem.artist || "未知歌手";
-  const displayCover = mediaItem.cover_url;
-
-  // Local values if not playing this track, global values if active
-  const activeTime = isCurrentActive ? currentTime : 0;
-  const activeDuration = isCurrentActive ? duration : (mediaItem.duration || 0);
-  const activeIsPlaying = isCurrentActive && isPlaying;
 
   return (
     <div className="w-full bg-gradient-to-br from-app-sidebar/80 to-app-sidebar/40 backdrop-blur-xl border border-app-border/80 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-center gap-6 select-none">
@@ -164,7 +167,9 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
         {/* Song Info */}
         <div className="mb-4 text-center md:text-left">
           <h4 className="text-lg font-bold text-tx-primary line-clamp-1">{displayTitle}</h4>
-          <p className="text-sm text-tx-tertiary font-medium line-clamp-1">{displayArtist}</p>
+          <p className="text-sm text-tx-tertiary font-medium line-clamp-1">
+            {[displayArtist, displayAlbum].filter(Boolean).join(" · ")}
+          </p>
         </div>
 
         {/* Interface controls */}

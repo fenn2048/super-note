@@ -82,11 +82,10 @@ export default function MobileMorePage() {
   return (
     <div className="flex-1 flex flex-col h-full bg-app-bg overflow-y-auto">
       <MobileChromeHeader
-        variant="root"
-        title="更多"
-        subtitle="发现更多工具，定制你的空间"
+        variant="bare"
+        title="我的"
+        subtitle="文件、收藏、AI 与设置"
       />
-      {/* 头部装饰（大标题区，顶栏已有汉堡） */}
       <div className="px-6 pt-3 pb-2 md:pt-6">
         <h1 className="text-xl font-bold text-tx-primary leading-tight tracking-tight md:text-2xl">更多功能</h1>
         <p className="text-sm text-tx-tertiary mt-1">文件、收藏、AI 与设置都在这里</p>

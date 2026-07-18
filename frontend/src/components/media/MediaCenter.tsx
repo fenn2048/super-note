@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { api, getCurrentWorkspace } from "@/lib/api";
+import { api, getCurrentWorkspace, resolveAttachmentUrl } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import { useMediaStore } from "@/store/mediaStore";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -17,6 +17,8 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover } from "@/lib/id3";
+import MobileChromeHeader from "@/components/common/MobileChromeHeader";
+import { useAppActions } from "@/store/AppContext";
 
 interface Collection {
   id: string;
@@ -39,6 +41,7 @@ interface MediaItem {
   description?: string;
   alist_path: string;
   artist?: string;
+  album?: string;
   duration?: number; // in seconds
   year?: number;
   genre?: string; // JSON string of array
@@ -61,6 +64,7 @@ interface Review {
 
 export default function MediaCenter() {
   const { t } = useTranslation();
+  const actions = useAppActions();
   const [workspaceId, setWorkspaceId] = useState<string | null>(() => {
     const ws = getCurrentWorkspace();
     return !ws || ws === "personal" ? null : ws;
@@ -361,9 +365,9 @@ export default function MediaCenter() {
     }
   };
 
-  // Duration display formatter
-  const formatDuration = (sec: number | undefined) => {
-    if (!sec) return "00:00";
+  // Duration display formatter — null/0 shows placeholder so "全 0" 不误导
+  const formatDuration = (sec: number | undefined | null) => {
+    if (sec == null || !sec || isNaN(Number(sec))) return "--:--";
     const hrs = Math.floor(sec / 3600);
     const mins = Math.floor((sec % 3600) / 60);
     const secs = Math.floor(sec % 60);
@@ -371,6 +375,11 @@ export default function MediaCenter() {
       return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const goBackToMore = () => {
+    actions.setViewMode("more");
+    actions.setMobileView("list");
   };
 
   // Reviews interactive Tiptap editor setup
@@ -473,6 +482,15 @@ export default function MediaCenter() {
 
   return (
     <div className="flex flex-col h-full bg-app-bg text-tx-primary select-none">
+      {/* 移动端顶栏：从「我的」进入时有返回 */}
+      {!selectedItem && (
+        <MobileChromeHeader
+          variant="stack"
+          title="媒体库"
+          subtitle={mediaType === "video" ? "视频" : "音乐"}
+          onLeadingClick={goBackToMore}
+        />
+      )}
       
       {/* 1. Detail view mode */}
       <AnimatePresence mode="wait">
@@ -485,7 +503,10 @@ export default function MediaCenter() {
             className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full flex flex-col md:gap-6 pb-[calc(1.5rem+var(--safe-area-bottom))] md:pb-6"
           >
             {/* Navigation back */}
-            <div className="flex items-center justify-between shrink-0 px-4 pt-4 md:px-6 md:pt-6 mb-4 md:mb-0">
+            <div
+              className="flex items-center justify-between shrink-0 px-4 md:px-6 md:pt-6 mb-4 md:mb-0"
+              style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
+            >
               <button 
                 onClick={() => setSelectedItem(null)}
                 className="flex items-center gap-1.5 text-xs font-semibold text-tx-secondary hover:text-tx-primary bg-app-sidebar/40 border border-app-border/40 px-3 py-1.5 rounded-lg transition-colors"
@@ -512,7 +533,10 @@ export default function MediaCenter() {
             {/* Media Player wrapper */}
             <div className="w-full md:px-6">
               {selectedItem.type === "video" ? (
-                <MediaPlayer mediaId={selectedItem.id} />
+                <MediaPlayer
+                  mediaId={selectedItem.id}
+                  onExitFullscreen={() => setSelectedItem(null)}
+                />
               ) : (
                 <MusicPlayer mediaId={selectedItem.id} />
               )}
@@ -583,8 +607,11 @@ export default function MediaCenter() {
                         )}
                       </h2>
                     )}
-                    {selectedItem.artist && (
-                      <p className="text-xs text-tx-secondary font-medium">歌手: {selectedItem.artist}</p>
+                    {(selectedItem.artist || selectedItem.album) && (
+                      <p className="text-xs text-tx-secondary font-medium mt-0.5">
+                        {selectedItem.artist || "未知歌手"}
+                        {selectedItem.album ? ` · ${selectedItem.album}` : ""}
+                      </p>
                     )}
                     {selectedItem.collection_title && (
                       <p className="text-xs text-tx-tertiary mt-0.5">合集: <span className="font-semibold">{selectedItem.collection_title}</span></p>
@@ -799,7 +826,7 @@ export default function MediaCenter() {
                   {isAdmin && (
                     <button 
                       onClick={handleOpenAddCollection}
-                      className="text-accent-primary hover:bg-accent-primary/10 p-1.5 rounded transition-colors"
+                      className="hidden md:inline-flex text-accent-primary hover:bg-accent-primary/10 p-1.5 rounded transition-colors"
                       title="新建合集"
                     >
                       <PlusCircle size={16} />
@@ -924,7 +951,7 @@ export default function MediaCenter() {
                   </div>
                 </div>
 
-                {/* Import actions (admin/owner only) */}
+                {/* Import actions (admin/owner only) — 移动隐藏 JSON 导入 / 下载模板 */}
                 {isAdmin && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
@@ -940,18 +967,19 @@ export default function MediaCenter() {
                       )}
                     >
                       <SlidersHorizontal size={16} />
-                      {isBatchMode ? "退出管理" : "批量管理"}
+                      <span className="max-md:hidden">{isBatchMode ? "退出管理" : "批量管理"}</span>
                     </button>
                     <button
                       onClick={() => setShowAlistBrowser(true)}
-                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-2 px-4 rounded-xl shadow-lg shadow-accent-primary/10 flex items-center gap-1.5 transition-all"
+                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-2 px-3 md:px-4 rounded-xl shadow-lg shadow-accent-primary/10 flex items-center gap-1.5 transition-all"
                     >
                       <Plus size={16} />
-                      网盘导入
+                      <span className="max-md:hidden">网盘导入</span>
+                      <span className="md:hidden">导入</span>
                     </button>
                     <button
                       onClick={() => setShowImportJson(true)}
-                      className="bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all"
+                      className="hidden md:flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-all"
                     >
                       <Upload size={16} />
                       JSON 导入
@@ -959,7 +987,7 @@ export default function MediaCenter() {
                     <a
                       href="/api/media/import/template"
                       download="template.json"
-                      className="bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition-all"
+                      className="hidden md:flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-all"
                     >
                       <Download size={16} />
                       下载模板
@@ -1019,78 +1047,111 @@ export default function MediaCenter() {
                     <p className="text-xs text-tx-tertiary">点击上方的“网盘导入”或“JSON 导入”录入第一批音视频！</p>
                   </div>
                 ) : viewStyle === "list" ? (
-                  /* TEXT LIST VIEW MODE */
-                  <div className="flex flex-col border border-app-border/40 rounded-2xl bg-app-sidebar/5 overflow-hidden select-none">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-app-border/40 bg-app-sidebar/30 text-tx-tertiary font-semibold select-none">
-                          <th className="p-3 w-12 text-center">操作</th>
-                          <th className="p-3 w-16">封面</th>
-                          <th className="p-3">标题</th>
-                          {mediaType === "audio" && <th className="p-3 w-40">歌手</th>}
-                          <th className="p-3 w-40 hidden md:table-cell">合集</th>
-                          <th className="p-3 w-28 hidden sm:table-cell">播放次数</th>
-                          <th className="p-3 w-24">时长</th>
-                          {isAdmin && <th className="p-3 w-16 text-center">管理</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((item, idx) => (
-                          <tr 
-                            key={item.id} 
-                            onClick={() => {
-                              if (isBatchMode) {
-                                const newSelected = new Set(selectedItemIds);
-                                if (newSelected.has(item.id)) {
-                                  newSelected.delete(item.id);
+                  /* LIST VIEW — 无封面列；移动用卡片行，桌面用 table */
+                  <>
+                    {/* 移动列表 */}
+                    <div className="flex flex-col gap-1 md:hidden">
+                      {items.map((item) => (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            if (isBatchMode) {
+                              const newSelected = new Set(selectedItemIds);
+                              if (newSelected.has(item.id)) newSelected.delete(item.id);
+                              else newSelected.add(item.id);
+                              setSelectedItemIds(newSelected);
+                            } else if (item.type === "audio") {
+                              playMedia(item, items);
+                            } else {
+                              playMedia(item, items);
+                              setSelectedItem(item);
+                            }
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl border border-app-border/30 bg-app-sidebar/10 active:bg-app-hover",
+                            selectedItemIds.has(item.id) && isBatchMode && "border-accent-primary bg-accent-primary/5"
+                          )}
+                        >
+                          <button
+                            type="button"
+                            className="w-9 h-9 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (item.type === "audio") {
+                                const st = useMediaStore.getState();
+                                if (st.currentMedia?.id === item.id) {
+                                  st.isPlaying ? st.pauseMedia() : st.resumeMedia();
                                 } else {
-                                  newSelected.add(item.id);
+                                  playMedia(item, items);
                                 }
-                                setSelectedItemIds(newSelected);
                               } else {
-                                if (item.type === "audio") {
+                                playMedia(item, items);
+                                setSelectedItem(item);
+                              }
+                            }}
+                          >
+                            {item.type === "audio" && useMediaStore.getState().currentMedia?.id === item.id && useMediaStore.getState().isPlaying ? (
+                              <Pause size={14} className="fill-accent-primary" />
+                            ) : (
+                              <Play size={14} className="fill-accent-primary translate-x-0.5" />
+                            )}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-tx-primary truncate">{item.title}</p>
+                            <p className="text-[11px] text-tx-tertiary truncate mt-0.5">
+                              {item.type === "audio"
+                                ? [item.artist || "未知歌手", item.album].filter(Boolean).join(" · ")
+                                : (item.collection_title || `${item.play_count} 次播放`)}
+                            </p>
+                          </div>
+                          <span className="text-[11px] text-tx-tertiary tabular-nums shrink-0">{formatDuration(item.duration)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* 桌面 table，去掉封面列 */}
+                    <div className="hidden md:flex flex-col border border-app-border/40 rounded-2xl bg-app-sidebar/5 overflow-hidden select-none">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-app-border/40 bg-app-sidebar/30 text-tx-tertiary font-semibold select-none">
+                            <th className="p-3 w-12 text-center">操作</th>
+                            <th className="p-3">标题</th>
+                            {mediaType === "audio" && <th className="p-3 w-36">歌手</th>}
+                            {mediaType === "audio" && <th className="p-3 w-36">专辑</th>}
+                            <th className="p-3 w-40">合集</th>
+                            <th className="p-3 w-28">播放次数</th>
+                            <th className="p-3 w-24">时长</th>
+                            <th className="p-3 w-16 text-center">管理</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item) => (
+                            <tr
+                              key={item.id}
+                              onClick={() => {
+                                if (isBatchMode) {
+                                  const newSelected = new Set(selectedItemIds);
+                                  if (newSelected.has(item.id)) newSelected.delete(item.id);
+                                  else newSelected.add(item.id);
+                                  setSelectedItemIds(newSelected);
+                                } else if (item.type === "audio") {
                                   playMedia(item, items);
                                 } else {
                                   playMedia(item, items);
                                   setSelectedItem(item);
                                 }
-                              }
-                            }}
-                            className={cn(
-                              "border-b border-app-border/20 hover:bg-app-hover/50 cursor-pointer transition-colors",
-                              selectedItemIds.has(item.id) && isBatchMode && "bg-accent-primary/5 hover:bg-accent-primary/10"
-                            )}
-                          >
-                            {/* Play/Pause icon column */}
-                            <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                              {isBatchMode ? (
-                                <button
-                                  onClick={() => {
-                                    const newSelected = new Set(selectedItemIds);
-                                    if (newSelected.has(item.id)) {
-                                      newSelected.delete(item.id);
-                                    } else {
-                                      newSelected.add(item.id);
-                                    }
-                                    setSelectedItemIds(newSelected);
-                                  }}
-                                >
-                                  {selectedItemIds.has(item.id) ? (
-                                    <CheckCircle className="w-5 h-5 text-accent-primary fill-accent-primary" />
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full border-2 border-app-border" />
-                                  )}
-                                </button>
-                              ) : (
+                              }}
+                              className={cn(
+                                "border-b border-app-border/20 hover:bg-app-hover/50 cursor-pointer transition-colors",
+                                selectedItemIds.has(item.id) && isBatchMode && "bg-accent-primary/5"
+                              )}
+                            >
+                              <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   onClick={() => {
                                     if (item.type === "audio") {
-                                      if (useMediaStore.getState().currentMedia?.id === item.id) {
-                                        if (useMediaStore.getState().isPlaying) {
-                                          useMediaStore.getState().pauseMedia();
-                                        } else {
-                                          useMediaStore.getState().resumeMedia();
-                                        }
+                                      const st = useMediaStore.getState();
+                                      if (st.currentMedia?.id === item.id) {
+                                        st.isPlaying ? st.pauseMedia() : st.resumeMedia();
                                       } else {
                                         playMedia(item, items);
                                       }
@@ -1099,7 +1160,7 @@ export default function MediaCenter() {
                                       setSelectedItem(item);
                                     }
                                   }}
-                                  className="w-7 h-7 rounded-full bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary flex items-center justify-center transition-all"
+                                  className="w-7 h-7 rounded-full bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary inline-flex items-center justify-center"
                                 >
                                   {item.type === "audio" && useMediaStore.getState().currentMedia?.id === item.id && useMediaStore.getState().isPlaying ? (
                                     <Pause size={12} className="fill-accent-primary" />
@@ -1107,125 +1168,79 @@ export default function MediaCenter() {
                                     <Play size={12} className="fill-accent-primary translate-x-0.5" />
                                   )}
                                 </button>
-                              )}
-                            </td>
-
-                            {/* Cover */}
-                            <td className="p-3">
-                              <div className={cn(
-                                "bg-black/20 rounded overflow-hidden flex items-center justify-center border border-app-border/30",
-                                item.type === "video" ? "w-12 h-8 aspect-[16/10]" : "w-10 h-10 aspect-square"
-                              )}>
-                                {item.type === "audio" ? (
-                                  <AudioCover item={item} className="w-full h-full object-cover" fallbackIconSize={14} />
-                                ) : item.cover_url ? (
-                                  <img src={item.cover_url} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-accent-primary/5 text-accent-primary">
-                                    <Film size={14} />
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* Title */}
-                            <td className="p-3 font-semibold text-tx-primary">
-                              <div>
-                                <p className="hover:text-accent-primary transition-colors line-clamp-1">{item.title}</p>
-                                {item.artist && <p className="text-[10px] text-tx-tertiary font-normal md:hidden mt-0.5">{item.artist}</p>}
-                                {item.collection_title && <p className="text-[9px] text-tx-tertiary font-normal md:hidden mt-0.5">合集: {item.collection_title}</p>}
-                              </div>
-                            </td>
-
-                            {/* Artist */}
-                            {mediaType === "audio" && (
-                              <td className="p-3 text-tx-secondary font-medium md:table-cell">
-                                {item.artist || "-"}
                               </td>
-                            )}
-
-                            {/* Collection */}
-                            <td className="p-3 text-tx-tertiary hidden md:table-cell">
-                              {item.collection_title || "-"}
-                            </td>
-
-                            {/* Play count */}
-                            <td className="p-3 text-tx-secondary hidden sm:table-cell">
-                              {item.play_count} 次
-                            </td>
-
-                            {/* Duration */}
-                            <td className="p-3 text-tx-secondary">
-                              {formatDuration(item.duration)}
-                            </td>
-
-                            {/* Actions */}
-                            <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1.5">
-                                {item.type === "audio" && (
-                                  <button
-                                    onClick={() => setSelectedItem(item)}
-                                    className="text-tx-secondary hover:text-accent-primary p-1.5 rounded transition-colors"
-                                    title="详情介绍"
-                                  >
-                                    <Info size={14} />
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    onClick={async () => {
-                                      if (window.confirm("确认要删除这个单品吗？")) {
-                                        await api.request(`/media/items/${item.id}`, { method: "DELETE" });
-                                        fetchData();
-                                      }
-                                    }}
-                                    className="text-accent-danger hover:bg-accent-danger/10 p-1.5 rounded transition-colors"
-                                    title="删除"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                              <td className="p-3 font-semibold text-tx-primary">
+                                <p className="hover:text-accent-primary line-clamp-1">{item.title}</p>
+                              </td>
+                              {mediaType === "audio" && (
+                                <td className="p-3 text-tx-secondary">{item.artist || "-"}</td>
+                              )}
+                              {mediaType === "audio" && (
+                                <td className="p-3 text-tx-secondary">{item.album || "-"}</td>
+                              )}
+                              <td className="p-3 text-tx-tertiary">{item.collection_title || "-"}</td>
+                              <td className="p-3 text-tx-secondary">{item.play_count} 次</td>
+                              <td className="p-3 text-tx-secondary">{formatDuration(item.duration)}</td>
+                              <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {item.type === "audio" && (
+                                    <button onClick={() => setSelectedItem(item)} className="text-tx-secondary hover:text-accent-primary p-1.5 rounded" title="详情">
+                                      <Info size={14} />
+                                    </button>
+                                  )}
+                                  {isAdmin && (
+                                    <button
+                                      onClick={async () => {
+                                        if (window.confirm("确认要删除这个单品吗？")) {
+                                          await api.request(`/media/items/${item.id}`, { method: "DELETE" });
+                                          fetchData();
+                                        }
+                                      }}
+                                      className="text-accent-danger hover:bg-accent-danger/10 p-1.5 rounded"
+                                      title="删除"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 ) : (
-                  /* GRID VIEW MODE */
-                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+                  /* GRID VIEW — 视频横版/音频方图，对齐参考图密度 */
+                  <div className={cn(
+                    "grid gap-3 sm:gap-4",
+                    mediaType === "video"
+                      ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                      : "grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                  )}>
                     {items.map(item => (
                       <div
                         key={item.id}
                         onClick={() => {
                           if (isBatchMode) {
                             const newSelected = new Set(selectedItemIds);
-                            if (newSelected.has(item.id)) {
-                              newSelected.delete(item.id);
-                            } else {
-                              newSelected.add(item.id);
-                            }
+                            if (newSelected.has(item.id)) newSelected.delete(item.id);
+                            else newSelected.add(item.id);
                             setSelectedItemIds(newSelected);
+                          } else if (item.type === "audio") {
+                            playMedia(item, items);
                           } else {
-                            if (item.type === "audio") {
-                              playMedia(item, items);
-                            } else {
-                              playMedia(item, items);
-                              setSelectedItem(item);
-                            }
+                            playMedia(item, items);
+                            setSelectedItem(item);
                           }
                         }}
                         className={cn(
-                          "bg-app-sidebar/20 border rounded-xl overflow-hidden shadow group cursor-pointer transition-all hover:scale-[1.02] flex flex-col relative",
-                          selectedItemIds.has(item.id) && isBatchMode
-                            ? "border-accent-primary shadow-lg shadow-accent-primary/5"
-                            : "border-app-border/40 hover:bg-app-sidebar/40"
+                          "group cursor-pointer transition-all flex flex-col relative",
+                          selectedItemIds.has(item.id) && isBatchMode && "ring-2 ring-accent-primary rounded-xl"
                         )}
                       >
-                        {/* Batch selection checkbox overlay */}
                         {isBatchMode && (
-                          <div className="absolute top-2 left-2 z-10 bg-black/60 backdrop-blur rounded-full p-1 border border-white/10 shadow-lg animate-fade-in">
+                          <div className="absolute top-2 left-2 z-10 bg-black/60 backdrop-blur rounded-full p-1 border border-white/10 shadow-lg">
                             {selectedItemIds.has(item.id) ? (
                               <CheckCircle className="w-5 h-5 text-accent-primary fill-accent-primary" />
                             ) : (
@@ -1234,16 +1249,15 @@ export default function MediaCenter() {
                           </div>
                         )}
 
-                        {/* Cover image container */}
                         <div className={cn(
-                          "bg-black/40 border-b border-app-border/20 relative flex items-center justify-center overflow-hidden",
-                          item.type === "video" ? "aspect-[2/3]" : "aspect-square"
+                          "relative flex items-center justify-center overflow-hidden rounded-xl bg-black/30 border border-app-border/20",
+                          item.type === "video" ? "aspect-video" : "aspect-square"
                         )}>
                           {item.type === "audio" ? (
-                            <AudioCover item={item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" fallbackIconSize={16} />
+                            <AudioCover item={item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" fallbackIconSize={20} />
                           ) : item.cover_url ? (
                             <img
-                              src={item.cover_url}
+                              src={resolveAttachmentUrl(item.cover_url)}
                               alt={item.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               loading="lazy"
@@ -1257,7 +1271,6 @@ export default function MediaCenter() {
                             />
                           )}
 
-                          {/* Info 'i' button overlay (only for audio, and not in batch mode) */}
                           {item.type === "audio" && !isBatchMode && (
                             <button
                               onClick={(e) => {
@@ -1270,46 +1283,32 @@ export default function MediaCenter() {
                               <Info size={11} />
                             </button>
                           )}
-                          
-                          {/* Hover Play icon overlay */}
+
                           {!isBatchMode && (
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                              <div className={cn(
-                                "rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/30 transform scale-90 group-hover:scale-100 transition-transform",
-                                item.type === "video" ? "w-7 h-7" : "w-10 h-10"
-                              )}>
-                                <Play size={item.type === "video" ? 14 : 20} className="fill-white translate-x-0.5" />
+                            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <div className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg">
+                                <Play size={18} className="fill-white translate-x-0.5" />
                               </div>
                             </div>
                           )}
 
-                          {/* Duration tag */}
-                          {item.duration && (
-                            <span className={cn(
-                              "absolute bottom-2 right-2 bg-black/75 rounded text-white tracking-wide font-semibold",
-                              item.type === "video" ? "px-1 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[11px]"
-                            )}>
+                          {!!item.duration && (
+                            <span className="absolute bottom-1.5 right-1.5 bg-black/75 rounded px-1.5 py-0.5 text-[10px] text-white font-semibold">
                               {formatDuration(item.duration)}
                             </span>
                           )}
                         </div>
 
-                        {/* Text info */}
-                        <div className="p-2 flex-1 flex flex-col justify-between">
-                          <div>
-                            <h4 className="font-bold text-tx-primary line-clamp-2 leading-snug tracking-tight mb-0.5 text-[11px]">
-                              {item.title}
-                            </h4>
-                            {item.artist && (
-                              <p className="text-tx-tertiary truncate text-[9px]">{item.artist}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center justify-between text-tx-tertiary mt-2 text-[9px]">
-                            <span>{item.play_count} 次播放</span>
-                            {item.year && <span>{item.year}</span>}
-                          </div>
+                        <div className="mt-2 px-0.5">
+                          <h4 className="font-semibold text-tx-primary line-clamp-2 leading-snug text-[12px] sm:text-[13px]">
+                            {item.title}
+                          </h4>
+                          {item.type === "audio" && (
+                            <p className="text-tx-tertiary truncate text-[11px] mt-0.5">
+                              {[item.artist, item.album].filter(Boolean).join(" · ") || "未知歌手"}
+                            </p>
+                          )}
                         </div>
-
                       </div>
                     ))}
                   </div>

@@ -5,12 +5,49 @@ import { cn } from "@/lib/utils";
 
 // Memory cache to prevent parsing the same audio repeatedly during current session
 const id3CoverCache = new Map<string, string>();
+const id3MetaCache = new Map<string, ID3Metadata>();
+
+export interface ID3Metadata {
+  artist?: string;
+  album?: string;
+  title?: string;
+  coverUrl?: string;
+  coverBlob?: Blob;
+}
+
+function decodeId3Text(encoding: number, data: Uint8Array): string {
+  try {
+    if (encoding === 0) {
+      // ISO-8859-1
+      return new TextDecoder("iso-8859-1").decode(data).replace(/\0/g, "").trim();
+    }
+    if (encoding === 1) {
+      // UTF-16 with BOM
+      return new TextDecoder("utf-16").decode(data).replace(/\0/g, "").trim();
+    }
+    if (encoding === 2) {
+      // UTF-16BE without BOM
+      return new TextDecoder("utf-16be").decode(data).replace(/\0/g, "").trim();
+    }
+    // encoding 3 = UTF-8
+    return new TextDecoder("utf-8").decode(data).replace(/\0/g, "").trim();
+  } catch {
+    return new TextDecoder().decode(data).replace(/\0/g, "").trim();
+  }
+}
+
+function readTextFrame(buffer: Uint8Array, frameDataOffset: number, frameSize: number): string {
+  if (frameSize < 2) return "";
+  const encoding = buffer[frameDataOffset];
+  const textBytes = buffer.subarray(frameDataOffset + 1, frameDataOffset + frameSize);
+  return decodeId3Text(encoding, textBytes);
+}
 
 /**
  * Streaming parser that fetches up to 4MB of an audio file and extracts
- * the embedded ID3v2 cover art (PIC or APIC frames).
+ * ID3v2 cover art (APIC/PIC) plus text frames (TPE1/TALB/TIT2).
  */
-export async function getID3CoverUrl(url: string): Promise<{ url: string, blob: Blob } | null> {
+export async function getID3Metadata(url: string): Promise<ID3Metadata | null> {
   try {
     const absoluteUrl = resolveAttachmentUrl(url);
     const token = localStorage.getItem("super-token");
@@ -75,6 +112,8 @@ export async function getID3CoverUrl(url: string): Promise<{ url: string, blob: 
     const isV3 = versionMajor === 3;
     const isV4 = versionMajor === 4;
 
+    const meta: ID3Metadata = {};
+
     while (offset < Math.min(tagSize + 10, buffer.length)) {
       let frameId = "";
       let frameSize = 0;
@@ -82,7 +121,7 @@ export async function getID3CoverUrl(url: string): Promise<{ url: string, blob: 
 
       if (isV2) {
         frameId = String.fromCharCode(buffer[offset], buffer[offset + 1], buffer[offset + 2]);
-        frameSize = (buffer[offset + 3] << 16) | (buffer[offset + 4] << 8) | buffer[offset + 5];
+        frameSize = (buffer[offset + 3] << 16) | (buffer[offset + 4] << 8) | (buffer[offset + 5]);
         headerSize = 6;
       } else if (isV3 || isV4) {
         frameId = String.fromCharCode(buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]);
@@ -102,84 +141,126 @@ export async function getID3CoverUrl(url: string): Promise<{ url: string, blob: 
         break;
       }
 
-      // Check for cover image frame ("PIC" in v2, "APIC" in v3/v4)
+      const frameDataOffset = offset + headerSize;
+
+      // Cover image frame ("PIC" in v2, "APIC" in v3/v4)
       if ((isV2 && frameId === "PIC") || ((isV3 || isV4) && frameId === "APIC")) {
-        const frameDataOffset = offset + headerSize;
-        let p = frameDataOffset;
-
-        const textEncoding = buffer[p];
-        p += 1;
-
-        let mimeType = "";
-        if (isV2) {
-          const format = String.fromCharCode(buffer[p], buffer[p + 1], buffer[p + 2]);
-          mimeType = format.toLowerCase() === "png" ? "image/png" : "image/jpeg";
-          p += 3;
-        } else {
-          let mimeEnd = p;
-          while (mimeEnd < frameDataOffset + frameSize && buffer[mimeEnd] !== 0) {
-            mimeEnd++;
-          }
-          mimeType = new TextDecoder().decode(buffer.subarray(p, mimeEnd));
-          p = mimeEnd + 1;
-        }
-
-        // Skip picture type byte
-        p += 1;
-
-        // Skip description null-terminated string
-        if (textEncoding === 0 || textEncoding === 3) {
-          while (p < frameDataOffset + frameSize && buffer[p] !== 0) {
-            p++;
-          }
+        if (!meta.coverUrl) {
+          let p = frameDataOffset;
+          const textEncoding = buffer[p];
           p += 1;
-        } else {
-          while (p + 1 < frameDataOffset + frameSize && !(buffer[p] === 0 && buffer[p + 1] === 0)) {
+
+          let mimeType = "";
+          if (isV2) {
+            const format = String.fromCharCode(buffer[p], buffer[p + 1], buffer[p + 2]);
+            mimeType = format.toLowerCase() === "png" ? "image/png" : "image/jpeg";
+            p += 3;
+          } else {
+            let mimeEnd = p;
+            while (mimeEnd < frameDataOffset + frameSize && buffer[mimeEnd] !== 0) {
+              mimeEnd++;
+            }
+            mimeType = new TextDecoder().decode(buffer.subarray(p, mimeEnd));
+            p = mimeEnd + 1;
+          }
+
+          // Skip picture type byte
+          p += 1;
+
+          // Skip description null-terminated string
+          if (textEncoding === 0 || textEncoding === 3) {
+            while (p < frameDataOffset + frameSize && buffer[p] !== 0) {
+              p++;
+            }
+            p += 1;
+          } else {
+            while (p + 1 < frameDataOffset + frameSize && !(buffer[p] === 0 && buffer[p + 1] === 0)) {
+              p += 2;
+            }
             p += 2;
           }
-          p += 2;
-        }
 
-        const imgData = buffer.subarray(p, frameDataOffset + frameSize);
-        const blob = new Blob([imgData], { type: mimeType });
-        return { url: URL.createObjectURL(blob), blob };
+          const imgData = buffer.subarray(p, frameDataOffset + frameSize);
+          const blob = new Blob([imgData], { type: mimeType || "image/jpeg" });
+          meta.coverBlob = blob;
+          meta.coverUrl = URL.createObjectURL(blob);
+        }
+      }
+
+      // Text frames
+      if (isV2) {
+        if (frameId === "TP1" && !meta.artist) meta.artist = readTextFrame(buffer, frameDataOffset, frameSize);
+        if (frameId === "TAL" && !meta.album) meta.album = readTextFrame(buffer, frameDataOffset, frameSize);
+        if (frameId === "TT2" && !meta.title) meta.title = readTextFrame(buffer, frameDataOffset, frameSize);
+      } else {
+        if ((frameId === "TPE1" || frameId === "TPE2") && !meta.artist) {
+          meta.artist = readTextFrame(buffer, frameDataOffset, frameSize);
+        }
+        if (frameId === "TALB" && !meta.album) {
+          meta.album = readTextFrame(buffer, frameDataOffset, frameSize);
+        }
+        if (frameId === "TIT2" && !meta.title) {
+          meta.title = readTextFrame(buffer, frameDataOffset, frameSize);
+        }
       }
 
       offset += headerSize + frameSize;
     }
+
+    if (!meta.artist && !meta.album && !meta.coverUrl && !meta.title) {
+      return null;
+    }
+    return meta;
   } catch (err) {
-    console.warn("Failed to extract ID3 cover art:", err);
+    console.warn("Failed to extract ID3 metadata:", err);
+  }
+  return null;
+}
+
+/** @deprecated use getID3Metadata — kept for call sites expecting cover only */
+export async function getID3CoverUrl(url: string): Promise<{ url: string; blob: Blob } | null> {
+  const meta = await getID3Metadata(url);
+  if (meta?.coverUrl && meta.coverBlob) {
+    return { url: meta.coverUrl, blob: meta.coverBlob };
   }
   return null;
 }
 
 /**
- * Custom React Hook to load and cache ID3 cover art dynamically
+ * Custom React Hook to load and cache ID3 cover + text metadata dynamically
  */
 export function useID3Cover(itemId: string | undefined, dbCoverUrl: string | undefined, mediaType?: string) {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [meta, setMeta] = useState<ID3Metadata | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
     if (!itemId || mediaType?.startsWith("video")) {
       setCoverUrl(null);
+      setMeta(null);
       return;
     }
     const activeItemId = itemId;
     if (dbCoverUrl) {
       setCoverUrl(dbCoverUrl);
+    }
+
+    if (id3MetaCache.has(activeItemId)) {
+      const cached = id3MetaCache.get(activeItemId)!;
+      setMeta(cached);
+      if (!dbCoverUrl && cached.coverUrl) setCoverUrl(cached.coverUrl);
       return;
     }
 
-    if (id3CoverCache.has(activeItemId)) {
-      setCoverUrl(id3CoverCache.get(activeItemId)!);
-      return;
+    if (id3CoverCache.has(activeItemId) && dbCoverUrl) {
+      setCoverUrl(id3CoverCache.get(activeItemId)! || dbCoverUrl);
+      // still try text meta if not cached
     }
 
     let active = true;
     setLoading(true);
 
-    async function extractCover() {
+    async function extractMeta() {
       try {
         const res = await api.request<{ url: string }>(`/media/items/${activeItemId}/play-url`);
         if (!active || !res?.url) {
@@ -187,62 +268,81 @@ export function useID3Cover(itemId: string | undefined, dbCoverUrl: string | und
           return;
         }
 
-        const id3Data = await getID3CoverUrl(res.url);
-        if (active) {
-          if (id3Data) {
-            id3CoverCache.set(activeItemId, id3Data.url);
-            setCoverUrl(id3Data.url);
+        const id3Data = await getID3Metadata(res.url);
+        if (!active) return;
 
-            // Upload cover to server in the background
+        if (id3Data) {
+          id3MetaCache.set(activeItemId, id3Data);
+          setMeta(id3Data);
+
+          if (id3Data.coverUrl) {
+            id3CoverCache.set(activeItemId, id3Data.coverUrl);
+            if (!dbCoverUrl) setCoverUrl(id3Data.coverUrl);
+          }
+
+          // 回写歌手/专辑到服务端（空字段才写）
+          if (id3Data.artist || id3Data.album) {
+            try {
+              await api.request(`/media/items/${activeItemId}/metadata`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  artist: id3Data.artist || null,
+                  album: id3Data.album || null,
+                }),
+              });
+            } catch (err) {
+              console.warn("Failed to patch ID3 text metadata:", err);
+            }
+          }
+
+          // Upload cover to server in the background
+          if (id3Data.coverBlob && !dbCoverUrl) {
             try {
               const formData = new FormData();
-              formData.append("file", id3Data.blob, "cover.jpg");
-              
+              formData.append("file", id3Data.coverBlob, "cover.jpg");
+
               const token = localStorage.getItem("super-token");
               const uploadResRaw = await fetch(`${getBaseUrl()}/media/upload-cover`, {
                 method: "POST",
                 body: formData,
                 headers: {
-                  ...(token ? { Authorization: `Bearer ${token}` } : {})
-                }
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
               });
-              
+
               if (uploadResRaw.ok) {
                 const uploadRes = await uploadResRaw.json();
                 if (uploadRes && uploadRes.url) {
-                  // Update the item's cover_url
                   await api.request(`/media/items/${activeItemId}/cover`, {
                     method: "PATCH",
-                    body: JSON.stringify({ cover_url: uploadRes.url })
+                    body: JSON.stringify({ cover_url: uploadRes.url }),
                   });
-                  // Also update the in-memory cache to use the permanent URL
                   id3CoverCache.set(activeItemId, uploadRes.url);
                 }
               }
             } catch (err) {
               console.warn("Failed to upload ID3 cover to server:", err);
             }
-
-          } else {
-            // Put null in cache to avoid re-fetching failed covers
-            id3CoverCache.set(activeItemId, "");
-            setCoverUrl(null);
           }
+        } else {
+          id3CoverCache.set(activeItemId, "");
+          id3MetaCache.set(activeItemId, {});
+          if (!dbCoverUrl) setCoverUrl(null);
         }
       } catch (e) {
-        console.warn("ID3 cover extraction hook error:", e);
+        console.warn("ID3 metadata extraction hook error:", e);
       } finally {
         if (active) setLoading(false);
       }
     }
 
-    extractCover();
+    extractMeta();
     return () => {
       active = false;
     };
   }, [itemId, dbCoverUrl]);
 
-  return { coverUrl, loading };
+  return { coverUrl, loading, meta };
 }
 
 interface AudioCoverProps {
@@ -265,7 +365,7 @@ export function AudioCover({ item, className, fallbackIconSize = 20 }: AudioCove
   if (coverToUse) {
     return (
       <img
-        src={coverToUse}
+        src={resolveAttachmentUrl(coverToUse)}
         alt={item.title || "audio cover"}
         className={cn("w-full h-full object-cover", className)}
         loading="lazy"

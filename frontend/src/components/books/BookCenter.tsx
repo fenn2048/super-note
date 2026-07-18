@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { api, getServerUrl } from "@/lib/api";
+import { api, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
 import { Book, BookGroup } from "@/types";
 import { cn } from "@/lib/utils";
 import { readBooks, readBookGroups } from "@/lib/offlineRead";
@@ -21,7 +21,8 @@ import {
   FileText,
   User,
   Tags,
-  Share2
+  Share2,
+  Plus,
 } from "lucide-react";
 
 interface BookCenterProps {
@@ -276,8 +277,8 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
 
       {/* Sidebar for library groups */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 border-r border-app-border bg-app-surface flex flex-col shrink-0 transition-transform duration-300 md:relative md:translate-x-0 md:bg-app-surface/30 md:z-0",
-        showMobileSidebar ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        "fixed inset-y-0 left-0 z-40 w-64 border-r border-app-border bg-app-surface flex flex-col shrink-0 transition-transform duration-300 overflow-hidden md:relative md:translate-x-0 md:bg-app-surface/30 md:z-0",
+        showMobileSidebar ? "translate-x-0 pointer-events-auto" : "-translate-x-full md:translate-x-0 pointer-events-none md:pointer-events-auto"
       )}>
         <div className="p-4 border-b border-app-border flex items-center justify-between">
           <h2 className="text-sm font-semibold flex items-center gap-2">
@@ -389,8 +390,8 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
           </div>
         </div>
 
-        {/* Add Group Form */}
-        <form onSubmit={handleCreateGroup} className="p-3 border-t border-app-border bg-app-surface/10">
+        {/* Add Group Form — 仅桌面；移动端不提供创建分类/合集 */}
+        <form onSubmit={handleCreateGroup} className="hidden md:block p-3 border-t border-app-border bg-app-surface/10">
           <div className="flex gap-1.5">
             <input
               type="text"
@@ -423,81 +424,48 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
             <p className="text-xs text-tx-tertiary mt-1">支持 EPUB, PDF, MOBI, AZW, CBZ, FB2 格式</p>
           </div>
         )}
-        {/* Top Header */}
-        <div className="px-4 md:px-6 py-4 border-b border-app-border bg-app-surface/10 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shrink-0">
-          {/* Search bar & Hamburger */}
-          <div className="flex items-center gap-3 flex-1 max-w-md">
+        {/* Top Header — 移动端预留状态栏 safe-area；导入入口改到网格加号卡片 */}
+        <div
+          className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border bg-app-surface/10 flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between shrink-0"
+          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
+        >
+          <div className="flex items-center gap-2.5 flex-1 max-w-md min-w-0">
             <button
               onClick={() => setShowMobileSidebar(prev => !prev)}
-              className="p-1.5 rounded-lg border border-app-border bg-app-surface text-tx-secondary hover:text-accent-primary md:hidden shrink-0 transition-colors"
+              className="p-2 rounded-xl border border-app-border bg-app-surface text-tx-secondary hover:text-accent-primary md:hidden shrink-0 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
               title="切换分类"
             >
-              <Menu size={14} />
+              <Menu size={16} />
             </button>
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
               <input
                 type="text"
                 placeholder="搜索书籍、作者..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-1.5 bg-app-surface border border-app-border rounded-lg text-xs focus:outline-none focus:border-accent-primary transition-colors text-tx-primary"
+                className="w-full pl-9 pr-4 py-2 md:py-1.5 bg-app-surface border border-app-border rounded-xl md:rounded-lg text-xs focus:outline-none focus:border-accent-primary transition-colors text-tx-primary"
               />
             </div>
           </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-3">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept=".epub,.pdf,.mobi,.azw,.azw3,.cbz,.fb2"
-              className="hidden"
-            />
-            <button
-              onClick={handleUploadClick}
-              disabled={isUploading}
-              className="flex items-center gap-2 px-4 py-1.5 bg-accent-primary text-white rounded-lg text-xs font-semibold hover:bg-accent-primary/90 active:scale-95 transition-all shadow-sm disabled:opacity-50"
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>正在导入...</span>
-                </>
-              ) : (
-                <>
-                  <Upload size={14} />
-                  <span>导入书籍</span>
-                </>
-              )}
-            </button>
-          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".epub,.pdf,.mobi,.azw,.azw3,.cbz,.fb2"
+            className="hidden"
+          />
         </div>
 
-        {/* Books List Grid */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Books List Grid — 移动 3 列，桌面多列，封面 3:4；末尾加号卡片导入 */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(1rem+var(--safe-area-bottom,0px))]">
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-tx-tertiary">
               <Loader2 size={24} className="animate-spin text-accent-primary" />
               <span className="text-xs">加载书库中...</span>
             </div>
-          ) : filteredBooks.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center gap-3 text-tx-tertiary text-center border-2 border-dashed border-app-border rounded-xl">
-              <BookOpen size={36} className="text-tx-tertiary/40" />
-              <div className="text-xs font-semibold">书库空空如也</div>
-              <div className="text-[10px] text-tx-tertiary max-w-xs">
-                支持导入 EPUB, PDF, MOBI, CBZ, FB2 格式电子书。
-              </div>
-              <button
-                onClick={handleUploadClick}
-                className="mt-2 text-xs text-accent-primary hover:underline"
-              >
-                立即导入第一本书籍
-              </button>
-            </div>
           ) : (
-            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
               {filteredBooks.map((book) => {
                 const coverBg = getHashColor(book.title);
                 let coverUrl: string | null = null;
@@ -505,7 +473,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                   try {
                     const meta = JSON.parse(book.metadata);
                     if (meta.coverAttachmentId) {
-                      coverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+                      coverUrl = resolveAttachmentUrl(`/api/attachments/${meta.coverAttachmentId}`);
                     }
                   } catch {}
                 }
@@ -513,90 +481,81 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                   <div
                     key={book.bookHash}
                     onClick={() => onOpenBook(book.bookHash)}
-                    className="group relative flex flex-col bg-app-surface border border-app-border rounded-lg overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:border-accent-primary/30 active:scale-[0.98] transition-all"
+                    className="group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all"
                   >
-                    {/* Book Cover */}
-                    <div className="aspect-[3/4] w-full relative flex flex-col justify-between overflow-hidden border-b border-app-border select-none" style={{ backgroundColor: coverUrl ? undefined : coverBg }}>
+                    <div
+                      className="aspect-[3/4] w-full relative overflow-hidden rounded-md shadow-sm border border-app-border/30 select-none bg-app-surface"
+                      style={{ backgroundColor: coverUrl ? undefined : coverBg }}
+                    >
                       {coverUrl ? (
-                        <img src={coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                        <img src={coverUrl} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <>
-                          {/* Spine shading */}
                           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-r from-black/25 via-white/10 to-transparent"></div>
-                          {/* Title & Author on Cover */}
-                          <div className="my-auto text-center px-1 flex flex-col items-center justify-center">
-                            <h3 className="text-[10px] font-bold text-white leading-tight font-serif line-clamp-3 text-shadow">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
+                            <h3 className="text-[11px] sm:text-xs font-bold text-white leading-tight font-serif line-clamp-4">
                               {book.title}
                             </h3>
-                            <p className="text-[8px] text-white/80 mt-0.5 line-clamp-1">
+                            <p className="text-[9px] text-white/80 mt-1 line-clamp-1 hidden sm:block">
                               {book.author || "未知作者"}
                             </p>
                           </div>
                         </>
                       )}
-                      
-                      {/* Formats badge */}
-                      <span className="absolute top-1 right-1 text-[7px] font-bold px-1.5 py-0.5 rounded bg-black/40 text-white uppercase tracking-wider">
-                        {book.format}
-                      </span>
-                      
-                      {/* Sharing tag indicator */}
-                      {book.visibility === "WORKSPACE" && (
-                        <div className="absolute bottom-1 left-1.5 flex items-center gap-0.5 text-[7px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-semibold">
-                          <Globe size={6} />
-                          <span>共享</span>
-                        </div>
-                      )}
+
+                      <div className="absolute top-1.5 left-1.5 opacity-0 md:group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
+                        <button
+                          onClick={(e) => handleEditClick(book, e)}
+                          className="p-1 text-white hover:text-accent-primary hover:bg-white/10 rounded transition-all"
+                          title="编辑信息"
+                        >
+                          <Edit size={12} />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteBook(book.bookHash, e)}
+                          className="p-1 text-white hover:text-red-400 hover:bg-white/10 rounded transition-all"
+                          title="删除书籍"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Meta info info */}
-                    <div className="p-2 flex flex-col flex-1">
-                      <div className="text-[10px] font-semibold truncate text-tx-primary group-hover:text-accent-primary transition-colors">
+                    <div className="mt-2 px-0.5">
+                      <div className="text-[12px] sm:text-[13px] font-medium text-tx-primary line-clamp-2 leading-snug group-hover:text-accent-primary transition-colors">
                         {book.title}
                       </div>
-                      <div className="text-[8px] text-tx-secondary truncate mt-0.5">
+                      <div className="text-[10px] text-tx-tertiary truncate mt-0.5 hidden md:block">
                         {book.author || "未知作者"}
                       </div>
-                      
-                      {/* Progress bar */}
-                      <div className="mt-1.5 space-y-0.5">
-                        <div className="flex justify-between text-[8px] text-tx-tertiary">
-                          <span>进度: {book.progress ? `${Math.round(book.progress)}%` : "0%"}</span>
-                          {book.creatorName && book.workspaceId && (
-                            <span className="text-[7px] max-w-[50px] truncate text-tx-tertiary">
-                              {book.creatorName}
-                            </span>
-                          )}
-                        </div>
-                        <div className="w-full h-0.5 bg-app-border rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-accent-primary rounded-full"
-                            style={{ width: `${book.progress || 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Hover Actions Menu overlay */}
-                    <div className="absolute top-1 left-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
-                      <button
-                        onClick={(e) => handleEditClick(book, e)}
-                        className="p-0.5 text-white hover:text-accent-primary hover:bg-white/10 rounded transition-all"
-                        title="编辑信息"
-                      >
-                        <Edit size={10} />
-                      </button>
-                      <button
-                        onClick={(e) => handleDeleteBook(book.bookHash, e)}
-                        className="p-0.5 text-white hover:text-red-400 hover:bg-white/10 rounded transition-all"
-                        title="删除书籍"
-                      >
-                        <Trash2 size={10} />
-                      </button>
                     </div>
                   </div>
                 );
               })}
+
+              {/* 与书籍封面同尺寸的加号卡片 → 导入书籍 */}
+              <button
+                type="button"
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                title="导入书籍"
+                aria-label="导入书籍"
+                className="group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all text-left disabled:opacity-60 disabled:cursor-wait"
+              >
+                <div className="aspect-[3/4] w-full relative overflow-hidden rounded-md shadow-sm border border-app-border/40 bg-white dark:bg-app-surface flex items-center justify-center hover:border-accent-primary/40 hover:bg-app-hover/40 transition-colors">
+                  {isUploading ? (
+                    <Loader2 size={36} className="animate-spin text-accent-primary" />
+                  ) : (
+                    <Plus
+                      size={40}
+                      strokeWidth={1.5}
+                      className="text-tx-tertiary/70 group-hover:text-accent-primary transition-colors"
+                    />
+                  )}
+                </div>
+                {/* 占位与书籍标题区等高，保持网格对齐 */}
+                <div className="mt-2 px-0.5 min-h-[1.25rem] sm:min-h-[2rem]" aria-hidden />
+              </button>
             </div>
           )}
         </div>

@@ -2075,6 +2075,17 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 33,
+    name: "media-items-add-album",
+    up: (db) => {
+      // 音频专辑名（从 ID3 TALB 等解析后回写）
+      const cols = db.prepare("PRAGMA table_info(media_items)").all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "album")) {
+        db.exec("ALTER TABLE media_items ADD COLUMN album TEXT");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

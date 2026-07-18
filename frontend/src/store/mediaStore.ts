@@ -6,6 +6,7 @@ export interface MediaPlayItem {
   type: "video" | "audio";
   alist_path: string;
   artist?: string;
+  album?: string;
   cover_url?: string;
   duration?: number;
 }
@@ -39,6 +40,12 @@ export interface MediaState {
   setPlayMode: (mode: PlayMode) => void;
   nextMedia: (auto?: boolean) => void;
   prevMedia: () => void;
+  /** 仅从播放队列移除，不删除媒体文件 */
+  removeFromPlaylist: (index: number) => void;
+  /** 清空播放队列（不删文件）；停止当前播放 */
+  clearPlaylist: () => void;
+  /** 合并更新当前曲目的元数据（歌手/专辑/时长等） */
+  patchCurrentMedia: (patch: Partial<MediaPlayItem>) => void;
 }
 
 export const useMediaStore = create<MediaState>()((set, get) => ({
@@ -79,6 +86,76 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   setMuted: (isMuted) => set({ isMuted }),
   setPlaylist: (playlist) => set({ playlist }),
   setPlayMode: (playMode) => set({ playMode }),
+
+  removeFromPlaylist: (index) => {
+    const { playlist, currentIndex, currentMedia } = get();
+    if (index < 0 || index >= playlist.length) return;
+
+    const nextList = playlist.filter((_, i) => i !== index);
+    if (nextList.length === 0) {
+      set({
+        playlist: [],
+        currentIndex: -1,
+        currentMedia: null,
+        isPlaying: false,
+        currentTime: 0,
+        duration: 0,
+      });
+      return;
+    }
+
+    // 删的是当前曲：切到同 index（原下一首）或末尾
+    if (index === currentIndex) {
+      const newIndex = Math.min(index, nextList.length - 1);
+      const nextItem = nextList[newIndex];
+      set({
+        playlist: nextList,
+        currentIndex: newIndex,
+        currentMedia: nextItem,
+        isPlaying: true,
+        currentTime: 0,
+        duration: nextItem.duration || 0,
+        seekTime: null,
+      });
+      return;
+    }
+
+    // 删的是当前之前的曲，currentIndex 需前移
+    const newCurrentIndex = index < currentIndex ? currentIndex - 1 : currentIndex;
+    set({
+      playlist: nextList,
+      currentIndex: newCurrentIndex,
+      currentMedia: currentMedia && nextList.some((p) => p.id === currentMedia.id)
+        ? currentMedia
+        : nextList[newCurrentIndex] || null,
+    });
+  },
+
+  clearPlaylist: () => {
+    set({
+      playlist: [],
+      currentIndex: -1,
+      currentMedia: null,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+      seekTime: null,
+    });
+  },
+
+  patchCurrentMedia: (patch) => {
+    const { currentMedia, playlist, currentIndex } = get();
+    if (!currentMedia) return;
+    const updated = { ...currentMedia, ...patch };
+    const nextPlaylist = playlist.map((item, i) =>
+      i === currentIndex || item.id === currentMedia.id ? { ...item, ...patch } : item
+    );
+    set({
+      currentMedia: updated,
+      playlist: nextPlaylist,
+      ...(patch.duration != null ? { duration: patch.duration } : {}),
+    });
+  },
 
   nextMedia: (auto = false) => {
     const { playlist, currentIndex, playMode, currentMedia } = get();

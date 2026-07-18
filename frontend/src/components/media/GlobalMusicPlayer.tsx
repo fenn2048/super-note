@@ -34,7 +34,10 @@ export default function GlobalMusicPlayer() {
     setPlayMode,
     seekTime,
     resetSeek,
-    playMedia
+    playMedia,
+    removeFromPlaylist,
+    clearPlaylist,
+    patchCurrentMedia,
   } = useMediaStore();
 
   const [playUrl, setPlayUrl] = useState<string>("");
@@ -51,8 +54,19 @@ export default function GlobalMusicPlayer() {
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  const { coverUrl: id3Cover } = useID3Cover(currentMedia?.id, currentMedia?.cover_url, currentMedia?.type);
+  const { coverUrl: id3Cover, meta: id3Meta } = useID3Cover(currentMedia?.id, currentMedia?.cover_url, currentMedia?.type);
   const coverToUse = id3Cover || currentMedia?.cover_url;
+
+  // ID3 歌手/专辑回填到播放状态
+  useEffect(() => {
+    if (!currentMedia || !id3Meta) return;
+    const patch: { artist?: string; album?: string } = {};
+    if (id3Meta.artist && !currentMedia.artist) patch.artist = id3Meta.artist;
+    if (id3Meta.album && !currentMedia.album) patch.album = id3Meta.album;
+    if (Object.keys(patch).length > 0) {
+      patchCurrentMedia(patch);
+    }
+  }, [currentMedia?.id, id3Meta?.artist, id3Meta?.album]);
 
   // 1. Fetch play URL when currentMedia changes (only for audio)
   useEffect(() => {
@@ -155,8 +169,85 @@ export default function GlobalMusicPlayer() {
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLAudioElement>) => {
     const audio = e.currentTarget;
-    setDuration(audio.duration);
+    const d = audio.duration;
+    if (!d || isNaN(d)) return;
+    setDuration(d);
+    // 回写时长到 store / 后端（仅当库里没有有效时长时）
+    if (currentMedia && (!currentMedia.duration || currentMedia.duration <= 0)) {
+      patchCurrentMedia({ duration: Math.floor(d) });
+      api.request(`/media/items/${currentMedia.id}/metadata`, {
+        method: "PATCH",
+        body: JSON.stringify({ duration: Math.floor(d) }),
+      }).catch(() => {});
+    }
   };
+
+  // Media Session（Android 锁屏 / 系统媒体控件）
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !currentMedia || currentMedia.type !== "audio") {
+      return;
+    }
+
+    const artwork: MediaImage[] = [];
+    const cover = coverToUse || currentMedia.cover_url;
+    if (cover) {
+      artwork.push(
+        { src: cover, sizes: "96x96", type: "image/jpeg" },
+        { src: cover, sizes: "256x256", type: "image/jpeg" },
+        { src: cover, sizes: "512x512", type: "image/jpeg" },
+      );
+    }
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentMedia.title || "未知曲目",
+        artist: currentMedia.artist || "未知歌手",
+        album: currentMedia.album || "",
+        artwork,
+      });
+      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    } catch (err) {
+      console.warn("mediaSession metadata failed:", err);
+    }
+
+    const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch { /* some actions unsupported */ }
+    };
+
+    setHandler("play", () => resumeMedia());
+    setHandler("pause", () => pauseMedia());
+    setHandler("previoustrack", () => prevMedia());
+    setHandler("nexttrack", () => nextMedia(false));
+    setHandler("seekto", (details) => {
+      if (details.seekTime != null && audioRef.current) {
+        audioRef.current.currentTime = details.seekTime;
+        setCurrentTime(details.seekTime);
+      }
+    });
+
+    return () => {
+      setHandler("play", null);
+      setHandler("pause", null);
+      setHandler("previoustrack", null);
+      setHandler("nexttrack", null);
+      setHandler("seekto", null);
+    };
+  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, coverToUse, isPlaying]);
+
+  // 同步 mediaSession position state
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !("setPositionState" in navigator.mediaSession)) return;
+    if (!duration || duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: duration || 0,
+        playbackRate: 1,
+        position: Math.min(currentTime || 0, duration || 0),
+      });
+    } catch { /* ignore */ }
+  }, [currentTime, duration, isPlaying]);
 
   const handleEnded = () => {
     if (currentMedia) {
@@ -310,7 +401,8 @@ export default function GlobalMusicPlayer() {
               item={currentMedia}
               className={cn(
                 "w-full h-full object-cover rounded-full select-none transition-transform duration-300 group-hover:scale-105",
-                isPlaying ? "animate-spin-slow" : ""
+                "animate-[spin_10s_linear_infinite]",
+                !isPlaying && "[animation-play-state:paused]"
               )}
               fallbackIconSize={16}
             />
@@ -325,7 +417,7 @@ export default function GlobalMusicPlayer() {
               {currentMedia.title}
             </span>
             <span className="text-[10px] text-tx-tertiary truncate">
-              {currentMedia.artist || "未知歌手"}
+              {[currentMedia.artist || "未知歌手", currentMedia.album].filter(Boolean).join(" · ")}
             </span>
           </div>
         </div>
@@ -492,16 +584,33 @@ export default function GlobalMusicPlayer() {
               exit={{ opacity: 0, y: 20 }}
               className="fixed bottom-24 right-6 w-80 bg-app-sidebar/95 dark:bg-[#181824]/95 backdrop-blur-xl border border-app-border/80 rounded-2xl shadow-2xl z-50 p-4 flex flex-col max-h-[350px] overflow-hidden"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-app-border/40 select-none">
+              <div className="flex items-center justify-between pb-2 border-b border-app-border/40 select-none gap-2">
                 <span className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1.5">
                   <ListMusic size={14} /> 播放队列 ({playlist.length})
                 </span>
-                <button 
-                  onClick={() => setShowQueue(false)} 
-                  className="text-tx-tertiary hover:text-tx-primary text-xs"
-                >
-                  关闭
-                </button>
+                <div className="flex items-center gap-2">
+                  {playlist.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("确定清空播放列表？音频文件不会被删除。")) {
+                          clearPlaylist();
+                          setShowQueue(false);
+                        }
+                      }}
+                      className="text-[11px] text-accent-danger hover:underline"
+                      title="一键移除全部（仅播放列表）"
+                    >
+                      一键移除
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setShowQueue(false)} 
+                    className="text-tx-tertiary hover:text-tx-primary text-xs"
+                  >
+                    关闭
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto mt-2 pr-1 flex flex-col gap-1.5">
                 {playlist.map((item, idx) => (
@@ -509,20 +618,33 @@ export default function GlobalMusicPlayer() {
                     key={item.id + "-" + idx}
                     onClick={() => playMedia(item, playlist)}
                     className={cn(
-                      "flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors text-xs font-medium",
+                      "group/queue flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors text-xs font-medium",
                       idx === currentIndex 
                         ? "bg-accent-primary/10 text-accent-primary" 
                         : "hover:bg-app-hover text-tx-secondary hover:text-tx-primary"
                     )}
                   >
                     <span className="w-4 text-center text-[10px] text-tx-tertiary">{idx + 1}</span>
-                    <div className="flex-1 truncate">
+                    <div className="flex-1 truncate min-w-0">
                       <p className="truncate font-semibold">{item.title}</p>
-                      {item.artist && <p className="text-[10px] text-tx-tertiary truncate">{item.artist}</p>}
+                      <p className="text-[10px] text-tx-tertiary truncate">
+                        {[item.artist, item.album].filter(Boolean).join(" · ") || "未知歌手"}
+                      </p>
                     </div>
-                    {item.duration && (
-                      <span className="text-[10px] text-tx-tertiary shrink-0">{formatDuration(item.duration)}</span>
-                    )}
+                    {item.duration ? (
+                      <span className="text-[10px] text-tx-tertiary shrink-0 group-hover/queue:hidden">{formatDuration(item.duration)}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      title="从播放列表移除"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromPlaylist(idx);
+                      }}
+                      className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-tx-tertiary hover:text-accent-danger hover:bg-accent-danger/10 opacity-100 md:opacity-0 md:group-hover/queue:opacity-100 transition-opacity"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -618,7 +740,7 @@ export default function GlobalMusicPlayer() {
                     {currentMedia.title}
                   </h2>
                   <p className="text-sm font-semibold text-white/60 mt-1 lg:mt-2">
-                    {currentMedia.artist || "未知歌手"}
+                    {[currentMedia.artist || "未知歌手", currentMedia.album].filter(Boolean).join(" · ")}
                   </p>
                 </div>
 

@@ -617,6 +617,54 @@ media.patch("/items/:id/cover", requireWorkspaceFeature("media"), async (c) => {
   return c.json({ success: true, cover_url });
 });
 
+/**
+ * 轻量回写元数据（ID3 解析 / 播放器 loadedmetadata）。
+ * 任意登录用户可写：仅填充空字段，不覆盖已有值（除非 force=true 且为管理员）。
+ */
+media.patch("/items/:id/metadata", requireWorkspaceFeature("media"), async (c) => {
+  const userId = getAuthUserId(c);
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  const id = c.req.param("id");
+  const body = await c.req.json() as {
+    artist?: string | null;
+    album?: string | null;
+    duration?: number | null;
+    force?: boolean;
+  };
+
+  const db = getDb();
+  const item = db.prepare("SELECT * FROM media_items WHERE id = ?").get(id) as any;
+  if (!item) return c.json({ error: "单品不存在" }, 404);
+
+  const force = !!body.force && canUserManageMedia(item.workspace_id, userId);
+  const nextArtist =
+    body.artist != null && String(body.artist).trim()
+      ? (force || !item.artist ? String(body.artist).trim() : item.artist)
+      : item.artist;
+  const nextAlbum =
+    body.album != null && String(body.album).trim()
+      ? (force || !item.album ? String(body.album).trim() : item.album)
+      : item.album;
+  const nextDuration =
+    body.duration != null && Number(body.duration) > 0
+      ? (force || !item.duration ? Math.floor(Number(body.duration)) : item.duration)
+      : item.duration;
+
+  db.prepare(
+    `UPDATE media_items
+     SET artist = ?, album = ?, duration = ?, updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(nextArtist || null, nextAlbum || null, nextDuration || null, id);
+
+  return c.json({
+    success: true,
+    artist: nextArtist || null,
+    album: nextAlbum || null,
+    duration: nextDuration || null,
+  });
+});
+
 media.put("/items/:id", requireWorkspaceFeature("media"), async (c) => {
   const userId = getAuthUserId(c);
   if (!userId) return c.json({ error: "未授权" }, 401);
@@ -630,7 +678,7 @@ media.put("/items/:id", requireWorkspaceFeature("media"), async (c) => {
     return c.json({ error: "仅管理员可编辑单品" }, 403);
   }
 
-  const { collection_id, title, cover_url, description, alist_path, artist, duration, year, genre, sort_order, tags } = await c.req.json() as any;
+  const { collection_id, title, cover_url, description, alist_path, artist, album, duration, year, genre, sort_order, tags } = await c.req.json() as any;
   if (!title || !alist_path) {
     return c.json({ error: "标题和 Alist 路径不能为空" }, 400);
   }
@@ -638,9 +686,9 @@ media.put("/items/:id", requireWorkspaceFeature("media"), async (c) => {
   db.transaction(() => {
     db.prepare(`
       UPDATE media_items
-      SET collection_id = ?, title = ?, cover_url = ?, description = ?, alist_path = ?, artist = ?, duration = ?, year = ?, genre = ?, sort_order = ?, updated_at = datetime('now')
+      SET collection_id = ?, title = ?, cover_url = ?, description = ?, alist_path = ?, artist = ?, album = ?, duration = ?, year = ?, genre = ?, sort_order = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(collection_id || null, title, cover_url || null, description || null, alist_path, artist || null, duration || null, year || null, JSON.stringify(genre || []), sort_order || 0, id);
+    `).run(collection_id || null, title, cover_url || null, description || null, alist_path, artist || null, album || null, duration || null, year || null, JSON.stringify(genre || []), sort_order || 0, id);
 
     // Sync tags
     db.prepare("DELETE FROM media_tags WHERE media_id = ?").run(id);
