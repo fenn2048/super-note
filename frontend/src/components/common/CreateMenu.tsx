@@ -84,7 +84,9 @@ export default function CreateMenu({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 8 }}
             className={cn(
-              "fixed z-50 w-56 rounded-2xl border border-app-border bg-app-elevated shadow-xl p-2",
+              "z-50 w-56 rounded-2xl border border-app-border bg-app-elevated shadow-xl p-2",
+              // 默认 fixed（移动 FAB）；桌面 Rail 传入 absolute 锚在按钮旁
+              className?.includes("absolute") ? "absolute" : "fixed",
               className,
             )}
           >

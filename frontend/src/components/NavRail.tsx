@@ -31,7 +31,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
-  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell,
+  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Plus,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -40,6 +40,7 @@ import { api, broadcastLogout, getCurrentWorkspace, getServerUrl, clearServerUrl
 import { ViewMode, WorkspaceFeatures } from "@/types";
 import { cn } from "@/lib/utils";
 import MigrationModal from "@/components/MigrationModal";
+import CreateMenu from "@/components/common/CreateMenu";
 import { useRailMode, nextRailMode, RailMode } from "@/hooks/useRailMode";
 import { getAppInfo, isDesktop as isDesktopApp, switchDesktopToFull, type AppInfo } from "@/lib/desktopBridge";
 import { clearLocalIdMap, clearQueue, getQueueLength } from "@/lib/offlineQueue";
@@ -139,6 +140,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
   // D-2：迁移向导弹窗。点"切换到云端"会先弹出，让用户选择是否把本地数据迁过去。
   const [showMigration, setShowMigration] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [desktopInfo, setDesktopInfo] = useState<AppInfo | null>(null);
 
   useEffect(() => {
@@ -398,6 +400,46 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
           )}>
             {(currentUser.displayName || currentUser.username || "").slice(0, 1)}
           </span>
+        </div>
+      )}
+
+      {/* 桌面全局「+」：与移动端 CreateMenu 一致 */}
+      {!isMobile && (
+        <div className="relative mb-1">
+          <button
+            type="button"
+            onClick={() => setCreateMenuOpen(true)}
+            title={showLabel ? undefined : "快速创建"}
+            aria-label="快速创建"
+            className={cn(
+              itemBaseClass,
+              "text-white bg-accent-primary hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/25",
+            )}
+          >
+            <Plus size={18} strokeWidth={2.5} />
+            {showLabel && (
+              <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1 font-medium">
+                创建
+              </span>
+            )}
+          </button>
+          <CreateMenu
+            open={createMenuOpen}
+            onClose={() => setCreateMenuOpen(false)}
+            showCamera={false}
+            className="absolute left-full ml-2 bottom-0"
+            onAction={(action) => {
+              if (action === "note") {
+                window.dispatchEvent(new CustomEvent("super:quick-new-note"));
+              } else if (action === "diary") {
+                window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+              } else if (action === "task") {
+                openTasksEntry();
+                actions.setViewMode("projects");
+                window.dispatchEvent(new CustomEvent("super:quick-new-task"));
+              }
+            }}
+          />
         </div>
       )}
 
