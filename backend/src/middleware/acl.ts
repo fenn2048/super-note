@@ -8,6 +8,14 @@
  *
  * 权限级别（由低到高）：viewer < commenter < editor < admin < owner
  * 操作权限映射：read < comment < write < manage
+ *
+ * 角色 → 最高可执行权限（严格阶梯，名实一致）：
+ *   viewer    → read     仅查看
+ *   commenter → comment  可评论
+ *   editor    → write    可编辑
+ *   admin/owner → manage 可管理
+ *
+ * 若产品需要「家庭全员可写」，应在邀请时默认授予 editor，而不是把 viewer 提权为 write。
  */
 import type { Context, Next } from "hono";
 import { getDb } from "../db/schema";
@@ -30,10 +38,10 @@ const PERM_LEVEL: Record<Permission, number> = {
   manage: 4,
 };
 
-// 角色 → 最高可执行权限（家庭空间全员协作：全员皆有写/编辑权限）
+// 角色 → 最高可执行权限
 const ROLE_MAX_PERM: Record<WorkspaceRole, Permission> = {
-  viewer: "write",
-  commenter: "write",
+  viewer: "read",
+  commenter: "comment",
   editor: "write",
   admin: "manage",
   owner: "manage",

@@ -34,7 +34,12 @@ const ai = new Hono();
 function resolveScope(
   c: any,
 ): { userId: string; workspaceId: string | null } | { error: Response } {
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
+  if (!userId) {
+    return {
+      error: c.json({ error: "未授权", code: "UNAUTHENTICATED" }, 401) as Response,
+    };
+  }
   const raw = (c.req.query("workspaceId") || "").trim();
   const ws = !raw || raw === "personal" || raw === "null" ? null : raw;
 
@@ -1060,7 +1065,7 @@ ai.post("/parse-document", async (c) => {
     return c.json({ error: "未配置 API Key" }, 400);
   }
 
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
 
   try {
     const formData = await c.req.formData();
@@ -1522,7 +1527,7 @@ ai.post("/batch-format", async (c) => {
     return c.json({ error: "未配置 API Key" }, 400);
   }
 
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const { noteIds } = await c.req.json() as { noteIds: string[] };
 
   if (!noteIds || noteIds.length === 0) {
@@ -1980,7 +1985,7 @@ function getConversation(
 // 返回当前用户的会话（按 updatedAt 倒序），每条附最近一条消息做 preview
 ai.get("/conversations", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
 
   const rows = db.prepare(`
     SELECT
@@ -2026,7 +2031,7 @@ ai.get("/conversations", (c) => {
 // body: { title? }  创建新会话并返回其 id
 ai.post("/conversations", async (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   let body: { title?: string } = {};
   try { body = await c.req.json(); } catch { /* 允许空 body */ }
   const title = typeof body.title === "string" ? body.title.trim().slice(0, 100) : "";
@@ -2060,7 +2065,7 @@ ai.post("/conversations", async (c) => {
 // PATCH /api/ai/conversations/:id   body: { title?, archived? }
 ai.patch("/conversations/:id", async (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const id = c.req.param("id");
 
   let body: { title?: string; archived?: boolean } = {};
@@ -2092,7 +2097,7 @@ ai.patch("/conversations/:id", async (c) => {
 // 连带删除会话下的所有消息（SQLite ALTER 加列拿不到 FK CASCADE，这里显式删）
 ai.delete("/conversations/:id", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const id = c.req.param("id");
 
   const conv = getConversation(db, userId, id);
@@ -2113,7 +2118,7 @@ ai.delete("/conversations/:id", (c) => {
 //   - 未传：返回"最近活跃会话"的消息（兼容旧前端）；若该用户没任何消息/会话则返回 []
 ai.get("/chat-history", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const limitParam = Number(c.req.query("limit") || "100");
   const limit = Math.min(500, Math.max(1, Number.isFinite(limitParam) ? limitParam : 100));
   const convIdParam = c.req.query("conversationId") || "";
@@ -2174,7 +2179,7 @@ function safeParseRefs(s: string): { id: string; title: string }[] | undefined {
 // 返回：入库的 { id, createdAt, conversationId }
 ai.post("/chat-history", async (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
 
   let body: {
     id?: string;
@@ -2261,7 +2266,7 @@ ai.post("/chat-history", async (c) => {
 // - 未传：兜底行为——清空"最近活跃会话"的消息（兼容旧前端的"清空聊天"按钮）
 ai.delete("/chat-history", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const convIdParam = c.req.query("conversationId") || "";
 
   let convId = "";
@@ -2340,7 +2345,7 @@ function normalizePromptInput(body: { name?: unknown; prompt?: unknown }):
 // GET /api/ai/prompts — 列出当前用户所有自定义指令
 ai.get("/prompts", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const rows = db.prepare(`
     SELECT id, userId, name, prompt, usageCount, lastUsedAt, createdAt, updatedAt
       FROM ai_custom_prompts
@@ -2354,7 +2359,7 @@ ai.get("/prompts", (c) => {
 // POST /api/ai/prompts — 新建
 ai.post("/prompts", async (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const body = await c.req.json().catch(() => ({})) as { name?: unknown; prompt?: unknown };
   const norm = normalizePromptInput(body);
   if (!norm.ok) return c.json({ error: norm.error }, 400);
@@ -2381,7 +2386,7 @@ ai.post("/prompts", async (c) => {
 // PUT /api/ai/prompts/:id — 更新（可改名、可改内容）
 ai.put("/prompts/:id", async (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const id = c.req.param("id");
   const body = await c.req.json().catch(() => ({})) as { name?: unknown; prompt?: unknown };
   const norm = normalizePromptInput(body);
@@ -2414,7 +2419,7 @@ ai.put("/prompts/:id", async (c) => {
 // DELETE /api/ai/prompts/:id
 ai.delete("/prompts/:id", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const id = c.req.param("id");
   const info = db.prepare(
     "DELETE FROM ai_custom_prompts WHERE id = ? AND userId = ?",
@@ -2428,7 +2433,7 @@ ai.delete("/prompts/:id", (c) => {
 // 里的"最近编辑"维度。
 ai.post("/prompts/:id/touch", (c) => {
   const db = getDb();
-  const userId = c.req.header("X-User-Id") || "demo";
+  const userId = c.req.header("X-User-Id") || "";
   const id = c.req.param("id");
   const info = db.prepare(`
     UPDATE ai_custom_prompts

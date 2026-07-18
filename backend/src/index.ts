@@ -65,9 +65,62 @@ import { startAiTaskWorker, stopAiTaskWorker } from "./services/ai-worker";
 
 const app = new Hono();
 
+/**
+ * CORS origin 解析。
+ * ---------------------------------------------------------------------------
+ * 历史实现 `origin => origin || "*"` 会反射任意 Origin 且 credentials=true，
+ * 浏览器场景下等价于对任意站点开放带 cookie 的跨域 API（CSRF / 数据窃取面）。
+ *
+ * 规则：
+ *   1. 无 Origin（curl、同源、部分原生 WebView）→ 放行（返回请求 origin 或 * 不适用，返回 undefined 让中间件不拦）
+ *   2. ALLOWED_ORIGINS 白名单命中 → 回显该 origin
+ *   3. 开发模式（NODE_ENV !== production）：额外允许 localhost / 127.0.0.1 任意端口
+ *   4. 生产未配置白名单且非 localhost → 拒绝（返回 null，不设 ACAO）
+ *
+ * ALLOWED_ORIGINS 格式：逗号分隔完整 origin，如
+ *   https://note.example.com,http://localhost:5173
+ */
+function parseAllowedOrigins(): string[] {
+  return (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    // http(s)://localhost、capacitor://localhost、ionic://localhost 等本地壳
+    return (
+      u.hostname === "localhost" ||
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "[::1]" ||
+      u.hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveCorsOrigin(origin: string): string | null | undefined {
+  if (!origin) return undefined;
+
+  const allowed = parseAllowedOrigins();
+  if (allowed.includes(origin)) return origin;
+
+  // 本机 / 原生壳（localhost）一律放行，覆盖：
+  //   - Vite dev (http://localhost:5173)
+  //   - Capacitor/Ionic WebView (capacitor://localhost 等)
+  //   - Electron 本地页面
+  // 生产公网域名必须进 ALLOWED_ORIGINS，不会被这条放过。
+  if (isLoopbackOrigin(origin)) return origin;
+
+  return null;
+}
+
 app.use("*", logger());
 app.use("*", cors({
-  origin: (origin) => origin || "*",
+  origin: (origin) => resolveCorsOrigin(origin || ""),
   allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   // 注意：自定义 header 必须在这里逐一列出，浏览器/WebView 跨域时才会让 OPTIONS 预检放行。
   //   - X-Sudo-Token：管理员高危操作（备份配置、删除、恢复、邮件发送等）必带；
@@ -246,7 +299,7 @@ app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
 app.get("/api/settings", (c) => {
   const db = getDb();
   const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled' OR key = 'login_captcha_enabled'").all() as { key: string; value: string }[];
-  const result: Record<string, string> = { site_title: "ark-notes", site_favicon: "", editor_font_family: "", editor_lxgw_wenkai_enabled: "false", debug_files_query: "false", web_ui_enabled: "true", login_captcha_enabled: "false" };
+  const result: Record<string, string> = { site_title: "蜉蝣", site_favicon: "", editor_font_family: "", editor_lxgw_wenkai_enabled: "false", debug_files_query: "false", web_ui_enabled: "true", login_captcha_enabled: "false" };
   for (const row of rows) {
     result[row.key] = row.value;
   }
@@ -721,7 +774,7 @@ try {
 }
 
 
-console.log(`🚀 ark-notes API running on http://localhost:${port}`);
+console.log(`🚀 蜉蝣 API running on http://localhost:${port}`);
 console.log(`📖 OpenAPI 文档: http://localhost:${port}/api/openapi.json`);
 
 // @hono/node-server 的 serve 返回底层 http.Server；拿到后挂 WebSocket
