@@ -1,4 +1,4 @@
-# super-note
+# 蜉蝣 (super-note)
 
 > 自托管的私有知识库，对标群晖 Note Station。
 >
@@ -56,10 +56,20 @@ React 18 · TypeScript · Vite 5 · Tiptap 3 · Tailwind · Hono 4 · SQLite(FTS
 ```bash
 git clone https://github.com/cropflre/super-note.git
 cd super-note
-docker-compose up -d
+docker compose up -d          # 默认仅 core（笔记服务，无需 Redis/Ollama）
 ```
 
 访问 `http://<你的IP>:3001`。
+
+可选能力通过 Compose profile 启用：
+
+```bash
+docker compose --profile ai up -d      # + Redis + Ollama（本地 AI / 多实例队列）
+docker compose --profile media up -d   # + OpenList（媒体库）
+docker compose --profile full up -d    # 全家桶
+```
+
+启用 `ai` profile 后，在 `.env` 中设置 `REDIS_URL=redis://redis:6379` 与 `OLLAMA_URL=http://ollama:11434`（详见 `.env.example`）。
 
 ### 本地开发
 
@@ -103,6 +113,8 @@ Android 可直接从 [Releases](https://github.com/cropflre/super-note/releases)
 | `PORT` | `3001` | 服务端口 |
 | `DB_PATH` | `/app/data/super-note.db` | 数据库文件路径 |
 | `OLLAMA_URL` | — | 本地 Ollama 地址（可选） |
+| `REDIS_URL` | —（memory） | 不设置则用进程内 memory；多实例填 `redis://...` |
+| `ALLOWED_ORIGINS` | — | CORS 白名单，逗号分隔完整 origin；生产跨域必填 |
 
 数据持久化：容器需将 **`/app/data`** 映射到宿主机（不是 `/data`）。镜像已声明 `VOLUME ["/app/data"]`，主流 NAS 面板会自动预填该路径。
 
@@ -130,7 +142,7 @@ Android 可直接从 [Releases](https://github.com/cropflre/super-note/releases)
 终端执行一行命令解除隔离即可（路径换成你实际拖过去的位置）：
 
 ```bash
-sudo xattr -dr com.apple.quarantine "/Applications/Super Note.app"
+sudo xattr -dr com.apple.quarantine "/Applications/蜉蝣.app"
 # 或
 sudo xattr -dr com.apple.quarantine ~/Downloads/Super\ Note.app
 ```

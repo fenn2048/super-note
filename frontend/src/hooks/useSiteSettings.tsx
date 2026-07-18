@@ -14,7 +14,7 @@ export interface SiteConfig {
 }
 
 const DEFAULT_CONFIG: SiteConfig = {
-  title: "super-note",
+  title: "蜉蝣",
   favicon: "",
   editorFontFamily: "",
   lxgwWenkaiEnabled: false,
@@ -68,7 +68,7 @@ function parseDataUrlMime(url: string): string {
 }
 
 function applyToDOM(title: string, faviconUrl: string) {
-  document.title = title || "super-note";
+  document.title = title || "蜉蝣";
 
   // 清理页面上所有"图标类"link（含 alternate/apple-touch/shortcut），避免旧节点覆盖新节点
   const oldLinks = document.head.querySelectorAll<HTMLLinkElement>(
@@ -157,7 +157,7 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     api.getSiteSettingsPublic().then(async (data) => {
       const config: SiteConfig = {
-        title: data.site_title || "super-note",
+        title: data.site_title || "蜉蝣",
         favicon: data.site_favicon || "",
         editorFontFamily: data.editor_font_family || "",
         lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true",
@@ -194,7 +194,7 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
       site_favicon: favicon,
     });
     const config: SiteConfig = {
-      title: data.site_title || "super-note",
+      title: data.site_title || "蜉蝣",
       favicon: data.site_favicon || "",
       editorFontFamily: data.editor_font_family || siteConfig.editorFontFamily,
       lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true" || siteConfig.lxgwWenkaiEnabled,

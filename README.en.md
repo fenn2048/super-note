@@ -1,4 +1,4 @@
-# super-note
+# 蜉蝣 (super-note)
 
 > A self-hosted private knowledge base, inspired by Synology Note Station.
 >
@@ -56,10 +56,20 @@ Don't want to self-host yet? Try the official demo site maintained by the author
 ```bash
 git clone https://github.com/cropflre/super-note.git
 cd super-note
-docker-compose up -d
+docker compose up -d          # core only (no Redis/Ollama required)
 ```
 
 Open `http://<your-ip>:3001`.
+
+Optional profiles:
+
+```bash
+docker compose --profile ai up -d      # + Redis + Ollama
+docker compose --profile media up -d   # + OpenList (media library)
+docker compose --profile full up -d    # everything
+```
+
+With the `ai` profile, set `REDIS_URL=redis://redis:6379` and `OLLAMA_URL=http://ollama:11434` in `.env` (see `.env.example`).
 
 ### Local development
 
@@ -86,13 +96,13 @@ For Android, download the APK directly from [Releases](https://github.com/cropfl
 
 ### fnOS (one-click .fpk install)
 
-Grab the latest `super-note-x.y.z.fpk` from [Releases](https://github.com/cropflre/super-note/releases). On your fnOS NAS, open **App Center → Settings → Install app manually** and pick the file. After installation, click the "Super Note" icon on the desktop or open `http://<nas-ip>:3001` in your browser.
+Grab the latest `super-note-x.y.z.fpk` from [Releases](https://github.com/cropflre/super-note/releases). On your fnOS NAS, open **App Center → Settings → Install app manually** and pick the file. After installation, click the "蜉蝣" icon on the desktop or open `http://<nas-ip>:3001` in your browser.
 
 > The .fpk currently targets x86_64 fnOS only (`platform=x86`). To build it yourself, see [scripts/fpk/README.md](./scripts/fpk/README.md).
 
 ### UGREEN UGOS (one-click .upk install)
 
-Grab the latest `super-note-x.y.z.upk` from [Releases](https://github.com/cropflre/super-note/releases). On your UGREEN NAS, open **App Center → Settings → Local Install** and pick the file. After installation, click the "Super Note" icon on the desktop.
+Grab the latest `super-note-x.y.z.upk` from [Releases](https://github.com/cropflre/super-note/releases). On your UGREEN NAS, open **App Center → Settings → Local Install** and pick the file. After installation, click the "蜉蝣" icon on the desktop.
 
 > To build it yourself, see [scripts/upk/README.md](./scripts/upk/README.md).
 
@@ -103,6 +113,8 @@ Grab the latest `super-note-x.y.z.upk` from [Releases](https://github.com/cropfl
 | `PORT` | `3001` | Service port |
 | `DB_PATH` | `/app/data/super-note.db` | Database file path |
 | `OLLAMA_URL` | — | Local Ollama endpoint (optional) |
+| `REDIS_URL` | — (memory) | Unset = in-process memory mode; multi-instance needs `redis://...` |
+| `ALLOWED_ORIGINS` | — | CORS allowlist (comma-separated origins); required for cross-origin prod |
 
 Data persistence: mount **`/app/data`** from the container to the host (not `/data`). The image declares `VOLUME ["/app/data"]`, so mainstream NAS panels will prefill this path.
 
