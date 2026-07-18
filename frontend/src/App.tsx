@@ -54,6 +54,7 @@ import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/
 import { realtime } from "@/lib/realtime";
 import { openTasksEntry, openPlansEntry, setLibraryTab } from "@/lib/navigation.config";
 import AppSplashGate from "@/components/AppSplashGate";
+import CreateMenu, { CreateFabButton } from "@/components/common/CreateMenu";
 
 import { App as CapApp } from "@capacitor/app";
 
@@ -372,6 +373,7 @@ function AppLayout() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TabId>("appearance");
   const [barsVisible, setBarsVisible] = useState(true);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [showDiaryComposer, setShowDiaryComposer] = useState(false);
   const [composerInitialImages, setComposerInitialImages] = useState<{ id: string; url: string }[]>([]);
   const [showCameraModal, setShowCameraModal] = useState(false);
@@ -396,6 +398,7 @@ function AppLayout() {
 
   // 太空飞船健康提醒
   const { prefs: userPrefs } = useUserPreferences();
+  const [startupApplied, setStartupApplied] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [reminderTrigger, setReminderTrigger] = useState(0);
   // Initialize from URL eagerly (before effects run) to prevent the hash-sync
@@ -494,6 +497,32 @@ function AppLayout() {
     }, intervalMs);
     return () => clearTimeout(timer);
   }, [userPrefs.healthReminderEnabled, userPrefs.reminderInterval, showReminder, reminderTrigger]);
+
+  // P2-1：启动默认页（深链 hash 优先；仅首次进入主界面应用一次）
+  useEffect(() => {
+    if (startupApplied) return;
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    if (hash && hash !== "#" && hash !== "#/" && hash !== "#/home" && hash !== "#/notes") {
+      setStartupApplied(true);
+      return;
+    }
+    const landing = userPrefs.startupLanding || "last";
+    if (landing === "last") {
+      setStartupApplied(true);
+      return;
+    }
+    if (landing === "home") {
+      actions.setViewMode("home");
+    } else if (landing === "notes") {
+      actions.setViewMode("all");
+      actions.setSelectedNotebook(null);
+    } else if (landing === "tasks") {
+      openTasksEntry();
+      actions.setViewMode("projects");
+    }
+    setStartupApplied(true);
+  }, [startupApplied, userPrefs.startupLanding, actions]);
+
 
   // Listen to custom open-book event → 资料库书库 Tab（阅读器由 LibraryCenter 承接）
   useEffect(() => {
@@ -1430,20 +1459,28 @@ function AppLayout() {
 
       <AnimatePresence>
         {showMobileFAB && barsVisible && !keyboardVisible && (
-          <MobileFAB
-            viewMode={state.viewMode}
-            onNewNote={quickCreateNote}
-            onNewDiary={() => {
-              setComposerInitialImages([]);
-              setShowDiaryComposer(true);
-            }}
-            onNewTask={() => {
-              setShowTaskComposer(true);
-            }}
-            onCameraClick={() => {
-              setShowCameraModal(true);
-            }}
-          />
+          <>
+            <div className="mobile-fab-anchor fixed right-4 z-40 md:hidden">
+              <CreateFabButton onClick={() => setCreateMenuOpen(true)} />
+            </div>
+            <CreateMenu
+              open={createMenuOpen}
+              onClose={() => setCreateMenuOpen(false)}
+              className="right-4 bottom-[calc(5.5rem+var(--safe-area-bottom))] md:hidden"
+              showCamera={isNativePlatform()}
+              onAction={(action) => {
+                if (action === "note") void quickCreateNote();
+                else if (action === "diary") {
+                  setComposerInitialImages([]);
+                  setShowDiaryComposer(true);
+                } else if (action === "task") {
+                  setShowTaskComposer(true);
+                } else if (action === "camera") {
+                  setShowCameraModal(true);
+                }
+              }}
+            />
+          </>
         )}
       </AnimatePresence>
 
