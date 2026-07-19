@@ -40,7 +40,7 @@ super-note/
 │   │   │   ├── AIChatPanel      # AI 知识库问答面板
 │   │   │   ├── AIWritingAssistant  # AI 写作助手（选中文本操作）
 │   │   │   ├── AISettingsPanel  # AI 服务配置面板
-│   │   │   ├── TaskCenter       # 任务管理中心
+│   │   │   ├── ProjectCenter    # 任务/项目（方案 A 统一入口）
 │   │   │   ├── MindMapEditor    # 思维导图编辑器
 │   │   │   ├── DataManager      # 数据导入导出
 │   │   │   └── SettingsModal    # 设置弹窗

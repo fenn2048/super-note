@@ -1075,7 +1075,7 @@ function AppLayout() {
   // ── 工作区切换：清空当前会话态，回到空态页 ──────────────────────────
   //
   // WorkspaceSwitcher 切换后会广播 "super:workspace-changed"。之前只有 Sidebar /
-  // TaskCenter / FileManager / DiaryCenter / MindMap 自己监听并各自重拉，但
+  // FileManager / DiaryCenter / MindMap 自己监听并各自重拉，但
   // App 顶层并没有清理"正在编辑的笔记 + 笔记列表 + 选择/筛选状态"——于是会
   // 出现两类问题：
   //   1) 切到 A 空间后，右侧仍显示着 B 空间的 activeNote，且该笔记被 B 空间
