@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMediaStore, PlayMode, MediaPlayItem } from "@/store/mediaStore";
 import { api } from "@/lib/api";
 import { 
@@ -343,9 +344,8 @@ export default function GlobalMusicPlayer() {
             <AudioCover
               item={currentMedia}
               className={cn(
-                "w-full h-full object-cover rounded-full pointer-events-none select-none",
-                "animate-[spin_10s_linear_infinite]",
-                !isPlaying && "[animation-play-state:paused]"
+                "w-full h-full object-cover rounded-full pointer-events-none select-none media-disc-spin",
+                !isPlaying && "media-disc-spin-paused",
               )}
               fallbackIconSize={24}
             />
@@ -380,14 +380,16 @@ export default function GlobalMusicPlayer() {
       </AnimatePresence>
 
       {/* ----------------------------------------------------------------------- */}
-      {/* PERSISTENT BOTTOM BAR — 移动端贴 Tab 上方通栏矮条，避免与 FAB 抢右下角 */}
+      {/* PERSISTENT BOTTOM BAR — Portal 到 body，相对视口贴底（抬过 Tab） */}
       {/* ----------------------------------------------------------------------- */}
-      {!isMiniMode && (
+      {!isMiniMode &&
+        typeof document !== "undefined" &&
+        createPortal(
         <div 
         className={cn(
           "z-40 bg-app-sidebar/85 dark:bg-[#181824]/85 backdrop-blur-xl border border-app-border/60 shadow-xl flex items-center justify-between select-none transition-all duration-300",
-          // 移动：通栏迷你条，bottom 用 --mobile-music-bottom（Tab 上方）
-          "fixed left-3 right-3 mobile-music-mini rounded-2xl px-3 py-2.5 md:absolute md:left-6 md:right-6 md:bottom-6 md:py-3.5 md:px-4",
+          // 全端 fixed：移动 bottom 用 --mobile-music-bottom（随 Tab 显隐）
+          "fixed left-3 right-3 mobile-music-mini rounded-2xl px-3 py-2.5 md:left-6 md:right-6 md:bottom-6 md:py-3.5 md:px-4",
           isExpanded && "max-md:opacity-0 max-md:pointer-events-none"
         )}
       >
@@ -400,9 +402,8 @@ export default function GlobalMusicPlayer() {
             <AudioCover
               item={currentMedia}
               className={cn(
-                "w-full h-full object-cover rounded-full select-none transition-transform duration-300 group-hover:scale-105",
-                "animate-[spin_10s_linear_infinite]",
-                !isPlaying && "[animation-play-state:paused]"
+                "w-full h-full object-cover rounded-full select-none media-disc-spin",
+                !isPlaying && "media-disc-spin-paused",
               )}
               fallbackIconSize={16}
             />
@@ -570,8 +571,9 @@ export default function GlobalMusicPlayer() {
             </button>
           </div>
         </div>
-      </div>
-      )}
+      </div>,
+          document.body,
+        )}
 
       {/* Floating Queue Drawer Panel (Desktop) */}
       <AnimatePresence>
@@ -716,9 +718,8 @@ export default function GlobalMusicPlayer() {
                     <AudioCover 
                       item={currentMedia} 
                       className={cn(
-                        "w-full h-full object-cover select-none",
-                        "animate-[spin_10s_linear_infinite]",
-                        !isPlaying && "[animation-play-state:paused]"
+                        "w-full h-full object-cover select-none media-disc-spin",
+                        !isPlaying && "media-disc-spin-paused",
                       )}
                       fallbackIconSize={64}
                     />

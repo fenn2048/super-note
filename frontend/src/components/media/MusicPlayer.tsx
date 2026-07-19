@@ -152,9 +152,8 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
           <AudioCover 
             item={{ id: mediaItem.id, cover_url: mediaItem.cover_url, title: mediaItem.title }} 
             className={cn(
-              "w-full h-full object-cover rounded-full select-none",
-              "animate-[spin_10s_linear_infinite]",
-              !activeIsPlaying && "[animation-play-state:paused]"
+              "w-full h-full object-cover rounded-full select-none media-disc-spin",
+              !activeIsPlaying && "media-disc-spin-paused",
             )}
             fallbackIconSize={24}
           />

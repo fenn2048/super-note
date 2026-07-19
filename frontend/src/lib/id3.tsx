@@ -355,10 +355,19 @@ interface AudioCoverProps {
   fallbackIconSize?: number;
 }
 
+/** 由标题/id 派生稳定色相，无封面时作渐变底色 */
+function coverHue(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return h % 360;
+}
+
 /**
  * Drop-in component to display the audio cover (dynamically reading ID3 if DB cover is missing)
  */
-export function AudioCover({ item, className, fallbackIconSize = 20 }: AudioCoverProps) {
+export function AudioCover({ item, className, fallbackIconSize = 28 }: AudioCoverProps) {
   const { coverUrl, loading } = useID3Cover(item.id, item.cover_url, (item as any).type);
   const coverToUse = coverUrl || item.cover_url;
 
@@ -373,9 +382,53 @@ export function AudioCover({ item, className, fallbackIconSize = 20 }: AudioCove
     );
   }
 
+  const hue = coverHue(item.title || item.id || "audio");
+  const initial = (item.title || "♪").trim().charAt(0).toUpperCase() || "♪";
+
+  // className 里常带 object-cover（给 img 用），占位容器只保留尺寸/动画相关
+  const shellClass = (className || "")
+    .split(/\s+/)
+    .filter((c) => c && !c.startsWith("object-"))
+    .join(" ");
+
   return (
-    <div className={cn("w-full h-full bg-accent-primary/10 flex items-center justify-center text-accent-primary", className)}>
-      <Music style={{ width: fallbackIconSize, height: fallbackIconSize }} className={loading ? "animate-pulse" : ""} />
+    <div
+      className={cn(
+        "w-full h-full relative flex items-center justify-center overflow-hidden select-none",
+        shellClass,
+      )}
+      style={{
+        background: `linear-gradient(145deg,
+          hsl(${hue}, 48%, 52%) 0%,
+          hsl(${(hue + 28) % 360}, 42%, 34%) 55%,
+          hsl(${(hue + 52) % 360}, 38%, 24%) 100%)`,
+      }}
+      aria-hidden
+    >
+      {/* 柔和唱片环，避免纯灰块 */}
+      <div
+        className="absolute inset-[14%] rounded-full border border-white/20"
+        style={{
+          background:
+            "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.22), transparent 45%), rgba(0,0,0,0.18)",
+        }}
+      />
+      <div className="absolute inset-[42%] rounded-full bg-black/25 border border-white/10" />
+      <div className="relative z-[1] flex flex-col items-center justify-center gap-0.5">
+        <span
+          className={cn(
+            "text-white/95 font-semibold tracking-tight drop-shadow-sm leading-none",
+            loading && "animate-pulse",
+          )}
+          style={{ fontSize: Math.max(fallbackIconSize * 0.95, 16) }}
+        >
+          {initial}
+        </span>
+        <Music
+          style={{ width: fallbackIconSize * 0.55, height: fallbackIconSize * 0.55 }}
+          className="text-white/70"
+        />
+      </div>
     </div>
   );
 }

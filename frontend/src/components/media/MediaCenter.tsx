@@ -1246,11 +1246,15 @@ export default function MediaCenter() {
                         )}
 
                         <div className={cn(
-                          "relative flex items-center justify-center overflow-hidden rounded-xl bg-black/30 border border-app-border/20",
-                          item.type === "video" ? "aspect-video" : "aspect-square"
+                          "relative flex items-center justify-center overflow-hidden rounded-xl border border-app-border/25",
+                          item.type === "video" ? "aspect-video bg-black/20" : "aspect-square bg-app-surface/40",
                         )}>
                           {item.type === "audio" ? (
-                            <AudioCover item={item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" fallbackIconSize={20} />
+                            <AudioCover
+                              item={item}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              fallbackIconSize={32}
+                            />
                           ) : item.cover_url ? (
                             <img
                               src={resolveAttachmentUrl(item.cover_url)}
@@ -1273,10 +1277,18 @@ export default function MediaCenter() {
                                 e.stopPropagation();
                                 setSelectedItem(item);
                               }}
-                              className="absolute top-1.5 right-1.5 z-10 bg-black/60 backdrop-blur text-white hover:bg-accent-primary p-1 rounded-full shadow transition-colors"
+                              className={cn(
+                                "absolute top-1.5 right-1.5 z-10 rounded-full p-1 shadow-sm transition-all",
+                                "bg-white/85 dark:bg-zinc-900/80 backdrop-blur-sm",
+                                "text-tx-tertiary hover:text-accent-primary hover:bg-white dark:hover:bg-zinc-800",
+                                "border border-black/5 dark:border-white/10",
+                                // 桌面悬停才显眼，移动端轻量常显
+                                "opacity-70 md:opacity-0 md:group-hover:opacity-100",
+                              )}
                               title="详情介绍"
+                              aria-label="详情介绍"
                             >
-                              <Info size={11} />
+                              <Info size={12} strokeWidth={2} />
                             </button>
                           )}
 
@@ -1566,26 +1578,19 @@ export default function MediaCenter() {
         )}
       </AnimatePresence>
 
-      {/* 批量操作条：Portal 到 body，避免父级 transform/overflow 把 fixed 钉歪；移动端贴底全宽 */}
+      {/* 批量操作条：Portal + 固定 CSS 贴底（避开 Tab），不依赖 framer transform 以免 fixed 错位 */}
       {typeof document !== "undefined" &&
+        isBatchMode &&
         createPortal(
-          <AnimatePresence>
-            {isBatchMode && (
-              <motion.div
-                initial={{ y: 40, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 40, opacity: 0 }}
-                className={cn(
-                  "fixed z-[60] flex items-center gap-2 md:gap-4 select-none",
-                  "bg-app-elevated/95 backdrop-blur-md border border-app-border shadow-2xl",
-                  // 移动端：左右留边 + 抬过底栏/安全区，横向排布不挤压换行
-                  "left-3 right-3 bottom-[calc(4.25rem+var(--safe-area-bottom,0px))]",
-                  "px-3 py-2.5 rounded-2xl",
-                  // 桌面：底部居中浮条
-                  "md:left-1/2 md:right-auto md:bottom-6 md:w-auto md:min-w-[320px] md:max-w-lg",
-                  "md:-translate-x-1/2 md:px-6 md:py-3.5",
-                )}
-              >
+          <div
+            className={cn(
+              "media-batch-bar flex items-center gap-2 md:gap-4 select-none",
+              "bg-app-elevated/95 backdrop-blur-md border border-app-border shadow-2xl",
+              "px-3 py-2.5 md:px-6 md:py-3.5 rounded-2xl",
+            )}
+            role="toolbar"
+            aria-label="批量操作"
+          >
                 <div className="flex-1 min-w-0 text-xs text-tx-secondary font-semibold whitespace-nowrap truncate">
                   已选中{" "}
                   <span className="text-accent-primary font-bold">
@@ -1657,9 +1662,7 @@ export default function MediaCenter() {
                     取消
                   </button>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>,
+          </div>,
           document.body,
         )}
 

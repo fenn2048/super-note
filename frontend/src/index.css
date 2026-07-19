@@ -520,6 +520,46 @@ body::before {
   padding-bottom: var(--mobile-content-pb);
 }
 
+/* 媒体唱片旋转：全局统一角速度（约 3rpm，避免 Tailwind 任意动画不一致） */
+@keyframes media-disc-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.media-disc-spin {
+  animation: media-disc-spin 20s linear infinite;
+  will-change: transform;
+}
+.media-disc-spin-paused {
+  animation-play-state: paused;
+}
+
+/* 媒体批量操作条：贴底并抬过 Tab（--mobile-tab-h 由 App 按底栏显隐写入） */
+.media-batch-bar {
+  position: fixed;
+  z-index: 100;
+  left: 0.75rem;
+  right: 0.75rem;
+  /* 有迷你播放器时再抬一层（--mobile-extra-bottom） */
+  bottom: calc(
+    var(--mobile-tab-h) + var(--mobile-extra-bottom) + var(--safe-area-bottom) + 10px
+  );
+}
+@media (min-width: 768px) {
+  .media-batch-bar {
+    left: 50%;
+    right: auto;
+    bottom: 1.5rem;
+    width: auto;
+    min-width: 320px;
+    max-width: 32rem;
+    transform: translateX(-50%);
+  }
+}
+
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */
 .ProseMirror {
   outline: none;
