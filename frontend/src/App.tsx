@@ -52,7 +52,15 @@ import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import { realtime } from "@/lib/realtime";
-import { openTasksEntry, openPlansEntry, setLibraryTab, getMobileTabModules } from "@/lib/navigation.config";
+import {
+  openTasksEntry,
+  openPlansEntry,
+  setLibraryTab,
+  getMobileTabModules,
+  shouldShowMobileTabBar,
+  shouldShowMobileFAB,
+  syncMobileShellCssVars,
+} from "@/lib/navigation.config";
 import AppSplashGate from "@/components/AppSplashGate";
 import CreateMenu, { CreateFabButton } from "@/components/common/CreateMenu";
 
@@ -1210,36 +1218,25 @@ function AppLayout() {
     350
   );
 
-  const isRootPageOfTabBar =
-    (state.viewMode === "home") ||
-    (state.viewMode === "projects" && !isProjectDetailOpen) ||
-    (isNotesView && state.mobileView === "list") ||
-    (state.viewMode === "diary") ||
-    (state.viewMode === "more");
-  // 资料库（library / 遗留 books|media|files）为栈式全屏页：无底栏、无全局「+」
-
-  const isLibraryStack =
-    state.viewMode === "library" ||
-    state.viewMode === "media" ||
-    state.viewMode === "books" ||
-    state.viewMode === "files";
-
+  // 移动壳层：规则集中在 navigation.config（Phase A）
   const { visible: keyboardVisible } = useKeyboardVisible();
-  const showMobileTabBar =
-    isRootPageOfTabBar && state.viewMode !== "trash" && !isLibraryStack;
+  const shellCtx = {
+    viewMode: state.viewMode,
+    mobileView: state.mobileView,
+    isProjectDetailOpen,
+    barsVisible,
+    keyboardVisible,
+  };
+  const showMobileTabBar = shouldShowMobileTabBar(shellCtx);
   const showMobileFAB =
-    showMobileTabBar &&
-    state.viewMode !== "more" &&
-    state.viewMode !== "trash" &&
-    !isLibraryStack;
+    shouldShowMobileFAB(shellCtx) && barsVisible && !keyboardVisible;
 
-  // 底栏显隐同步 CSS 变量：迷你播放器 / 批量条贴底高度与 Tab 一致（资料库无 Tab 时不抬高）
+  // 底栏显隐 → CSS 变量（迷你播放器 / 批量条 / content padding 共用）
   useEffect(() => {
-    const root = document.documentElement;
     const tabShown = showMobileTabBar && barsVisible && !keyboardVisible;
-    root.style.setProperty("--mobile-tab-h", tabShown ? "64px" : "0px");
+    syncMobileShellCssVars({ tabBarVisible: tabShown });
     return () => {
-      root.style.setProperty("--mobile-tab-h", "64px");
+      syncMobileShellCssVars({ tabBarVisible: true });
     };
   }, [showMobileTabBar, barsVisible, keyboardVisible]);
 

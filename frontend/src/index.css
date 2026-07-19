@@ -490,11 +490,11 @@ body::before {
   }
 }
 
-/* ===== PR4: 移动端底部叠层避让 =====
- * --mobile-tab-h: Tab 内容高度（不含 safe-area）
- * --mobile-extra-bottom: 迷你播放器等额外占用（由 JS 写入）
- * --mobile-fab-bottom: FAB 距视口底
- * --mobile-content-pb: 主内容区底部内边距
+/* ===== 移动端底部叠层避让（Phase A 壳层规范）=====
+ * --mobile-tab-h: Tab 内容高度；栈页/隐栏时由 syncMobileShellCssVars 置 0
+ * --mobile-extra-bottom: 迷你播放器等额外占用（GlobalMusicPlayer 写入）
+ * --mobile-fab-bottom / --mobile-content-pb / --mobile-music-bottom: 派生
+ * 批量条 .media-batch-bar 已用 tab + extra + safe
  */
 :root {
   --mobile-tab-h: 64px;

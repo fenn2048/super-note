@@ -331,3 +331,90 @@ export function isNotesViewMode(viewMode: ViewMode): boolean {
     viewMode === "tag"
   );
 }
+
+// ── 移动壳层规则（Phase A · 体验蓝图固化）────────────────────────────────
+// Web = Rail + 内容；移动 = 底栏三主 + 我的 + 栈页。
+// 栈页：无底栏、无 FAB；用 StackChrome 右上 × 关闭。
+
+/** 资料库及遗留分项：栈式全屏 */
+export function isLibraryStackViewMode(viewMode: ViewMode): boolean {
+  return (
+    viewMode === "library" ||
+    viewMode === "media" ||
+    viewMode === "books" ||
+    viewMode === "files"
+  );
+}
+
+export interface MobileShellContext {
+  viewMode: ViewMode;
+  /** 笔记列表 vs 编辑器 */
+  mobileView?: "list" | "editor" | string;
+  /** 项目详情打开时不显示底栏 */
+  isProjectDetailOpen?: boolean;
+  /** 底栏滚动显隐 */
+  barsVisible?: boolean;
+  /** 软键盘 */
+  keyboardVisible?: boolean;
+}
+
+/**
+ * 是否显示移动底栏（根页）
+ * 根：首页 / 笔记列表 / 任务非详情 / 说说 / 我的
+ * 非根：资料库栈、回收站、编辑器、项目详情…
+ */
+export function shouldShowMobileTabBar(ctx: MobileShellContext): boolean {
+  const { viewMode, mobileView, isProjectDetailOpen } = ctx;
+  if (isLibraryStackViewMode(viewMode)) return false;
+  if (viewMode === "trash") return false;
+  if (viewMode === "home") return true;
+  if (viewMode === "more") return true;
+  if (viewMode === "diary") return true;
+  if (viewMode === "projects" || viewMode === "plans" || viewMode === "tasks") {
+    return !isProjectDetailOpen;
+  }
+  if (isNotesViewMode(viewMode) || viewMode === "favorites") {
+    return mobileView !== "editor";
+  }
+  return false;
+}
+
+/**
+ * 是否显示全局「+」FAB
+ * 根页且非「我的」、非栈页
+ */
+export function shouldShowMobileFAB(ctx: MobileShellContext): boolean {
+  if (!shouldShowMobileTabBar(ctx)) return false;
+  if (ctx.viewMode === "more") return false;
+  return true;
+}
+
+/**
+ * 同步移动端贴底 CSS 变量（Tab / 播放器额外高度）
+ * --mobile-tab-h：底栏内容高；隐栏或栈页时为 0
+ */
+export function syncMobileShellCssVars(opts: {
+  tabBarVisible: boolean;
+  extraBottomPx?: number;
+}): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.style.setProperty(
+    "--mobile-tab-h",
+    opts.tabBarVisible ? "64px" : "0px",
+  );
+  if (opts.extraBottomPx !== undefined) {
+    root.style.setProperty(
+      "--mobile-extra-bottom",
+      `${Math.max(0, opts.extraBottomPx)}px`,
+    );
+  }
+}
+
+/**
+ * 内容区底部避让（可读 CSS 变量组合）
+ * 用于 inline style 或文档说明；运行时优先用 var(--mobile-content-pb)
+ */
+export function getMobileContentPaddingBottom(): string {
+  return "var(--mobile-content-pb)";
+}
