@@ -18,6 +18,11 @@ import { PullToRefresh } from "@/components/PullToRefresh";
 import { realtime } from "@/lib/realtime";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
+import {
+  EmptyState,
+  EmptyActionButton,
+  LoadingBlock,
+} from "@/components/common/FeedbackStates";
 // "导入 Word 文档" 走 dynamic import（见 createNoteInNotebook），减少首屏 bundle 体积。
 
 /* ===== 排序模式 ===== */
@@ -3256,41 +3261,21 @@ export default function NoteList() {
                   ))}
                 </AnimatePresence>
                 {state.notes.length === 0 && !state.isLoading && (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-accent-primary/10 flex items-center justify-center mb-4">
-                      <FileText size={28} className="text-accent-primary/40" />
-                    </div>
-                    <p className="text-sm font-medium text-tx-secondary mb-1">{t('common.noNotes')}</p>
-                    <p className="text-xs text-tx-tertiary mb-5 max-w-[200px] leading-relaxed">
-                      {t('common.noNotesHint')}
-                    </p>
-                    <button
-                      onClick={() => handleCreateNote("normal")}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 active:scale-95 transition-all shadow-sm"
-                    >
-                      <Plus size={14} />
-                      {t('common.newNote')}
-                    </button>
-                  </div>
+                  <EmptyState
+                    icon={FileText}
+                    title={t("common.noNotes")}
+                    description={t("common.noNotesHint")}
+                    action={
+                      <EmptyActionButton onClick={() => handleCreateNote("normal")}>
+                        <Plus size={14} />
+                        {t("common.newNote")}
+                      </EmptyActionButton>
+                    }
+                    className="py-16"
+                  />
                 )}
-                {/* 骨架屏 Loading */}
                 {state.isLoading && state.notes.length === 0 && (
-                  <div className="space-y-2 px-1">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="rounded-lg border border-transparent p-3 animate-pulse">
-                        <div className="flex items-center gap-2">
-                          <div className="h-4 bg-app-hover rounded w-3/5" />
-                          <div className="h-3 bg-app-hover rounded w-4 ml-auto" />
-                        </div>
-                        <div className="h-3 bg-app-hover/70 rounded w-full mt-2.5" />
-                        <div className="h-3 bg-app-hover/50 rounded w-4/5 mt-1.5" />
-                        <div className="flex items-center gap-1.5 mt-2.5">
-                          <div className="h-2.5 w-2.5 bg-app-hover/60 rounded-full" />
-                          <div className="h-2.5 bg-app-hover/40 rounded w-16" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <LoadingBlock label={t("common.loading") || "加载中…"} className="py-12" />
                 )}
               </div>
             </ScrollArea>

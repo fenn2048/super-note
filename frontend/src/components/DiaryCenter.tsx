@@ -60,6 +60,11 @@ import MentionPicker, { parseMentionTrigger, replaceMentionText, useMentionState
 import RecordingPanel from "@/components/RecordingPanel";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import OCRModal from "@/components/OCRModal";
+import {
+  EmptyState,
+  EmptyActionButton,
+  LoadingBlock,
+} from "@/components/common/FeedbackStates";
 
 
 marked.setOptions({
@@ -4174,21 +4179,31 @@ export default function DiaryCenter() {
                   />
                 </div>
               ) : loading ? (
-                <div className="flex justify-center py-16">
-                  <Loader2 size={24} className="animate-spin text-accent-primary" />
-                </div>
+                <LoadingBlock label="加载说说…" className="py-16" />
               ) : displayedItems.length === 0 ? (
-                <div className="flex flex-col items-center py-20 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-app-hover/60 flex items-center justify-center mb-4">
-                    <MessageCircle size={28} className="text-tx-tertiary" />
-                  </div>
-                  <p className="text-sm text-tx-secondary font-medium">
-                    {isFiltering ? t("diary.emptyFiltered") : t("diary.empty")}
-                  </p>
-                  <p className="text-xs text-tx-tertiary mt-1">
-                    {isFiltering ? t("diary.emptyFilteredHint") : t("diary.emptyHint")}
-                  </p>
-                </div>
+                <EmptyState
+                  icon={MessageCircle}
+                  title={isFiltering ? t("diary.emptyFiltered") : t("diary.empty")}
+                  description={
+                    isFiltering ? t("diary.emptyFilteredHint") : t("diary.emptyHint")
+                  }
+                  action={
+                    !isFiltering ? (
+                      <EmptyActionButton
+                        onClick={() => {
+                          haptic.light();
+                          window.dispatchEvent(
+                            new CustomEvent("super:quick-new-diary"),
+                          );
+                        }}
+                      >
+                        <Edit2 size={14} />
+                        说一句
+                      </EmptyActionButton>
+                    ) : undefined
+                  }
+                  className="py-20"
+                />
               ) : (
                 <div className="space-y-5">
                   {/* 置顶动态区 */}
