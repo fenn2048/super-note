@@ -222,20 +222,33 @@ export interface AIEnhanceResult {
   truncated?: boolean;
 }
 
+/** AI 剪藏增强；默认 45s 超时（MV3 SW 不宜更长） */
 export async function enhanceClip(
   cfg: SuperClipperConfig,
   payload: AIEnhanceRequest,
+  opts?: { timeoutMs?: number },
 ): Promise<AIEnhanceResult> {
   const base = normalizeBaseUrl(cfg.serverUrl);
-  const res = await fetch(`${base}/api/ai/clip-enhance`, {
-    method: "POST",
-    headers: authHeaders(cfg),
-    body: JSON.stringify(payload),
-  });
-  // 4xx / 5xx 走异常路径
-  if (!res.ok) throw await parseErr(res);
-  // 200 同时可能携带 ok:false（AI 服务自身的逻辑失败，例如超时、JSON 解析失败）
-  return (await res.json()) as AIEnhanceResult;
+  const timeoutMs = opts?.timeoutMs ?? 45_000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${base}/api/ai/clip-enhance`, {
+      method: "POST",
+      headers: authHeaders(cfg),
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw await parseErr(res);
+    return (await res.json()) as AIEnhanceResult;
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      return { ok: false, error: `AI 超时（>${Math.round(timeoutMs / 1000)}s）` };
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export interface SaveClipPayload {

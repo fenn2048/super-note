@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "蜉蝣剪藏",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "一键把网页正文、选区与链接剪藏到蜉蝣（Super Note）自托管实例。",
   "permissions": [
     "activeTab",

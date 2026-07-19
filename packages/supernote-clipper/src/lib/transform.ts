@@ -72,11 +72,17 @@ export function countText(html: string): number {
  */
 export async function inlineImages(
   html: string,
-  opts: { concurrency?: number; maxSizeBytes?: number; timeoutMs?: number } = {},
+  opts: {
+    concurrency?: number;
+    maxSizeBytes?: number;
+    timeoutMs?: number;
+    onProgress?: (done: number, total: number) => void;
+  } = {},
 ): Promise<{ html: string; ok: number; failed: number; skipped: number }> {
-  const concurrency = opts.concurrency ?? 4;
+  const concurrency = opts.concurrency ?? 3;
   const maxSize = opts.maxSizeBytes ?? 5 * 1024 * 1024; // 5MB 单图
   const timeoutMs = opts.timeoutMs ?? 8000;
+  const onProgress = opts.onProgress;
 
   // 用正则提取所有 <img> 标签的 src
   // 注意：service worker 环境不保证有 DOMParser，因此使用正则方式解析。
@@ -120,9 +126,11 @@ export async function inlineImages(
     }
   };
 
-  // 并发池
+  // 并发池（限流）
   const results = new Map<string, string | null>();
   let idx = 0;
+  let finished = 0;
+  const total = queue.length;
   const workers: Promise<void>[] = [];
   for (let i = 0; i < concurrency; i++) {
     workers.push(
@@ -132,6 +140,8 @@ export async function inlineImages(
           const src = queue[my];
           const data = await fetchOne(src);
           results.set(src, data);
+          finished++;
+          onProgress?.(finished, total);
         }
       })(),
     );

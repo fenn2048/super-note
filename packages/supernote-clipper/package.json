@@ -1,6 +1,6 @@
 {
   "name": "@super/clipper",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "蜉蝣剪藏 — 浏览器扩展，一键把网页剪藏到蜉蝣 / Super Note",
   "private": true,
   "type": "module",

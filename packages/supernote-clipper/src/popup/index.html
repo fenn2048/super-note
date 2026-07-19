@@ -138,6 +138,15 @@
 
       <div id="result" class="result hidden"></div>
 
+      <!-- 离线上传队列 -->
+      <div id="queue-section" class="section-card queue-section hidden">
+        <div class="queue-row">
+          <label class="muted-label">待上传队列</label>
+          <button type="button" id="queue-flush" class="btn-link queue-flush">立即同步</button>
+        </div>
+        <p id="queue-status" class="hint-line muted">—</p>
+      </div>
+
       <!-- 最近 -->
       <div id="history-section" class="section-card history-section">
         <label class="muted-label">最近剪藏</label>

@@ -723,3 +723,17 @@ input[type="url"] {
   font-size: 12.5px;
   outline: none;
 }
+
+/* C3 queue */
+.queue-section .queue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.queue-flush {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+}

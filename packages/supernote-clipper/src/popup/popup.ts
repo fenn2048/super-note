@@ -122,6 +122,8 @@ async function init() {
   });
 
   await renderHistory();
+  await refreshQueueStatus();
+  document.getElementById("queue-flush")?.addEventListener("click", () => void flushQueue());
 
   if (cfg.serverUrl && cfg.token) {
     await checkConnection(cfg.serverUrl, cfg.token);
@@ -130,6 +132,58 @@ async function init() {
     disableClipUI();
     setBadge("err", "未配置");
   }
+}
+
+async function refreshQueueStatus() {
+  const section = document.getElementById("queue-section");
+  const status = document.getElementById("queue-status");
+  if (!section || !status) return;
+  try {
+    const res = (await chrome.runtime.sendMessage({ type: "QUEUE_STATUS" })) as {
+      ok?: boolean;
+      count?: number;
+    };
+    const n = res?.count ?? 0;
+    if (n > 0) {
+      section.classList.remove("hidden");
+      status.textContent = `${n} 条待上传（联网后自动或点同步）`;
+    } else {
+      section.classList.add("hidden");
+      status.textContent = "—";
+    }
+  } catch {
+    section.classList.add("hidden");
+  }
+}
+
+async function flushQueue() {
+  const status = document.getElementById("queue-status");
+  if (status) status.textContent = "同步中…";
+  try {
+    const res = (await chrome.runtime.sendMessage({ type: "QUEUE_FLUSH" })) as {
+      uploaded?: number;
+      remaining?: number;
+      failed?: number;
+    };
+    const up = res?.uploaded ?? 0;
+    const rem = res?.remaining ?? 0;
+    if (status) {
+      status.textContent =
+        up > 0
+          ? `已上传 ${up} 条${rem ? `，剩余 ${rem}` : ""}`
+          : rem
+            ? `仍有 ${rem} 条未成功`
+            : "队列已空";
+    }
+    if (up > 0) {
+      showResult(true, `离线队列已同步 ${up} 条`);
+    }
+  } catch (e: any) {
+    if (status) status.textContent = "同步失败";
+    showResult(false, String(e?.message || e));
+  }
+  await refreshQueueStatus();
+  await renderHistory();
 }
 
 function collectAITasks(): AIEnhanceTasks {
@@ -368,19 +422,38 @@ async function clip(mode: ClipMode) {
       noteId?: string;
       noteTitle?: string;
       images?: { ok: number; failed: number; skipped: number };
+      aiInfo?: { ok: boolean; error?: string };
+      queued?: boolean;
     };
     progress.classList.add("hidden");
     if (res?.ok) {
       const imgInfo = res.images
         ? ` · 图 ${res.images.ok}${res.images.failed ? `（${res.images.failed} 失败）` : ""}`
         : "";
+      const aiInfo =
+        res.aiInfo && !res.aiInfo.ok
+          ? ` · AI 未生效（${(res.aiInfo.error || "").slice(0, 32)}）`
+          : res.aiInfo?.ok
+            ? " · 已 AI 整理"
+            : "";
       const title = res.noteTitle || "无标题";
       await pushClipHistory({ title, noteId: res.noteId, ok: true });
       await renderHistory();
       const cfg = await getConfig();
-      showResult(true, `已保存「${title}」${imgInfo}`, {
+      showResult(true, `已保存「${title}」${imgInfo}${aiInfo}`, {
         noteId: res.noteId,
         serverUrl: cfg.serverUrl,
+      });
+    } else if (res?.queued) {
+      await pushClipHistory({
+        title: tab.title || "已入队",
+        ok: false,
+        error: "已加入离线队列",
+      });
+      await renderHistory();
+      await refreshQueueStatus();
+      showResult(false, res.error || "网络失败，已加入离线队列", {
+        flushQueue: true,
       });
     } else {
       lastFailedReq = req;
@@ -422,6 +495,7 @@ function showResult(
     retry?: boolean;
     simplify?: boolean;
     retryConnect?: boolean;
+    flushQueue?: boolean;
   },
 ) {
   const el = document.getElementById("result")!;
@@ -460,6 +534,14 @@ function showResult(
     b.className = "btn-link";
     b.textContent = "用简化模式";
     b.onclick = () => void clip("simplified");
+    actions.appendChild(b);
+  }
+  if (opts?.flushQueue) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn-link";
+    b.textContent = "同步队列";
+    b.onclick = () => void flushQueue();
     actions.appendChild(b);
   }
   if (opts?.retryConnect) {

@@ -15,6 +15,14 @@ import "../lib/sw-polyfill";
 import { getConfig, isConfigured, normalizeBaseUrl } from "../lib/storage";
 import { enhanceClip, SuperApiError, type AIEnhanceResult, saveClip, uploadClipImage, type SaveClipPayload } from "../lib/api";
 import { buildContentBundle, inlineImages } from "../lib/transform";
+import {
+  enqueueClip,
+  isLikelyNetworkError,
+  listQueuedClips,
+  MAX_ATTEMPTS,
+  removeQueuedClip,
+  updateQueuedClip,
+} from "../lib/clipQueue";
 import type {
   AIEnhanceMode,
   AIEnhanceTasks,
@@ -112,9 +120,22 @@ chrome.commands?.onCommand.addListener(async (command) => {
 // ========== popup 调用 ==========
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg || msg.type !== "CLIP_REQUEST") return undefined;
+  if (!msg) return undefined;
+
+  // 上传队列状态 / 手动 flush
+  if (msg.type === "QUEUE_STATUS") {
+    void listQueuedClips().then((items) => {
+      sendResponse({ ok: true, count: items.length, items });
+    });
+    return true;
+  }
+  if (msg.type === "QUEUE_FLUSH") {
+    void flushUploadQueue().then((r) => sendResponse(r));
+    return true;
+  }
+
+  if (msg.type !== "CLIP_REQUEST") return undefined;
   console.log("[super-clipper] 收到 CLIP_REQUEST, mode =", msg.mode, "完整消息:", JSON.stringify(msg));
-  // 异步响应：返回 true，通过 sendResponse 回传最终结果
   (async () => {
     try {
       const result = await runClip(msg as ClipRequest);
@@ -126,6 +147,57 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
+// 联网后自动尝试 flush 上传队列
+if (typeof self !== "undefined") {
+  self.addEventListener("online", () => {
+    void flushUploadQueue().then((r) => {
+      if (r.uploaded > 0) {
+        notify("离线队列已同步", `成功上传 ${r.uploaded} 条剪藏`);
+      }
+    });
+  });
+}
+
+/** 上传失败队列 flush */
+async function flushUploadQueue(): Promise<{
+  ok: boolean;
+  uploaded: number;
+  failed: number;
+  remaining: number;
+}> {
+  const cfg = await getConfig();
+  if (!isConfigured(cfg)) {
+    return { ok: false, uploaded: 0, failed: 0, remaining: (await listQueuedClips()).length };
+  }
+  const items = await listQueuedClips();
+  let uploaded = 0;
+  let failed = 0;
+  for (const item of items) {
+    if (item.attempts >= MAX_ATTEMPTS) {
+      failed++;
+      continue;
+    }
+    try {
+      await saveClip(cfg, item.payload);
+      await removeQueuedClip(item.id);
+      uploaded++;
+    } catch (e) {
+      const msg = describeError(e);
+      await updateQueuedClip(item.id, {
+        attempts: item.attempts + 1,
+        lastError: msg,
+      });
+      failed++;
+      if (!isLikelyNetworkError(msg)) {
+        // 鉴权类错误：停止后续
+        break;
+      }
+    }
+  }
+  const remaining = (await listQueuedClips()).length;
+  return { ok: true, uploaded, failed, remaining };
+}
+
 // ========== 核心流水线 ==========
 
 interface ClipResult {
@@ -134,6 +206,8 @@ interface ClipResult {
   noteId?: string;
   noteTitle?: string;
   images?: { ok: number; failed: number; skipped: number };
+  aiInfo?: { ok: boolean; error?: string };
+  queued?: boolean;
 }
 
 async function runClip(req: ClipRequest): Promise<ClipResult> {
@@ -234,22 +308,33 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
   // 图片处理（简化模式不需要处理图片，因为已经移除了）
   let images = { ok: 0, failed: 0, skipped: 0 };
   if (req.mode !== "simplified") {
+    const onImgProgress = (done: number, total: number) => {
+      if (total <= 0) return;
+      sendProgress({
+        type: "CLIP_PROGRESS",
+        phase: "download-images",
+        message: `处理图片 ${done}/${total}…`,
+      });
+    };
     if (cfg.imageLocalization) {
       sendProgress({
         type: "CLIP_PROGRESS",
         phase: "download-images",
-        message: "正在下载并本地化图片...",
+        message: "正在下载并本地化图片…",
       });
-      const result = await localizeImages(html, cfg, req.workspaceId);
+      const result = await localizeImages(html, cfg, req.workspaceId, 8000, 3, onImgProgress);
       html = result.html;
       images = { ok: result.ok, failed: result.failed, skipped: result.skipped };
     } else if (cfg.imageMode === "inline") {
       sendProgress({
         type: "CLIP_PROGRESS",
         phase: "download-images",
-        message: "正在下载并内联图片...",
+        message: "正在下载并内联图片…",
       });
-      const result = await inlineImages(html);
+      const result = await inlineImages(html, {
+        concurrency: 3,
+        onProgress: onImgProgress,
+      });
       html = result.html;
       images = { ok: result.ok, failed: result.failed, skipped: result.skipped };
     } else if (cfg.imageMode === "skip") {
@@ -279,26 +364,28 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
     sendProgress({
       type: "CLIP_PROGRESS",
       phase: "ai-enhance",
-      message: "AI 正在优化内容...",
+      message: "AI 正在优化（最长约 45s）…",
     });
     try {
-      const aiResp = await enhanceClip(cfg, {
-        title: data.title,
-        url: data.url,
-        siteName: data.siteName,
-        contentText: data.text,
-        tasks: aiTasks,
-        language: cfg.aiEnhanceLanguage,
-        customInstruction: cfg.aiCustomInstruction || undefined,
-        maxInputChars: cfg.aiMaxInputChars,
-      });
+      const aiResp = await enhanceClip(
+        cfg,
+        {
+          title: data.title,
+          url: data.url,
+          siteName: data.siteName,
+          contentText: data.text,
+          tasks: aiTasks,
+          language: cfg.aiEnhanceLanguage,
+          customInstruction: cfg.aiCustomInstruction || undefined,
+          maxInputChars: cfg.aiMaxInputChars,
+        },
+        { timeoutMs: 45_000 },
+      );
 
       if (aiResp.ok && aiResp.enhanced) {
-        // 应用标题覆盖（如果用户勾了 title 任务）
         if (aiResp.enhanced.title) {
           pageTitle = aiResp.enhanced.title;
         }
-        // 合并 AI 标签（去重）
         if (aiResp.enhanced.tags && aiResp.enhanced.tags.length) {
           const set = new Set(tags.map((t) => t.toLowerCase()));
           for (const t of aiResp.enhanced.tags) {
@@ -308,28 +395,41 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
             }
           }
         }
-        // 生成 AI 块（用于 prepend / append / replace）
         aiBlock = composeAIBlock(aiResp.enhanced, cfg.outputFormat);
         aiInfo = { ok: true };
       } else {
         const err = aiResp.error || "AI 返回失败";
         console.warn("[super-clipper] AI 优化失败:", err);
         aiInfo = { ok: false, error: err };
+        sendProgress({
+          type: "CLIP_PROGRESS",
+          phase: "ai-enhance",
+          message:
+            cfg.aiFailureStrategy === "fail"
+              ? `AI 失败：${err}`
+              : `AI 未生效（${err.slice(0, 40)}），保存原文…`,
+        });
         if (cfg.aiFailureStrategy === "fail") {
           notify("AI 优化失败", err);
           return { ok: false, error: `AI 优化失败：${err}` };
         }
-        // fallback：继续走原文路径
       }
     } catch (e: any) {
       const msg = describeError(e);
       console.warn("[super-clipper] AI 优化异常:", msg);
       aiInfo = { ok: false, error: msg };
+      sendProgress({
+        type: "CLIP_PROGRESS",
+        phase: "ai-enhance",
+        message:
+          cfg.aiFailureStrategy === "fail"
+            ? `AI 异常：${msg}`
+            : `AI 异常，已降级保存原文`,
+      });
       if (cfg.aiFailureStrategy === "fail") {
         notify("AI 优化失败", msg);
         return { ok: false, error: `AI 优化失败：${msg}` };
       }
-      // fallback：继续走原文路径
     }
   }
   // ========== /AI 优化 ==========
@@ -383,34 +483,42 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
   }
 
   // 上传
-  sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传到 Super Note..." });
+  sendProgress({ type: "CLIP_PROGRESS", phase: "upload", message: "正在上传到蜉蝣…" });
   const isDiary = req.notebookId === "__diary__";
+  const savePayload: SaveClipPayload & Record<string, unknown> = {
+    type: isDiary ? "diary" : "note",
+    title: pageTitle,
+    content,
+    contentText,
+    workspaceId: req.workspaceId || null,
+    notebookId: isDiary ? null : (req.notebookId || "default"),
+    tags,
+  };
+
+  if (isDiary) {
+    const matches = Array.from(
+      content.matchAll(
+        /\/api\/diary\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi,
+      ),
+    );
+    savePayload.images = Array.from(new Set(matches.map((m) => m[1])));
+    savePayload.mood = "";
+    savePayload.visibility = "PRIVATE";
+  }
+
   try {
-    const savePayload: any = {
-      type: isDiary ? "diary" : "note",
-      title: pageTitle,
-      content,
-      contentText,
-      workspaceId: req.workspaceId || null,
-      notebookId: isDiary ? null : (req.notebookId || "default"),
-      tags,
-    };
-
-    if (isDiary) {
-      const matches = Array.from(content.matchAll(/\/api\/diary\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi));
-      savePayload.images = Array.from(new Set(matches.map(m => m[1])));
-      savePayload.mood = "";
-      savePayload.visibility = "PRIVATE";
-    }
-
     const resp = await saveClip(cfg, savePayload);
     const noteId = resp.id;
 
     const targetDesc = isDiary ? "说说" : "笔记";
+    const imgTip =
+      images.ok + images.failed > 0
+        ? ` · 图成功 ${images.ok}${images.failed ? ` / 失败 ${images.failed}` : ""}`
+        : "";
     sendProgress({
       type: "CLIP_PROGRESS",
       phase: "done",
-      message: `已保存为${targetDesc}`,
+      message: `已保存为${targetDesc}${imgTip}`,
       noteId,
       images,
       aiInfo,
@@ -418,15 +526,39 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
     const aiTip = aiInfo
       ? aiInfo.ok
         ? "（已 AI 优化）"
-        : `（AI 失败：${(aiInfo.error || "").slice(0, 60)}，已保存原文）`
+        : `（AI 未生效：${(aiInfo.error || "").slice(0, 48)}，已存原文）`
       : "";
     notify(
       "剪藏成功",
-      `已保存为${targetDesc}${images.failed ? `（${images.failed} 张图片下载失败）` : ""}${aiTip}`,
+      `已保存为${targetDesc}${images.failed ? `（${images.failed} 张图失败）` : ""}${aiTip}`,
     );
-    return { ok: true, noteId, noteTitle: pageTitle, images };
+    return { ok: true, noteId, noteTitle: pageTitle, images, aiInfo };
   } catch (e) {
     const msg = describeError(e);
+    // 网络类错误：入队，联网后重试
+    if (isLikelyNetworkError(msg) || e instanceof TypeError) {
+      try {
+        await enqueueClip({
+          noteTitle: pageTitle,
+          pageUrl: data.url,
+          payload: savePayload as SaveClipPayload,
+          lastError: msg,
+        });
+        sendProgress({
+          type: "CLIP_PROGRESS",
+          phase: "error",
+          message: "网络失败，已加入离线队列",
+        });
+        notify("已加入离线队列", "联网后将自动上传，也可在 Popup 手动同步");
+        return {
+          ok: false,
+          error: `网络失败，已加入离线队列：${msg}`,
+          queued: true,
+        };
+      } catch (qe) {
+        console.warn("[super-clipper] enqueue failed", qe);
+      }
+    }
     sendProgress({ type: "CLIP_PROGRESS", phase: "error", message: msg });
     notify("剪藏失败", msg);
     return { ok: false, error: msg };
@@ -981,11 +1113,14 @@ function parseTags(raw: string): string[] {
 
 function describeError(e: unknown): string {
   if (e instanceof SuperApiError) {
-    if (e.status === 401) return "登录已过期或失效，请在扩展选项中重新登录。";
+    if (e.status === 401) return "登录已过期或失效，请改用访问令牌或重新登录。";
     if (e.status === 403) return "权限不足：" + e.message;
     return e.message;
   }
-  if (e instanceof Error) return e.message;
+  if (e instanceof Error) {
+    if (e.name === "AbortError") return "请求超时";
+    return e.message;
+  }
   return String(e);
 }
 
@@ -1137,9 +1272,9 @@ async function localizeImages(
   cfg: any,
   workspaceId?: string | null,
   timeoutMs = 8000,
-  concurrency = 4,
+  concurrency = 3,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<{ html: string; ok: number; failed: number; skipped: number }> {
-  // 用正则提取 <img> 标签的 src
   const imgRegex = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')([^>]*)>/gi;
   const imgEntries: Array<{ fullMatch: string; src: string }> = [];
   let match: RegExpExecArray | null;
@@ -1148,7 +1283,6 @@ async function localizeImages(
     imgEntries.push({ fullMatch: match[0], src });
   }
 
-  // 唯一 http/https URLs
   const queue: string[] = [];
   const seen = new Set<string>();
   for (const entry of imgEntries) {
@@ -1158,32 +1292,35 @@ async function localizeImages(
     }
   }
 
+  const maxBytes = 5 * 1024 * 1024;
   const downloadAndUploadOne = async (src: string): Promise<string | null> => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      // 1. Fetch image
       const res = await fetch(src, {
         credentials: "omit",
         signal: ctrl.signal,
       });
       if (!res.ok) return null;
       const blob = await res.blob();
-      
-      // 2. Upload to private server
+      if (blob.size > maxBytes) {
+        console.warn(`[localizeImages] skip large image ${blob.size}B: ${src.slice(0, 80)}`);
+        return null;
+      }
       const uploadRes = await uploadClipImage(cfg, blob, workspaceId);
-      return uploadRes.url; // /api/diary/attachments/<id>
+      return uploadRes.url;
     } catch (err) {
-      console.warn(`[localizeImages] Failed to localize image: ${src}`, err);
+      console.warn(`[localizeImages] Failed: ${src}`, err);
       return null;
     } finally {
       clearTimeout(timer);
     }
   };
 
-  // 并发上传
   const results = new Map<string, string | null>();
   let idx = 0;
+  let finished = 0;
+  const total = queue.length;
   const workers: Promise<void>[] = [];
   for (let i = 0; i < concurrency; i++) {
     workers.push(
@@ -1193,6 +1330,8 @@ async function localizeImages(
           const src = queue[my];
           const localUrl = await downloadAndUploadOne(src);
           results.set(src, localUrl);
+          finished++;
+          onProgress?.(finished, total);
         }
       })(),
     );
