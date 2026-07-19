@@ -27,7 +27,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppPermissionsPlugin.class);
+        registerPlugin(ShareReceivePlugin.class);
         super.onCreate(savedInstanceState);
+
         // Start the keep-alive foreground service
         Intent serviceIntent = new Intent(this, KeepAliveService.class);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -36,16 +38,14 @@ public class MainActivity extends BridgeActivity {
             startService(serviceIntent);
         }
 
-
-        // Request permissions (removed from startup; requested on-demand now)
-        // checkAndRequestPermissions();
-
+        // 系统分享 / 冷启动 Intent
+        handleIncomingIntent(getIntent());
 
         // Inject download bridge and customize WebChromeClient for permissions
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
-            
+
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
                 public void onPermissionRequest(final android.webkit.PermissionRequest request) {
@@ -54,6 +54,30 @@ public class MainActivity extends BridgeActivity {
                     });
                 }
             });
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // singleTask：后台再被分享唤起时走这里
+        setIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    /**
+     * 解析并消费分享 Intent；VIEW（微信文章）留给 Capacitor App plugin 的 appUrlOpen。
+     */
+    private void handleIncomingIntent(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            ShareReceivePlugin.queueFromIntent(this, intent);
+            // 防止旋转/重建时重复入队
+            intent.setAction(Intent.ACTION_MAIN);
+            intent.removeExtra(Intent.EXTRA_TEXT);
+            intent.removeExtra(Intent.EXTRA_STREAM);
+            intent.removeExtra(Intent.EXTRA_SUBJECT);
         }
     }
 
@@ -80,13 +104,13 @@ public class MainActivity extends BridgeActivity {
         public void downloadFile(String base64Data, String filename, String mimeType) {
             try {
                 byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
-                
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
                     values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
                     values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-                    
+
                     Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                     if (uri != null) {
                         try (OutputStream os = getContentResolver().openOutputStream(uri)) {
@@ -128,7 +152,6 @@ public class MainActivity extends BridgeActivity {
             editor.putString("userId", userId);
             editor.apply();
 
-            // Restart KeepAliveService to pickup new auth info
             Intent serviceIntent = new Intent(MainActivity.this, KeepAliveService.class);
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent);

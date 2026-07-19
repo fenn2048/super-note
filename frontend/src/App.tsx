@@ -43,6 +43,8 @@ import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
 import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
+import { useShareReceive } from "@/hooks/useShareReceive";
+import { stashSharePayload, subscribeShareReceive } from "@/lib/shareReceive";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import { useEditorSwipeBack } from "@/hooks/useEditorSwipeBack";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
@@ -936,6 +938,20 @@ function AppLayout() {
 
   // Android 返回键 / Escape 入口
   useMobileBackButton();
+
+  // Android 系统分享入站（已登录：落库为笔记并跳转）
+  useShareReceive({
+    authenticated: true,
+    onNoteCreated: (noteId) => {
+      actions.refreshNotebooks();
+      actions.refreshNotes();
+      sessionStorage.setItem(
+        "super:pending-navigate",
+        JSON.stringify({ sourceType: "note", sourceId: noteId }),
+      );
+      window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
+    },
+  });
 
   // P2: 状态栏与主题同步
   useStatusBarSync();
@@ -2011,6 +2027,19 @@ function AuthGate() {
   useEffect(() => {
     authRef.current = isAuthenticated;
   }, [isAuthenticated]);
+
+  // 未登录时收到系统分享：暂存，登录后由 AppLayout useShareReceive 落库
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    return subscribeShareReceive((payload) => {
+      // true = 已登录，AppLayout 会处理；null = auth 判定中，只 stash 不 toast
+      if (authRef.current === true) return;
+      stashSharePayload(payload);
+      if (authRef.current === false) {
+        toast.info("已收到分享，登录后将自动保存为笔记");
+      }
+    });
+  }, []);
 
   const lastBackgroundTimeRef = useRef<number | null>(null);
   useEffect(() => {
