@@ -49,7 +49,6 @@ export default defineConfig({
           // 重型可选能力：独立 chunk，仅打开对应功能时加载
           if (id.includes("mermaid")) return "vendor-mermaid";
           if (id.includes("tesseract")) return "vendor-tesseract";
-          if (id.includes("@mediapipe")) return "vendor-mediapipe";
           if (id.includes("artplayer") || id.includes("hls.js")) return "vendor-player";
           if (id.includes("pdfjs") || id.includes("foliate")) return "vendor-pdf";
           if (id.includes("@codemirror") || id.includes("/codemirror")) return "vendor-codemirror";

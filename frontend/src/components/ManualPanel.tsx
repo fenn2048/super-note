@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { BookOpen, Sparkles, Users, Key, Database, Smile, Rocket, HelpCircle, Shield, ArrowRight, Globe } from "lucide-react";
+import { BookOpen, Sparkles, Users, Key, Database, HelpCircle, Shield, ArrowRight, Globe, Monitor } from "lucide-react";
 
 type SectionId = "quickstart" | "workspace" | "projects" | "editor" | "data" | "health" | "clipper";
 
@@ -13,7 +13,7 @@ export default function ManualPanel() {
     { id: "editor" as const, label: "✍️ 智能排版与快捷键", desc: "编辑技巧与阅读密度" },
     { id: "clipper" as const, label: "🌐 浏览器剪藏插件", desc: "网页内容一键剪藏" },
     { id: "data" as const, label: "🔒 数据管理与安全", desc: "自动备份与恢复" },
-    { id: "health" as const, label: "🛸 健康关怀提醒", desc: "太空飞船与实时监测" },
+    { id: "health" as const, label: "🧘 健康休息提醒", desc: "定时全屏屏保休息" },
   ];
 
   return (
@@ -357,50 +357,39 @@ export default function ManualPanel() {
           <div className="space-y-5">
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2 mb-2 text-zinc-950 dark:text-zinc-50">
-                <Rocket className="w-5 h-5 text-indigo-500" />
-                健康作息关怀提醒
+                <Monitor className="w-5 h-5 text-indigo-500" />
+                健康休息提醒
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                沉浸于码字或阅读常常让人忘记时间。Love Write 特别设计了富有趣味性的“太空飞船健康提醒”系统，时刻关注您的身体状态。
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
-              <h3 className="text-xs font-bold mb-1 flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                <Shield className="w-4 h-4" />
-                特别说明：颈椎健康实时监测
-              </h3>
-              <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                休息室中提供的<strong>“颈部动作实时监测”</strong>功能支持通过摄像头进行姿势校准。您可以选择开启摄像头，图像仅在您的本地浏览器进行渲染和偏差对准分析，绝不上传到任何服务器，安全保护您的隐私。如果您拒绝了摄像头权限，系统会自动降级为普通趣味模拟练习（由滑块或时间控制），并展示可爱的飞船警告卡片。
+                沉浸于码字或阅读常常让人忘记时间。开启后，系统会在连续使用达到设定间隔时弹出全屏屏保，温和地提醒您休息眼睛、活动身体。
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800/60">
               <h3 className="text-sm font-semibold mb-2.5 flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100">
-                <Smile className="w-4 h-4 text-indigo-500" />
+                <Monitor className="w-4 h-4 text-indigo-500" />
                 提醒触发机制
               </h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
                 当您在浏览器或客户端中<strong>连续浏览/编辑本站内容超过设定时间</strong>（默认 30 分钟）时：
               </p>
               <ol className="list-decimal pl-4 mt-2 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-                <li>一艘闪烁着尾部火焰的<strong>太空飞船</strong>将会平滑地从屏幕左侧飞入，缓缓飞跃整个视口并在右侧消失。此动作会<strong>连续飞跃 3 次</strong>，起到温和的视觉暗示作用。</li>
-                <li>随后屏幕中央将弹出一个玻璃磨砂风格的<strong>关怀卡片</strong>，提醒您：<strong>眨眨眼/远眺放松眼睛</strong>、<strong>喝杯水补充水分</strong>、<strong>站立起来伸展肢体活动活动</strong>。</li>
-                <li>您可以点击卡片下方的“好的，我会注意的”按钮关闭提醒。此时系统将重新为您安排下一轮浏览计时。</li>
+                <li>进入<strong>全屏屏保</strong>（Bing 壁纸背景 + 大时钟），并自动触发一次全局保存。</li>
+                <li>借此机会<strong>远眺放松眼睛</strong>、<strong>喝杯水</strong>、<strong>站立伸展</strong>。</li>
+                <li>按任意键或点击屏幕即可关闭屏保，系统将重新开始下一轮计时。</li>
               </ol>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">⚙️ 如何修改提醒间隔</h3>
+              <h3 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">⚙️ 如何开启与修改间隔</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                默认的提醒间隔为 <strong>30 分钟</strong>。若您认为提醒过于频繁或间隔过长，可以按以下步骤修改：
+                功能<strong>默认关闭</strong>。默认提醒间隔为 <strong>30 分钟</strong>。可按以下步骤调整：
               </p>
               <ol className="list-decimal pl-4 mt-2 space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
                 <li>打开“设置”对话框。</li>
                 <li>切换至<strong>“开关偏好” (Switches)</strong> 选项卡。</li>
-                <li>在设置列表中找到<strong>“健康休息提醒间隔”</strong>下拉选择框。</li>
-                <li>可将间隔值更改为 15 分钟、30 分钟、45 分钟、1 小时、1.5 小时或 2 小时。</li>
-                <li>修改将即时生效，无需重启客户端，系统已自动重置并以新间隔重新为您计时。</li>
+                <li>开启<strong>“健康休息提醒”</strong>，并在下方选择提醒间隔（15 分钟～2 小时）。</li>
+                <li>修改将即时生效，无需重启客户端。</li>
               </ol>
             </div>
           </div>

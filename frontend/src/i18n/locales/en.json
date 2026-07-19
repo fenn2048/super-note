@@ -600,7 +600,7 @@
     "customSplashClear": "Reset default",
     "customSplashHint": "Portrait recommended, max 5MB. JPG / PNG / WebP.",
     "healthReminder": "Health break reminder",
-    "healthReminderDesc": "Periodic rest prompt (spaceship mini-games). Off by default.",
+    "healthReminderDesc": "Shows a full-screen screensaver after continuous browsing, prompting rest. Off by default.",
     "healthReminderInterval": "Interval (minutes)"
   },
   "securitySettings": {

@@ -19,8 +19,6 @@ const ALLOWED_KEYS = new Set([
   "lockOnOpen",
   "healthReminderEnabled",
   "reminderInterval",
-  "faceMimicGoodThreshold",
-  "faceMimicWonderfulThreshold",
 ]);
 
 function parseJson(raw: string | undefined | null): Record<string, unknown> {

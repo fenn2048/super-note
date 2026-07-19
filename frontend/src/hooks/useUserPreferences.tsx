@@ -32,8 +32,6 @@ export interface UserPreferences {
   noteListDensity: NoteListDensity;
   healthReminderEnabled: boolean;
   reminderInterval: number;
-  faceMimicGoodThreshold: number;
-  faceMimicWonderfulThreshold: number;
   startupLanding: StartupLanding;
 }
 
@@ -45,8 +43,6 @@ const DEFAULT_PREFS: UserPreferences = {
   noteListDensity: "cozy",
   healthReminderEnabled: false,
   reminderInterval: 30,
-  faceMimicGoodThreshold: 70,
-  faceMimicWonderfulThreshold: 80,
   startupLanding: "last",
 };
 
@@ -80,14 +76,6 @@ function normalizePrefs(parsed: Partial<UserPreferences> & Record<string, unknow
       typeof parsed.reminderInterval === "number"
         ? parsed.reminderInterval
         : DEFAULT_PREFS.reminderInterval,
-    faceMimicGoodThreshold:
-      typeof parsed.faceMimicGoodThreshold === "number"
-        ? parsed.faceMimicGoodThreshold
-        : DEFAULT_PREFS.faceMimicGoodThreshold,
-    faceMimicWonderfulThreshold:
-      typeof parsed.faceMimicWonderfulThreshold === "number"
-        ? parsed.faceMimicWonderfulThreshold
-        : DEFAULT_PREFS.faceMimicWonderfulThreshold,
     startupLanding:
       parsed.startupLanding === "last" ||
       parsed.startupLanding === "home" ||

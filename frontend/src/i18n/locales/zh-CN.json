@@ -608,7 +608,7 @@
     "customSplashClear": "恢复默认",
     "customSplashHint": "建议竖图，≤5MB。JPG / PNG / WebP。",
     "healthReminder": "健康休息提醒",
-    "healthReminderDesc": "定时弹出休息引导（含飞船小游戏）。默认关闭。",
+    "healthReminderDesc": "定时弹出全屏屏保，提醒休息眼睛与活动身体。默认关闭。",
     "healthReminderInterval": "提醒间隔（分钟）"
   },
   "securitySettings": {

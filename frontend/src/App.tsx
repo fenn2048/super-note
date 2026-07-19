@@ -407,7 +407,7 @@ function AppLayout() {
 
 
 
-  // 太空飞船健康提醒
+  // 健康休息提醒（定时屏保）
   const { prefs: userPrefs } = useUserPreferences();
   const [startupApplied, setStartupApplied] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
@@ -1593,7 +1593,7 @@ function AppLayout() {
         </AnimatePresence>
       </Suspense>
 
-      {/* 太空飞船休息提醒 */}
+      {/* 健康休息屏保 */}
       <Suspense fallback={null}>
         <AnimatePresence>
           {showReminder && (
