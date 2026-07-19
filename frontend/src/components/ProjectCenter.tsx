@@ -1993,9 +1993,60 @@ export default function ProjectCenter() {
                         </div>
                       </div>
 
+                      {/* 移动端快速添加（与桌面 quick-add 对齐） */}
+                      {typeof window !== "undefined" && window.innerWidth < 768 && (
+                        <form
+                          onSubmit={handleQuickAddTask}
+                          className="md:hidden flex items-center gap-2 mb-4 max-w-[640px] mx-auto bg-app-elevated border border-app-border/50 rounded-xl px-3 py-2 shadow-xs"
+                        >
+                          <Plus size={16} className="text-accent-primary shrink-0" />
+                          <Input
+                            type="text"
+                            value={quickAddTitle}
+                            onChange={(e) => setQuickAddTitle(e.target.value)}
+                            placeholder={t("projects.quickAddTaskPlaceholder") || "添加任务，回车创建"}
+                            className="flex-1 bg-transparent border-0 focus-visible:ring-0 px-0 text-sm h-9"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleOpenTaskCreateModal}
+                            className="p-2 rounded-lg text-tx-tertiary hover:bg-app-hover shrink-0"
+                            title="详细创建"
+                          >
+                            <Maximize2 size={16} />
+                          </button>
+                        </form>
+                      )}
+
                       {loadingMyTasks ? (
                         <div className="flex items-center justify-center py-12">
                           <Loader2 size={24} className="animate-spin text-accent-primary" />
+                        </div>
+                      ) : filteredMyTasks.length === 0 ? (
+                        <div className="max-w-[640px] mx-auto flex flex-col items-center justify-center py-16 px-6 text-center">
+                          <div className="w-14 h-14 rounded-2xl bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center mb-4">
+                            <ListTodo size={28} className="text-accent-primary/70" />
+                          </div>
+                          <p className="text-sm font-semibold text-tx-primary mb-1">
+                            {projectSearchQuery
+                              ? "没有匹配的任务"
+                              : t("projects.noMyTasks") || "还没有任务"}
+                          </p>
+                          <p className="text-xs text-tx-tertiary mb-5 max-w-[260px] leading-relaxed">
+                            {projectSearchQuery
+                              ? "试试其他关键词，或清除搜索"
+                              : "记下今天要办的事，从这里开始"}
+                          </p>
+                          {!projectSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={handleOpenTaskCreateModal}
+                              className="inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-accent-primary text-white text-sm font-semibold shadow-sm active:scale-[0.98]"
+                            >
+                              <Plus size={16} />
+                              创建任务
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <>
