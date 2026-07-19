@@ -74,3 +74,6 @@ A: 检查 lockfile 是否与 `package.json` 同步；本地 `cd backend && npm i
 
 **Q: sharp / better-sqlite3 启动报错？**  
 A: 运行时必须带 Alpine musl 预编译包；Dockerfile 已设 `npm_config_platform=linux npm_config_libc=musl`。
+
+**Q: `empty platform value from expression $BUILDPLATFORM`？**  
+A: 不要在 Dockerfile 顶部写 `ARG BUILDPLATFORM=`（空默认会盖掉 BuildKit 自动注入）。构建阶段用 `FROM --platform=$BUILDPLATFORM`，平台变量由 BuildKit 提供。

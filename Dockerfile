@@ -7,16 +7,16 @@
 #   - 前端构建后删除 map；manualChunks 由 vite 配置负责
 # =============================================================================
 
+# 仅声明会在 FROM 中插值的 ARG。
+# 切勿写 ARG BUILDPLATFORM= / TARGETARCH= 空默认值：会覆盖 BuildKit 自动注入，
+# 导致 FROM --platform=$BUILDPLATFORM 报 empty platform value。
 ARG DOCKER_REGISTRY=""
-ARG TARGETPLATFORM=
-ARG TARGETARCH=
-ARG BUILDPLATFORM=
-
 ARG APK_MIRROR=""
 ARG NPM_REGISTRY=""
 
 
 # ---------- Stage 1: 前端 ----------
+# BUILDPLATFORM / TARGETARCH 由 BuildKit 自动注入（无需全局 ARG）
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS frontend-build
 ARG TARGETARCH
 ARG APK_MIRROR
