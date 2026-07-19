@@ -43,38 +43,19 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        // 手动分包，降低构建内存峰值。
-        // 注意：互有循环依赖的包必须落在同一 chunk，否则生产环境会出现
-        // "Cannot access 'X' before initialization"（TDZ）。
+        // 只拆「真正按需动态 import」的重型可选库。
+        // 不要把 react / i18next / tiptap / codemirror 等核心依赖硬拆成多个
+        // vendor-*：生产环境会出现 createContext / TDZ 一类运行时错误
+        // （dev 不走这套分包所以正常，Docker 生产 build 才炸）。
+        // 其余交给 Rollup 按依赖图自动分包。
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          // 重型可选能力：独立 chunk，仅打开对应功能时加载
           if (id.includes("mermaid")) return "vendor-mermaid";
           if (id.includes("tesseract")) return "vendor-tesseract";
           if (id.includes("artplayer") || id.includes("hls.js")) return "vendor-player";
-          if (id.includes("pdfjs") || id.includes("foliate")) return "vendor-pdf";
-          // CodeMirror 6 / Lezer / y-codemirror 不要单独 manualChunks：
-          // 它们与 yjs/lib0 等互相引用，拆到 vendor-codemirror 后生产环境会出现
-          // "Cannot access 'X' before initialization"（TDZ）。交给 Rollup 默认归入 vendor。
-          if (id.includes("@tiptap") || id.includes("prosemirror")) return "vendor-tiptap";
-          if (id.includes("framer-motion") || id.includes("lucide-react") || id.includes("react-icons")) {
-            return "vendor-ui";
+          if (id.includes("pdfjs") || id.includes("foliate-js") || id.includes("/foliate/")) {
+            return "vendor-pdf";
           }
-          if (id.includes("react-dom") || id.includes("/react/") || id.endsWith("/react")) {
-            return "vendor-react";
-          }
-          if (
-            id.includes("jszip") ||
-            id.includes("react-markdown") ||
-            id.includes("remark-gfm") ||
-            id.includes("turndown") ||
-            id.includes("date-fns") ||
-            id.includes("i18next")
-          ) {
-            return "vendor-utils";
-          }
-          // 其余 node_modules 归入 generic vendor（避免单包过大）
-          return "vendor";
         },
       },
     },
