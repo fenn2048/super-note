@@ -564,6 +564,29 @@ body::before {
   padding-bottom: calc(1.25rem + var(--safe-area-bottom, 0px));
 }
 
+/* Phase D：键盘焦点可见性（无障碍）——避免仅 outline:none 的按钮失焦不可见 */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent-primary) 55%, transparent);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none; /* 表单已有 ring，避免双线 */
+}
+
+/* 减弱动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .media-disc-spin {
+    animation: none !important;
+  }
+  .animate-spin {
+    animation-duration: 1.5s;
+  }
+}
+
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */
 .ProseMirror {
   outline: none;
