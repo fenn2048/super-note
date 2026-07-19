@@ -3196,9 +3196,20 @@ function DiaryEditor({
       className="bg-app-surface/60 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm"
     >
       <div className="p-4 pb-2">
-        <div className="flex items-center gap-1.5 mb-2 text-[11px] text-accent-primary">
-          <Edit2 size={11} />
-          <span>{t("diary.editing")}</span>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5 text-[11px] text-accent-primary min-w-0">
+            <Edit2 size={11} className="shrink-0" />
+            <span className="truncate">{t("diary.editing") || "编辑中…"}</span>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover active:scale-95 transition-all shrink-0"
+            title={t("common.cancel") || "取消"}
+            aria-label={t("common.cancel") || "取消编辑"}
+          >
+            <X size={16} />
+          </button>
         </div>
 
         <textarea
@@ -3405,6 +3416,16 @@ function DiaryEditor({
           >
             {text.length > 0 && text.length}
           </span>
+
+          {/* 取消 */}
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="px-3 py-1.5 rounded-full text-xs font-medium text-tx-secondary hover:bg-app-hover active:scale-95 transition-all disabled:opacity-50"
+          >
+            {t("common.cancel") || "取消"}
+          </button>
 
           {/* 保存按钮 */}
           <button

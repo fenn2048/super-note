@@ -1188,175 +1188,192 @@ function AppearancePanel() {
   return (
     <div className="space-y-6">
       {/* 站点标识 */}
-      <div>
-        <h3 className="text-lg font-bold text-tx-primary mb-1">{t('settings.siteIdentity')}</h3>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">{t('settings.siteIdentityDesc')}</p>
-        {!isAdmin && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
-            {t('settings.siteIdentityAdminOnly')}
-          </p>
-        )}
-        {isAdmin && <div className="mb-6" />}
-
-        <div className="flex flex-col sm:flex-row gap-6 items-start">
-          {/* Logo 上传区域 */}
-          <div className="flex flex-col items-center gap-2.5">
-            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('settings.siteIcon')}</span>
-            <div
-              className={cn(
-                "relative w-20 h-20 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden group transition-colors",
-                isAdmin
-                  ? "cursor-pointer hover:border-accent-primary"
-                  : "cursor-not-allowed opacity-60"
-              )}
-              onClick={() => { if (isAdmin) fileInputRef.current?.click(); }}
-            >
-              {previewIcon ? (
-                <img src={previewIcon} alt="Site Icon" className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-zinc-400 dark:text-zinc-600">
-                  <Camera size={20} />
-                  <span className="text-[10px]">{t('settings.upload')}</span>
-                </div>
-              )}
-              {isAdmin && (
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <Camera className="w-5 h-5 text-white" />
-                </div>
-              )}
-            </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageChange}
-              accept="image/png,image/jpeg,image/svg+xml,image/x-icon,image/webp"
-              className="hidden"
-              disabled={!isAdmin}
-            />
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">PNG/SVG/ICO · &lt;1MB</span>
-              {previewIcon && isAdmin && (
-                <button
-                  onClick={handleRemoveIcon}
-                  className="text-[10px] text-red-500 hover:text-red-400 transition-colors"
-                >
-                  {t('settings.remove')}
-                </button>
-              )}
-            </div>
-          </div>
-
-          
-      {/* 启动闪屏自定义（本机） */}
-      <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+      <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-tx-primary">{t("settings.customSplash", { defaultValue: "启动闪屏图" })}</h3>
-          <p className="text-xs text-tx-tertiary mt-1">{t("settings.customSplashDesc", { defaultValue: "自定义 App 加载阶段显示的图片（本机保存）。" })}</p>
+          <h3 className="text-lg font-bold text-tx-primary mb-1">{t('settings.siteIdentity')}</h3>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('settings.siteIdentityDesc')}</p>
+          {!isAdmin && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              {t('settings.siteIdentityAdminOnly')}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-28 rounded-lg border border-app-border overflow-hidden bg-[#F5F3EE] flex items-center justify-center shrink-0">
-            {splashPreview ? (
-              <img src={splashPreview} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <BrandMark size={40} />
-            )}
+
+        {/* 图标 + 名称：同一张卡片，桌面横排 / 窄屏纵排 */}
+        <div className="rounded-xl border border-app-border bg-app-elevated p-4">
+          <div className="flex flex-col sm:flex-row gap-5 sm:gap-6 sm:items-start">
+            {/* Logo */}
+            <div className="flex flex-col items-center gap-2 shrink-0 sm:pt-0.5">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 self-start sm:self-center">
+                {t('settings.siteIcon')}
+              </span>
+              <div
+                className={cn(
+                  "relative w-20 h-20 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden group transition-colors",
+                  isAdmin
+                    ? "cursor-pointer hover:border-accent-primary"
+                    : "cursor-not-allowed opacity-60",
+                )}
+                onClick={() => { if (isAdmin) fileInputRef.current?.click(); }}
+              >
+                {previewIcon ? (
+                  <img src={previewIcon} alt="Site Icon" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-zinc-400 dark:text-zinc-600">
+                    <Camera size={20} />
+                    <span className="text-[10px]">{t('settings.upload')}</span>
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Camera className="w-5 h-5 text-white" />
+                  </div>
+                )}
+              </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageChange}
+                accept="image/png,image/jpeg,image/svg+xml,image/x-icon,image/webp"
+                className="hidden"
+                disabled={!isAdmin}
+              />
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">PNG/SVG/ICO · &lt;1MB</span>
+                {previewIcon && isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveIcon}
+                    className="text-[10px] text-red-500 hover:text-red-400 transition-colors"
+                  >
+                    {t('settings.remove')}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 站点名称 + 保存 */}
+            <div className="flex-1 min-w-0 space-y-3 w-full">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  {t('settings.siteName')}
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => { setTitle(e.target.value); setSaveMessage(""); }}
+                  maxLength={20}
+                  disabled={!isAdmin}
+                  className="w-full px-3 py-2 bg-app-bg border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder={t('settings.siteNamePlaceholder')}
+                />
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-right">{title.length} / 20</p>
+              </div>
+
+              {isAdmin && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSaving || !title.trim() || !hasChanges}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    {t('settings.saveChanges')}
+                  </button>
+                  {saveMessage && (
+                    <span className={`text-xs ${saveMessage === t('settings.saveSuccess') ? "text-emerald-500" : "text-red-500"}`}>
+                      {saveMessage}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col gap-2 min-w-0">
-            <input
-              ref={splashInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                setSplashBusy(true);
-                setSplashMsg("");
-                try {
-                  const url = await saveCustomSplashFromFile(f);
-                  setSplashPreview(url);
-                  setSplashMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
-                } catch (err: any) {
-                  setSplashMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
-                } finally {
-                  setSplashBusy(false);
-                }
-              }}
-            />
-            <button
-              type="button"
-              disabled={splashBusy}
-              onClick={() => splashInputRef.current?.click()}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
-            >
-              {splashBusy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
-            </button>
-            {splashPreview && (
-              <button
-                type="button"
-                disabled={splashBusy}
-                onClick={async () => {
+        </div>
+
+        {/* 本机启动闪屏（独立卡片，避免被塞进图标行） */}
+        <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-tx-primary">
+              {t("settings.customSplash", { defaultValue: "启动闪屏图" })}
+            </h3>
+            <p className="text-xs text-tx-tertiary mt-1">
+              {t("settings.customSplashDesc", {
+                defaultValue: "自定义 App 加载阶段显示的图片（本机保存）。系统冷启动瞬间仍为默认品牌图。",
+              })}
+            </p>
+          </div>
+          <div className="flex flex-col xs:flex-row sm:flex-row items-start gap-4">
+            <div className="w-20 h-28 rounded-lg border border-app-border overflow-hidden bg-[#F5F3EE] flex items-center justify-center shrink-0">
+              {splashPreview ? (
+                <img src={splashPreview} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <BrandMark size={40} />
+              )}
+            </div>
+            <div className="flex flex-col gap-2 min-w-0 flex-1">
+              <input
+                ref={splashInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
                   setSplashBusy(true);
+                  setSplashMsg("");
                   try {
-                    await clearCustomSplash();
-                    setSplashPreview(null);
-                    setSplashMsg("");
+                    const url = await saveCustomSplashFromFile(f);
+                    setSplashPreview(url);
+                    setSplashMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
+                  } catch (err: any) {
+                    setSplashMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
                   } finally {
                     setSplashBusy(false);
                   }
                 }}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
-              >
-                {t("settings.customSplashClear", { defaultValue: "恢复默认" })}
-              </button>
-            )}
-            <p className="text-[11px] text-tx-tertiary">{t("settings.customSplashHint", { defaultValue: "建议竖图，≤5MB" })}</p>
-            {splashMsg && <p className="text-[11px] text-accent-primary">{splashMsg}</p>}
-          </div>
-        </div>
-      </div>
-
-      {/* 站点级默认闪屏（P2-7b，管理员，多设备一致） */}
-      {isAdmin && (
-        <SiteSplashUrlField />
-      )}
-
-      {/* 站点名称 */}
-          <div className="flex-1 space-y-3 w-full">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('settings.siteName')}</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => { setTitle(e.target.value); setSaveMessage(""); }}
-                maxLength={20}
-                disabled={!isAdmin}
-                className="w-full px-3 py-2 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400 disabled:opacity-60 disabled:cursor-not-allowed"
-                placeholder={t('settings.siteNamePlaceholder')}
               />
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-right">{title.length} / 20</p>
-            </div>
-
-            {isAdmin && (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={handleSave}
-                  disabled={isSaving || !title.trim() || !hasChanges}
-                  className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={splashBusy}
+                  onClick={() => splashInputRef.current?.click()}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
                 >
-                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  {t('settings.saveChanges')}
+                  {splashBusy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
                 </button>
-                {saveMessage && (
-                  <span className={`text-xs ${saveMessage === t('settings.saveSuccess') ? "text-emerald-500" : "text-red-500"}`}>
-                    {saveMessage}
-                  </span>
+                {splashPreview && (
+                  <button
+                    type="button"
+                    disabled={splashBusy}
+                    onClick={async () => {
+                      setSplashBusy(true);
+                      try {
+                        await clearCustomSplash();
+                        setSplashPreview(null);
+                        setSplashMsg("");
+                      } finally {
+                        setSplashBusy(false);
+                      }
+                    }}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
+                  >
+                    {t("settings.customSplashClear", { defaultValue: "恢复默认" })}
+                  </button>
                 )}
               </div>
-            )}
+              <p className="text-[11px] text-tx-tertiary">
+                {t("settings.customSplashHint", { defaultValue: "建议竖图，≤5MB。JPG / PNG / WebP。" })}
+              </p>
+              {splashMsg && <p className="text-[11px] text-accent-primary">{splashMsg}</p>}
+            </div>
           </div>
         </div>
+
+        {/* 站点级默认闪屏 URL（管理员，独立整行卡片） */}
+        {isAdmin && <SiteSplashUrlField />}
       </div>
 
       {/* 分割线 */}
