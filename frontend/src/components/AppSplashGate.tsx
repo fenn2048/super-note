@@ -1,12 +1,11 @@
 /**
- * 应用内启动门（P2-7）
- * - 有自定义闪屏：全屏显示用户图
- * - 否则：品牌默认 Logo + 蜉蝣
- * 在 auth/bootstrap 完成前覆盖主界面，避免原生 splash hide 后白屏。
+ * 应用内启动门（P2-7 / P2-7b）
+ * 优先级：本机自定义图 → 站点级 site_splash_url → 品牌默认 Logo
  */
 import { useEffect, useState } from "react";
 import { getCustomSplashDataUrl } from "@/lib/splashStorage";
 import BrandMark from "@/components/BrandMark";
+import { api } from "@/lib/api";
 
 export type AppSplashGateProps = {
   /** true 时开始淡出并卸载 */
@@ -22,13 +21,26 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
 
   useEffect(() => {
     let cancelled = false;
-    getCustomSplashDataUrl()
-      .then((u) => {
-        if (!cancelled) setCustomUrl(u);
-      })
-      .catch(() => {
+    (async () => {
+      try {
+        const local = await getCustomSplashDataUrl();
+        if (cancelled) return;
+        if (local) {
+          setCustomUrl(local);
+          return;
+        }
+        // 站点级默认闪屏（多设备一致）
+        try {
+          const site = await api.getSiteSettings();
+          const siteUrl = (site.site_splash_url || "").trim();
+          if (!cancelled) setCustomUrl(siteUrl || null);
+        } catch {
+          if (!cancelled) setCustomUrl(null);
+        }
+      } catch {
         if (!cancelled) setCustomUrl(null);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
