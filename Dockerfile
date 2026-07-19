@@ -1,43 +1,30 @@
 # =============================================================================
-# super-note 多架构 Dockerfile（Alpine 精简版）
+# super-note 多架构 Dockerfile（Alpine · Phase 0+1 缓存优化）
 # -----------------------------------------------------------------------------
-# 支持 linux/amd64 与 linux/arm64，macOS（Apple Silicon + Intel）均可原生构建。
+# 关键改动（相对旧版）：
+#   - npm ci + BuildKit cache mount（/root/.npm）
+#   - 前端 COPY 分层：依赖与源码分离，避免改一行业务就重装依赖
+#   - APK 默认不进 context（.dockerignore），镜像更小
+#   - 后端同样 npm ci + cache
 #
-# 构建方式：
-#   # macOS Apple Silicon → arm64（默认，最快，无需 QEMU）
-#   docker build -t super-note .
-#
-#   # macOS Intel / Linux x86 → amd64
-#   docker build -t super-note .
-#
-#   # 显式指定架构
-#   docker build --platform linux/amd64 -t super-note .
-#   docker build --platform linux/arm64 -t super-note .
-#
-#   # 多架构 manifest
-#   docker buildx build --platform linux/amd64,linux/arm64 -t super-note --push .
-#
-# 关键设计：
-#   - 基础镜像：node:20-alpine（~42MB），而非 node:20-slim（~150MB）
-#   - better-sqlite3 / sqlite-vec 在 musl 下需要本地编译 → 用 --virtual
-#     安装构建链，npm ci 完立即 `apk del`，不留任何构建产物在运行层
-#   - rollup 的原生绑定根据 TARGETARCH 选 musl 版（linux-*-musl）而不是 gnu
-#   - APK_MIRROR 与 NPM_REGISTRY 可配置，中国大陆用户换成国内镜像加速
+# 构建：
+#   DOCKER_BUILDKIT=1 docker build \
+#     --build-arg DOCKER_REGISTRY=docker.m.daocloud.io/ \
+#     --build-arg APK_MIRROR=mirrors.aliyun.com \
+#     --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+#     -t super-note .
 # =============================================================================
 
-# Docker 镜像源：中国大陆用户可设为 docker.m.daocloud.io/ 加速
-# 通过 docker build --build-arg DOCKER_REGISTRY=docker.m.daocloud.io/ ... 传入
 ARG DOCKER_REGISTRY=""
 ARG TARGETPLATFORM=
 ARG TARGETARCH=
+ARG BUILDPLATFORM=
 
-# ---------- 镜像源配置 ----------
-# 中国大陆用户可设置：
-#   docker build --build-arg APK_MIRROR=mirrors.ustc.edu.cn --build-arg NPM_REGISTRY=https://registry.npmmirror.com ...
-# 或通过 docker-compose.yml 的 args 传入。
-# 默认留空 → 使用 Alpine / npm 官方源（全球 CDN，对 macOS 友好）。
 ARG APK_MIRROR=""
 ARG NPM_REGISTRY=""
+
+# ---------- 公共：配置 apk / npm 镜像 ----------
+# 各 stage 内联一小段，避免额外 base stage 拖垮缓存命中语义
 
 
 # ---------- Stage 1: 前端构建 ----------
@@ -47,34 +34,41 @@ ARG APK_MIRROR
 ARG NPM_REGISTRY
 WORKDIR /app
 
-# 安装 bash（脚本依赖）
 RUN if [ -n "$APK_MIRROR" ]; then \
       sed -i 's/https/http/g' /etc/apk/repositories \
       && sed -i "s/dl-cdn.alpinelinux.org/$APK_MIRROR/g" /etc/apk/repositories; \
     fi \
     && apk add --no-cache bash \
-    && if [ -n "$NPM_REGISTRY" ]; then \
-      npm config set registry "$NPM_REGISTRY"; \
-    fi \
+    && if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
     && npm config set fetch-retry-maxtimeout 180000 \
     && npm config set fetch-retry-mintimeout 20000 \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# 复制依赖定义文件以利用 Docker 缓存
+# 1) 仅 lockfile → 依赖层可长期缓存
 COPY package.json ./
-COPY frontend/package.json ./frontend/
-COPY frontend/package-lock.json ./frontend/
+COPY frontend/package.json frontend/package-lock.json ./frontend/
 
-# Step 1: 安装依赖
-RUN cd frontend \
-    && npm install --no-audit --no-fund --legacy-peer-deps
+RUN --mount=type=cache,target=/root/.npm \
+    cd frontend \
+    && npm ci --no-audit --no-fund --legacy-peer-deps
 
-# 复制其余前端源码（包含之前在宿主机生成的 downloads 目录中的浏览器扩展和 APK）
-COPY frontend ./frontend
+# 2) 配置与源码分层（改业务代码不重装依赖）
+COPY frontend/index.html \
+     frontend/vite.config.ts \
+     frontend/tsconfig.json \
+     frontend/tsconfig.app.json \
+     frontend/tsconfig.node.json \
+     frontend/postcss.config.cjs \
+     frontend/tailwind.config.cjs \
+     frontend/components.json \
+     ./frontend/
+COPY frontend/src ./frontend/src
+COPY frontend/public ./frontend/public
 
-# Step 2: 根据目标架构处理 rollup 并构建前端
-RUN cd frontend \
+# 3) 目标 arch 的 rollup musl 绑定 + 构建
+RUN --mount=type=cache,target=/root/.npm \
+    cd frontend \
     && if [ -n "${TARGETARCH}" ]; then \
       ROLLUP_VER=$(node -e "try{const l=require('./package-lock.json');const v=(l.packages||{})['node_modules/rollup']||(l.dependencies||{}).rollup||{};console.log(v.version||'')}catch(e){console.log('')}"); \
       [ -z "$ROLLUP_VER" ] && ROLLUP_VER="4.59.0"; \
@@ -85,101 +79,83 @@ RUN cd frontend \
       esac; \
       if [ -n "$ROLLUP_PKG" ]; then \
         echo "Installing rollup target arch pkg: $ROLLUP_PKG"; \
-        npm install "$ROLLUP_PKG" --save-optional --no-audit --no-fund 2>/dev/null || true; \
+        npm install "$ROLLUP_PKG" --no-save --no-audit --no-fund 2>/dev/null || true; \
       fi; \
-    fi; \
-    \
-    npm run build
+    fi \
+    && npm run build \
+    && find dist -name '*.map' -type f -delete 2>/dev/null || true
 
-# ---------- Stage 2: 后端构建（tsc） ----------
+
+# ---------- Stage 2: 后端构建 ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS backend-build
 ARG APK_MIRROR
 ARG NPM_REGISTRY
 WORKDIR /app/backend
 
-# 配置镜像源（同 Stage 1）
 RUN if [ -n "$APK_MIRROR" ]; then \
       sed -i 's/https/http/g' /etc/apk/repositories \
       && sed -i "s/dl-cdn.alpinelinux.org/$APK_MIRROR/g" /etc/apk/repositories; \
     fi \
-    && if [ -n "$NPM_REGISTRY" ]; then \
-      npm config set registry "$NPM_REGISTRY"; \
-    fi \
+    && if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
     && npm config set fetch-retry-maxtimeout 180000 \
     && npm config set fetch-retry-mintimeout 20000 \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# tsc 纯 JS 架构无关，但 npm ci 会触发 better-sqlite3 / sqlite-vec / sharp 编译
-# vips-dev + fftw-dev 是 sharp 在 Alpine (musl) 下从源码编译的依赖
+# better-sqlite3 / sqlite-vec / sharp(musl 源码路径) 需要编译链
 RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers vips-dev fftw-dev
 
 COPY backend/package.json backend/package-lock.json ./
-# 告知 sharp 选取 linux-musl 预构建包，而非 glibc 版
-RUN npm_config_platform=linux npm_config_libc=musl \
-    npm install --no-audit --no-fund --legacy-peer-deps
-COPY backend/ .
-RUN npx tsc
 
-# 构建阶段完成后修剪 devDependencies，仅保留生产依赖
-# 这样运行时 stage 只需复制 node_modules，无需重新编译原生模块
-RUN npm prune --omit=dev --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm \
+    npm_config_platform=linux npm_config_libc=musl \
+    npm ci --no-audit --no-fund --legacy-peer-deps
 
-# build-deps 在这个 stage 用不着保留，最终运行时镜像会从 runtime stage 重新编译
-RUN apk del .build-deps
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
+# templates 运行时需要；构建 tsc 不依赖，但一并复制简化 runtime COPY
+COPY backend/templates ./templates
 
-# ---------- Stage 3: 运行时镜像 ----------
-# 默认使用主机架构（`docker build`）；跨架构构建请用 buildx
+RUN npx tsc \
+    && npm prune --omit=dev --no-audit --no-fund \
+    && apk del .build-deps \
+    && rm -rf /tmp/* /root/.npm/_logs
+
+
+# ---------- Stage 3: 运行时 ----------
 FROM ${DOCKER_REGISTRY}node:20-alpine
 ARG APK_MIRROR
-ARG NPM_REGISTRY
 WORKDIR /app
 
-# 配置镜像源
+# 运行时尽量少装包；sharp 预编译包通常自带，不装 vips-dev
 RUN if [ -n "$APK_MIRROR" ]; then \
       sed -i 's/https/http/g' /etc/apk/repositories \
       && sed -i "s/dl-cdn.alpinelinux.org/$APK_MIRROR/g" /etc/apk/repositories; \
     fi \
-    && if [ -n "$NPM_REGISTRY" ]; then \
-      npm config set registry "$NPM_REGISTRY"; \
-    fi \
-    && npm config set fetch-retry-maxtimeout 180000 \
-    && npm config set fetch-retry-mintimeout 20000 \
-    && npm config set fetch-retries 5 \
-    && npm config set fetch-timeout 600000
+    && apk add --no-cache tini \
+    && rm -rf /var/cache/apk/*
 
-# tini 提供 PID 1 信号转发，15KB，避免容器 kill 时僵尸进程
-RUN apk add --no-cache tini
-
-# 运行时依赖（production only）：直接复制构建阶段已编译的 node_modules
-# 避免在无缓存环境下重新编译 better-sqlite3 等原生模块
 COPY package.json ./package.json
 COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
-
 COPY --from=backend-build /app/backend/dist ./backend/dist
-COPY backend/templates ./backend/templates
+COPY --from=backend-build /app/backend/templates ./backend/templates
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 RUN mkdir -p /app/data
-
-# 数据卷（便于 NAS 面板自动识别）
 VOLUME ["/app/data"]
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# ---- 版本/构建元信息 ----
 ARG BUILD_DATE=""
 ARG APP_VERSION=""
-ENV SUPER_BUILD_TIME=${BUILD_DATE}
-ENV SUPER_APP_VERSION=${APP_VERSION}
-
-ENV NODE_ENV=production
-ENV DB_PATH=/app/data/super-note.db
-ENV PORT=3001
+ENV SUPER_BUILD_TIME=${BUILD_DATE} \
+    SUPER_APP_VERSION=${APP_VERSION} \
+    NODE_ENV=production \
+    DB_PATH=/app/data/super-note.db \
+    PORT=3001
 
 EXPOSE 3001
-
 WORKDIR /app
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "backend/dist/index.js"]
