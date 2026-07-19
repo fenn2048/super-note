@@ -136,20 +136,18 @@ if [[ "$SHA_TAG" == true && "$GIT_SHA" != "unknown" ]]; then
   echo "==> Extra tag: ${IMAGE_TAG}:${GIT_SHA}"
 fi
 
-PLATFORM_ARGS=()
+# macOS Bash 3.2 + set -u：空数组 "${arr[@]}" 会报 unbound variable，
+# 因此不单独维护可为空的 PLATFORM_ARGS，只在有值时拼进 DOCKER_ARGS。
+DOCKER_ARGS=("${BUILD_ARGS[@]}" "${TAGS[@]}")
 if [[ -n "$PLATFORM" ]]; then
-  PLATFORM_ARGS+=(--platform "$PLATFORM")
+  DOCKER_ARGS=(--platform "$PLATFORM" "${DOCKER_ARGS[@]}")
   echo "==> platform=${PLATFORM}"
 fi
 
 echo "==> docker build ${TAGS[*]} ..."
 START_TS=$(date +%s)
 
-docker build \
-  "${BUILD_ARGS[@]}" \
-  "${PLATFORM_ARGS[@]}" \
-  "${TAGS[@]}" \
-  .
+docker build "${DOCKER_ARGS[@]}" .
 
 END_TS=$(date +%s)
 ELAPSED=$((END_TS - START_TS))
