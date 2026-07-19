@@ -43,7 +43,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        // 手动分包，降低构建内存峰值
+        // 手动分包，降低构建内存峰值。
+        // 注意：互有循环依赖的包必须落在同一 chunk，否则生产环境会出现
+        // "Cannot access 'X' before initialization"（TDZ）。
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           // 重型可选能力：独立 chunk，仅打开对应功能时加载
@@ -51,7 +53,9 @@ export default defineConfig({
           if (id.includes("tesseract")) return "vendor-tesseract";
           if (id.includes("artplayer") || id.includes("hls.js")) return "vendor-player";
           if (id.includes("pdfjs") || id.includes("foliate")) return "vendor-pdf";
-          if (id.includes("@codemirror") || id.includes("/codemirror")) return "vendor-codemirror";
+          // CodeMirror 6 / Lezer / y-codemirror 不要单独 manualChunks：
+          // 它们与 yjs/lib0 等互相引用，拆到 vendor-codemirror 后生产环境会出现
+          // "Cannot access 'X' before initialization"（TDZ）。交给 Rollup 默认归入 vendor。
           if (id.includes("@tiptap") || id.includes("prosemirror")) return "vendor-tiptap";
           if (id.includes("framer-motion") || id.includes("lucide-react") || id.includes("react-icons")) {
             return "vendor-ui";
