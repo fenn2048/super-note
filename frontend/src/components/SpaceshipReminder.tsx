@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { toast } from "@/lib/toast";
-import FaceMimicGame from "./FaceMimicGame";
+// FaceMimicGame 暂未挂入 UI；需要时再 React.lazy(() => import("./FaceMimicGame"))
 
 
 interface SpaceshipReminderProps {

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { X, Copy, Check, ScanText, Loader2, ImagePlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/lib/toast";
-import Tesseract from "tesseract.js";
 import { cn } from "@/lib/utils";
 
 interface OCRModalProps {
@@ -70,6 +69,8 @@ export default function OCRModal({ isOpen, onClose, onInsert }: OCRModalProps) {
     setProgressStatus("初始化中...");
     
     try {
+      // 动态加载 ~2MB+ 的 tesseract，避免进主包
+      const Tesseract = (await import("tesseract.js")).default;
       const result = await Tesseract.recognize(
         imageFile,
         'chi_sim+eng',

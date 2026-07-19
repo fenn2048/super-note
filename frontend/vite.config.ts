@@ -44,33 +44,34 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // 手动分包，降低构建内存峰值
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-tiptap': [
-            '@tiptap/react',
-            '@tiptap/starter-kit',
-            '@tiptap/extension-code-block-lowlight',
-            '@tiptap/extension-highlight',
-            '@tiptap/extension-image',
-            '@tiptap/extension-placeholder',
-            '@tiptap/extension-task-item',
-            '@tiptap/extension-task-list',
-            '@tiptap/extension-underline',
-          ],
-          'vendor-ui': [
-            'framer-motion',
-            'lucide-react',
-            'react-icons',
-          ],
-          'vendor-utils': [
-            'jszip',
-            'react-markdown',
-            'remark-gfm',
-            'turndown',
-            'date-fns',
-            'i18next',
-            'react-i18next',
-          ],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          // 重型可选能力：独立 chunk，仅打开对应功能时加载
+          if (id.includes("mermaid")) return "vendor-mermaid";
+          if (id.includes("tesseract")) return "vendor-tesseract";
+          if (id.includes("@mediapipe")) return "vendor-mediapipe";
+          if (id.includes("artplayer") || id.includes("hls.js")) return "vendor-player";
+          if (id.includes("pdfjs") || id.includes("foliate")) return "vendor-pdf";
+          if (id.includes("@codemirror") || id.includes("/codemirror")) return "vendor-codemirror";
+          if (id.includes("@tiptap") || id.includes("prosemirror")) return "vendor-tiptap";
+          if (id.includes("framer-motion") || id.includes("lucide-react") || id.includes("react-icons")) {
+            return "vendor-ui";
+          }
+          if (id.includes("react-dom") || id.includes("/react/") || id.endsWith("/react")) {
+            return "vendor-react";
+          }
+          if (
+            id.includes("jszip") ||
+            id.includes("react-markdown") ||
+            id.includes("remark-gfm") ||
+            id.includes("turndown") ||
+            id.includes("date-fns") ||
+            id.includes("i18next")
+          ) {
+            return "vendor-utils";
+          }
+          // 其余 node_modules 归入 generic vendor（避免单包过大）
+          return "vendor";
         },
       },
     },

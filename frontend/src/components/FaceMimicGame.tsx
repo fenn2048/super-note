@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { CheckCircle2, Smile } from "lucide-react";
-import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
+import type { FaceLandmarker as FaceLandmarkerType } from "@mediapipe/tasks-vision";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface FaceMimicGameProps {
@@ -25,7 +25,7 @@ export default function FaceMimicGame({ onComplete, completed, stream, videoRef,
   const [currentExprIndex, setCurrentExprIndex] = useState(0);
   const [similarity, setSimilarity] = useState(0);
   const [feedback, setFeedback] = useState<"None" | "Good" | "Wonderful">("None");
-  const [landmarker, setLandmarker] = useState<FaceLandmarker | null>(null);
+  const [landmarker, setLandmarker] = useState<FaceLandmarkerType | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(true);
   const requestRef = useRef<number>();
   const lastVideoTimeRef = useRef<number>(-1);
@@ -36,6 +36,8 @@ export default function FaceMimicGame({ onComplete, completed, stream, videoRef,
     let active = true;
     const initFaceLandmarker = async () => {
       try {
+        // 动态 import mediapipe，避免未打开健康提醒时进主包
+        const { FilesetResolver, FaceLandmarker } = await import("@mediapipe/tasks-vision");
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
         );

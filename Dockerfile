@@ -1,18 +1,10 @@
 # =============================================================================
-# super-note 多架构 Dockerfile（Alpine · Phase 0+1 缓存优化）
+# super-note Dockerfile（Phase 0+1+2）
 # -----------------------------------------------------------------------------
-# 关键改动（相对旧版）：
-#   - npm ci + BuildKit cache mount（/root/.npm）
-#   - 前端 COPY 分层：依赖与源码分离，避免改一行业务就重装依赖
-#   - APK 默认不进 context（.dockerignore），镜像更小
-#   - 后端同样 npm ci + cache
-#
-# 构建：
-#   DOCKER_BUILDKIT=1 docker build \
-#     --build-arg DOCKER_REGISTRY=docker.m.daocloud.io/ \
-#     --build-arg APK_MIRROR=mirrors.aliyun.com \
-#     --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-#     -t super-note .
+# Phase 2：
+#   - 后端 esbuild 单文件 dist/index.js
+#   - 运行时 node_modules 仅保留 native/external（better-sqlite3/sharp/…）
+#   - 前端构建后删除 map；manualChunks 由 vite 配置负责
 # =============================================================================
 
 ARG DOCKER_REGISTRY=""
@@ -23,11 +15,8 @@ ARG BUILDPLATFORM=
 ARG APK_MIRROR=""
 ARG NPM_REGISTRY=""
 
-# ---------- 公共：配置 apk / npm 镜像 ----------
-# 各 stage 内联一小段，避免额外 base stage 拖垮缓存命中语义
 
-
-# ---------- Stage 1: 前端构建 ----------
+# ---------- Stage 1: 前端 ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS frontend-build
 ARG TARGETARCH
 ARG APK_MIRROR
@@ -45,7 +34,6 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# 1) 仅 lockfile → 依赖层可长期缓存
 COPY package.json ./
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 
@@ -53,7 +41,6 @@ RUN --mount=type=cache,target=/root/.npm \
     cd frontend \
     && npm ci --no-audit --no-fund --legacy-peer-deps
 
-# 2) 配置与源码分层（改业务代码不重装依赖）
 COPY frontend/index.html \
      frontend/vite.config.ts \
      frontend/tsconfig.json \
@@ -66,7 +53,6 @@ COPY frontend/index.html \
 COPY frontend/src ./frontend/src
 COPY frontend/public ./frontend/public
 
-# 3) 目标 arch 的 rollup musl 绑定 + 构建
 RUN --mount=type=cache,target=/root/.npm \
     cd frontend \
     && if [ -n "${TARGETARCH}" ]; then \
@@ -78,16 +64,17 @@ RUN --mount=type=cache,target=/root/.npm \
         *)     ROLLUP_PKG="" ;; \
       esac; \
       if [ -n "$ROLLUP_PKG" ]; then \
-        echo "Installing rollup target arch pkg: $ROLLUP_PKG"; \
         npm install "$ROLLUP_PKG" --no-save --no-audit --no-fund 2>/dev/null || true; \
       fi; \
     fi \
     && npm run build \
-    && find dist -name '*.map' -type f -delete 2>/dev/null || true
+    && find dist -name '*.map' -type f -delete 2>/dev/null || true \
+    && find dist -type d -name 'node_modules' -prune -o -type f -name '*.LICENSE.txt' -delete 2>/dev/null || true
 
 
-# ---------- Stage 2: 后端构建 ----------
+# ---------- Stage 2: 后端 bundle + 极简 runtime node_modules ----------
 FROM --platform=$BUILDPLATFORM ${DOCKER_REGISTRY}node:20-alpine AS backend-build
+ARG TARGETARCH
 ARG APK_MIRROR
 ARG NPM_REGISTRY
 WORKDIR /app/backend
@@ -102,24 +89,29 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && npm config set fetch-retries 5 \
     && npm config set fetch-timeout 600000
 
-# better-sqlite3 / sqlite-vec / sharp(musl 源码路径) 需要编译链
+# 编译 native 模块需要工具链；esbuild 为 JS 依赖
 RUN apk add --no-cache --virtual .build-deps python3 make g++ linux-headers vips-dev fftw-dev
 
 COPY backend/package.json backend/package-lock.json ./
-
-RUN --mount=type=cache,target=/root/.npm \
-    npm_config_platform=linux npm_config_libc=musl \
-    npm ci --no-audit --no-fund --legacy-peer-deps
-
+COPY backend/build.bundle.mjs ./
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
-# templates 运行时需要；构建 tsc 不依赖，但一并复制简化 runtime COPY
 COPY backend/templates ./templates
 
-RUN npx tsc \
-    && npm prune --omit=dev --no-audit --no-fund \
+# 全量依赖（含 esbuild dev）用于打包
+RUN --mount=type=cache,target=/root/.npm \
+    npm_config_platform=linux npm_config_libc=musl \
+    npm ci --no-audit --no-fund --legacy-peer-deps \
+    && node build.bundle.mjs
+
+# 仅安装 runtime external 到 dist/node_modules（体积关键）
+WORKDIR /app/backend/dist
+RUN --mount=type=cache,target=/root/.npm \
+    npm_config_platform=linux npm_config_libc=musl \
+    npm install --omit=dev --no-audit --no-fund --legacy-peer-deps \
     && apk del .build-deps \
-    && rm -rf /tmp/* /root/.npm/_logs
+    && rm -rf /tmp/* /root/.npm/_logs \
+    && du -sh /app/backend/dist /app/backend/dist/node_modules 2>/dev/null || true
 
 
 # ---------- Stage 3: 运行时 ----------
@@ -127,7 +119,6 @@ FROM ${DOCKER_REGISTRY}node:20-alpine
 ARG APK_MIRROR
 WORKDIR /app
 
-# 运行时尽量少装包；sharp 预编译包通常自带，不装 vips-dev
 RUN if [ -n "$APK_MIRROR" ]; then \
       sed -i 's/https/http/g' /etc/apk/repositories \
       && sed -i "s/dl-cdn.alpinelinux.org/$APK_MIRROR/g" /etc/apk/repositories; \
@@ -136,8 +127,10 @@ RUN if [ -n "$APK_MIRROR" ]; then \
     && rm -rf /var/cache/apk/*
 
 COPY package.json ./package.json
-COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
-COPY --from=backend-build /app/backend/dist ./backend/dist
+# 单文件 + 极简 node_modules
+COPY --from=backend-build /app/backend/dist/index.js ./backend/dist/index.js
+COPY --from=backend-build /app/backend/dist/package.json ./backend/dist/package.json
+COPY --from=backend-build /app/backend/dist/node_modules ./backend/node_modules
 COPY --from=backend-build /app/backend/templates ./backend/templates
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
@@ -153,9 +146,13 @@ ENV SUPER_BUILD_TIME=${BUILD_DATE} \
     SUPER_APP_VERSION=${APP_VERSION} \
     NODE_ENV=production \
     DB_PATH=/app/data/super-note.db \
-    PORT=3001
+    PORT=3001 \
+    # NODE_PATH 让 require('better-sqlite3') 从 /app/backend/node_modules 解析
+    NODE_PATH=/app/backend/node_modules
 
 EXPOSE 3001
 WORKDIR /app
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+# 从 /app 启动时 cwd 正确，node 找 backend/dist/index.js；
+# external 模块经 NODE_PATH 解析
 CMD ["node", "backend/dist/index.js"]

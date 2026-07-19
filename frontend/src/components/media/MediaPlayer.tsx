@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import Artplayer from "artplayer";
-import Hls from "hls.js";
+import type ArtplayerType from "artplayer";
 import { useMediaStore } from "@/store/mediaStore";
 import { api } from "@/lib/api";
 import { Loader2, AlertTriangle, ChevronLeft } from "lucide-react";
@@ -38,7 +37,7 @@ async function unlockOrientation() {
 
 export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFullscreen }: MediaPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<Artplayer | null>(null);
+  const playerRef = useRef<ArtplayerType | null>(null);
   const isFullscreenRef = useRef(false);
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -109,6 +108,13 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
       }
 
       if (!containerRef.current) return;
+
+      // 动态加载播放器内核，避免进主包
+      const [{ default: Artplayer }, hlsMod] = await Promise.all([
+        import("artplayer"),
+        import("hls.js"),
+      ]);
+      const Hls = hlsMod.default;
 
       const player = new Artplayer({
         container: containerRef.current,
