@@ -948,7 +948,7 @@ const NoteCard = React.memo(function NoteCard({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       className={cn(
-        "note-card-shell relative cursor-pointer group overflow-hidden",
+        "note-card-shell note-list-row relative cursor-pointer group overflow-hidden",
         isSelected && "is-selected",
         isActive && "is-active",
         isContextTarget && "bg-app-hover border-accent-primary/20",
@@ -1007,7 +1007,7 @@ const NoteCard = React.memo(function NoteCard({
               "整行装不下的长不可断词"时才强制打破，对中英混排最友好。
             - overflow-wrap-anywhere 避免极长 URL 撑破容器。 */}
         {preview && (
-          <p className="text-xs text-tx-tertiary mt-1.5 line-clamp-2 leading-relaxed break-words [overflow-wrap:anywhere]">{preview}</p>
+          <p className="note-list-preview text-xs text-tx-tertiary mt-1.5 line-clamp-2 leading-relaxed break-words [overflow-wrap:anywhere]">{preview}</p>
         )}
 
         {/* 底部元信息行

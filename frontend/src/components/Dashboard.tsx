@@ -27,6 +27,7 @@ import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import { renderDiaryContent } from "./DiaryCenter";
+import DashboardQuickActions from "@/components/dashboard/DashboardQuickActions";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -690,43 +691,11 @@ export default function Dashboard() {
               transition={{ duration: 0.3, delay: 0.05 }}
               className="rounded-window border border-app-border/60 bg-app-elevated shadow-sm p-4 sm:p-5"
             >
-              <h2 className="text-[11px] font-semibold text-tx-tertiary uppercase tracking-wider mb-3.5 px-0.5">
-                快捷操作
-              </h2>
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-                <button
-                  onClick={handleQuickCreateNote}
-                  className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
-                >
-                  <div className="w-11 h-11 rounded-card bg-gradient-to-br from-amber-400/25 to-orange-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
-                    <FileText size={20} />
-                  </div>
-                  <span className="text-xs font-semibold text-tx-primary">记笔记</span>
-                  <span className="text-[10px] text-tx-tertiary mt-0.5 hidden sm:block">记录创意想法</span>
-                </button>
-
-                <button
-                  onClick={handleQuickWriteSays}
-                  className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
-                >
-                  <div className="w-11 h-11 rounded-card bg-gradient-to-br from-violet-500/25 to-fuchsia-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
-                    <MessageCircle size={20} />
-                  </div>
-                  <span className="text-xs font-semibold text-tx-primary">写说说</span>
-                  <span className="text-[10px] text-tx-tertiary mt-0.5 hidden sm:block">记录日常生活</span>
-                </button>
-
-                <button
-                  onClick={handleQuickAddTask}
-                  className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
-                >
-                  <div className="w-11 h-11 rounded-card bg-gradient-to-br from-emerald-400/25 to-teal-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
-                    <ListTodo size={20} />
-                  </div>
-                  <span className="text-xs font-semibold text-tx-primary">加待办</span>
-                  <span className="text-[10px] text-tx-tertiary mt-0.5 hidden sm:block">管理计划日程</span>
-                </button>
-              </div>
+              <DashboardQuickActions
+                onCreateNote={handleQuickCreateNote}
+                onWriteSays={handleQuickWriteSays}
+                onAddTask={handleQuickAddTask}
+              />
             </motion.div>
           )}
 

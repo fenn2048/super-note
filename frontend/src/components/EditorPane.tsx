@@ -1770,16 +1770,7 @@ export default function EditorPane() {
               {activeNote.title || t('editor.untitled')}
             </span>
           </div>
-          {/* 搜索（查找替换）：移动端高频操作上提到顶部，方便点击；
-              通过自定义事件 'super:open-search' 触发 TiptapEditor 内部的 SearchReplacePanel，
-              避免把 TiptapEditor 的内部 state 提升到外部、保持组件接口干净。 */}
-          <Button
-            variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-            onClick={() => window.dispatchEvent(new CustomEvent('super:open-search'))}
-            aria-label={t('editor.searchInNote')}
-          >
-            <Search size={17} />
-          </Button>
+          {/* 顶栏仅保留收藏 + ⋯（搜索/锁等并入菜单，减少拥挤） */}
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={toggleFavorite}
             aria-label={activeNote.isFavorite ? t('editor.unfavoriteTooltip') : t('editor.favoriteTooltip')}>
             <Star size={17} className={cn(activeNote.isFavorite && "text-amber-400 fill-amber-400")} />
@@ -1799,6 +1790,16 @@ export default function EditorPane() {
                   transition={{ duration: 0.12 }}
                   className="absolute top-full right-0 mt-1 w-56 bg-app-elevated border border-app-border rounded-lg shadow-xl z-50 py-1 overflow-hidden"
                 >
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("super:open-search"));
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
+                  >
+                    <Search size={15} className="text-tx-tertiary" />
+                    <span>{t("editor.searchInNote") || "文内搜索"}</span>
+                  </button>
                   {/* 锁定 / 解锁 —— 原顶栏外露按钮，移入菜单避免拥挤 */}
                   <button
                     onClick={() => { toggleLock(); setShowMobileMenu(false); }}

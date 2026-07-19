@@ -712,7 +712,7 @@ function ModulePackSettings() {
 
 function SwitchesPanel() {
   const { t } = useTranslation();
-  const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
+  const { prefs: userPrefs, setPref: setUserPref, cloudSynced } = useUserPreferences();
   const [isAdmin, setIsAdmin] = useState(false);
   const [webUiEnabled, setWebUiEnabled] = useState(false);
   const [desktopHideMenuBar, setDesktopHideMenuBar] = useState(true);
@@ -961,6 +961,56 @@ function SwitchesPanel() {
           </label>
         )}
       </div>
+    </div>
+  );
+}
+
+/** 站点级闪屏 URL（管理员） */
+function SiteSplashUrlField() {
+  const [url, setUrl] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api
+      .getSiteSettings()
+      .then((s) => setUrl(s.site_splash_url || ""))
+      .catch(() => {});
+  }, []);
+  return (
+    <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-tx-primary">站点默认闪屏 URL</h3>
+        <p className="text-xs text-tx-tertiary mt-1">
+          管理员配置后，无本机自定义图时全站启动门使用此图（多设备一致）
+        </p>
+      </div>
+      <input
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="https://…/splash.jpg"
+        className="w-full px-3 py-2 rounded-lg border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:ring-2 focus:ring-accent-primary/40"
+      />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setMsg("");
+          try {
+            await api.updateSiteSettings({ site_splash_url: url.trim() });
+            setMsg("已保存");
+          } catch (e: any) {
+            setMsg(e?.message || "保存失败");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
+      >
+        {busy ? "…" : "保存站点闪屏"}
+      </button>
+      {msg && <p className="text-[11px] text-accent-primary">{msg}</p>}
     </div>
   );
 }
@@ -1248,6 +1298,11 @@ function AppearancePanel() {
         </div>
       </div>
 
+      {/* 站点级默认闪屏（P2-7b，管理员，多设备一致） */}
+      {isAdmin && (
+        <SiteSplashUrlField />
+      )}
+
       {/* 站点名称 */}
           <div className="flex-1 space-y-3 w-full">
             <div className="space-y-1.5">
@@ -1486,17 +1541,17 @@ function AppearancePanel() {
           </div>
         </div>
 
-        {/* 阅读密度：影响编辑器正文段落与列表项的纵向间距/行高（per-device 偏好） */}
-        <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+        {/* 阅读密度：编辑器正文 */}
+        <div className="flex items-center justify-between p-4 rounded-xl border border-app-border bg-app-surface/50">
           <div className="min-w-0 pr-3">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-sm font-medium text-tx-primary">
               {t('settings.readingDensity', { defaultValue: '阅读密度' })}
             </span>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <p className="text-xs text-tx-tertiary mt-0.5">
               {t('settings.readingDensityDesc', { defaultValue: '调节正文段落和列表项的纵向间距，紧凑模式更省空间。' })}
             </p>
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex-shrink-0">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-app-bg flex-shrink-0">
             {([
               { code: "cozy" as const, label: t('settings.densityCozy', { defaultValue: '宽松' }) },
               { code: "compact" as const, label: t('settings.densityCompact', { defaultValue: '紧凑' }) },
@@ -1507,8 +1562,38 @@ function AppearancePanel() {
                 className={cn(
                   "relative px-3 py-1 rounded-md text-xs font-medium transition-colors",
                   userPrefs.readingDensity === opt.code
-                    ? "bg-white dark:bg-zinc-700 text-accent-primary shadow-sm"
-                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                    ? "bg-app-elevated text-accent-primary shadow-sm"
+                    : "text-tx-tertiary hover:text-tx-primary"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 笔记列表密度（云端偏好） */}
+        <div className="flex items-center justify-between p-4 rounded-xl border border-app-border bg-app-surface/50">
+          <div className="min-w-0 pr-3">
+            <span className="text-sm font-medium text-tx-primary">笔记列表密度</span>
+            <p className="text-xs text-tx-tertiary mt-0.5">
+              调节笔记列表行高与预览行数
+              {cloudSynced ? " · 已跨设备同步" : " · 登录后自动同步"}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-app-bg flex-shrink-0">
+            {([
+              { code: "cozy" as const, label: "舒适" },
+              { code: "compact" as const, label: "紧凑" },
+            ]).map((opt) => (
+              <button
+                key={opt.code}
+                onClick={() => setUserPref("noteListDensity", opt.code)}
+                className={cn(
+                  "relative px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                  userPrefs.noteListDensity === opt.code
+                    ? "bg-app-elevated text-accent-primary shadow-sm"
+                    : "text-tx-tertiary hover:text-tx-primary",
                 )}
               >
                 {opt.label}

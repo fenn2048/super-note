@@ -587,6 +587,16 @@ select:focus-visible {
   }
 }
 
+/* 笔记列表密度（body.note-list-density-compact） */
+body.note-list-density-compact .note-list-row {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body.note-list-density-compact .note-list-row .note-list-preview {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */
 .ProseMirror {
   outline: none;
