@@ -375,7 +375,7 @@ async function safeJson<T>(res: Response, fullUrl: string): Promise<T> {
   }
 }
 
-function getToken(): string | null {
+export function getToken(): string | null {
   return localStorage.getItem("super-token");
 }
 
@@ -1374,6 +1374,7 @@ export const api = {
       debug_files_query?: string;
       web_ui_enabled?: string;
       login_captcha_enabled?: string;
+      site_splash_url?: string;
     }>("/settings"),
   updateSiteSettings: (data: {
     site_title?: string;
@@ -1387,6 +1388,7 @@ export const api = {
     debug_files_query?: boolean | string;
     web_ui_enabled?: boolean | string;
     login_captcha_enabled?: boolean | string;
+    site_splash_url?: string;
   }) =>
     request<{
       site_title: string;
@@ -1398,10 +1400,21 @@ export const api = {
       debug_files_query?: string;
       web_ui_enabled?: string;
       login_captcha_enabled?: string;
+      site_splash_url?: string;
     }>("/settings", {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  getUserPreferences: () =>
+    request<{ prefs: Record<string, unknown>; updatedAt: string | null }>(
+      "/users/me/preferences",
+    ),
+  updateUserPreferences: (prefs: Record<string, unknown>) =>
+    request<{ prefs: Record<string, unknown>; updatedAt: string }>(
+      "/users/me/preferences",
+      { method: "PUT", body: JSON.stringify(prefs) },
+    ),
 
   // Fonts
   getFonts: () => request<CustomFont[]>("/fonts"),
