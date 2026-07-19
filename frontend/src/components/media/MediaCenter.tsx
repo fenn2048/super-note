@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover } from "@/lib/id3";
+import { EmptyState, LoadingBlock } from "@/components/common/FeedbackStates";
 
 interface Collection {
   id: string;
@@ -1032,16 +1033,14 @@ export default function MediaCenter() {
                 )}
 
                 {loading ? (
-                  <div className="h-64 flex flex-col items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
-                    <span className="text-sm text-tx-secondary">正在载入媒体文件...</span>
-                  </div>
+                  <LoadingBlock label="正在载入媒体文件…" className="h-64" />
                 ) : items.length === 0 ? (
-                  <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-app-sidebar/10 rounded-2xl border border-dashed border-app-border/60">
-                    <Film className="w-10 h-10 text-tx-tertiary mb-3 animate-pulse" />
-                    <h4 className="text-sm font-bold text-tx-primary mb-1">暂无媒体文件</h4>
-                    <p className="text-xs text-tx-tertiary">点击上方的“网盘导入”或“JSON 导入”录入第一批音视频！</p>
-                  </div>
+                  <EmptyState
+                    icon={mediaType === "audio" ? Music : Film}
+                    title="暂无媒体文件"
+                    description="使用上方导入，录入第一批音视频"
+                    className="h-64 rounded-2xl border border-dashed border-app-border/60 bg-app-surface/30"
+                  />
                 ) : viewStyle === "list" ? (
                   /* LIST VIEW — 无封面列；移动用卡片行，桌面用 table */
                   <>

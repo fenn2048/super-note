@@ -4,12 +4,13 @@
  * 移动：栈页（无底栏/FAB），右上 × 关闭。
  */
 import React, { Suspense, useCallback, useEffect, useState } from "react";
-import { FolderOpen, Book, Film, Loader2 } from "lucide-react";
+import { FolderOpen, Book, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLibraryTab, setLibraryTab, type LibraryTab } from "@/lib/navigation.config";
 import { getCurrentWorkspace } from "@/lib/api";
 import { useAppActions } from "@/store/AppContext";
 import StackChrome from "@/components/common/StackChrome";
+import { LoadingBlock } from "@/components/common/FeedbackStates";
 
 const FileManager = React.lazy(() => import("@/components/FileManager"));
 const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
@@ -25,7 +26,7 @@ const TABS: { id: LibraryTab; label: string; icon: React.ReactNode }[] = [
 function Fallback() {
   return (
     <div className="flex-1 flex items-center justify-center">
-      <Loader2 size={20} className="animate-spin text-accent-primary" />
+      <LoadingBlock label="加载资料库…" />
     </div>
   );
 }

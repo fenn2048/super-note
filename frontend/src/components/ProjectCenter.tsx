@@ -39,6 +39,11 @@ import ProjectDiscussion from "./ProjectDiscussion";
 import ProjectCalendar from "./ProjectCalendar";
 import ProjectGantt from "./ProjectGantt";
 import TaskDetailModal from "./TaskDetailModal";
+import {
+  EmptyState,
+  EmptyActionButton,
+  LoadingBlock,
+} from "@/components/common/FeedbackStates";
 
 const PlanCenter = React.lazy(() => import("./PlanCenter"));
 
@@ -2019,35 +2024,30 @@ export default function ProjectCenter() {
                       )}
 
                       {loadingMyTasks ? (
-                        <div className="flex items-center justify-center py-12">
-                          <Loader2 size={24} className="animate-spin text-accent-primary" />
-                        </div>
+                        <LoadingBlock label="加载任务…" className="py-12" />
                       ) : filteredMyTasks.length === 0 ? (
-                        <div className="max-w-[640px] mx-auto flex flex-col items-center justify-center py-16 px-6 text-center">
-                          <div className="w-14 h-14 rounded-2xl bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center mb-4">
-                            <ListTodo size={28} className="text-accent-primary/70" />
-                          </div>
-                          <p className="text-sm font-semibold text-tx-primary mb-1">
-                            {projectSearchQuery
+                        <EmptyState
+                          icon={ListTodo}
+                          title={
+                            projectSearchQuery
                               ? "没有匹配的任务"
-                              : t("projects.noMyTasks") || "还没有任务"}
-                          </p>
-                          <p className="text-xs text-tx-tertiary mb-5 max-w-[260px] leading-relaxed">
-                            {projectSearchQuery
+                              : t("projects.noMyTasks") || "还没有任务"
+                          }
+                          description={
+                            projectSearchQuery
                               ? "试试其他关键词，或清除搜索"
-                              : "记下今天要办的事，从这里开始"}
-                          </p>
-                          {!projectSearchQuery && (
-                            <button
-                              type="button"
-                              onClick={handleOpenTaskCreateModal}
-                              className="inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-accent-primary text-white text-sm font-semibold shadow-sm active:scale-[0.98]"
-                            >
-                              <Plus size={16} />
-                              创建任务
-                            </button>
-                          )}
-                        </div>
+                              : "记下今天要办的事，从这里开始"
+                          }
+                          action={
+                            !projectSearchQuery ? (
+                              <EmptyActionButton onClick={handleOpenTaskCreateModal}>
+                                <Plus size={16} />
+                                创建任务
+                              </EmptyActionButton>
+                            ) : undefined
+                          }
+                          className="max-w-[640px] mx-auto"
+                        />
                       ) : (
                         <>
                           {/* 1. OVERDUE SECTION */}

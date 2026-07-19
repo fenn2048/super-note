@@ -24,6 +24,11 @@ import {
   Share2,
   Plus,
 } from "lucide-react";
+import {
+  EmptyState,
+  EmptyActionButton,
+  LoadingBlock,
+} from "@/components/common/FeedbackStates";
 
 interface BookCenterProps {
   onOpenBook: (bookHash: string) => void;
@@ -455,26 +460,19 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
         {/* 封面网格：移动 3 列保持可点；桌面略加密 */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(1.25rem+var(--safe-area-bottom,0px))]">
           {loading ? (
-            <div className="h-64 flex flex-col items-center justify-center gap-3 text-tx-tertiary">
-              <Loader2 size={24} className="animate-spin text-accent-primary" />
-              <span className="text-xs">加载书库中...</span>
-            </div>
+            <LoadingBlock label="加载书库中…" className="h-64" />
           ) : filteredBooks.length === 0 && !searchQuery ? (
-            <div className="h-64 flex flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center">
-                <BookOpen size={28} className="text-accent-primary/70" />
-              </div>
-              <p className="text-sm font-semibold text-tx-primary">书架还是空的</p>
-              <p className="text-xs text-tx-tertiary max-w-[240px]">导入 EPUB / PDF 等格式，点右下角加号卡片即可</p>
-              <button
-                type="button"
-                onClick={handleUploadClick}
-                disabled={isUploading}
-                className="mt-1 h-10 px-5 rounded-xl bg-accent-primary text-white text-sm font-semibold active:scale-[0.98]"
-              >
-                导入书籍
-              </button>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="书架还是空的"
+              description="导入 EPUB / PDF 等格式，点网格中的加号卡片或下方按钮"
+              action={
+                <EmptyActionButton onClick={handleUploadClick}>
+                  导入书籍
+                </EmptyActionButton>
+              }
+              className="h-64"
+            />
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2.5 sm:gap-3 md:gap-4">
               {filteredBooks.map((book) => {
