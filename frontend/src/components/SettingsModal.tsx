@@ -1068,7 +1068,7 @@ function SiteSplashUrlField() {
 function AppearancePanel() {
   const { t, i18n } = useTranslation();
   const { siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled } = useSiteSettings();
-  const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
+  const { prefs: userPrefs, setPref: setUserPref, cloudSynced } = useUserPreferences();
   const [title, setTitle] = useState(siteConfig.title);
   const [splashPreview, setSplashPreview] = useState<string | null>(null);
   const [splashBusy, setSplashBusy] = useState(false);
