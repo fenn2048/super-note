@@ -2466,81 +2466,93 @@ function DiaryCard({
                 </button>
               </div>
 
-              {/* 右侧：••• 操作菜单 */}
-              <div className="relative flex items-center">
+              {/* 右侧：••• 操作菜单（定位容器只包按钮，保证与菜单垂直居中对齐） */}
+              <div className="flex items-center">
                 {item.triggerUserId && item.userId === SU_USER_ID && (
                   <span className="text-[10px] text-tx-tertiary mr-2 opacity-80">
                     AI 助手生成
                   </span>
                 )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowActionMenu(!showActionMenu);
-                  }}
-                  className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-all"
-                  title="操作菜单"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
+                <div className="relative flex items-center justify-center">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowActionMenu(!showActionMenu);
+                    }}
+                    className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-all"
+                    title="操作菜单"
+                    aria-expanded={showActionMenu}
+                    aria-haspopup="menu"
+                  >
+                    <MoreHorizontal size={16} />
+                  </button>
 
-                <AnimatePresence>
-                  {showActionMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                      transition={{ duration: 0.15, ease: "easeOut" }}
-                      className="absolute right-full mr-2 top-1/2 -translate-y-[calc(50%+2px)] bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
-                    >
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          setShowActionMenu(false);
-                          try {
-                            const updated = await api.updateDiary(item.id, { isPinned: item.isPinned ? 0 : 1 });
-                            onUpdate(updated);
-                            toast.success(item.isPinned ? "已取消置顶" : "已置顶");
-                          } catch (err) {
-                            toast.error("操作失败");
-                          }
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
+                  <AnimatePresence>
+                    {showActionMenu && (
+                      <motion.div
+                        // y: "-50%" 必须写在 motion 里：framer-motion 会覆盖 class 上的
+                        // transform，若只写 Tailwind -translate-y，菜单只会 top:50% 不回移，
+                        // 视觉上比三个点偏低。
+                        initial={{ opacity: 0, scale: 0.95, x: 10, y: "-50%" }}
+                        animate={{ opacity: 1, scale: 1, x: 0, y: "-50%" }}
+                        exit={{ opacity: 0, scale: 0.95, x: 10, y: "-50%" }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        style={{ transformOrigin: "right center" }}
+                        role="menu"
+                        className="absolute right-full mr-2 top-1/2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
                       >
-                        <Pin size={12} className={cn(item.isPinned && "fill-white")} />
-                        <span>{item.isPinned ? "取消置顶" : "置顶"}</span>
-                      </button>
-
-                      {currentUser && item.userId === currentUser.id && (
                         <button
-                          onClick={(e) => {
+                          role="menuitem"
+                          onClick={async (e) => {
                             e.stopPropagation();
                             setShowActionMenu(false);
-                            setIsEditing(true);
+                            try {
+                              const updated = await api.updateDiary(item.id, { isPinned: item.isPinned ? 0 : 1 });
+                              onUpdate(updated);
+                              toast.success(item.isPinned ? "已取消置顶" : "已置顶");
+                            } catch (err) {
+                              toast.error("操作失败");
+                            }
                           }}
                           className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
                         >
-                          <Edit2 size={12} />
-                          <span>{t("diary.edit")}</span>
+                          <Pin size={12} className={cn(item.isPinned && "fill-white")} />
+                          <span>{item.isPinned ? "取消置顶" : "置顶"}</span>
                         </button>
-                      )}
 
-                      {currentUser && (item.userId === currentUser.id || item.triggerUserId === currentUser.id) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowActionMenu(false);
-                            void handleDelete();
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap shrink-0"
-                        >
-                          <Trash2 size={12} />
-                          <span>{t("diary.delete")}</span>
-                        </button>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                        {currentUser && item.userId === currentUser.id && (
+                          <button
+                            role="menuitem"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowActionMenu(false);
+                              setIsEditing(true);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
+                          >
+                            <Edit2 size={12} />
+                            <span>{t("diary.edit")}</span>
+                          </button>
+                        )}
+
+                        {currentUser && (item.userId === currentUser.id || item.triggerUserId === currentUser.id) && (
+                          <button
+                            role="menuitem"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowActionMenu(false);
+                              void handleDelete();
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 text-red-400 hover:bg-white/10 active:bg-red-500/10 transition-colors whitespace-nowrap shrink-0"
+                          >
+                            <Trash2 size={12} />
+                            <span>{t("diary.delete")}</span>
+                          </button>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
 
