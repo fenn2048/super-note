@@ -45,6 +45,8 @@ import { useSkin } from "@/hooks/useSkin";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
+import { isModuleAllowedByPack } from "@/lib/modulePack";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -147,13 +149,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useModalFocusTrap(open, onClose);
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 全局命令列表定义
+  // 全局命令列表定义（创建类指令按模块包过滤）
   const commands = useMemo<CommandItem[]>(() => {
-    return [
-      {
+    const list: CommandItem[] = [];
+    if (isModuleAllowedByPack("notes")) {
+      list.push({
         id: "new-note",
         type: "command",
         title: "新建笔记",
@@ -163,8 +167,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         handler: () => {
           window.dispatchEvent(new CustomEvent("super:quick-new-note"));
         },
-      },
-      {
+      });
+    }
+    if (isModuleAllowedByPack("diary")) {
+      list.push({
         id: "new-diary",
         type: "command",
         title: "新建说说",
@@ -173,22 +179,25 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         handler: () => {
           window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
         },
-      },
-      {
+      });
+    }
+    if (isModuleAllowedByPack("tasks")) {
+      list.push({
         id: "new-task",
         type: "command",
         title: "新建任务",
         subtitle: "在「我的任务」中创建一条任务（统一项目任务体系）",
         icon: ListTodo,
         handler: () => {
-          // 方案 A：进入项目任务域；具体创建由 ProjectCenter / FAB 承接
           actions.setViewMode("projects");
           const filter = { type: "my-tasks" };
           sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
           window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
           window.dispatchEvent(new CustomEvent("super:quick-new-task"));
         },
-      },
+      });
+    }
+    list.push(
       {
         id: "go-home",
         type: "command",
@@ -210,7 +219,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           actions.setSelectedNotebook(null);
         },
       },
-      {
+    );
+    if (isModuleAllowedByPack("diary")) {
+      list.push({
         id: "go-diary",
         type: "command",
         title: "前往 说说墙",
@@ -219,8 +230,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         handler: () => {
           actions.setViewMode("diary");
         },
-      },
-      {
+      });
+    }
+    if (isModuleAllowedByPack("tasks")) {
+      list.push({
         id: "go-projects",
         type: "command",
         title: "前往 任务",
@@ -232,7 +245,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
           window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
         },
-      },
+      });
+    }
+    list.push(
       {
         id: "go-mentions",
         type: "command",
@@ -274,7 +289,6 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           actions.toggleSidebar();
         },
       },
-      // 各种皮肤一键切换
       {
         id: "skin-claude",
         type: "command",
@@ -315,8 +329,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           setSkin("mono");
         },
       },
-
-    ];
+    );
+    return list;
   }, [theme, setTheme, setSkin, actions]);
 
   // 合并计算出最终展示项 (DisplayItems) — 含全局多域搜索结果
@@ -549,34 +563,68 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const body = useMemo(() => {
     if (!open) return null;
+    const isMobile =
+      typeof window !== "undefined" && window.innerWidth < 768;
     return (
       <div
-        className="fixed inset-0 z-[200] flex items-start justify-center pt-[15vh] px-4"
+        className={cn(
+          "fixed inset-0 z-[200] flex justify-center",
+          isMobile
+            ? "items-stretch p-0"
+            : "items-start pt-[min(15vh,120px)] px-4 pb-8",
+        )}
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden />
         <div
-          className="relative w-full max-w-[640px] bg-app-elevated border border-app-border rounded-xl shadow-2xl overflow-hidden"
+          ref={dialogRef as React.RefObject<HTMLDivElement>}
+          className={cn(
+            "relative w-full bg-app-elevated border border-app-border shadow-2xl overflow-hidden flex flex-col",
+            isMobile
+              ? "h-full max-w-none rounded-none border-0"
+              : "max-w-[640px] max-h-[min(70vh,640px)] rounded-xl",
+          )}
           role="dialog"
           aria-modal="true"
           aria-label="全局搜索与命令面板"
           onClick={(e) => e.stopPropagation()}
+          style={
+            isMobile
+              ? {
+                  paddingTop: "var(--safe-area-top)",
+                  paddingBottom: "var(--safe-area-bottom)",
+                }
+              : undefined
+          }
         >
           {/* 输入框 */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-app-border">
-            <SearchIcon size={18} className="text-tx-tertiary shrink-0" />
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-app-border shrink-0">
+            {isMobile && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-sm font-semibold text-accent-primary px-1 shrink-0 min-h-[40px]"
+                aria-label="关闭搜索"
+              >
+                关闭
+              </button>
+            )}
+            <SearchIcon size={18} className="text-tx-tertiary shrink-0" aria-hidden />
             <input
               ref={inputRef}
-              type="text"
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onInputKeyDown}
               placeholder="搜索笔记 / 说说 / 任务 / 书库，或输入指令..."
-              className="flex-1 bg-transparent outline-none text-sm text-tx-primary placeholder:text-tx-tertiary"
+              className="flex-1 bg-transparent outline-none text-base md:text-sm text-tx-primary placeholder:text-tx-tertiary min-h-[40px]"
               autoComplete="off"
               spellCheck={false}
+              aria-label="全局搜索"
+              aria-controls="command-palette-list"
+              aria-autocomplete="list"
             />
             {loading && <Loader2 size={16} className="animate-spin text-tx-tertiary" />}
             <kbd className="hidden sm:inline-flex items-center px-1.5 h-5 rounded border border-app-border text-[10px] text-tx-tertiary">
@@ -585,7 +633,16 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           </div>
 
           {/* 选项结果列表 */}
-          <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
+          <div
+            id="command-palette-list"
+            ref={listRef}
+            role="listbox"
+            aria-label="搜索结果与命令"
+            className={cn(
+              "overflow-y-auto py-1 flex-1",
+              isMobile ? "min-h-0" : "max-h-[50vh]",
+            )}
+          >
             {displayItems.length === 0 && query.trim() && !loading && (
               <div className="px-4 py-6 text-center text-sm text-tx-tertiary">
                 未找到与 &ldquo;{query}&rdquo; 匹配的项目或指令
@@ -651,7 +708,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         </div>
       </div>
     );
-  }, [open, query, loading, displayItems, activeIdx, onInputKeyDown, activateHit, onClose]);
+  }, [open, query, loading, displayItems, activeIdx, onInputKeyDown, activateHit, onClose, dialogRef]);
 
   if (typeof document === "undefined") return null;
   return createPortal(body, document.body);
