@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api, getCurrentWorkspace, resolveAttachmentUrl } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import { useMediaStore } from "@/store/mediaStore";
@@ -1565,76 +1566,102 @@ export default function MediaCenter() {
         )}
       </AnimatePresence>
 
-      {/* Floating Batch Action Bar */}
-      <AnimatePresence>
-        {isBatchMode && (
-          <motion.div
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 50, opacity: 0 }}
-            className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-app-sidebar border border-app-border rounded-2xl py-3.5 px-6 shadow-2xl z-40 flex items-center gap-4 min-w-[320px] max-w-lg select-none"
-            style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
-          >
-            <div className="flex-1 text-xs text-tx-secondary font-semibold">
-              已选中 <span className="text-accent-primary font-bold">{selectedItemIds.size}</span> 个媒体
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  if (selectedItemIds.size === items.length) {
-                    setSelectedItemIds(new Set());
-                  } else {
-                    setSelectedItemIds(new Set(items.map(item => item.id)));
-                  }
-                }}
-                className="py-1.5 px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all"
-              >
-                {selectedItemIds.size === items.length ? "取消全选" : "全选"}
-              </button>
-              
-              <button
-                onClick={async () => {
-                  if (selectedItemIds.size === 0) return;
-                  if (window.confirm(`确认要删除选中的 ${selectedItemIds.size} 个单品吗？`)) {
-                    try {
-                      await api.request("/media/items/batch-delete", {
-                        method: "POST",
-                        body: JSON.stringify({ ids: Array.from(selectedItemIds) })
-                      });
-                      setSelectedItemIds(new Set());
-                      setIsBatchMode(false);
-                      fetchData();
-                    } catch (err) {
-                      console.error("Batch delete failed:", err);
-                    }
-                  }
-                }}
-                disabled={selectedItemIds.size === 0}
+      {/* 批量操作条：Portal 到 body，避免父级 transform/overflow 把 fixed 钉歪；移动端贴底全宽 */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {isBatchMode && (
+              <motion.div
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 40, opacity: 0 }}
                 className={cn(
-                  "py-1.5 px-3.5 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 shadow",
-                  selectedItemIds.size > 0
-                    ? "bg-accent-danger hover:bg-accent-danger-hover text-white"
-                    : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed"
+                  "fixed z-[60] flex items-center gap-2 md:gap-4 select-none",
+                  "bg-app-elevated/95 backdrop-blur-md border border-app-border shadow-2xl",
+                  // 移动端：左右留边 + 抬过底栏/安全区，横向排布不挤压换行
+                  "left-3 right-3 bottom-[calc(4.25rem+var(--safe-area-bottom,0px))]",
+                  "px-3 py-2.5 rounded-2xl",
+                  // 桌面：底部居中浮条
+                  "md:left-1/2 md:right-auto md:bottom-6 md:w-auto md:min-w-[320px] md:max-w-lg",
+                  "md:-translate-x-1/2 md:px-6 md:py-3.5",
                 )}
               >
-                <Trash2 size={13} />
-                批量删除
-              </button>
-              
-              <button
-                onClick={() => {
-                  setIsBatchMode(false);
-                  setSelectedItemIds(new Set());
-                }}
-                className="py-1.5 px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all text-tx-secondary"
-              >
-                取消
-              </button>
-            </div>
-          </motion.div>
+                <div className="flex-1 min-w-0 text-xs text-tx-secondary font-semibold whitespace-nowrap truncate">
+                  已选中{" "}
+                  <span className="text-accent-primary font-bold">
+                    {selectedItemIds.size}
+                  </span>{" "}
+                  个
+                </div>
+
+                <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedItemIds.size === items.length) {
+                        setSelectedItemIds(new Set());
+                      } else {
+                        setSelectedItemIds(new Set(items.map((item) => item.id)));
+                      }
+                    }}
+                    className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all whitespace-nowrap"
+                  >
+                    {selectedItemIds.size === items.length ? "取消全选" : "全选"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (selectedItemIds.size === 0) return;
+                      if (
+                        window.confirm(
+                          `确认要删除选中的 ${selectedItemIds.size} 个单品吗？`,
+                        )
+                      ) {
+                        try {
+                          await api.request("/media/items/batch-delete", {
+                            method: "POST",
+                            body: JSON.stringify({
+                              ids: Array.from(selectedItemIds),
+                            }),
+                          });
+                          setSelectedItemIds(new Set());
+                          setIsBatchMode(false);
+                          fetchData();
+                        } catch (err) {
+                          console.error("Batch delete failed:", err);
+                        }
+                      }
+                    }}
+                    disabled={selectedItemIds.size === 0}
+                    className={cn(
+                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 shadow whitespace-nowrap",
+                      selectedItemIds.size > 0
+                        ? "bg-accent-danger hover:bg-accent-danger-hover text-white"
+                        : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
+                    )}
+                  >
+                    <Trash2 size={13} />
+                    <span className="max-md:hidden">批量</span>
+                    删除
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBatchMode(false);
+                      setSelectedItemIds(new Set());
+                    }}
+                    className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all text-tx-secondary whitespace-nowrap"
+                  >
+                    取消
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>
 
     </div>
   );
