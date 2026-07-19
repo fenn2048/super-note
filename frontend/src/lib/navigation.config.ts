@@ -80,7 +80,8 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "笔记",
     feature: "notes",
     tier: 0,
-    placements: ["desktopRail", "mobileTab", "mobileMore", "cmdk"],
+    // 移动端走底栏「笔记」，不在「我的」重复入口
+    placements: ["desktopRail", "mobileTab", "cmdk"],
     group: "primary",
     moreDesc: "浏览和管理所有核心笔记",
   },
@@ -156,7 +157,8 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "文件",
     feature: "files",
     tier: 2,
-    placements: ["mobileMore"],
+    // 移动「我的」不单独入口，统一走资料库 Tab
+    placements: ["cmdk"],
     group: "secondary",
     moreDesc: "附件与上传文件管理",
     action: "libraryTab",
@@ -168,7 +170,8 @@ export const NAV_MODULES: NavModule[] = [
     labelKey: "sidebar.books",
     labelFallback: "书库",
     tier: 2,
-    placements: ["mobileMore"],
+    // 移动「我的」不单独入口，统一走资料库 Tab
+    placements: ["cmdk"],
     group: "secondary",
     moreDesc: "电子书阅读与划线",
     action: "libraryTab",
@@ -181,7 +184,8 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "媒体库",
     feature: "media",
     tier: 2,
-    placements: ["mobileMore"],
+    // 移动「我的」不单独入口，统一走资料库 Tab
+    placements: ["cmdk"],
     group: "secondary",
     moreDesc: "音视频媒体管理与播放",
     action: "libraryTab",

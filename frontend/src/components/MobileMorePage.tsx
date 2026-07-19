@@ -98,7 +98,7 @@ export default function MobileMorePage() {
       />
       <div className="px-6 pt-3 pb-2 md:pt-6">
         <h1 className="text-xl font-bold text-tx-primary leading-tight tracking-tight md:text-2xl">更多功能</h1>
-        <p className="text-sm text-tx-tertiary mt-1">书库、媒体、收藏、AI 与设置</p>
+        <p className="text-sm text-tx-tertiary mt-1">资料库、收藏、AI 与设置</p>
       </div>
 
       <div className="px-4 py-2 grid grid-cols-2 gap-3 flex-1 pb-6">
