@@ -4001,12 +4001,28 @@ export default function DiaryCenter() {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowMobileSearch(true)}
-                  className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
-                >
-                  <Search size={18} />
-                </button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic.light();
+                      window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+                    }}
+                    className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg bg-accent-primary text-white text-xs font-semibold active:scale-95 shadow-sm"
+                    title="写说说"
+                    aria-label="写说说"
+                  >
+                    <Edit2 size={14} />
+                    <span>说一句</span>
+                  </button>
+                  <button
+                    onClick={() => setShowMobileSearch(true)}
+                    className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
+                    title="搜索"
+                  >
+                    <Search size={18} />
+                  </button>
+                </div>
               </>
             ) : (
               <motion.div
@@ -4070,11 +4086,26 @@ export default function DiaryCenter() {
                 </div>
               )}
 
-              {/* 发布框 — 列表模式下显示 */}
+              {/* 发布框 — 桌面内嵌；移动用顶栏「说一句」→ CreateMenu / DiaryComposeModal */}
               {viewMode === "list" && (
                 <div className="hidden md:block">
                   <ComposeBox onPost={handlePost} />
                 </div>
+              )}
+              {viewMode === "list" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.light();
+                    window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+                  }}
+                  className="md:hidden w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-dashed border-app-border bg-app-elevated/80 text-left active:bg-app-hover transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-full bg-accent-primary/10 text-accent-primary flex items-center justify-center shrink-0">
+                    <Edit2 size={16} />
+                  </div>
+                  <span className="text-sm text-tx-tertiary">说一句今天的事…</span>
+                </button>
               )}
 
               {/* 过滤状态指示器 */}
