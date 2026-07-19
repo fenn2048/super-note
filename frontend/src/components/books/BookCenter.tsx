@@ -424,26 +424,24 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
             <p className="text-xs text-tx-tertiary mt-1">支持 EPUB, PDF, MOBI, AZW, CBZ, FB2 格式</p>
           </div>
         )}
-        {/* Top Header — safe-area 由 LibraryCenter 顶栏统一处理；导入入口在网格加号卡片 */}
-        <div className="px-4 md:px-6 py-2.5 md:py-4 border-b border-app-border bg-app-surface/10 flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5 flex-1 max-w-md min-w-0">
-            <button
-              onClick={() => setShowMobileSidebar(prev => !prev)}
-              className="p-2 rounded-xl border border-app-border bg-app-surface text-tx-secondary hover:text-accent-primary md:hidden shrink-0 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
-              title="切换分类"
-            >
-              <Menu size={16} />
-            </button>
-            <div className="relative flex-1 min-w-0">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
-              <input
-                type="text"
-                placeholder="搜索书籍、作者..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 md:py-1.5 bg-app-surface border border-app-border rounded-xl md:rounded-lg text-xs focus:outline-none focus:border-accent-primary transition-colors text-tx-primary"
-              />
-            </div>
+        {/* 工具条：与文件/媒体同密度（分类 + 搜索） */}
+        <div className="px-3 md:px-6 py-2 md:py-3 border-b border-app-border bg-app-surface/30 flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowMobileSidebar((prev) => !prev)}
+            className="p-2 rounded-xl border border-app-border bg-app-bg text-tx-secondary hover:text-accent-primary md:hidden shrink-0 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+            title="切换分类"
+          >
+            <Menu size={16} />
+          </button>
+          <div className="relative flex-1 min-w-0 max-w-md">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+            <input
+              type="text"
+              placeholder="搜索书籍、作者..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 h-9 bg-app-bg border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 transition-colors text-tx-primary"
+            />
           </div>
           <input
             type="file"
@@ -454,15 +452,31 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
           />
         </div>
 
-        {/* Books List Grid — 移动 3 列，桌面多列，封面 3:4；末尾加号卡片导入 */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(1rem+var(--safe-area-bottom,0px))]">
+        {/* 封面网格：移动 3 列保持可点；桌面略加密 */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(1.25rem+var(--safe-area-bottom,0px))]">
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-tx-tertiary">
               <Loader2 size={24} className="animate-spin text-accent-primary" />
               <span className="text-xs">加载书库中...</span>
             </div>
+          ) : filteredBooks.length === 0 && !searchQuery ? (
+            <div className="h-64 flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center">
+                <BookOpen size={28} className="text-accent-primary/70" />
+              </div>
+              <p className="text-sm font-semibold text-tx-primary">书架还是空的</p>
+              <p className="text-xs text-tx-tertiary max-w-[240px]">导入 EPUB / PDF 等格式，点右下角加号卡片即可</p>
+              <button
+                type="button"
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                className="mt-1 h-10 px-5 rounded-xl bg-accent-primary text-white text-sm font-semibold active:scale-[0.98]"
+              >
+                导入书籍
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2.5 sm:gap-3 md:gap-4">
               {filteredBooks.map((book) => {
                 const coverBg = getHashColor(book.title);
                 let coverUrl: string | null = null;

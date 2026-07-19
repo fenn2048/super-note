@@ -1060,85 +1060,58 @@ export default function FileManager() {
         </div>
       </div>
 
-      {/* 顶栏 - 移动端（返回由 LibraryCenter 顶栏统一提供） */}
-      <div className="flex md:hidden flex-col gap-3 px-4 py-2.5 border-b border-app-border bg-app-surface/40 shrink-0">
-        {/* Row 1: Title/Stats, Quick Actions */}
-        <div className="flex items-center justify-between gap-3">
-          {/* Left: Title/Stats */}
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-tx-primary truncate">
-                {isImageHostMode ? "图床" : "文件管理"}
-              </h2>
-              <p className="text-[10px] text-tx-tertiary leading-none mt-0.5 truncate">
-                {isImageHostMode
-                  ? "直链分享 · 支持复制 Markdown"
-                  : statsLine || "\u00A0"}
-              </p>
-            </div>
-          </div>
-
-          {/* Right: Icon-only toggles */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Reclaimable Cleanup Button */}
-            {reclaimable && reclaimable.items > 0 && (
-              <button
-                onClick={handleCleanupOrphans}
-                disabled={cleaningUp}
-                className={cn(
-                  "w-8 h-8 rounded-button flex items-center justify-center text-amber-600 bg-amber-500/10 border border-amber-500/20 active:bg-amber-500/20",
-                  cleaningUp && "opacity-60"
-                )}
-                title={`可清理附件，释放约 ${humanSize(reclaimable.bytes)}`}
-              >
-                {cleaningUp ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Sparkles size={14} />
-                )}
-              </button>
-            )}
-
-            {/* Globe Toggle */}
-            <button
-              onClick={toggleImageHostMode}
-              className={cn(
-                "w-8 h-8 rounded-button flex items-center justify-center border transition-all",
-                isImageHostMode
-                  ? "bg-indigo-500/15 text-indigo-500 border-indigo-500/30"
-                  : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover"
-              )}
-              title={isImageHostMode ? "退出图床" : "进入图床"}
-            >
-              <Globe size={14} />
-            </button>
-
-            {/* Select Toggle */}
-            <button
-              onClick={toggleSelectionMode}
-              className={cn(
-                "w-8 h-8 rounded-button flex items-center justify-center border transition-all",
-                selectionMode
-                  ? "bg-accent-primary/15 text-accent-primary border-accent-primary/30"
-                  : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover"
-              )}
-              title={selectionMode ? "退出多选" : "多选"}
-            >
-              <CheckSquare size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Search Input & Upload Button */}
+      {/* 移动工具条：资料库 Tab 已标「文件」，此处不再重复标题，单行搜索+动作 */}
+      <div className="flex md:hidden flex-col gap-2 px-3 py-2 border-b border-app-border bg-app-surface/30 shrink-0">
         <div className="flex items-center gap-2">
-          {/* Search Input */}
+          {/* 动作图标先放行首，与书库/媒体工具条密度一致 */}
+          {reclaimable && reclaimable.items > 0 && (
+            <button
+              onClick={handleCleanupOrphans}
+              disabled={cleaningUp}
+              className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center text-amber-600 bg-amber-500/10 border border-amber-500/20 active:bg-amber-500/20 shrink-0",
+                cleaningUp && "opacity-60",
+              )}
+              title={`可清理附件，释放约 ${humanSize(reclaimable.bytes)}`}
+            >
+              {cleaningUp ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Sparkles size={15} />
+              )}
+            </button>
+          )}
+          <button
+            onClick={toggleImageHostMode}
+            className={cn(
+              "w-9 h-9 rounded-xl flex items-center justify-center border transition-all shrink-0",
+              isImageHostMode
+                ? "bg-accent-primary/15 text-accent-primary border-accent-primary/30"
+                : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover",
+            )}
+            title={isImageHostMode ? "退出图床" : "进入图床"}
+          >
+            <Globe size={15} />
+          </button>
+          <button
+            onClick={toggleSelectionMode}
+            className={cn(
+              "w-9 h-9 rounded-xl flex items-center justify-center border transition-all shrink-0",
+              selectionMode
+                ? "bg-accent-primary/15 text-accent-primary border-accent-primary/30"
+                : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover",
+            )}
+            title={selectionMode ? "退出多选" : "多选"}
+          >
+            <CheckSquare size={15} />
+          </button>
           <div className="relative flex-1 min-w-0">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary" />
             <Input
-              placeholder="按文件名搜索…"
+              placeholder="搜索文件…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-7 h-8 text-xs bg-app-bg w-full rounded-button border-app-border focus-visible:ring-1 focus-visible:ring-accent-primary focus-visible:border-accent-primary"
+              className="pl-8 h-9 text-xs bg-app-bg w-full rounded-xl border-app-border focus-visible:ring-1 focus-visible:ring-accent-primary focus-visible:border-accent-primary"
             />
             {searchInput && (
               <button
@@ -1149,18 +1122,16 @@ export default function FileManager() {
               </button>
             )}
           </div>
-
-          {/* Upload Button */}
           <Button
             size="sm"
             onClick={onPickFiles}
             disabled={uploading}
-            className="h-8 px-2.5 text-xs bg-accent-primary hover:bg-accent-primary/95 text-white border-accent-primary shadow-sm active:scale-[0.98] transition-transform rounded-button shrink-0"
+            className="h-9 px-3 text-xs bg-accent-primary hover:bg-accent-primary/95 text-white border-accent-primary shadow-sm active:scale-[0.98] transition-transform rounded-xl shrink-0"
           >
             {uploading ? (
-              <Loader2 size={13} className="animate-spin mr-1" />
+              <Loader2 size={14} className="animate-spin mr-1" />
             ) : (
-              <Upload size={13} className="mr-1" />
+              <Upload size={14} className="mr-1" />
             )}
             <span>{uploading ? "上传中" : "上传"}</span>
           </Button>
