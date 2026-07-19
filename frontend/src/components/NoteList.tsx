@@ -2673,26 +2673,7 @@ export default function NoteList() {
                   </MobileChromeIconButton>
                 </>
               )}
-              <div className="flex items-center">
-                <MobileChromeIconButton
-                  title={t("common.new") || "新建"}
-                  onClick={() => handleCreateNote("normal")}
-                >
-                  <Plus size={18} />
-                </MobileChromeIconButton>
-                <button
-                  ref={createMenuAnchorMobileRef}
-                  type="button"
-                  aria-label="选择新建类型"
-                  onClick={() => {
-                    setCreateMenuSource("mobile");
-                    setCreateMenuOpen((v) => !v);
-                  }}
-                  className="min-h-[40px] w-6 flex items-center justify-center rounded-button text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary transition-colors -ml-1"
-                >
-                  <ChevronDown size={12} />
-                </button>
-              </div>
+              {/* 新建交给全局 FAB / CreateMenu，顶栏只保留检索与筛选 */}
               <MobileChromeIconButton
                 title="搜索"
                 onClick={() => setMobileSearchOpen(true)}
