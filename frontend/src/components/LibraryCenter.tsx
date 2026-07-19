@@ -1,14 +1,15 @@
 /**
- * 资料库统一壳（P1-3）
+ * 资料库统一壳（P1-3 + Phase A StackChrome）
  * Tab：文件 | 书库 | 媒体 —— 内部复用既有业务组件，不复制逻辑。
+ * 移动：栈页（无底栏/FAB），右上 × 关闭。
  */
 import React, { Suspense, useCallback, useEffect, useState } from "react";
-import { FolderOpen, Book, Film, Loader2, X } from "lucide-react";
+import { FolderOpen, Book, Film, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLibraryTab, setLibraryTab, type LibraryTab } from "@/lib/navigation.config";
 import { getCurrentWorkspace } from "@/lib/api";
 import { useAppActions } from "@/store/AppContext";
-import { haptic } from "@/hooks/useCapacitor";
+import StackChrome from "@/components/common/StackChrome";
 
 const FileManager = React.lazy(() => import("@/components/FileManager"));
 const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
@@ -35,9 +36,8 @@ export default function LibraryCenter() {
   const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
   const workspaceId = getCurrentWorkspace();
 
-  /** 移动端返回上一页：资料库多从「我的」进入 */
+  /** 栈关闭：多从「我的」进入资料库 */
   const goBack = useCallback(() => {
-    haptic.light();
     actions.setViewMode("more");
     actions.setMobileView("list");
   }, [actions]);
@@ -100,39 +100,24 @@ export default function LibraryCenter() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-      <div
-        className="shrink-0 border-b border-app-border bg-app-surface/80 backdrop-blur-sm px-2 md:px-4 pb-0"
-        style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 6px)" }}
-      >
-        <div className="flex items-center gap-0.5 md:gap-1 max-w-3xl">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => selectTab(t.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 md:px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors",
-                tab === t.id
-                  ? "border-accent-primary text-accent-primary bg-accent-primary/5"
-                  : "border-transparent text-tx-tertiary hover:text-tx-primary hover:bg-app-hover",
-              )}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
-          {/* 移动端关闭：返回上一页（多从「我的」进入） */}
+      <StackChrome onClose={goBack} closeLabel="关闭资料库">
+        {TABS.map((t) => (
           <button
+            key={t.id}
             type="button"
-            onClick={goBack}
-            className="md:hidden ml-auto inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-tx-tertiary hover:text-tx-primary hover:bg-app-hover active:bg-app-active shrink-0"
-            title="关闭"
-            aria-label="关闭"
+            onClick={() => selectTab(t.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 md:px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors",
+              tab === t.id
+                ? "border-accent-primary text-accent-primary bg-accent-primary/5"
+                : "border-transparent text-tx-tertiary hover:text-tx-primary hover:bg-app-hover",
+            )}
           >
-            <X size={18} />
+            {t.icon}
+            {t.label}
           </button>
-        </div>
-      </div>
+        ))}
+      </StackChrome>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <Suspense fallback={<Fallback />}>
