@@ -688,7 +688,35 @@ if (process.env.NODE_ENV === "production") {
     ".eot": "application/vnd.ms-fontobject",
     ".webp": "image/webp",
     ".map": "application/json",
+    ".apk": "application/vnd.android.package-archive",
+    ".zip": "application/zip",
   };
+
+  // 镜像默认不内置 APK（.dockerignore 排除）。Android 客户端仍可能请求
+  // /downloads/super-note-debug.apk；若 SPA 回退 index.html，WebView 会打开登录页。
+  // 缺失时 302 到可配置直链或 GitHub Releases，保证「下载更新」不进 SPA。
+  const androidApkFallbackUrl = (
+    process.env.SUPER_ANDROID_APK_URL ||
+    process.env.ANDROID_APK_URL ||
+    "https://github.com/cropflre/super-note/releases/latest"
+  ).trim();
+
+  /** 带扩展名的静态资源缺失时禁止 SPA fallback（避免 .apk 变成登录 HTML） */
+  function isStaticAssetPath(reqPath: string): boolean {
+    if (
+      reqPath.startsWith("/downloads/") ||
+      reqPath.startsWith("/assets/") ||
+      reqPath.startsWith("/brand/") ||
+      reqPath.startsWith("/icons/") ||
+      reqPath.startsWith("/fonts/") ||
+      reqPath.startsWith("/vendor/") ||
+      reqPath.startsWith("/emojis/")
+    ) {
+      return true;
+    }
+    const ext = path.extname(reqPath).toLowerCase();
+    return Boolean(ext && ext !== ".html");
+  }
 
   // 静态资源 + SPA fallback（排除 /api 路径）
   app.get("*", (c) => {
@@ -708,10 +736,31 @@ if (process.env.NODE_ENV === "production") {
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const ext = path.extname(filePath).toLowerCase();
       const contentType = mimeTypes[ext] || "application/octet-stream";
+      // APK/ZIP 等安装包：用流式响应 + 附件头，便于 WebView / 系统下载器
+      if (ext === ".apk" || ext === ".zip") {
+        const stat = fs.statSync(filePath);
+        const body = fs.readFileSync(filePath);
+        return c.body(body, 200, {
+          "Content-Type": contentType,
+          "Content-Length": String(stat.size),
+          "Content-Disposition": `attachment; filename="${path.basename(filePath)}"`,
+          "Cache-Control": "public, max-age=300",
+        });
+      }
       const content = fs.readFileSync(filePath);
       return c.body(content, 200, { "Content-Type": contentType });
     }
-    // SPA fallback：返回 index.html
+
+    // 缺失的 APK：重定向到官方下载，避免 SPA 登录页（旧版 Android 客户端也受益）
+    if (reqPath.toLowerCase().endsWith(".apk") && androidApkFallbackUrl) {
+      return c.redirect(androidApkFallbackUrl, 302);
+    }
+
+    if (isStaticAssetPath(reqPath)) {
+      return c.json({ error: "Not Found", path: reqPath }, 404);
+    }
+
+    // SPA fallback：仅对无扩展名的前端路由返回 index.html
     const indexPath = path.join(frontendDist, "index.html");
     if (fs.existsSync(indexPath)) {
       return c.html(fs.readFileSync(indexPath, "utf-8"));

@@ -149,6 +149,35 @@ function resolveMinClientVersion(): string | null {
 }
 
 /**
+ * Android APK 下载地址（给 UpdateNotifier / 关于页）。
+ * 优先 ENV 直链；否则若镜像内存在 public downloads APK 则返回站内路径；
+ * 再否则指向 GitHub Releases（Docker 默认不打包 .apk）。
+ */
+function resolveAndroidApkUrl(): string {
+  const envUrl = (process.env.SUPER_ANDROID_APK_URL || process.env.ANDROID_APK_URL || "").trim();
+  if (envUrl) return envUrl;
+
+  const apkCandidates = [
+    path.resolve(process.cwd(), "frontend/dist/downloads/super-note-debug.apk"),
+    path.resolve(process.cwd(), "frontend/dist/downloads/super-note.apk"),
+    path.resolve(process.cwd(), "../frontend/dist/downloads/super-note-debug.apk"),
+    path.resolve(__dirname, "../../../frontend/dist/downloads/super-note-debug.apk"),
+  ];
+  for (const p of apkCandidates) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        const base = path.basename(p);
+        return `/downloads/${base}`;
+      }
+    } catch {
+      /* continue */
+    }
+  }
+
+  return "https://github.com/cropflre/super-note/releases/latest";
+}
+
+/**
  * 解析当前应用版本号。缓存进程级结果，避免每次请求都 fs.readFileSync。
  * 读文件抛错时静默降级，用 fallback 字符串；这个接口要"永远能答"。
  */
@@ -267,6 +296,7 @@ router.get("/", (c) => {
   const frontendBuildId = resolveFrontendBuildId();
   const minClientVersion = resolveMinClientVersion();
   const serverInstanceId = resolveServerInstanceId();
+  const androidApkUrl = resolveAndroidApkUrl();
 
   return c.json({
     appVersion: resolveAppVersion(),
@@ -280,6 +310,8 @@ router.get("/", (c) => {
     // serverInstanceId：1.1.7 起用于"登录云端账号"迁移向导识别同源后端，
     // 阻止用户把数据迁移到同一台机器（会造成双份数据）。
     ...(serverInstanceId ? { serverInstanceId } : {}),
+    // Android 客户端下载地址（站内 APK / ENV 直链 / GitHub Releases）
+    androidApkUrl,
   });
 });
 

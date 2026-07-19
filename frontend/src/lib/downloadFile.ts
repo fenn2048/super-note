@@ -18,10 +18,44 @@ declare global {
         mimeType: string,
         token: string,
       ) => void;
+      /** 系统浏览器打开外链（更新页 / GitHub 等） */
+      openExternalUrl?: (url: string) => void;
       shareText?: (text: string, title: string) => void;
       shareFile?: (base64: string, filename: string, mimeType: string) => void;
     };
   }
+}
+
+/** 在系统浏览器中打开 URL（Android 原生桥优先，避免 WebView SPA 吞链） */
+export function openExternalUrl(url: string): void {
+  if (!url) return;
+  const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
+  if (bridge?.openExternalUrl) {
+    bridge.openExternalUrl(url);
+    return;
+  }
+  try {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    window.location.href = url;
+  }
+}
+
+/** 下载远程 APK/安装包：Android 走原生流式；其它端走系统下载 */
+export function downloadApkFromUrl(url: string, filename = "super-note.apk"): void {
+  const abs = toAbsoluteUrl(url);
+  const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
+  if (bridge?.downloadFromUrl) {
+    const token = getToken() || "";
+    bridge.downloadFromUrl(
+      abs,
+      filename,
+      "application/vnd.android.package-archive",
+      token,
+    );
+    return;
+  }
+  openExternalUrl(abs);
 }
 
 export async function downloadAttachment(url: string, filename: string): Promise<void> {

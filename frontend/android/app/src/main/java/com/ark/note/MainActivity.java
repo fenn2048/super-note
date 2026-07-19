@@ -101,6 +101,28 @@ public class MainActivity extends BridgeActivity {
         }
 
         /**
+         * 用系统浏览器 / 外部应用打开 URL（更新页、GitHub Releases 等）。
+         * 切勿用 WebView 内跳转：站点 SPA 会把缺失的 .apk 渲染成登录页。
+         */
+        @JavascriptInterface
+        public void openExternalUrl(String urlStr) {
+            runOnUiThread(() -> {
+                try {
+                    if (urlStr == null || urlStr.isEmpty()) {
+                        Toast.makeText(MainActivity.this, "无效链接", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(urlStr));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Exception e) {
+                    Log.e(TAG, "openExternalUrl", e);
+                    Toast.makeText(MainActivity.this, "无法打开: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        /**
          * 原生流式下载 URL → Downloads（避免 WebView base64 OOM）
          * token 可为 null；非空则加 Authorization: Bearer
          */

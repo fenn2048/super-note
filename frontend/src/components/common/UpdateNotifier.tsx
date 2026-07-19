@@ -40,6 +40,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getServerUrl } from "@/lib/api";
+import { downloadApkFromUrl, openExternalUrl } from "@/lib/downloadFile";
 import { RefreshCw, X, AlertTriangle, ExternalLink } from "lucide-react";
 
 // 编译期常量兜底：开发态走 HMR / 旧构建可能没注入，统一给"取不到"的哨兵值。
@@ -119,8 +120,8 @@ function writeDismissed(key: string) {
   try { localStorage.setItem(DISMISS_KEY, key); } catch { /* ignore */ }
 }
 
-// Android native 壳的 APK 下载页（落在 GitHub release 页，最稳）
-const APK_DOWNLOAD_URL = "https://github.com/cropflre/super-note/releases/latest";
+// Android APK 默认回落页（镜像通常不内置 .apk；可被 /api/version.androidApkUrl 覆盖）
+const DEFAULT_APK_PAGE = "https://github.com/cropflre/super-note/releases/latest";
 
 /**
  * 简单的 semver 比较：a < b 返回 -1；a > b 返回 1；相等返回 0。
@@ -156,8 +157,10 @@ export default function UpdateNotifier() {
     appVersion: string;
     frontendBuildId?: string;
     minClientVersion?: string;
+    androidApkUrl?: string;
   } | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(() => readDismissed());
+  const [downloading, setDownloading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const check = useCallback(async () => {
@@ -167,6 +170,7 @@ export default function UpdateNotifier() {
         appVersion: info.appVersion,
         frontendBuildId: info.frontendBuildId,
         minClientVersion: info.minClientVersion,
+        androidApkUrl: info.androidApkUrl,
       });
     } catch {
       // 后端不可达 / 老版本没有 /api/version → 静默失败
@@ -305,15 +309,77 @@ export default function UpdateNotifier() {
     setDismissed(key);
   };
 
-  const handleOpenDownload = () => {
-    // Android WebView 里点超链接有时会被拦住；统一用 window.open 兜底到系统浏览器。
-    const downloadUrl = isAndroidNative()
-      ? `${getServerUrl()}/downloads/super-note-debug.apk`
-      : "https://github.com/cropflre/super-note/releases/latest";
+  /**
+   * Android 下载更新：
+   *   1) 优先使用 /api/version.androidApkUrl（站内 APK / ENV / GitHub）
+   *   2) 再尝试 GitHub release 里的 .apk 直链
+   *   3) 直链用原生 downloadFromUrl；页面链接用系统浏览器打开
+   * 绝不能在 WebView 内直接打开缺失的 /downloads/*.apk——旧后端 SPA 会回退登录页。
+   */
+  const handleOpenDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
     try {
-      window.open(downloadUrl, "_blank", "noopener,noreferrer");
-    } catch {
-      window.location.href = downloadUrl;
+      let target =
+        serverInfo?.androidApkUrl?.trim() ||
+        `${getServerUrl().replace(/\/$/, "")}/downloads/super-note-debug.apk`;
+
+      // 相对路径拼到当前连接的服务器
+      if (target.startsWith("/")) {
+        target = `${getServerUrl().replace(/\/$/, "")}${target}`;
+      }
+
+      // 若仍是「站内 downloads APK」，探测是否真是安装包（不是 HTML 登录页）
+      const looksLikeHostedApk = /\/downloads\/.+\.apk(\?|$)/i.test(target);
+      if (looksLikeHostedApk) {
+        let usable = false;
+        try {
+          const head = await fetch(target, { method: "HEAD", redirect: "follow" });
+          const ct = (head.headers.get("content-type") || "").toLowerCase();
+          usable =
+            head.ok &&
+            !ct.includes("text/html") &&
+            (ct.includes("android") ||
+              ct.includes("octet-stream") ||
+              ct.includes("zip") ||
+              ct === "");
+          // 部分环境 HEAD 不带 type，再看最终 URL 是否仍是 .apk
+          if (head.ok && !usable) {
+            usable = /\.apk(\?|$)/i.test(head.url || target) && !ct.includes("text/html");
+          }
+        } catch {
+          usable = false;
+        }
+        if (!usable) {
+          // 尝试 GitHub 资产直链
+          try {
+            const rel = await api.getLatestRelease();
+            if (rel.available) {
+              const apk = rel.assets.find((a) => /\.apk$/i.test(a.name));
+              if (apk?.browserDownloadUrl) {
+                target = apk.browserDownloadUrl;
+              } else if (rel.htmlUrl) {
+                target = rel.htmlUrl;
+              } else {
+                target = DEFAULT_APK_PAGE;
+              }
+            } else {
+              target = DEFAULT_APK_PAGE;
+            }
+          } catch {
+            target = DEFAULT_APK_PAGE;
+          }
+        }
+      }
+
+      const isDirectApk = /\.apk(\?|$)/i.test(target) && !/github\.com\/.*\/releases\/?$/i.test(target);
+      if (isDirectApk) {
+        downloadApkFromUrl(target, "super-note.apk");
+      } else {
+        openExternalUrl(target || DEFAULT_APK_PAGE);
+      }
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -340,14 +406,15 @@ export default function UpdateNotifier() {
           </p>
           <button
             type="button"
-            onClick={handleOpenDownload}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent-primary text-white text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity"
+            onClick={() => void handleOpenDownload()}
+            disabled={downloading}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent-primary text-white text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity disabled:opacity-60"
           >
             <ExternalLink className="w-4 h-4" />
-            前往下载页
+            {downloading ? "准备下载…" : "下载 / 打开安装包"}
           </button>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
-            GitHub Releases · 请选择最新的 Android APK 资源
+            将使用系统浏览器或下载器；不会在应用内打开登录页
           </p>
         </div>
       </div>
@@ -368,10 +435,11 @@ export default function UpdateNotifier() {
         </span>
         {isAndroidNative() ? (
           <button
-            onClick={handleOpenDownload}
-            className="flex-shrink-0 px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium"
+            onClick={() => void handleOpenDownload()}
+            disabled={downloading}
+            className="flex-shrink-0 px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium disabled:opacity-60"
           >
-            下载更新
+            {downloading ? "…" : "下载更新"}
           </button>
         ) : (
           <button

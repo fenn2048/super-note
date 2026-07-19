@@ -747,6 +747,13 @@ export const api = {
      * 不了原生 plugin 不兼容。Web / Electron 无视此字段（它们走各自的升级通道）。
      */
     minClientVersion?: string;
+    /**
+     * Android APK 下载地址。可能是：
+     *   - 站内相对路径 `/downloads/super-note-debug.apk`
+     *   - ENV 配置的完整 URL
+     *   - GitHub Releases 页（Docker 默认不内置 APK）
+     */
+    androidApkUrl?: string;
   }> => {
     const res = await fetch(`${getBaseUrl()}/version`);
     if (!res.ok) throw new Error(`版本信息获取失败: ${res.status}`);
