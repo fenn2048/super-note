@@ -41,7 +41,7 @@ export function openExternalUrl(url: string): void {
   }
 }
 
-/** 下载远程 APK/安装包：Android 走原生流式；其它端走系统下载 */
+/** 下载远程 APK/安装包：Android 走原生流式并调起安装；其它端触发浏览器下载 */
 export function downloadApkFromUrl(url: string, filename = "super-note.apk"): void {
   const abs = toAbsoluteUrl(url);
   const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
@@ -55,7 +55,17 @@ export function downloadApkFromUrl(url: string, filename = "super-note.apk"): vo
     );
     return;
   }
-  openExternalUrl(abs);
+  try {
+    const a = document.createElement("a");
+    a.href = abs;
+    a.download = filename || "super-note.apk";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch {
+    openExternalUrl(abs);
+  }
 }
 
 export async function downloadAttachment(url: string, filename: string): Promise<void> {

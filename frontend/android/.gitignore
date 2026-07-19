@@ -56,6 +56,9 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+# 分发用固定签名（与 build_signed_debug_apk.sh 默认一致）。
+# 提交后保证每次打包的 APK 签名相同，Android 端可覆盖安装。
+!debug.keystore
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

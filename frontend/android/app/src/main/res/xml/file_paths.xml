@@ -3,6 +3,7 @@
     <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
     <cache-path name="share_cache" path="share/" />
+    <cache-path name="apk_updates" path="updates/" />
     <files-path name="app_files" path="." />
     <external-cache-path name="ext_cache" path="." />
 </paths>

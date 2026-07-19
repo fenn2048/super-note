@@ -55,10 +55,13 @@ capacitor.config.*
 build-resources
 packages
 
-# --- 下载页大文件：APK ~37MB，不进镜像（设置页可链外链；需要时本地挂载）---
-# clipper zip 很小可保留；仅排除 apk
-**/*.apk
-frontend/public/downloads/*.apk
+# --- 下载页：默认不带 APK；./build_docker.sh --with-assets 会先生成
+#     frontend/public/downloads/*.apk|*.zip 再进 context（约 +40MB）。
+# 只排除 Android 工程构建中间产物，避免把 gradle 输出误塞进镜像。
+frontend/android/output/
+frontend/android/**/build/
+frontend/android/**/*.apk
+# 注意：不要写 **/*.apk —— 那会把 public/downloads 的安装包也挡掉
 
 # --- 飞牛 fpk / 打包脚本临时产物 ---
 scripts/fpk/work

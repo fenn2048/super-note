@@ -148,4 +148,6 @@
          - USE_FINGERPRINT：兼容 Android 8 及以下旧设备的指纹 API；新系统自动 noop -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+    <!-- 应用内下载 APK 后调起系统安装器（覆盖安装需与原先签名一致） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
@@ -141,6 +142,24 @@ public class MainActivity extends BridgeActivity {
                     }
                     conn.connect();
                     int code = conn.getResponseCode();
+                    // 跟随 3xx（部分环境 instanceFollowRedirects 对 HTTPS→HTTP 会停）
+                    int hops = 0;
+                    while (code >= 300 && code < 400 && hops < 5) {
+                        String loc = conn.getHeaderField("Location");
+                        if (loc == null || loc.isEmpty()) break;
+                        conn.disconnect();
+                        url = new URL(url, loc);
+                        conn = (HttpURLConnection) url.openConnection();
+                        conn.setConnectTimeout(20000);
+                        conn.setReadTimeout(120000);
+                        conn.setInstanceFollowRedirects(true);
+                        if (token != null && !token.isEmpty()) {
+                            conn.setRequestProperty("Authorization", "Bearer " + token);
+                        }
+                        conn.connect();
+                        code = conn.getResponseCode();
+                        hops++;
+                    }
                     if (code < 200 || code >= 300) {
                         throw new IOException("HTTP " + code);
                     }
@@ -151,12 +170,44 @@ public class MainActivity extends BridgeActivity {
                     }
                     if (ct == null || ct.isEmpty()) ct = "application/octet-stream";
 
-                    try (InputStream in = conn.getInputStream()) {
-                        streamToDownloads(in, filename, ct);
+                    String safeName = (filename != null && !filename.isEmpty())
+                            ? filename.replaceAll("[\\\\/:*?\"<>|]", "_")
+                            : "download.bin";
+                    boolean isApk = safeName.toLowerCase().endsWith(".apk")
+                            || (ct != null && ct.contains("android.package"));
+
+                    if (isApk) {
+                        // 写到 app cache，再 FileProvider 调起系统安装器（可覆盖安装）
+                        File updateDir = new File(getCacheDir(), "updates");
+                        if (!updateDir.exists() && !updateDir.mkdirs()) {
+                            throw new IOException("cannot create updates dir");
+                        }
+                        File apkFile = new File(updateDir, safeName.endsWith(".apk") ? safeName : "super-note.apk");
+                        try (InputStream in = conn.getInputStream();
+                             FileOutputStream fos = new FileOutputStream(apkFile)) {
+                            byte[] buf = new byte[8192];
+                            int n;
+                            while ((n = in.read(buf)) != -1) {
+                                fos.write(buf, 0, n);
+                            }
+                            fos.flush();
+                        }
+                        // 同步一份到系统 Downloads，便于用户备份
+                        try (InputStream in2 = new java.io.FileInputStream(apkFile)) {
+                            streamToDownloads(in2, apkFile.getName(),
+                                    "application/vnd.android.package-archive");
+                        } catch (Exception copyEx) {
+                            Log.w(TAG, "copy apk to Downloads failed", copyEx);
+                        }
+                        runOnUiThread(() -> promptInstallApk(apkFile));
+                    } else {
+                        try (InputStream in = conn.getInputStream()) {
+                            streamToDownloads(in, safeName, ct);
+                        }
+                        runOnUiThread(() ->
+                                Toast.makeText(MainActivity.this, "已保存: " + safeName, Toast.LENGTH_SHORT).show()
+                        );
                     }
-                    runOnUiThread(() ->
-                            Toast.makeText(MainActivity.this, "已保存: " + filename, Toast.LENGTH_SHORT).show()
-                    );
                 } catch (Exception e) {
                     Log.e(TAG, "downloadFromUrl", e);
                     runOnUiThread(() ->
@@ -166,6 +217,38 @@ public class MainActivity extends BridgeActivity {
                     if (conn != null) conn.disconnect();
                 }
             }).start();
+        }
+
+        /** 调起系统安装器；需 REQUEST_INSTALL_PACKAGES（Android 8+） */
+        private void promptInstallApk(File apkFile) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (!getPackageManager().canRequestPackageInstalls()) {
+                        Toast.makeText(MainActivity.this,
+                                "请允许「安装未知应用」后再次点击更新", Toast.LENGTH_LONG).show();
+                        Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                        settings.setData(Uri.parse("package:" + getPackageName()));
+                        settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(settings);
+                        return;
+                    }
+                }
+                Uri uri = FileProvider.getUriForFile(
+                        MainActivity.this,
+                        getPackageName() + ".fileprovider",
+                        apkFile
+                );
+                Intent install = new Intent(Intent.ACTION_VIEW);
+                install.setDataAndType(uri, "application/vnd.android.package-archive");
+                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(install);
+                Toast.makeText(MainActivity.this, "正在打开安装界面…", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Log.e(TAG, "promptInstallApk", e);
+                Toast.makeText(MainActivity.this,
+                        "无法打开安装器: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
         }
 
         /** 系统分享纯文本 */

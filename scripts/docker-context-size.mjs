@@ -112,15 +112,16 @@ if (big.length) {
     console.log(`  ${(b.size / 1024 / 1024).toFixed(1).padStart(6)} MB  ${b.rel}`);
   }
 }
-// 门禁：告警阈值
-const WARN_MB = 80;
-const FAIL_MB = 200;
+// 门禁：默认 80/200；带客户端安装包时（--with-assets）context 会到 ~80–120MB
+const withAssets = process.argv.includes("--with-assets") || process.env.DOCKER_CONTEXT_WITH_ASSETS === "1";
+const WARN_MB = withAssets ? 150 : 80;
+const FAIL_MB = withAssets ? 280 : 200;
 if (mb > FAIL_MB) {
-  console.error(`\n[FAIL] context > ${FAIL_MB} MB — check .dockerignore (backend/data? APK? packages?)`);
+  console.error(`\n[FAIL] context > ${FAIL_MB} MB — check .dockerignore (backend/data? packages?)`);
   process.exit(2);
 }
 if (mb > WARN_MB) {
   console.warn(`\n[WARN] context > ${WARN_MB} MB — consider trimming further`);
   process.exit(0);
 }
-console.log(`\n[OK] context under ${WARN_MB} MB target`);
+console.log(`\n[OK] context under ${WARN_MB} MB target${withAssets ? " (with-assets)" : ""}`);

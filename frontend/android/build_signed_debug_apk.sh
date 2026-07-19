@@ -2,9 +2,22 @@
 set -euo pipefail
 
 # build_signed_debug_apk.sh
+# -----------------------------------------------------------------------------
+# 产出固定签名的可分发 APK + 剪藏 zip → frontend/public|dist/downloads/
+#
 # Usage:
-#   ./build_signed_debug_apk.sh [--keystore <keystore>] [--alias <alias>] [--storepass <storepass>] [--keypass <keypass>] [--out <outdir>]
-# If keystore not provided, a local debug keystore will be generated under the android folder.
+#   ./build_signed_debug_apk.sh [options]
+#     --keystore PATH   默认 frontend/android/debug.keystore（固定签名，请提交仓库）
+#     --alias NAME      默认 mydebugkey
+#     --storepass PASS  默认 android
+#     --keypass PASS    默认 android
+#     --out DIR         默认 frontend/android/output
+#     --no-bump         不改 package.json / versionCode（Docker 镜像构建必开）
+#     --skip-clipper    不打包浏览器扩展
+#     --skip-apk        只打扩展，不编 Android
+#
+# 环境变量：KEYSTORE_PATH / KEY_ALIAS / STORE_PASS / KEY_PASS / OUT_DIR
+# 签名一致性：始终使用同一 keystore；缺失时才生成（会改变签名，请提交生成结果）
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANDROID_PROJECT_DIR="$SCRIPT_DIR"
@@ -15,34 +28,9 @@ KEY_ALIAS="${KEY_ALIAS:-mydebugkey}"
 STORE_PASS="${STORE_PASS:-android}"
 KEY_PASS="${KEY_PASS:-android}"
 OUT_DIR="${OUT_DIR:-$ANDROID_PROJECT_DIR/output}"
-
-# Auto-increment version in package.json and app/build.gradle
-echo "==== Auto-incrementing version ===="
-node -e "
-const fs = require('fs');
-const path = require('path');
-const pkgPath = path.join('$SCRIPT_DIR', '../../package.json');
-const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-const parts = (pkg.version || '1.0.0').split('.').map(Number);
-if (parts.length === 3) { parts[2]++; } else { parts.push(1); }
-const nextVersion = parts.join('.');
-pkg.version = nextVersion;
-fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-console.log('Incremented root package.json version to:', nextVersion);
-
-const gradlePath = path.join('$SCRIPT_DIR', 'app/build.gradle');
-if (fs.existsSync(gradlePath)) {
-  let gradle = fs.readFileSync(gradlePath, 'utf8');
-  const major = parts[0] || 1;
-  const minor = parts[1] || 0;
-  const patch = parts[2] || 0;
-  const nextCode = major * 10000 + minor * 100 + patch;
-  gradle = gradle.replace(/versionCode\\s+\\d+/, 'versionCode ' + nextCode);
-  gradle = gradle.replace(/versionName\\s+\\\"[^\\\"]+\\\"/, 'versionName \"' + nextVersion + '\"');
-  fs.writeFileSync(gradlePath, gradle);
-  console.log('Updated build.gradle with versionCode:', nextCode, 'versionName:', nextVersion);
-}
-"
+NO_BUMP=0
+SKIP_CLIPPER=0
+SKIP_APK_FLAG=0
 
 # Find Java Home
 if [ -z "${JAVA_HOME:-}" ]; then
@@ -78,14 +66,19 @@ fi
 
 print_usage() {
   cat <<EOF
-Usage: $0 [--keystore <path>] [--alias <alias>] [--storepass <storepass>] [--keypass <keypass>] [--out <outdir>]
+Usage: $0 [options]
 
-Generates (if missing) a local keystore, packages browser extensions, builds frontend, and builds/signs a debug APK.
-Defaults:
-  keystore: $KEYSTORE_PATH
-  alias:    $KEY_ALIAS
-  storepass/keypass: "$STORE_PASS" / "$KEY_PASS"
-  out dir:  $OUT_DIR
+  --keystore PATH  keystore path (default: $KEYSTORE_PATH)
+  --alias NAME     key alias (default: $KEY_ALIAS)
+  --storepass P    store password
+  --keypass P      key password
+  --out DIR        intermediate output dir
+  --no-bump        do not bump package.json / versionCode (for Docker)
+  --skip-clipper   skip browser extension packaging
+  --skip-apk       skip Android APK build
+  -h, --help
+
+Always re-sign with the same keystore so users can upgrade in place.
 EOF
 }
 
@@ -97,6 +90,9 @@ while [ "$#" -gt 0 ]; do
     --storepass) STORE_PASS="$2"; shift 2;;
     --keypass) KEY_PASS="$2"; shift 2;;
     --out) OUT_DIR="$2"; shift 2;;
+    --no-bump) NO_BUMP=1; shift;;
+    --skip-clipper) SKIP_CLIPPER=1; shift;;
+    --skip-apk) SKIP_APK_FLAG=1; shift;;
     -h|--help) print_usage; exit 0;;
     *) echo "Unknown arg: $1"; print_usage; exit 1;;
   esac
@@ -104,10 +100,60 @@ done
 
 mkdir -p "$OUT_DIR"
 
+if [ "$NO_BUMP" -eq 0 ]; then
+  echo "==== Auto-incrementing version ===="
+  node -e "
+const fs = require('fs');
+const path = require('path');
+const pkgPath = path.join('$SCRIPT_DIR', '../../package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+const parts = (pkg.version || '1.0.0').split('.').map(Number);
+if (parts.length === 3) { parts[2]++; } else { parts.push(1); }
+const nextVersion = parts.join('.');
+pkg.version = nextVersion;
+fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+console.log('Incremented root package.json version to:', nextVersion);
+
+const gradlePath = path.join('$SCRIPT_DIR', 'app/build.gradle');
+if (fs.existsSync(gradlePath)) {
+  let gradle = fs.readFileSync(gradlePath, 'utf8');
+  const major = parts[0] || 1;
+  const minor = parts[1] || 0;
+  const patch = parts[2] || 0;
+  const nextCode = major * 10000 + minor * 100 + patch;
+  gradle = gradle.replace(/versionCode\\s+\\d+/, 'versionCode ' + nextCode);
+  gradle = gradle.replace(/versionName\\s+\\\"[^\\\"]+\\\"/, 'versionName \"' + nextVersion + '\"');
+  fs.writeFileSync(gradlePath, gradle);
+  console.log('Updated build.gradle with versionCode:', nextCode, 'versionName:', nextVersion);
+}
+"
+else
+  echo "==== --no-bump: keep package.json / versionCode unchanged ===="
+  node -e "
+const fs = require('fs');
+const path = require('path');
+const pkg = JSON.parse(fs.readFileSync(path.join('$SCRIPT_DIR', '../../package.json'), 'utf8'));
+const v = pkg.version || '0.0.0';
+const parts = v.split('.').map(Number);
+const gradlePath = path.join('$SCRIPT_DIR', 'app/build.gradle');
+if (fs.existsSync(gradlePath)) {
+  let gradle = fs.readFileSync(gradlePath, 'utf8');
+  const major = parts[0] || 1;
+  const minor = parts[1] || 0;
+  const patch = parts[2] || 0;
+  const code = major * 10000 + minor * 100 + patch;
+  gradle = gradle.replace(/versionCode\\s+\\d+/, 'versionCode ' + code);
+  gradle = gradle.replace(/versionName\\s+\\\"[^\\\"]+\\\"/, 'versionName \"' + v + '\"');
+  fs.writeFileSync(gradlePath, gradle);
+  console.log('Synced build.gradle versionName=', v, 'versionCode=', code);
+}
+"
+fi
+
 # 1. Package browser extensions (supernote-clipper)
 CLIPPER_DIR="$SCRIPT_DIR/../../packages/supernote-clipper"
 FRONTEND_DIR="$SCRIPT_DIR/.."
-if [ -d "$CLIPPER_DIR" ]; then
+if [ "$SKIP_CLIPPER" -eq 0 ] && [ -d "$CLIPPER_DIR" ]; then
   echo "==== Building and packaging browser extensions ===="
   pushd "$CLIPPER_DIR" >/dev/null
   if [ -f "package-lock.json" ]; then
@@ -131,11 +177,16 @@ if [ -d "$CLIPPER_DIR" ]; then
   fi
   echo "Browser extensions copied to public downloads folder."
   popd >/dev/null
+elif [ "$SKIP_CLIPPER" -eq 1 ]; then
+  echo "==== --skip-clipper: leave existing extension zips ===="
 else
   echo "Browser extension directory not found at $CLIPPER_DIR, skipping."
 fi
 
 # 2. Build frontend and sync assets to Android
+if [ "$SKIP_APK_FLAG" -eq 1 ]; then
+  SKIP_ANDROID_BUILD=1
+fi
 if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
   echo "==== Building frontend ===="
   pushd "$FRONTEND_DIR" >/dev/null
@@ -185,16 +236,19 @@ if [ "$SKIP_ANDROID_BUILD" -eq 0 ]; then
   rm -rf "$OUT_DIR"/*
   find "$ANDROID_PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" -exec rm -f {} + 2>/dev/null || true
 
-  # Generate keystore if missing
+  # Generate keystore if missing（仅首次；之后务必提交 debug.keystore 以固定签名）
   if [ ! -f "$KEYSTORE_PATH" ]; then
-    echo "Keystore not found at $KEYSTORE_PATH. Generating..."
+    echo "Keystore not found at $KEYSTORE_PATH. Generating a NEW keystore..."
+    echo "WARNING: 新 keystore 与旧 APK 签名不同，用户将无法覆盖安装旧版！"
     keytool -genkeypair \
       -alias "$KEY_ALIAS" \
       -keyalg RSA -keysize 2048 -validity 10000 \
       -keystore "$KEYSTORE_PATH" \
       -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
-      -dname "CN=Local Debug, OU=Dev, O=Local, L=City, ST=State, C=CN"
-    echo "Keystore generated: $KEYSTORE_PATH"
+      -dname "CN=Super Note Client, OU=Mobile, O=SuperNote, L=City, ST=State, C=CN"
+    echo "Keystore generated: $KEYSTORE_PATH — please commit it for stable signatures."
+  else
+    echo "Using existing keystore: $KEYSTORE_PATH (stable signature)"
   fi
 
   # Ensure gradlew is executable

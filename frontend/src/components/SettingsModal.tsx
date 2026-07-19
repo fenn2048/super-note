@@ -19,6 +19,7 @@ import { getCustomSplashDataUrl, saveCustomSplashFromFile, clearCustomSplash } f
 import BrandMark from "@/components/BrandMark";
 import { MODULE_PACK_META, getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
 import { api, getServerUrl } from "@/lib/api";
+import { downloadApkFromUrl, downloadAttachment } from "@/lib/downloadFile";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
@@ -502,91 +503,59 @@ function AboutPanel() {
 
       <div className="h-px bg-zinc-200 dark:bg-zinc-800" />
 
-      {/* 插件与客户端下载 */}
+      {/* 插件与客户端下载（镜像需 ./build_docker.sh --with-assets 才内置 APK） */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-4">
         <h3 className="text-sm font-semibold text-tx-primary flex items-center gap-2">
           <Download size={15} className="text-accent-primary" />
-          下载扩展与客户端 (Debug 自签名版)
+          下载扩展与客户端
         </h3>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          提供本地重新打包的浏览器剪藏扩展和 Android 客户端安装包。
+          剪藏扩展与 Android 安装包由服务器 /downloads 提供。
+          部署时使用 <code className="text-[10px] px-1 rounded bg-zinc-200/80 dark:bg-zinc-700">./build_docker.sh --with-assets</code> 可将固定签名 APK 打进镜像；Android 端可覆盖安装。
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Chrome 扩展 */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-tx-primary truncate">Chrome 剪藏插件</div>
-                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-chrome.zip</div>
+          {([
+            { label: "Chrome 剪藏插件", file: "super-clipper-chrome.zip", kind: "zip" as const },
+            { label: "Edge 剪藏插件", file: "super-clipper-edge.zip", kind: "zip" as const },
+            { label: "Firefox 剪藏插件", file: "super-clipper-firefox.zip", kind: "zip" as const },
+            { label: "Android 客户端", file: "super-note-debug.apk", kind: "apk" as const },
+          ]).map((item) => {
+            const url = `${downloadBaseUrl}/downloads/${item.file}`;
+            const Icon = item.kind === "apk" ? Smartphone : Globe;
+            return (
+              <div
+                key={item.file}
+                className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Icon size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-tx-primary truncate">{item.label}</div>
+                    <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">
+                      {item.file}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.kind === "apk") {
+                      downloadApkFromUrl(url, item.file);
+                    } else {
+                      void downloadAttachment(url, item.file).catch((e) => {
+                        console.error(e);
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
+                >
+                  <Download size={11} />
+                  下载
+                </button>
               </div>
-            </div>
-            <a
-              href={`${downloadBaseUrl}/downloads/super-clipper-chrome.zip`}
-              download
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
-            >
-              <Download size={11} />
-              下载
-            </a>
-          </div>
-
-          {/* Edge 扩展 */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-tx-primary truncate">Edge 剪藏插件</div>
-                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-edge.zip</div>
-              </div>
-            </div>
-            <a
-              href={`${downloadBaseUrl}/downloads/super-clipper-edge.zip`}
-              download
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
-            >
-              <Download size={11} />
-              下载
-            </a>
-          </div>
-
-          {/* Firefox 扩展 */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Globe size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-tx-primary truncate">Firefox 剪藏插件</div>
-                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-clipper-firefox.zip</div>
-              </div>
-            </div>
-            <a
-              href={`${downloadBaseUrl}/downloads/super-clipper-firefox.zip`}
-              download
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
-            >
-              <Download size={11} />
-              下载
-            </a>
-          </div>
-
-          {/* Android 客户端 */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 shadow-sm">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Smartphone size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-tx-primary truncate">Android 客户端</div>
-                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5 truncate">super-note-debug.apk</div>
-              </div>
-            </div>
-            <a
-              href={`${downloadBaseUrl}/downloads/super-note-debug.apk`}
-              download
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
-            >
-              <Download size={11} />
-              下载
-            </a>
-          </div>
+            );
+          })}
         </div>
       </div>
 

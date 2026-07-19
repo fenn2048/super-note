@@ -3,13 +3,20 @@
 # super-note Docker 构建脚本（Phase 0–3）
 # -----------------------------------------------------------------------------
 # 用法：
-#   ./build_docker.sh                 # 默认：BuildKit + 国内镜像，不编 APK
-#   ./build_docker.sh --build-assets  # 编剪藏 zip + Android debug APK（很慢）
-#   ./build_docker.sh --no-mirror     # 官方源
-#   ./build_docker.sh --tag NAME      # 主 tag（默认 super-note）
-#   ./build_docker.sh --no-sha-tag    # 不额外打 git short SHA tag
+#   ./build_docker.sh                      # 默认：小镜像，不含 APK
+#   ./build_docker.sh --with-assets        # 先编剪藏 zip + 固定签名 APK，再打进镜像
+#   ./build_docker.sh --build-assets       # 同上（旧别名）
+#   ./build_docker.sh --no-mirror          # 官方源
+#   ./build_docker.sh --tag NAME           # 主 tag（默认 super-note）
+#   ./build_docker.sh --no-sha-tag         # 不额外打 git short SHA tag
 #   ./build_docker.sh --platform linux/amd64
-#   ./build_docker.sh --check-only    # 只检查 context 门禁，不 build
+#   ./build_docker.sh --check-only         # 只检查 context 门禁，不 build
+#
+# --with-assets 说明：
+#   - 剪藏：packages/supernote-clipper → frontend/public/downloads/*.zip
+#   - APK：固定 keystore（frontend/android/debug.keystore）签名，可覆盖安装
+#   - 不自动 bump 版本号（--no-bump）
+#   - 构建后网页「关于」与 Android「下载更新」均可直链 /downloads/...
 # =============================================================================
 set -euo pipefail
 
@@ -25,7 +32,7 @@ CHECK_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --build-assets|-a|--with-apk)
+    --build-assets|-a|--with-apk|--with-assets)
       BUILD_ASSETS=true
       shift
       ;;
@@ -50,7 +57,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,16p' "$0"
+      sed -n '2,22p' "$0"
       exit 0
       ;;
     *)
@@ -69,11 +76,67 @@ BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
 
 echo "==> Phase 3 docker build"
 echo "    tag=${IMAGE_TAG}  git=${GIT_SHA}  version=${APP_VERSION:-n/a}"
+echo "    with-assets=${BUILD_ASSETS}"
+
+# --- 可选：客户端安装包（必须在 context gate 之前生成，才能进镜像）---
+CLIPPER_ZIPS=(
+  "frontend/public/downloads/super-clipper-chrome.zip"
+  "frontend/public/downloads/super-clipper-edge.zip"
+  "frontend/public/downloads/super-clipper-firefox.zip"
+)
+APK_PATH="frontend/public/downloads/super-note-debug.apk"
+ASSET_SCRIPT="frontend/android/build_signed_debug_apk.sh"
+
+if [[ "$BUILD_ASSETS" == true ]]; then
+  echo "==> Building clipper + signed APK for image (stable keystore, --no-bump)..."
+  if [[ ! -x "$ASSET_SCRIPT" ]]; then
+    echo "ERROR: missing executable $ASSET_SCRIPT" >&2
+    exit 1
+  fi
+  # 固定签名：使用仓库内 debug.keystore（若不存在脚本会生成并提示提交）
+  (cd frontend/android && ./build_signed_debug_apk.sh --no-bump)
+
+  missing=0
+  for f in "${CLIPPER_ZIPS[@]}"; do
+    if [[ ! -f "$f" ]]; then
+      echo "ERROR: missing clipper asset: $f" >&2
+      missing=1
+    else
+      echo "    ok  $f ($(du -h "$f" | awk '{print $1}'))"
+    fi
+  done
+  if [[ ! -f "$APK_PATH" ]]; then
+    echo "ERROR: missing APK: $APK_PATH" >&2
+    echo "       Need Android SDK (zipalign/apksigner) + JDK on the build machine." >&2
+    missing=1
+  else
+    echo "    ok  $APK_PATH ($(du -h "$APK_PATH" | awk '{print $1}'))"
+  fi
+  if [[ "$missing" -ne 0 ]]; then
+    exit 1
+  fi
+  export DOCKER_CONTEXT_WITH_ASSETS=1
+else
+  echo "==> Skip APK/Gradle (default). Use --with-assets to bundle clients."
+  for f in "${CLIPPER_ZIPS[@]}"; do
+    [[ -f "$f" ]] || echo "    warn: missing $f (关于页剪藏下载会 404)"
+  done
+  if [[ -f "$APK_PATH" ]]; then
+    echo "    note: $APK_PATH exists and will be included in context"
+    export DOCKER_CONTEXT_WITH_ASSETS=1
+  else
+    echo "    note: no APK in public/downloads (Android 更新将回落 GitHub/ENV)"
+  fi
+fi
 
 # --- Context 门禁 ---
 if command -v node >/dev/null 2>&1 && [[ -f scripts/docker-context-size.mjs ]]; then
   echo "==> Context size gate"
-  node scripts/docker-context-size.mjs || {
+  GATE_ARGS=()
+  if [[ "${DOCKER_CONTEXT_WITH_ASSETS:-}" == "1" ]]; then
+    GATE_ARGS+=(--with-assets)
+  fi
+  node scripts/docker-context-size.mjs "${GATE_ARGS[@]+"${GATE_ARGS[@]}"}" || {
     code=$?
     if [[ $code -eq 2 ]]; then
       echo "Context gate failed. Fix .dockerignore before building." >&2
@@ -87,32 +150,6 @@ fi
 if [[ "$CHECK_ONLY" == true ]]; then
   echo "==> --check-only: done"
   exit 0
-fi
-
-# --- 可选 APK / 扩展 ---
-CLIPPER_ZIPS=(
-  "frontend/public/downloads/super-clipper-chrome.zip"
-  "frontend/public/downloads/super-clipper-edge.zip"
-  "frontend/public/downloads/super-clipper-firefox.zip"
-)
-APK_PATH="frontend/public/downloads/super-note-debug.apk"
-
-if [[ "$BUILD_ASSETS" == true ]]; then
-  echo "==> Building clipper + Android debug APK (slow)..."
-  if [[ -x frontend/android/build_signed_debug_apk.sh ]]; then
-    (cd frontend/android && ./build_signed_debug_apk.sh)
-  else
-    echo "WARN: frontend/android/build_signed_debug_apk.sh missing" >&2
-  fi
-  if [[ -f packages/supernote-clipper/package.json ]]; then
-    (cd packages/supernote-clipper && npm run pack:all 2>/dev/null || npm run build) || true
-  fi
-else
-  echo "==> Skip APK/Gradle (default). Use --build-assets to force."
-  for f in "${CLIPPER_ZIPS[@]}"; do
-    [[ -f "$f" ]] || echo "    warn: missing $f"
-  done
-  [[ -f "$APK_PATH" ]] || echo "    note: APK absent (excluded from image by .dockerignore)"
 fi
 
 BUILD_ARGS=(
@@ -136,8 +173,7 @@ if [[ "$SHA_TAG" == true && "$GIT_SHA" != "unknown" ]]; then
   echo "==> Extra tag: ${IMAGE_TAG}:${GIT_SHA}"
 fi
 
-# macOS Bash 3.2 + set -u：空数组 "${arr[@]}" 会报 unbound variable，
-# 因此不单独维护可为空的 PLATFORM_ARGS，只在有值时拼进 DOCKER_ARGS。
+# macOS Bash 3.2 + set -u：空数组 "${arr[@]}" 会报 unbound variable
 DOCKER_ARGS=("${BUILD_ARGS[@]}" "${TAGS[@]}")
 if [[ -n "$PLATFORM" ]]; then
   DOCKER_ARGS=(--platform "$PLATFORM" "${DOCKER_ARGS[@]}")
@@ -155,19 +191,27 @@ ELAPSED=$((END_TS - START_TS))
 echo "==> Done in ${ELAPSED}s"
 docker images "${IMAGE_TAG}" --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}' 2>/dev/null || true
 
-# 体积软报告
 if docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
   SIZE=$(docker image inspect "${IMAGE_TAG}" --format '{{.Size}}')
   python3 - <<PY
 size = int("${SIZE}")
 mb = size / 1_000_000
 print(f"Image size ≈ {mb:.1f} MB ({size} bytes)")
-if size > 450_000_000:
-    print("[WARN] soft gate: image > 450 MB")
+limit = 520_000_000 if "${BUILD_ASSETS}" == "true" else 450_000_000
+if size > limit:
+    print(f"[WARN] soft gate: image > {limit // 1_000_000} MB")
 else:
-    print("[OK] soft gate: image ≤ 450 MB")
+    print(f"[OK] soft gate: image ≤ {limit // 1_000_000} MB")
 PY
+fi
+
+if [[ "$BUILD_ASSETS" == true ]]; then
+  echo "==> Verify downloads in image (optional):"
+  echo "    docker run --rm ${IMAGE_TAG} ls -la /app/frontend/dist/downloads/"
 fi
 
 echo "Docs: docs/docker-build.md"
 echo "Release: ./scripts/release.sh"
+if [[ "$BUILD_ASSETS" != true ]]; then
+  echo "Tip: ./build_docker.sh --with-assets  # bundle APK + clipper into image"
+fi
