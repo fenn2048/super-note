@@ -2086,6 +2086,39 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 34,
+    name: "user-preferences-and-site-splash",
+    up: (db) => {
+      // 跨设备用户偏好（模块包 / startupLanding / 列表密度等 JSON）
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          userId TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          prefsJson TEXT NOT NULL DEFAULT '{}',
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      // 站点级默认闪屏图 URL（管理员配置，多设备一致）
+      db.prepare(
+        `INSERT INTO system_settings (key, value, updatedAt)
+         VALUES ('site_splash_url', '', datetime('now'))
+         ON CONFLICT(key) DO NOTHING`,
+      ).run();
+    },
+  },
+  {
+    version: 35,
+    name: "legacy-tasks-deprecation-note",
+    up: (db) => {
+      // 不删表：产品读写已走 project_tasks；此处写入标记供运维/导出工具识别
+      db.prepare(
+        `INSERT INTO system_settings (key, value, updatedAt)
+         VALUES ('legacy_tasks_deprecated', '1', datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = '1', updatedAt = datetime('now')`,
+      ).run();
+      // 可选：若 tasks 表仍存在且为空，加注释性索引无意义；保持数据以便回滚
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

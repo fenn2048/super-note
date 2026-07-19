@@ -37,6 +37,8 @@ export interface SiteSettings {
   web_ui_enabled: string;
   /** 是否开启登录图形验证码。 */
   login_captcha_enabled: string;
+  /** 站点级默认启动闪屏图 URL（管理员配置，多设备一致） */
+  site_splash_url: string;
 }
 
 const DEFAULTS: SiteSettings = {
@@ -50,6 +52,7 @@ const DEFAULTS: SiteSettings = {
   debug_files_query: "false",
   web_ui_enabled: "true",
   login_captcha_enabled: "false",
+  site_splash_url: "",
 };
 
 // 获取所有站点设置
@@ -87,7 +90,9 @@ settings.put("/", async (c) => {
   const userId = c.req.header("X-User-Id") || "";
 
   const wantsSiteIdentity =
-    body.site_title !== undefined || body.site_favicon !== undefined;
+    body.site_title !== undefined ||
+    body.site_favicon !== undefined ||
+    body.site_splash_url !== undefined;
   if (wantsSiteIdentity && !isSystemAdmin(userId)) {
     return c.json(
       { error: "仅管理员可修改该设置", code: "FORBIDDEN" },
@@ -121,6 +126,10 @@ settings.put("/", async (c) => {
     }
     if (body.site_favicon !== undefined) {
       upsert.run("site_favicon", body.site_favicon);
+    }
+    if (body.site_splash_url !== undefined) {
+      const url = String(body.site_splash_url || "").trim().slice(0, 2000);
+      upsert.run("site_splash_url", url);
     }
     if (body.editor_font_family !== undefined) {
       upsert.run("editor_font_family", body.editor_font_family);

@@ -41,6 +41,7 @@ import workspacesRouter from "./routes/workspaces";
 import clipRouter from "./routes/clip";
 import authRouter from "./routes/auth";
 import usersRouter, { handleGetAvatar } from "./routes/users";
+import userPreferencesRouter from "./routes/user-preferences";
 import tokensRouter from "./routes/tokens";
 import userMigrationRouter from "./routes/user-migration";
 import versionRouter, { resolveAppVersion } from "./routes/version";
@@ -298,7 +299,7 @@ app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
 // 站点设置（GET 无需 JWT，允许未登录时加载品牌信息）
 app.get("/api/settings", (c) => {
   const db = getDb();
-  const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled' OR key = 'login_captcha_enabled'").all() as { key: string; value: string }[];
+  const rows = db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'site_%' OR key LIKE 'editor_%' OR key LIKE 'debug_%' OR key = 'web_ui_enabled' OR key = 'login_captcha_enabled' OR key = 'site_splash_url'").all() as { key: string; value: string }[];
   const result: Record<string, string> = { site_title: "蜉蝣", site_favicon: "", editor_font_family: "", editor_lxgw_wenkai_enabled: "false", debug_files_query: "false", web_ui_enabled: "true", login_captcha_enabled: "false" };
   for (const row of rows) {
     result[row.key] = row.value;
@@ -552,6 +553,8 @@ app.route("/api/email", emailRouter);
 app.route("/api/shares", sharesRouter);
 app.route("/api/workspaces", workspacesRouter);
 app.route("/api/clip", clipRouter);
+// /me/preferences 须在 /:id 之前挂载
+app.route("/api/users", userPreferencesRouter);
 app.route("/api/users", usersRouter);
 app.route("/api/tokens", tokensRouter);
 app.route("/api/user-migration", userMigrationRouter);
