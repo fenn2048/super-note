@@ -15,6 +15,7 @@ import { haptic } from "@/hooks/useCapacitor";
 import { WorkspaceMember } from "@/types";
 import RecordingPanel from "@/components/RecordingPanel";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
+import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 
 
 interface DiaryComposeModalProps {
@@ -1120,24 +1121,43 @@ const handleEmojiSelect = (emoji: string) => {
     }
   };
 
+  const trapRef = useModalFocusTrap(isOpen && !isMobile, onClose);
+
   if (!isOpen) return null;
 
-  return (
+  // 桌面 Web：居中大弹窗；移动：全屏 sheet（键盘适配保留）
+  const shell = (
     <div
+      ref={trapRef as React.RefObject<HTMLDivElement>}
       className={cn(
-        "fixed z-[60] bg-app-bg flex flex-col overflow-hidden",
-        isMobile ? "inset-x-0 top-0" : "inset-0"
+        "bg-app-bg flex flex-col overflow-hidden",
+        isMobile
+          ? "fixed z-[60] inset-x-0 top-0"
+          : "relative w-full max-w-2xl max-h-[min(88vh,820px)] rounded-2xl border border-app-border shadow-2xl shadow-black/20 dark:shadow-black/50",
       )}
       style={isMobile ? { height: viewportHeight, bottom: "auto" } : undefined}
+      role="dialog"
+      aria-modal="true"
+      aria-label="新建说说"
     >
       {/* 顶栏 */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface shrink-0" style={{ paddingTop: "calc(var(--safe-area-top) + 8px)" }}>
+      <header
+        className={cn(
+          "flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface shrink-0",
+          !isMobile && "rounded-t-2xl",
+        )}
+        style={
+          isMobile
+            ? { paddingTop: "calc(var(--safe-area-top) + 8px)" }
+            : undefined
+        }
+      >
         <button
           onClick={onClose}
           className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
           aria-label="关闭"
         >
-          <ChevronDown size={24} />
+          {isMobile ? <ChevronDown size={24} /> : <X size={20} />}
         </button>
         <span className="text-sm font-semibold text-tx-primary">新建说说</span>
         <button
@@ -1151,7 +1171,12 @@ const handleEmojiSelect = (emoji: string) => {
       </header>
 
       {/* 编辑区域 */}
-      <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4 pb-20">
+      <div
+        className={cn(
+          "flex-1 flex flex-col p-4 overflow-y-auto space-y-4 min-h-0",
+          isMobile ? "pb-20" : "pb-4",
+        )}
+      >
         {showFormatToolbar && (
           <TextareaFormatToolbar
             textareaRef={textareaRef}
@@ -1481,7 +1506,17 @@ const handleEmojiSelect = (emoji: string) => {
       </AnimatePresence>
 
       {/* 底部操作工具栏 (紧挨着键盘上方右侧，屏幕底端对齐) */}
-      <div className="p-3 bg-app-surface border-t border-app-border flex items-center justify-between shrink-0" style={{ paddingBottom: "calc(var(--safe-area-bottom) + 8px)" }}>
+      <div
+        className={cn(
+          "p-3 bg-app-surface border-t border-app-border flex items-center justify-between shrink-0",
+          !isMobile && "rounded-b-2xl",
+        )}
+        style={
+          isMobile
+            ? { paddingBottom: "calc(var(--safe-area-bottom) + 8px)" }
+            : undefined
+        }
+      >
         {/* 左侧：可见性权限 + 清空与恢复 */}
         <div className="flex items-center gap-1">
           {getCurrentWorkspace() && getCurrentWorkspace() !== "personal" && (
@@ -2084,6 +2119,32 @@ const handleEmojiSelect = (emoji: string) => {
           </div>
         </div>
       )}
+    </div>
+  );
+
+  if (isMobile) return shell;
+
+  // 桌面：遮罩 + 居中大弹窗（非全屏页）
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-zinc-900/45 dark:bg-black/60 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 8 }}
+        transition={{ type: "spring", duration: 0.35, bounce: 0 }}
+        className="relative z-10 w-full max-w-2xl flex justify-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {shell}
+      </motion.div>
     </div>
   );
 }

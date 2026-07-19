@@ -434,8 +434,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
               } else if (action === "diary") {
                 window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
               } else if (action === "task") {
-                openTasksEntry();
-                actions.setViewMode("projects");
+                // 桌面/移动均打开任务创建弹窗（不强制跳转，避免打断当前页）
                 window.dispatchEvent(new CustomEvent("super:quick-new-task"));
               }
             }}

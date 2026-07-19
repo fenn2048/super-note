@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Capacitor } from "@capacitor/core";
 import OCRModal from "@/components/OCRModal";
+import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 
 interface MobileTaskCreateModalProps {
   isOpen: boolean;
@@ -176,12 +177,24 @@ export default function MobileTaskCreateModal({
     }
   };
 
+  // 桌面居中大弹窗；移动底部 sheet（原 md:hidden 导致 Web 端点「+」任务无界面）
+  const isDesktop =
+    typeof window !== "undefined" && window.innerWidth >= 768;
+  const trapRef = useModalFocusTrap(isOpen && isDesktop, onClose);
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-end justify-center select-text md:hidden"
-          style={{ bottom: isIOS ? "var(--keyboard-height, 0px)" : "0px" }}
+        <div
+          className={cn(
+            "fixed inset-0 z-[100] flex justify-center select-text p-0 md:p-6",
+            isDesktop ? "items-center" : "items-end",
+          )}
+          style={
+            !isDesktop && isIOS
+              ? { bottom: "var(--keyboard-height, 0px)" }
+              : undefined
+          }
         >
           {/* Backdrop */}
           <motion.div
@@ -189,27 +202,62 @@ export default function MobileTaskCreateModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm"
           />
 
           {/* Modal Panel */}
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 220 }}
-            className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col overflow-hidden shadow-2xl text-tx-primary"
-            style={{ 
-              maxHeight: "92%",
-              paddingBottom: "calc(var(--safe-area-bottom) + 16px)"
-            }}
+            initial={
+              isDesktop
+                ? { opacity: 0, scale: 0.96, y: 12 }
+                : { y: "100%" }
+            }
+            animate={
+              isDesktop ? { opacity: 1, scale: 1, y: 0 } : { y: 0 }
+            }
+            exit={
+              isDesktop
+                ? { opacity: 0, scale: 0.98, y: 8 }
+                : { y: "100%" }
+            }
+            transition={
+              isDesktop
+                ? { type: "spring", duration: 0.35, bounce: 0 }
+                : { type: "spring", damping: 25, stiffness: 220 }
+            }
+            onClick={(e) => e.stopPropagation()}
+            ref={trapRef as React.RefObject<HTMLDivElement>}
+            className={cn(
+              "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
+              isDesktop
+                ? "w-full max-w-lg max-h-[min(88vh,720px)] rounded-2xl border border-app-border"
+                : "w-full rounded-t-3xl border-t border-app-border",
+            )}
+            style={
+              isDesktop
+                ? undefined
+                : {
+                    maxHeight: "92%",
+                    paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
+                  }
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label="新建任务"
           >
-            {/* Top Pull Handle Indicator */}
-            <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
+            {/* Top Pull Handle — 仅移动 */}
+            {!isDesktop && (
+              <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
+            )}
 
             {/* Header */}
-            <div className="px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0">
-              <span className="w-6" /> {/* Placeholder to balance title centering */}
+            <div
+              className={cn(
+                "px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0",
+                isDesktop && "pt-4 rounded-t-2xl",
+              )}
+            >
+              <span className="w-6" />
               <h3 className="text-base font-bold text-tx-primary">新建任务</h3>
               <button
                 onClick={onClose}
@@ -390,14 +438,15 @@ export default function MobileTaskCreateModal({
               </button>
             </div>
 
-            {/* Project Selector Drawer */}
+            {/* Project Selector — 移动 bottom sheet / 桌面嵌套居中面板 */}
             <AnimatePresence>
               {isProjectDrawerOpen && (
-                <div 
-                  className="fixed inset-0 z-[110] flex items-end justify-center md:hidden"
-                  style={{ bottom: isIOS ? "var(--keyboard-height, 0px)" : "0px" }}
+                <div
+                  className={cn(
+                    "absolute inset-0 z-[110] flex justify-center",
+                    isDesktop ? "items-center p-4" : "items-end",
+                  )}
                 >
-                  {/* Backdrop */}
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -405,22 +454,36 @@ export default function MobileTaskCreateModal({
                     onClick={() => setIsProjectDrawerOpen(false)}
                     className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                   />
-                  {/* Drawer Content */}
                   <motion.div
-                    initial={{ y: "100%" }}
-                    animate={{ y: 0 }}
-                    exit={{ y: "100%" }}
+                    initial={isDesktop ? { opacity: 0, scale: 0.96 } : { y: "100%" }}
+                    animate={isDesktop ? { opacity: 1, scale: 1 } : { y: 0 }}
+                    exit={isDesktop ? { opacity: 0, scale: 0.98 } : { y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 220 }}
-                    className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10"
-                    style={{ 
-                      maxHeight: "60%",
-                      paddingBottom: "calc(var(--safe-area-bottom) + 16px)"
-                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
+                      isDesktop
+                        ? "w-full max-w-sm max-h-[60%] rounded-2xl border border-app-border"
+                        : "w-full rounded-t-3xl border-t border-app-border",
+                    )}
+                    style={
+                      isDesktop
+                        ? undefined
+                        : {
+                            maxHeight: "60%",
+                            paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
+                          }
+                    }
                   >
-                    {/* Handle */}
-                    <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
-                    {/* Header */}
-                    <div className="px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0">
+                    {!isDesktop && (
+                      <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
+                    )}
+                    <div
+                      className={cn(
+                        "px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0",
+                        isDesktop && "pt-4",
+                      )}
+                    >
                       <span className="w-6" />
                       <h4 className="text-sm font-bold text-tx-primary">选择所属项目</h4>
                       <button
@@ -431,7 +494,6 @@ export default function MobileTaskCreateModal({
                         <X size={16} />
                       </button>
                     </div>
-                    {/* List */}
                     <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
                       {projects.map((p) => {
                         const isSelected = p.id === selectedProjectId;
@@ -445,11 +507,15 @@ export default function MobileTaskCreateModal({
                             }}
                             className={cn(
                               "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
-                              isSelected ? "bg-accent-primary/10 text-accent-primary" : "hover:bg-app-hover text-tx-primary"
+                              isSelected
+                                ? "bg-accent-primary/10 text-accent-primary"
+                                : "hover:bg-app-hover text-tx-primary",
                             )}
                           >
                             <span>{p.name}</span>
-                            {isSelected && <Check size={16} className="text-accent-primary font-bold" />}
+                            {isSelected && (
+                              <Check size={16} className="text-accent-primary font-bold" />
+                            )}
                           </button>
                         );
                       })}
@@ -459,14 +525,15 @@ export default function MobileTaskCreateModal({
               )}
             </AnimatePresence>
 
-            {/* Assignee Selector Drawer */}
+            {/* Assignee Selector */}
             <AnimatePresence>
               {isAssigneeDrawerOpen && (
-                <div 
-                  className="fixed inset-0 z-[110] flex items-end justify-center md:hidden"
-                  style={{ bottom: isIOS ? "var(--keyboard-height, 0px)" : "0px" }}
+                <div
+                  className={cn(
+                    "absolute inset-0 z-[110] flex justify-center",
+                    isDesktop ? "items-center p-4" : "items-end",
+                  )}
                 >
-                  {/* Backdrop */}
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -474,22 +541,36 @@ export default function MobileTaskCreateModal({
                     onClick={() => setIsAssigneeDrawerOpen(false)}
                     className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                   />
-                  {/* Drawer Content */}
                   <motion.div
-                    initial={{ y: "100%" }}
-                    animate={{ y: 0 }}
-                    exit={{ y: "100%" }}
+                    initial={isDesktop ? { opacity: 0, scale: 0.96 } : { y: "100%" }}
+                    animate={isDesktop ? { opacity: 1, scale: 1 } : { y: 0 }}
+                    exit={isDesktop ? { opacity: 0, scale: 0.98 } : { y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 220 }}
-                    className="relative w-full bg-app-elevated rounded-t-3xl border-t border-app-border flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10"
-                    style={{ 
-                      maxHeight: "60%",
-                      paddingBottom: "calc(var(--safe-area-bottom) + 16px)"
-                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
+                      isDesktop
+                        ? "w-full max-w-sm max-h-[60%] rounded-2xl border border-app-border"
+                        : "w-full rounded-t-3xl border-t border-app-border",
+                    )}
+                    style={
+                      isDesktop
+                        ? undefined
+                        : {
+                            maxHeight: "60%",
+                            paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
+                          }
+                    }
                   >
-                    {/* Handle */}
-                    <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
-                    {/* Header */}
-                    <div className="px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0">
+                    {!isDesktop && (
+                      <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
+                    )}
+                    <div
+                      className={cn(
+                        "px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0",
+                        isDesktop && "pt-4",
+                      )}
+                    >
                       <span className="w-6" />
                       <h4 className="text-sm font-bold text-tx-primary">选择指派给</h4>
                       <button
@@ -500,9 +581,7 @@ export default function MobileTaskCreateModal({
                         <X size={16} />
                       </button>
                     </div>
-                    {/* List */}
                     <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
-                      {/* Option 1: Myself */}
                       <button
                         type="button"
                         onClick={() => {
@@ -511,34 +590,43 @@ export default function MobileTaskCreateModal({
                         }}
                         className={cn(
                           "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
-                          assigneeId === currentUserId ? "bg-accent-primary/10 text-accent-primary" : "hover:bg-app-hover text-tx-primary"
+                          assigneeId === currentUserId
+                            ? "bg-accent-primary/10 text-accent-primary"
+                            : "hover:bg-app-hover text-tx-primary",
                         )}
                       >
                         <span>我自己</span>
-                        {assigneeId === currentUserId && <Check size={16} className="text-accent-primary font-bold" />}
+                        {assigneeId === currentUserId && (
+                          <Check size={16} className="text-accent-primary font-bold" />
+                        )}
                       </button>
-                      {/* Other members */}
-                      {members.filter(m => m.userId !== currentUserId).map((m) => {
-                        const isSelected = m.userId === assigneeId;
-                        const name = m.displayName || m.username;
-                        return (
-                          <button
-                            key={m.userId}
-                            type="button"
-                            onClick={() => {
-                              setAssigneeId(m.userId);
-                              setIsAssigneeDrawerOpen(false);
-                            }}
-                            className={cn(
-                              "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
-                              isSelected ? "bg-accent-primary/10 text-accent-primary" : "hover:bg-app-hover text-tx-primary"
-                            )}
-                          >
-                            <span>{name}</span>
-                            {isSelected && <Check size={16} className="text-accent-primary font-bold" />}
-                          </button>
-                        );
-                      })}
+                      {members
+                        .filter((m) => m.userId !== currentUserId)
+                        .map((m) => {
+                          const isSelected = m.userId === assigneeId;
+                          const name = m.displayName || m.username;
+                          return (
+                            <button
+                              key={m.userId}
+                              type="button"
+                              onClick={() => {
+                                setAssigneeId(m.userId);
+                                setIsAssigneeDrawerOpen(false);
+                              }}
+                              className={cn(
+                                "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
+                                isSelected
+                                  ? "bg-accent-primary/10 text-accent-primary"
+                                  : "hover:bg-app-hover text-tx-primary",
+                              )}
+                            >
+                              <span>{name}</span>
+                              {isSelected && (
+                                <Check size={16} className="text-accent-primary font-bold" />
+                              )}
+                            </button>
+                          );
+                        })}
                     </div>
                   </motion.div>
                 </div>
