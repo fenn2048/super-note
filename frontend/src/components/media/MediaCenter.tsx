@@ -1211,12 +1211,12 @@ export default function MediaCenter() {
                     </div>
                   </>
                 ) : (
-                  /* GRID VIEW — 视频横版/音频方图，对齐参考图密度 */
+                  /* GRID VIEW — 视频横版/音频方图；移动端原尺寸，Web/md+ 封面同比约一半（列数加倍） */
                   <div className={cn(
                     "grid gap-3 sm:gap-4",
                     mediaType === "video"
-                      ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-                      : "grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                      ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-8"
+                      : "grid-cols-3 sm:grid-cols-3 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12"
                   )}>
                     {items.map(item => (
                       <div
