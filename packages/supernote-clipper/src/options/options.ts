@@ -14,12 +14,16 @@ async function init() {
 
   // 基础字段
   (document.getElementById("serverUrl") as HTMLInputElement).value = cfg.serverUrl;
+  const tokenEl = document.getElementById("apiToken") as HTMLInputElement | null;
+  if (tokenEl) tokenEl.value = cfg.token || "";
   (document.getElementById("username") as HTMLInputElement).value = cfg.username;
   (document.getElementById("defaultNotebook") as HTMLInputElement).value = cfg.defaultNotebook;
   (document.getElementById("defaultTags") as HTMLInputElement).value = cfg.defaultTags;
   (document.getElementById("imageMode") as HTMLSelectElement).value = cfg.imageMode;
   (document.getElementById("outputFormat") as HTMLSelectElement).value = cfg.outputFormat;
   (document.getElementById("includeSource") as HTMLInputElement).checked = cfg.includeSource;
+
+  document.getElementById("save-token-btn")?.addEventListener("click", onSaveToken);
 
   // AI 优化字段
   (document.getElementById("aiEnhanceEnabled") as HTMLInputElement).checked = cfg.aiEnhanceEnabled;
@@ -149,13 +153,48 @@ async function on2FAVerify() {
   }
 }
 
+async function onSaveToken() {
+  const el = document.getElementById("token-result")!;
+  el.className = "test-result";
+  el.textContent = "测试中…";
+  const serverUrl = normalizeBaseUrl(
+    (document.getElementById("serverUrl") as HTMLInputElement).value,
+  );
+  const token = (document.getElementById("apiToken") as HTMLInputElement).value.trim();
+  if (!serverUrl || !token) {
+    el.classList.add("err");
+    el.textContent = "请填写服务器地址与令牌";
+    return;
+  }
+  try {
+    const r = await ping({ serverUrl, token } as any);
+    await setConfig({
+      serverUrl,
+      token,
+      authMethod: "token",
+      username: r.username || "",
+      displayName: r.username || "",
+    });
+    showLoggedIn(r.username || "token", r.role || "user");
+    el.classList.add("ok");
+    el.textContent = "✅ 令牌有效";
+  } catch (e: any) {
+    el.classList.add("err");
+    el.textContent = `❌ ${String(e?.message || e)}`;
+  }
+}
+
 async function handleLoginSuccess(serverUrl: string, username: string, r: { token: string; user: { role: string; displayName?: string | null } }) {
   await setConfig({
     serverUrl,
     username,
     token: r.token,
     displayName: r.user.displayName || username,
+    authMethod: "login",
   });
+  // 同步到令牌输入框展示（JWT）
+  const tokenEl = document.getElementById("apiToken") as HTMLInputElement | null;
+  if (tokenEl) tokenEl.value = r.token;
   showLoggedIn(username, r.user.role);
   // 清除密码字段
   (document.getElementById("password") as HTMLInputElement).value = "";

@@ -1,13 +1,10 @@
 /**
  * 与 super-note 后端的 HTTP 交互。
  *
- * 认证方式：用户名 + 密码登录获取 JWT，后续通过 Authorization: Bearer <JWT> 认证。
- *
- * 接口：
- *   - POST /api/auth/login       用户名密码登录，获取 JWT
- *   - GET  /api/me               验证 token 有效性 + 获取用户信息
- *   - POST /api/export/import    批量导入笔记
- *   - GET  /api/notebooks        列出可选笔记本
+ * 认证方式（推荐顺序）：
+ *   1) API Token（nkn_…，设置 → 访问令牌）— 插件首选，长期有效
+ *   2) 账号登录 JWT — Options「高级」路径，会过期
+ * 请求头统一：Authorization: Bearer <token>
  */
 import { normalizeBaseUrl, type SuperClipperConfig } from "./storage";
 

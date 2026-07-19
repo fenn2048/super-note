@@ -2,13 +2,13 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>Super Note Clipper - 设置</title>
+    <title>蜉蝣剪藏 · 设置</title>
     <link rel="stylesheet" href="./options.css" />
   </head>
   <body>
     <main class="container">
-      <h1>Super Note Clipper 设置</h1>
-      <p class="sub">把这里填好，就可以一键把网页内容剪藏到你的 Super Note 实例。</p>
+      <h1>蜉蝣剪藏 · 设置</h1>
+      <p class="sub">配置后即可把网页一键剪藏到你的蜉蝣（Super Note）实例。</p>
 
       <section class="card">
         <h2>1. 服务器地址</h2>
@@ -18,10 +18,26 @@
         </label>
       </section>
 
-      <section class="card" id="login-card">
-        <h2>2. 登录账号</h2>
+      <section class="card">
+        <h2>2. 访问令牌（推荐）</h2>
         <p class="hint">
-          输入你的 Super Note 用户名和密码，点击「登录」即可完成认证。
+          在网页端 <strong>设置 → 访问令牌</strong> 新建 Token（前缀 <code>nkn_</code>），粘贴到下方。
+          长期有效，适合浏览器扩展，无需反复登录。
+        </p>
+        <label>
+          <span>API Token</span>
+          <input id="apiToken" type="password" placeholder="nkn_…" autocomplete="off" />
+        </label>
+        <div class="login-actions">
+          <button id="save-token-btn" class="btn primary" type="button">保存令牌并测试</button>
+          <span id="token-result" class="test-result"></span>
+        </div>
+      </section>
+
+      <section class="card" id="login-card">
+        <h2>3. 账号登录（高级 / 会过期）</h2>
+        <p class="hint">
+          使用用户名密码换取 JWT。JWT 会过期，生产环境更推荐上方的访问令牌。
         </p>
         <label>
           <span>用户名</span>
@@ -54,7 +70,7 @@
 
       <!-- 登录状态卡片（登录成功后显示） -->
       <section class="card hidden" id="status-card">
-        <h2>2. 登录状态</h2>
+        <h2>登录状态</h2>
         <div class="status-info">
           <span class="status-badge ok">✅ 已登录</span>
           <span id="status-user"></span>
@@ -66,10 +82,10 @@
       </section>
 
       <section class="card">
-        <h2>3. 默认行为</h2>
+        <h2>4. 默认行为</h2>
         <label>
           <span>默认笔记本</span>
-          <input id="defaultNotebook" type="text" placeholder="Web 剪藏（不存在会自动创建）" />
+          <input id="defaultNotebook" type="text" placeholder="剪藏笔记（不存在会自动创建）" />
         </label>
         <label>
           <span>默认标签（逗号分隔）</span>

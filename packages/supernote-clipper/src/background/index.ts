@@ -42,32 +42,32 @@ chrome.runtime.onInstalled.addListener(() => {
       });
       chrome.contextMenus.create({
         id: "super-clip-page",
-        title: "剪藏整个页面到 Super Note",
+        title: "剪藏整个页面到蜉蝣",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
         id: "super-clip-simplified",
-        title: "剪藏简化内容到 Super Note",
+        title: "剪藏简化内容到蜉蝣",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
         id: "super-clip-fullpage",
-        title: "完全克隆页面到 Super Note",
+        title: "完全克隆页面到蜉蝣",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
         id: "super-clip-screenshot",
-        title: "截图当前可视区域到 Super Note",
+        title: "截图当前可视区域到蜉蝣",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
         id: "super-clip-full-screenshot",
-        title: "截图整个页面到 Super Note",
+        title: "截图整个页面到蜉蝣",
         contexts: ["page"],
       });
       chrome.contextMenus.create({
         id: "super-clip-link",
-        title: "剪藏这个链接到 Super Note",
+        title: "剪藏这个链接到蜉蝣",
         contexts: ["link"],
       });
     });
@@ -142,15 +142,15 @@ async function runClip(req: ClipRequest): Promise<ClipResult> {
   const cfg = await getConfig();
   if (!isConfigured(cfg)) {
     notify(
-      "请先设置 Super Note",
-      "右键扩展图标 → 选项，填入服务器地址并登录账号。",
+      "请先配置蜉蝣剪藏",
+      "打开扩展 Popup 或选项页，填写服务器地址与访问令牌（nkn_…）。",
     );
     try {
       await chrome.runtime.openOptionsPage();
     } catch {
       /* ignore */
     }
-    return { ok: false, error: "未配置服务器地址或未登录" };
+    return { ok: false, error: "未配置服务器地址或访问令牌" };
   }
 
   // 截图模式走专门流程

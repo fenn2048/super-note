@@ -1,7 +1,7 @@
 {
   "name": "@super/clipper",
-  "version": "0.1.3",
-  "description": "Super Note Web Clipper — 浏览器扩展，一键把网页剪藏到 super-note",
+  "version": "0.2.0",
+  "description": "蜉蝣剪藏 — 浏览器扩展，一键把网页剪藏到蜉蝣 / Super Note",
   "private": true,
   "type": "module",
   "scripts": {
