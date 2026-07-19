@@ -625,6 +625,10 @@ export default function Dashboard() {
   const handleQuickWriteSays = () => {
     haptic.light();
     actions.setViewMode("diary");
+    // 与全局 CreateMenu / FAB 同一路径：打开说说撰写
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+    }, 80);
   };
 
   const handleQuickAddTask = () => {
@@ -633,6 +637,10 @@ export default function Dashboard() {
     const filter = { type: "my-tasks" };
     sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
     window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
+    // 打开与 CreateMenu 一致的任务创建
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("super:quick-new-task"));
+    }, 80);
   };
 
   const homeScrollRef = useRef<HTMLDivElement>(null);
@@ -849,8 +857,16 @@ export default function Dashboard() {
                   </button>
                 </div>
                 {diaries.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-xs text-tx-tertiary">
-                    还没有说说，去记录今天的生活吧
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-xs text-tx-tertiary mb-3">还没有说说，去记录今天的生活吧</p>
+                    <button
+                      type="button"
+                      onClick={handleQuickWriteSays}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent-primary/10 text-accent-primary text-xs font-semibold active:scale-[0.98]"
+                    >
+                      <MessageCircle size={14} />
+                      写说说
+                    </button>
                   </div>
                 ) : (
                   diaries.map((item) => (
@@ -889,8 +905,16 @@ export default function Dashboard() {
                   </button>
                 </div>
                 {upcomingTasks.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-xs text-tx-tertiary">
-                    最近 3 天没有到期的待办 ✨
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-xs text-tx-tertiary mb-3">最近 3 天没有到期的待办 ✨</p>
+                    <button
+                      type="button"
+                      onClick={handleQuickAddTask}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent-primary/10 text-accent-primary text-xs font-semibold active:scale-[0.98]"
+                    >
+                      <ListTodo size={14} />
+                      加待办
+                    </button>
                   </div>
                   ) : (
                   upcomingTasks.map((item: any) => (
@@ -924,8 +948,16 @@ export default function Dashboard() {
                   </button>
                 </div>
                 {notes.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-xs text-tx-tertiary">
-                    还没有笔记
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-xs text-tx-tertiary mb-3">还没有笔记</p>
+                    <button
+                      type="button"
+                      onClick={handleQuickCreateNote}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent-primary/10 text-accent-primary text-xs font-semibold active:scale-[0.98]"
+                    >
+                      <FileText size={14} />
+                      记笔记
+                    </button>
                   </div>
                 ) : (
                   notes.map((item) => (
