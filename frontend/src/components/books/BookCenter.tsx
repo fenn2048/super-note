@@ -424,11 +424,8 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
             <p className="text-xs text-tx-tertiary mt-1">支持 EPUB, PDF, MOBI, AZW, CBZ, FB2 格式</p>
           </div>
         )}
-        {/* Top Header — 移动端预留状态栏 safe-area；导入入口改到网格加号卡片 */}
-        <div
-          className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border bg-app-surface/10 flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between shrink-0"
-          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
-        >
+        {/* Top Header — safe-area 由 LibraryCenter 顶栏统一处理；导入入口在网格加号卡片 */}
+        <div className="px-4 md:px-6 py-2.5 md:py-4 border-b border-app-border bg-app-surface/10 flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 flex-1 max-w-md min-w-0">
             <button
               onClick={() => setShowMobileSidebar(prev => !prev)}

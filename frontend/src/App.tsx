@@ -1215,13 +1215,33 @@ function AppLayout() {
     (state.viewMode === "projects" && !isProjectDetailOpen) ||
     (isNotesView && state.mobileView === "list") ||
     (state.viewMode === "diary") ||
-    (state.viewMode === "media") ||
-    (state.viewMode === "books") ||
     (state.viewMode === "more");
+  // 资料库（library / 遗留 books|media|files）为栈式全屏页：无底栏、无全局「+」
+
+  const isLibraryStack =
+    state.viewMode === "library" ||
+    state.viewMode === "media" ||
+    state.viewMode === "books" ||
+    state.viewMode === "files";
 
   const { visible: keyboardVisible } = useKeyboardVisible();
-  const showMobileTabBar = isRootPageOfTabBar && state.viewMode !== "trash";
-  const showMobileFAB = showMobileTabBar && state.viewMode !== "more" && state.viewMode !== "trash";
+  const showMobileTabBar =
+    isRootPageOfTabBar && state.viewMode !== "trash" && !isLibraryStack;
+  const showMobileFAB =
+    showMobileTabBar &&
+    state.viewMode !== "more" &&
+    state.viewMode !== "trash" &&
+    !isLibraryStack;
+
+  // 底栏显隐同步 CSS 变量：迷你播放器 / 批量条贴底高度与 Tab 一致（资料库无 Tab 时不抬高）
+  useEffect(() => {
+    const root = document.documentElement;
+    const tabShown = showMobileTabBar && barsVisible && !keyboardVisible;
+    root.style.setProperty("--mobile-tab-h", tabShown ? "64px" : "0px");
+    return () => {
+      root.style.setProperty("--mobile-tab-h", "64px");
+    };
+  }, [showMobileTabBar, barsVisible, keyboardVisible]);
 
   // 工作区检测：新用户若无工作区则显示引导页
   const [hasFamilySpace, setHasFamilySpace] = useState<boolean | null>(null);

@@ -1060,24 +1060,12 @@ export default function FileManager() {
         </div>
       </div>
 
-      {/* 顶栏 - 移动端 */}
-      <div
-        className="flex md:hidden flex-col gap-3 px-4 py-3 border-b border-app-border bg-app-surface/40 shrink-0"
-        style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
-      >
-        {/* Row 1: Back/Close, Title/Stats, Quick Actions */}
+      {/* 顶栏 - 移动端（返回由 LibraryCenter 顶栏统一提供） */}
+      <div className="flex md:hidden flex-col gap-3 px-4 py-2.5 border-b border-app-border bg-app-surface/40 shrink-0">
+        {/* Row 1: Title/Stats, Quick Actions */}
         <div className="flex items-center justify-between gap-3">
-          {/* Left: Back button & Title/Stats */}
+          {/* Left: Title/Stats */}
           <div className="flex items-center gap-2 min-w-0">
-            <button
-              onClick={() => {
-                actions.setViewMode("more");
-                actions.setMobileView("list");
-              }}
-              className="p-1.5 -ml-1 rounded-button text-tx-secondary hover:bg-app-hover active:bg-app-active flex items-center justify-center"
-            >
-              <X size={18} />
-            </button>
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-tx-primary truncate">
                 {isImageHostMode ? "图床" : "文件管理"}
