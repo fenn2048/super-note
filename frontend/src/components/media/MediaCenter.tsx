@@ -992,8 +992,8 @@ export default function MediaCenter() {
                 )}
               </div>
 
-              {/* Items content list */}
-              <div className="flex-1 overflow-y-auto p-3 md:p-6">
+              {/* Items content list — 底部为迷你播放器/批量条留白（栈页 tab-h=0 时仍够用） */}
+              <div className="flex-1 overflow-y-auto p-3 md:p-6 pb-[calc(5.5rem+var(--safe-area-bottom,0px)+var(--mobile-extra-bottom,0px))]">
                 
                 {selectedCollection && (
                   <div className="mb-6 p-4 bg-app-sidebar/20 border border-app-border/40 rounded-2xl flex flex-col gap-2 relative group">

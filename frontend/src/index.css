@@ -537,13 +537,12 @@ body::before {
   animation-play-state: paused;
 }
 
-/* 媒体批量操作条：贴底并抬过 Tab（--mobile-tab-h 由 App 按底栏显隐写入） */
+/* 媒体批量操作条：贴底并抬过 Tab / 迷你播放器（资料库栈页 --mobile-tab-h=0） */
 .media-batch-bar {
   position: fixed;
   z-index: 100;
   left: 0.75rem;
   right: 0.75rem;
-  /* 有迷你播放器时再抬一层（--mobile-extra-bottom） */
   bottom: calc(
     var(--mobile-tab-h) + var(--mobile-extra-bottom) + var(--safe-area-bottom) + 10px
   );
@@ -558,6 +557,11 @@ body::before {
     max-width: 32rem;
     transform: translateX(-50%);
   }
+}
+
+/* 资料库栈页内容区：安全底边距（与书库/文件共用类名可选） */
+.library-stack-scroll {
+  padding-bottom: calc(1.25rem + var(--safe-area-bottom, 0px));
 }
 
 /* ===== Tiptap / ProseMirror 编辑器样式 ===== */
