@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal } from "lucide-react";
+import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal, Bell } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import SkinSwitcher from "@/components/SkinSwitcher";
@@ -439,21 +439,29 @@ function AboutPanel() {
   const server = getServerUrl() || (typeof window !== "undefined" ? window.location.origin : "");
   const downloadBaseUrl = server.replace(/\/+$/, "");
   const [isIgnoringBattery, setIsIgnoringBattery] = useState<boolean | null>(null);
+  const [keepAliveEnabled, setKeepAliveEnabled] = useState(false);
+  const [keepAliveBusy, setKeepAliveBusy] = useState(false);
+
+  const isAndroid =
+    typeof window !== "undefined" &&
+    (window as any).Capacitor &&
+    (window as any).Capacitor.getPlatform?.() === "android";
 
   useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android") {
-      try {
-        const AppPermissions = registerPlugin<any>("AppPermissions");
-        AppPermissions.isIgnoringBatteryOptimizations()
-          .then((res: any) => {
-            setIsIgnoringBattery(!!res.isIgnoring);
-          })
-          .catch(console.error);
-      } catch (e) {
-        console.warn("Capacitor plugin access error:", e);
-      }
+    if (!isAndroid) return;
+    try {
+      const AppPermissions = registerPlugin<any>("AppPermissions");
+      AppPermissions.isIgnoringBatteryOptimizations()
+        .then((res: any) => setIsIgnoringBattery(!!res.isIgnoring))
+        .catch(console.error);
+      AppPermissions.isBackgroundKeepAliveEnabled?.()
+        .then((res: any) => setKeepAliveEnabled(!!res?.enabled))
+        .catch(() => setKeepAliveEnabled(false));
+      AppPermissions.ensureNotificationChannels?.().catch(() => {});
+    } catch (e) {
+      console.warn("Capacitor plugin access error:", e);
     }
-  }, []);
+  }, [isAndroid]);
 
   return (
     <div className="space-y-6">
@@ -583,48 +591,128 @@ function AboutPanel() {
       </div>
 
       {/* Android 专属功能 */}
-      {typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.getPlatform() === "android" && (
+      {isAndroid && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              <Shield size={15} className="text-accent-primary" />
-              后台服务保活
+          <div className="rounded-xl border border-app-border bg-app-surface/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-tx-primary flex items-center gap-2">
+              <Bell size={15} className="text-accent-primary" />
+              通知渠道
             </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              为了确保在后台能够稳定地通过 WebSocket 接收实时消息提醒，请确保关闭系统的电池优化。
+            <p className="text-xs text-tx-tertiary">
+              任务提醒、消息提及、后台同步分属不同系统通知渠道，可在系统设置中单独开关与重要性。
             </p>
-            
-            <div className="flex items-center justify-between p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 text-xs">
-              <span className="text-zinc-600 dark:text-zinc-400">电池优化状态</span>
-              <span className={cn(
-                "font-semibold",
-                isIgnoringBattery === true ? "text-emerald-500" : "text-amber-500"
-              )}>
-                {isIgnoringBattery === true ? "已关闭优化 (后台运行稳定)" : "未关闭优化 (可能被后台清理)"}
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const AppPermissions = registerPlugin<any>("AppPermissions");
+                  await AppPermissions.ensureNotificationChannels?.();
+                  await AppPermissions.openNotificationSettings?.();
+                } catch (err: any) {
+                  const { toast } = await import("@/lib/toast");
+                  toast.error(err?.message || "无法打开通知设置");
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98]"
+            >
+              打开系统通知设置
+            </button>
+          </div>
 
-            {isIgnoringBattery !== true && (
+          <div className="rounded-xl border border-app-border bg-app-surface/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-tx-primary flex items-center gap-2">
+              <Shield size={15} className="text-accent-primary" />
+              后台消息提醒
+            </h3>
+            <p className="text-xs text-tx-tertiary">
+              默认关闭以省电。开启后会运行前台服务（状态栏常驻一条低优先级通知），约每分钟轮询未读消息。
+              前台打开 App 时仍可走 WebSocket，无需开启本项。
+            </p>
+
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-app-elevated border border-app-border text-xs">
+              <span className="text-tx-secondary">后台轮询（KeepAlive）</span>
               <button
+                type="button"
+                disabled={keepAliveBusy}
+                role="switch"
+                aria-checked={keepAliveEnabled}
                 onClick={async () => {
+                  const next = !keepAliveEnabled;
+                  setKeepAliveBusy(true);
                   try {
                     const AppPermissions = registerPlugin<any>("AppPermissions");
-                    await AppPermissions.requestIgnoreBatteryOptimizations();
-                    
-                    // Re-check after returning from settings (or just wait a bit)
-                    setTimeout(async () => {
-                      const res = await AppPermissions.isIgnoringBatteryOptimizations();
-                      setIsIgnoringBattery(!!res.isIgnoring);
-                    }, 2000);
+                    if (next) {
+                      // 开保活时建议同时引导通知权限
+                      try {
+                        const { LocalNotifications } = await import("@capacitor/local-notifications");
+                        await LocalNotifications.requestPermissions();
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                    const res = await AppPermissions.setBackgroundKeepAliveEnabled({ enabled: next });
+                    setKeepAliveEnabled(!!res?.enabled);
+                    const { toast } = await import("@/lib/toast");
+                    toast.success(next ? "已开启后台消息提醒" : "已关闭后台消息提醒");
                   } catch (err: any) {
                     const { toast } = await import("@/lib/toast");
-                    toast.error(err?.message || "无法打开电池优化设置");
+                    toast.error(err?.message || "切换失败");
+                  } finally {
+                    setKeepAliveBusy(false);
                   }
                 }}
-                className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+                className={cn(
+                  "relative w-11 h-6 rounded-full transition-colors shrink-0",
+                  keepAliveEnabled ? "bg-accent-primary" : "bg-app-border",
+                  keepAliveBusy && "opacity-50",
+                )}
               >
-                去关闭电池优化
+                <span
+                  className={cn(
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform",
+                    keepAliveEnabled && "translate-x-5",
+                  )}
+                />
               </button>
+            </div>
+
+            {keepAliveEnabled && (
+              <>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-app-elevated border border-app-border text-xs">
+                  <span className="text-tx-secondary">电池优化状态</span>
+                  <span
+                    className={cn(
+                      "font-semibold",
+                      isIgnoringBattery === true ? "text-emerald-500" : "text-amber-500",
+                    )}
+                  >
+                    {isIgnoringBattery === true
+                      ? "已忽略优化"
+                      : "未忽略（可能被系统杀掉）"}
+                  </span>
+                </div>
+                {isIgnoringBattery !== true && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const AppPermissions = registerPlugin<any>("AppPermissions");
+                        await AppPermissions.requestIgnoreBatteryOptimizations();
+                        setTimeout(async () => {
+                          const res = await AppPermissions.isIgnoringBatteryOptimizations();
+                          setIsIgnoringBattery(!!res.isIgnoring);
+                        }, 2000);
+                      } catch (err: any) {
+                        const { toast } = await import("@/lib/toast");
+                        toast.error(err?.message || "无法打开电池优化设置");
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+                  >
+                    去关闭电池优化
+                  </button>
+                )}
+              </>
             )}
           </div>
 

@@ -30,13 +30,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ShareReceivePlugin.class);
         super.onCreate(savedInstanceState);
 
-        // Start the keep-alive foreground service
-        Intent serviceIntent = new Intent(this, KeepAliveService.class);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
-        }
+        // 通知渠道（任务/消息/同步）；KeepAlive 默认关闭，仅用户开启后 startIfEnabled
+        NotificationChannels.ensureAll(this);
+        KeepAliveService.startIfEnabled(this);
 
         // 系统分享 / 冷启动 Intent
         handleIncomingIntent(getIntent());
@@ -145,18 +141,18 @@ public class MainActivity extends BridgeActivity {
     public class AndroidKeepAliveBridge {
         @JavascriptInterface
         public void updateAuthInfo(String serverUrl, String token, String userId) {
-            android.content.SharedPreferences sharedPref = getSharedPreferences("SuperNotePrefs", android.content.Context.MODE_PRIVATE);
-            android.content.SharedPreferences.Editor editor = sharedPref.edit();
-            editor.putString("serverUrl", serverUrl);
-            editor.putString("token", token);
-            editor.putString("userId", userId);
-            editor.apply();
+            android.content.SharedPreferences sharedPref =
+                    getSharedPreferences(KeepAliveService.PREFS, android.content.Context.MODE_PRIVATE);
+            sharedPref.edit()
+                    .putString("serverUrl", serverUrl != null ? serverUrl : "")
+                    .putString("token", token != null ? token : "")
+                    .putString("userId", userId != null ? userId : "")
+                    .apply();
 
-            Intent serviceIntent = new Intent(MainActivity.this, KeepAliveService.class);
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent);
-            } else {
-                startService(serviceIntent);
+            // 仅在用户已开启后台保活时重启服务以刷新凭证
+            if (KeepAliveService.isEnabled(MainActivity.this)) {
+                KeepAliveService.stop(MainActivity.this);
+                KeepAliveService.startIfEnabled(MainActivity.this);
             }
         }
     }

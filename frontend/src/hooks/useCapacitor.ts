@@ -350,6 +350,80 @@ export const haptic = {
   },
 };
 
+// ─── 通知渠道（与原生 NotificationChannels.java 对齐） ─────────────
+
+/** 任务截止提醒 */
+export const NOTIF_CHANNEL_TASKS = "fuyou_tasks";
+/** 协作消息 / 提及 */
+export const NOTIF_CHANNEL_MESSAGES = "fuyou_messages";
+/** 后台同步（FGS 常驻） */
+export const NOTIF_CHANNEL_SYNC = "fuyou_sync";
+
+let channelsReady: Promise<void> | null = null;
+
+/** 确保 Android 通知渠道存在（幂等） */
+export async function ensureNotificationChannels(): Promise<void> {
+  if (!isNativePlatform()) return;
+  if (channelsReady) return channelsReady;
+  channelsReady = (async () => {
+    try {
+      // 原生侧也建一遍（含删除旧渠道）
+      try {
+        const { registerPlugin } = await import("@capacitor/core");
+        const AppPermissions = registerPlugin<{
+          ensureNotificationChannels: () => Promise<{ ok: boolean }>;
+        }>("AppPermissions");
+        await AppPermissions.ensureNotificationChannels();
+      } catch {
+        /* web or missing plugin */
+      }
+
+      const defs: Array<{
+        id: string;
+        name: string;
+        description: string;
+        importance: number;
+        visibility?: number;
+      }> = [
+        {
+          id: NOTIF_CHANNEL_TASKS,
+          name: "任务提醒",
+          description: "任务截止与提醒时间到点通知",
+          importance: 5,
+        },
+        {
+          id: NOTIF_CHANNEL_MESSAGES,
+          name: "消息与提及",
+          description: "家庭协作消息、@提及等",
+          importance: 5,
+        },
+        {
+          id: NOTIF_CHANNEL_SYNC,
+          name: "后台同步",
+          description: "后台消息轮询与同步状态",
+          importance: 2,
+        },
+      ];
+      for (const ch of defs) {
+        try {
+          await LocalNotifications.createChannel({
+            id: ch.id,
+            name: ch.name,
+            description: ch.description,
+            importance: ch.importance as any,
+            visibility: 1,
+          });
+        } catch {
+          /* channel may already exist */
+        }
+      }
+    } catch (e) {
+      console.warn("[notifications] ensure channels failed", e);
+    }
+  })();
+  return channelsReady;
+}
+
 // ─── 待办事项本地通知调度 ──────────────────────────────────────────
 
 function hashStringToInt(str: string): number {
@@ -363,6 +437,7 @@ function hashStringToInt(str: string): number {
 }
 
 async function checkAndRequestPermissions() {
+  await ensureNotificationChannels();
   const status = await LocalNotifications.checkPermissions();
   if (status.display === "granted") return true;
   if (status.display === "prompt" || status.display === "prompt-with-rationale") {
@@ -401,10 +476,11 @@ export async function syncTaskNotification(task: Task) {
             title: "任务提醒",
             body: task.title,
             id: notificationId,
+            channelId: NOTIF_CHANNEL_TASKS,
             schedule: { at: scheduleDate },
-            extra: { taskId: task.id }
-          }
-        ]
+            extra: { taskId: task.id },
+          },
+        ],
       });
     }
   } catch (err) {
@@ -419,14 +495,14 @@ export async function syncAllTaskNotifications(tasks: Task[]) {
     if (!granted) return;
 
     const pending = await LocalNotifications.getPending();
-    const pendingIds = new Set(pending.notifications.map(n => n.id));
+    const pendingIds = new Set(pending.notifications.map((n) => n.id));
 
     const notificationsToSchedule: any[] = [];
     const idsToKeep = new Set<number>();
 
     for (const task of tasks) {
       const notificationId = hashStringToInt(task.id);
-      
+
       if (task.isCompleted || !task.remindAt) {
         if (pendingIds.has(notificationId)) {
           await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
@@ -447,8 +523,9 @@ export async function syncAllTaskNotifications(tasks: Task[]) {
           title: "任务提醒",
           body: task.title,
           id: notificationId,
+          channelId: NOTIF_CHANNEL_TASKS,
           schedule: { at: scheduleDate },
-          extra: { taskId: task.id }
+          extra: { taskId: task.id },
         });
       } else {
         if (pendingIds.has(notificationId)) {
@@ -478,7 +555,6 @@ export async function showLocalNotification(title: string, body: string, extra: 
     const granted = await checkAndRequestPermissions();
     if (!granted) return;
 
-    // 生成随机不冲突 ID
     const notificationId = Math.floor(Math.random() * 1000000) + 1;
 
     await LocalNotifications.schedule({
@@ -487,9 +563,10 @@ export async function showLocalNotification(title: string, body: string, extra: 
           title,
           body,
           id: notificationId,
-          extra
-        }
-      ]
+          channelId: NOTIF_CHANNEL_MESSAGES,
+          extra,
+        },
+      ],
     });
   } catch (err) {
     console.error("showLocalNotification failed:", err);

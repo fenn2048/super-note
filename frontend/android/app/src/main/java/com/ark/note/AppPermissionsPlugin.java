@@ -174,4 +174,73 @@ public class AppPermissionsPlugin extends Plugin {
             call.reject("无法打开电池优化设置: " + e.getMessage(), e);
         }
     }
+
+    /** 创建/对齐通知渠道（任务/消息/同步） */
+    @PluginMethod
+    public void ensureNotificationChannels(PluginCall call) {
+        try {
+            NotificationChannels.ensureAll(getContext());
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("ensureNotificationChannels failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** 后台消息保活是否开启（默认 false） */
+    @PluginMethod
+    public void isBackgroundKeepAliveEnabled(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("enabled", KeepAliveService.isEnabled(getContext()));
+        call.resolve(ret);
+    }
+
+    /**
+     * 开关后台消息前台服务。
+     * body: { enabled: boolean }
+     */
+    @PluginMethod
+    public void setBackgroundKeepAliveEnabled(PluginCall call) {
+        Boolean enabled = call.getBoolean("enabled", false);
+        boolean on = enabled != null && enabled;
+        Context ctx = getContext();
+        try {
+            KeepAliveService.setEnabled(ctx, on);
+            if (on) {
+                NotificationChannels.ensureAll(ctx);
+                KeepAliveService.startIfEnabled(ctx);
+            } else {
+                KeepAliveService.stop(ctx);
+            }
+            JSObject ret = new JSObject();
+            ret.put("enabled", on);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("setBackgroundKeepAliveEnabled failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** 打开系统通知设置（渠道管理） */
+    @PluginMethod
+    public void openNotificationSettings(PluginCall call) {
+        Context context = getContext();
+        try {
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
+            } else {
+                intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + context.getPackageName()));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("无法打开通知设置: " + e.getMessage(), e);
+        }
+    }
 }

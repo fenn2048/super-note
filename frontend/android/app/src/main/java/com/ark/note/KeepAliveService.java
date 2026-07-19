@@ -1,8 +1,6 @@
 package com.ark.note;
 
 import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
@@ -11,46 +9,99 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.util.Log;
+
 import androidx.core.app.NotificationCompat;
-import me.leolin.shortcutbadger.ShortcutBadger;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
+/**
+ * 可选后台消息轮询（前台服务）。
+ * 默认不启动；由用户在设置中开启「后台消息提醒」后才运行。
+ */
 public class KeepAliveService extends Service {
-    private static final String CHANNEL_ID = "KeepAliveServiceChannel";
+    private static final String TAG = "KeepAliveService";
+    public static final String PREFS = "SuperNotePrefs";
+    public static final String PREF_ENABLED = "backgroundKeepAliveEnabled";
     private static final int NOTIFICATION_ID = 8888;
-    private PowerManager.WakeLock wakeLock = null;
+    /** 轮询间隔：60s（原 15s 过重） */
+    private static final long POLL_INTERVAL_MS = 60_000L;
 
+    private PowerManager.WakeLock wakeLock = null;
     private Thread pollingThread = null;
-    private boolean isRunning = false;
+    private volatile boolean isRunning = false;
     private int lastUnreadCount = -1;
-    private java.util.Set<String> displayedNotificationIds = new java.util.HashSet<>();
+    private final java.util.Set<String> displayedNotificationIds = new java.util.HashSet<>();
+
+    public static boolean isEnabled(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_ENABLED, false);
+    }
+
+    public static void setEnabled(Context ctx, boolean enabled) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_ENABLED, enabled)
+                .apply();
+    }
+
+    public static void startIfEnabled(Context ctx) {
+        if (!isEnabled(ctx)) return;
+        Intent i = new Intent(ctx, KeepAliveService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ctx.startForegroundService(i);
+        } else {
+            ctx.startService(i);
+        }
+    }
+
+    public static void stop(Context ctx) {
+        ctx.stopService(new Intent(ctx, KeepAliveService.class));
+    }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        createNotificationChannel();
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Super Note 正在运行")
-                .setContentText("保持同步服务连接活跃中...")
+        NotificationChannels.ensureAll(this);
+
+        if (!isEnabled(this)) {
+            Log.i(TAG, "disabled — stopSelf");
+            stopSelf();
+            return;
+        }
+
+        Intent openApp = new Intent(this, MainActivity.class);
+        openApp.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pi = PendingIntent.getActivity(
+                this,
+                0,
+                openApp,
+                PendingIntent.FLAG_UPDATE_CURRENT
+                        | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+
+        Notification notification = new NotificationCompat.Builder(this, NotificationChannels.SYNC)
+                .setContentTitle("蜉蝣 · 后台消息")
+                .setContentText("正在轮询未读消息（可在设置中关闭）")
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .setContentIntent(pi)
+                .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .build();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            );
         } else {
             startForeground(NOTIFICATION_ID, notification);
-        }
-
-        // Acquire wake lock to keep CPU running in background
-        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        if (powerManager != null) {
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SuperNote::KeepAliveWakeLock");
-            wakeLock.acquire();
         }
 
         startPolling();
@@ -58,15 +109,17 @@ public class KeepAliveService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (!isEnabled(this)) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
         stopPolling();
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-        }
+        releaseWakeLock();
         super.onDestroy();
     }
 
@@ -75,43 +128,52 @@ public class KeepAliveService extends Service {
         return null;
     }
 
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel serviceChannel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "KeepAlive Service Channel",
-                    NotificationManager.IMPORTANCE_LOW
-            );
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(serviceChannel);
+    private void acquireWakeLockBriefly() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm == null) return;
+            if (wakeLock == null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Fuyou::KeepAlivePoll");
+                wakeLock.setReferenceCounted(false);
             }
+            // 仅在轮询期间短暂持锁，避免永久占 CPU
+            if (!wakeLock.isHeld()) {
+                wakeLock.acquire(30_000L);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "wakeLock acquire failed", e);
         }
     }
 
-    // --- Background Polling Thread ---
-    private synchronized void startPolling() {
-        if (pollingThread != null) {
-            return;
+    private void releaseWakeLock() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Exception ignored) {
         }
+    }
+
+    private synchronized void startPolling() {
+        if (pollingThread != null) return;
         isRunning = true;
-        pollingThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while (isRunning) {
-                    try {
-                        pollOnce();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    try {
-                        Thread.sleep(15000); // Poll every 15 seconds
-                    } catch (InterruptedException e) {
-                        break;
-                    }
+        pollingThread = new Thread(() -> {
+            while (isRunning) {
+                try {
+                    acquireWakeLockBriefly();
+                    pollOnce();
+                } catch (Exception e) {
+                    Log.e(TAG, "poll error", e);
+                } finally {
+                    releaseWakeLock();
+                }
+                try {
+                    Thread.sleep(POLL_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    break;
                 }
             }
-        });
+        }, "FuyouKeepAlivePoll");
         pollingThread.start();
     }
 
@@ -124,7 +186,7 @@ public class KeepAliveService extends Service {
     }
 
     private void pollOnce() {
-        SharedPreferences sharedPref = getSharedPreferences("SuperNotePrefs", Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String serverUrl = sharedPref.getString("serverUrl", "");
         String token = sharedPref.getString("token", "");
         String userId = sharedPref.getString("userId", "");
@@ -134,41 +196,31 @@ public class KeepAliveService extends Service {
         }
 
         String baseUrl = serverUrl.replaceAll("/+$", "");
-        String unreadUrl = baseUrl + "/api/notifications/unread-count";
-        String unreadResp = makeHttpRequest(unreadUrl, token, userId);
-
-        if (unreadResp == null) {
-            return;
-        }
+        String unreadResp = makeHttpRequest(baseUrl + "/api/notifications/unread-count", token, userId);
+        if (unreadResp == null) return;
 
         try {
             org.json.JSONObject json = new org.json.JSONObject(unreadResp);
             int count = json.getInt("count");
 
-            // Apply badge count using ShortcutBadger
             try {
                 me.leolin.shortcutbadger.ShortcutBadger.applyCount(getApplicationContext(), count);
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
             }
 
-            // Check if unread count increased to trigger heads-up alert
             if (lastUnreadCount != -1 && count > lastUnreadCount) {
                 fetchAndShowNewNotifications(baseUrl, token, userId);
             } else if (lastUnreadCount == -1) {
-                // First initialization run: load currently unread notification ids to avoid spamming alerts on startup
                 initializeAlreadyUnreadIds(baseUrl, token, userId);
             }
-
             lastUnreadCount = count;
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "parse unread", e);
         }
     }
 
     private void initializeAlreadyUnreadIds(String baseUrl, String token, String userId) {
-        String listUrl = baseUrl + "/api/notifications?limit=20";
-        String listResp = makeHttpRequest(listUrl, token, userId);
+        String listResp = makeHttpRequest(baseUrl + "/api/notifications?limit=20", token, userId);
         if (listResp == null) return;
         try {
             org.json.JSONObject json = new org.json.JSONObject(listResp);
@@ -182,13 +234,12 @@ public class KeepAliveService extends Service {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "init unread ids", e);
         }
     }
 
     private void fetchAndShowNewNotifications(String baseUrl, String token, String userId) {
-        String listUrl = baseUrl + "/api/notifications?limit=5";
-        String listResp = makeHttpRequest(listUrl, token, userId);
+        String listResp = makeHttpRequest(baseUrl + "/api/notifications?limit=5", token, userId);
         if (listResp == null) return;
         try {
             org.json.JSONObject json = new org.json.JSONObject(listResp);
@@ -197,24 +248,21 @@ public class KeepAliveService extends Service {
                 org.json.JSONObject item = items.getJSONObject(i);
                 String id = item.getString("id");
                 String readAt = item.optString("readAt", "");
-                if (readAt == null || readAt.isEmpty() || "null".equals(readAt)) {
-                    if (!displayedNotificationIds.contains(id)) {
-                        displayedNotificationIds.add(id);
-                        String actorName = item.optString("actorName", "");
-                        String label = item.optString("label", "新通知");
-                        String sourceTitle = item.optString("sourceTitle", "");
-                        
-                        String title = actorName.isEmpty() ? "Super Note 提醒" : (actorName + " " + label);
-                        String text = sourceTitle;
-                        if (text == null || text.isEmpty()) {
-                            text = "有一条新的未读消息";
-                        }
-                        showSystemNotification(id, title, text);
-                    }
-                }
+                if (readAt != null && !readAt.isEmpty() && !"null".equals(readAt)) continue;
+                if (displayedNotificationIds.contains(id)) continue;
+                displayedNotificationIds.add(id);
+
+                String actorName = item.optString("actorName", "");
+                String label = item.optString("label", "新通知");
+                String sourceTitle = item.optString("sourceTitle", "");
+                String title = actorName.isEmpty() ? "蜉蝣 · 消息" : (actorName + " " + label);
+                String text = (sourceTitle == null || sourceTitle.isEmpty())
+                        ? "有一条新的未读消息"
+                        : sourceTitle;
+                showMessageNotification(id, title, text);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "fetch notifications", e);
         }
     }
 
@@ -234,9 +282,7 @@ public class KeepAliveService extends Service {
                 conn.setRequestProperty("X-User-Id", userId);
             }
             conn.connect();
-
-            int responseCode = conn.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
+            if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                 InputStream in = conn.getInputStream();
                 reader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
                 StringBuilder response = new StringBuilder();
@@ -247,51 +293,47 @@ public class KeepAliveService extends Service {
                 return response.toString();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.w(TAG, "http " + urlStr, e);
         } finally {
             if (reader != null) {
-                try { reader.close(); } catch (Exception e) {}
+                try {
+                    reader.close();
+                } catch (Exception ignored) {
+                }
             }
-            if (conn != null) {
-                conn.disconnect();
-            }
+            if (conn != null) conn.disconnect();
         }
         return null;
     }
 
-    private void showSystemNotification(String id, String title, String text) {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    private void showMessageNotification(String id, String title, String text) {
+        android.app.NotificationManager notificationManager =
+                (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (notificationManager == null) return;
 
-        String notifyChannelId = "SuperNoteAlertChannel";
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    notifyChannelId,
-                    "通知提醒",
-                    NotificationManager.IMPORTANCE_HIGH
-            );
-            channel.enableLights(true);
-            channel.enableVibration(true);
-            notificationManager.createNotificationChannel(channel);
-        }
+        NotificationChannels.ensureAll(this);
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra("navigateSourceType", "mention");
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this,
                 id.hashCode(),
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+                PendingIntent.FLAG_UPDATE_CURRENT
+                        | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, notifyChannelId)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setDefaults(Notification.DEFAULT_ALL)
-                .setAutoCancel(true)
-                .setContentIntent(pendingIntent);
+        NotificationCompat.Builder builder =
+                new NotificationCompat.Builder(this, NotificationChannels.MESSAGES)
+                        .setContentTitle(title)
+                        .setContentText(text)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                        .setDefaults(Notification.DEFAULT_ALL)
+                        .setAutoCancel(true)
+                        .setContentIntent(pendingIntent);
 
         notificationManager.notify(id.hashCode(), builder.build());
     }

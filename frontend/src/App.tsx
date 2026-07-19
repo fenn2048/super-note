@@ -42,7 +42,7 @@ import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic } from "@/hooks/useCapacitor";
+import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic, ensureNotificationChannels } from "@/hooks/useCapacitor";
 import { useShareReceive } from "@/hooks/useShareReceive";
 import { stashSharePayload, subscribeShareReceive } from "@/lib/shareReceive";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
@@ -955,6 +955,12 @@ function AppLayout() {
 
   // P2: 状态栏与主题同步
   useStatusBarSync();
+
+  // Android 通知渠道（任务 / 消息 / 同步）
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    void ensureNotificationChannels();
+  }, []);
 
   // 标签页/Electron 窗口标题同步：
   //   关闭"标题跟随笔记标题"开关 → 沿用 useSiteSettings 设置的站点名（默认行为）；
