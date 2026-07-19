@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Lock, User, BookOpen, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, Sparkles } from "lucide-react";
+import { Loader2, Lock, User, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getServerUrl, setServerUrl, clearServerUrl, testServerConnection, fetchRegisterConfig, registerAccount } from "@/lib/api";
 import { buildServerUrl, parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
@@ -149,6 +149,8 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
   const [rememberMe, setRememberMe] = useState(false);
   const [autoLogin, setAutoLogin] = useState(false);
   const [canSavePassword, setCanSavePassword] = useState(false);
+  // 客户端：已连接服务器时折叠地址栏，减轻首次登录信息密度
+  const [serverExpanded, setServerExpanded] = useState(true);
   const triedAutoLoginRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const { t } = useTranslation();
@@ -166,6 +168,8 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
     if (saved) {
       setServerParts(parseServerUrl(saved));
       setServerStatus("ok");
+      // 已有历史地址：默认折叠，减少小屏信息密度
+      setServerExpanded(false);
       return;
     }
     const isElectron = !!(window as any).superDesktop?.isDesktop;
@@ -173,7 +177,13 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
       setServerParts(parseServerUrl(window.location.origin));
       // 不主动标 ok —— 让用户按"登录"时再测，避免误判
     }
+    setServerExpanded(true);
   }, [isClientMode]);
+
+  // 连接失败时自动展开地址栏，方便改错
+  useEffect(() => {
+    if (serverStatus === "fail") setServerExpanded(true);
+  }, [serverStatus]);
 
   const fetchNewCaptcha = async (apiBase?: string) => {
     try {
@@ -523,164 +533,129 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
       (isRegister && !confirmPassword) ||
       (isClientMode && !serverParts.host.trim());
 
+  const fieldInputCls =
+    "block w-full pl-11 pr-3 py-3 border border-app-border rounded-xl bg-app-surface/80 text-tx-primary placeholder:text-tx-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary transition-all text-base";
+  const fieldLabelCls = "text-sm font-medium text-tx-secondary";
+  const serverSummary = (() => {
+    try {
+      return buildServerUrl(serverParts);
+    } catch {
+      return serverParts.host || "";
+    }
+  })();
+  const showServerSummary =
+    isClientMode &&
+    !serverExpanded &&
+    !!serverParts.host.trim() &&
+    serverStatus !== "fail";
+
   return (
     <div
       ref={scrollContainerRef}
-      className="flex flex-col items-center bg-zinc-50 dark:bg-zinc-950 selection:bg-indigo-500/30 transition-colors overflow-y-auto overflow-x-hidden"
+      className="flex flex-col items-center bg-app-bg selection:bg-accent-primary/25 transition-colors overflow-y-auto overflow-x-hidden overscroll-y-none"
       style={{
-        // 移动端软键盘处理（最终方案，踩坑历史见下）：
-        //
-        // 踩过的坑：
-        //   1) Capacitor `Keyboard.resize: "none"`：原生层**不缩 WebView frame**,
-        //      WebView 始终全屏。键盘绘制在 WebView 之上。
-        //   2) 想用 `visualViewport.height` 推断键盘高度 —— 在部分 Android ROM
-        //      上 visualViewport 完全不感知键盘，推不出真实高度。
-        //   3) 致命错误（上一版 BUG）：把外层容器 maxHeight 设成 visualViewport.height,
-        //      容器只占屏幕上方部分；容器下方到 WebView 底（即键盘所在区域）
-        //      露出 body 背景 —— 浅色模式 body = var(--color-bg) ≈ 白色，于是用户
-        //      看到"登录按钮下方一直到键盘顶端是一整片白色"（截图红框区域）。
-        //   4) `useKeyboardLayout()` 默认只挂载在 AppLayout（登录后），登录页
-        //      是 AuthGate 直接 return <LoginPage />，原生事件链没人注册，
-        //      `--keyboard-height` 永远是 0 —— 这就是历史上多次"看似对了
-        //      但键盘弹起没反应"的根本原因。**修复**：登录页内独立调一次
-        //      `useKeyboardLayout()`，与 AppLayout 各自维护 listener，互不冲突。
-        //   5) 全局 CSS `html, body, #root { overflow: hidden }` 禁止文档
-        //      级滚动，**必须由 LoginPage 外层自己 overflow-y-auto** 作为
-        //      滚动容器（所以这里必须保留 overflow-y-auto、挂 ref）。
-        //   6) Android WebView focus 时不会自动 scrollIntoView —— 见上方
-        //      useEffect，手动监听 focusin + 算 scrollTop 让 input 出现在
-        //      可视区上 1/4 处（非居中），保证 input 下方的登录按钮可见。
-        //   7) 前后 `flex-1 min-h-0` 占位实测在 iOS WKWebView 下会出现
-        //      **上下不对称**（下方占位异常大、按钮被挤到键盘下方），改用
-        //      卡片 `my-auto`：flex 规范下 auto margin 内容不足时吸收剩余
-        //      空间实现居中，内容溢出时**坍缩为 0**，行为比 flex-1 更稳。
-        //
-        // 最终方案：
-        //   a) 容器高 = 100dvh（动态视口高，撑满 WebView），bg 与卡片同色系，
-        //      **永远不会露出 body 白底**。
-        //   b) `paddingBottom: keyboardHeight + safe-area-bottom`：键盘弹起时
-        //      原生事件回调写入精确像素，padding 把内容推到键盘上方；未弹起
-        //      时 keyboardHeight=0，等价于普通 safe-area padding。
-        //   c) flex-col + items-center + 卡片 auto-margin（**双态**）+ `flex-shrink-0`：
-        //      - 键盘未弹起：卡片 `my-auto`，整页垂直居中；
-        //      - 键盘已弹起：卡片 `mt-auto`（仅上方 auto），卡片**贴键盘上沿**，
-        //        否则会被在"键盘上方可视区"里二次居中，导致卡片下方到键盘顶
-        //        之间留出一大片白色（上一版症状）。
-        //      - 内容 > 可用区时 auto margin 按 flex 规范坍缩为 0，overflow-y-auto
-        //        滚动接管。
-        //   d) focusin 触发手动 scrollTo，把 focused input 滚到上 1/4 处。
-        minHeight: '100dvh',
-        maxHeight: '100dvh',
-        paddingTop: 'var(--safe-area-top)',
+        // 键盘/安全区方案见历史注释：容器 100dvh + paddingBottom(keyboard+safe) + 卡片 my-auto/mt-auto
+        minHeight: "100dvh",
+        maxHeight: "100dvh",
+        paddingTop: "var(--safe-area-top)",
         paddingBottom: `calc(var(--safe-area-bottom) + ${keyboardHeight}px)`,
       }}
     >
-      {/* 背景装饰 */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent rounded-full blur-3xl" />
-        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/5 via-transparent to-transparent rounded-full blur-3xl" />
+      {/* 品牌色弱装饰 */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden>
+        <div className="absolute -top-[30%] left-1/2 -translate-x-1/2 w-[140%] h-[55%] rounded-full bg-accent-primary/[0.07] blur-3xl" />
+        <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-accent-primary/[0.04] to-transparent" />
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-        // 居中策略（双态）：
-        //   - 键盘**未**弹起：`my-auto` —— flex 容器把剩余空间均分到卡片
-        //     上下，卡片整页垂直居中。
-        //   - 键盘**已**弹起：`mt-auto`（去掉下方 auto margin）—— 上方撑满
-        //     auto，下方 margin 为 0，卡片**贴近底部 padding**（即贴键盘
-        //     上沿）。否则 `my-auto` 会让卡片在"容器减键盘高的可用区"中再
-        //     次居中，结果是**卡片下方到键盘顶之间出现一大片白色空白**
-        //     （上一版用户截图正是这个症状：按钮下方白茫茫一片）。
-        //   - 内容 > 可用区时 auto margin 按 flex 规范坍缩为 0，overflow-y-auto
-        //     滚动接管。比 flex-1 占位元素更可靠（实测占位方案在 iOS
-        //     WKWebView 下会出现上下不对称）。
-        className={`relative w-full max-w-[420px] mx-4 py-6 flex-shrink-0 ${keyboardHeight > 0 ? 'mt-auto' : 'my-auto'}`}
+        transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className={`relative w-full max-w-[420px] px-4 sm:px-5 py-5 sm:py-8 flex-shrink-0 flex flex-col ${
+          keyboardHeight > 0 ? "mt-auto" : "my-auto"
+        }`}
       >
-        <div className="bg-app-elevated border border-app-border rounded-window shadow-xl dark:shadow-2xl dark:shadow-black/30 p-7 sm:p-8 backdrop-blur-sm">
-          {/* Logo & Title */}
-          <div className="text-center mb-6">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1, duration: 0.4 }}
-              className="inline-flex items-center justify-center mb-4"
-            >
-              <BrandMark size={56} />
-            </motion.div>
-            <h1 className="text-xl sm:text-2xl font-bold text-tx-primary tracking-tight">
-              {t("auth.appTitle")}
-            </h1>
-            <p className="text-sm text-tx-tertiary mt-1.5">
-              {isRegister
-                ? t("auth.registerSubtitle")
-                : isClientMode
+        {/* —— 品牌 Hero（键盘弹起时压缩） —— */}
+        <div
+          className={`text-center transition-all duration-200 ${
+            keyboardHeight > 0 ? "mb-3 scale-[0.92] origin-bottom" : "mb-5 sm:mb-6"
+          }`}
+        >
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.08, duration: 0.35 }}
+            className="inline-flex items-center justify-center mb-3"
+          >
+            <BrandMark size={keyboardHeight > 0 ? 48 : 64} />
+          </motion.div>
+          <h1 className="text-2xl sm:text-[1.65rem] font-bold text-tx-primary tracking-tight">
+            {t("auth.appTitle")}
+          </h1>
+          <p className="text-sm text-tx-tertiary mt-1.5 px-2 leading-relaxed">
+            {isRegister
+              ? t("auth.registerSubtitle")
+              : isClientMode
                 ? t("auth.subtitleClient")
                 : t("auth.subtitle")}
-            </p>
-          </div>
+          </p>
+        </div>
 
-          {/* 登录/注册 Tab（2FA 阶段时隐藏） */}
+        {/* —— 表单卡片 —— */}
+        <div className="bg-app-elevated border border-app-border rounded-2xl shadow-lg shadow-black/[0.04] dark:shadow-black/30 p-5 sm:p-7">
+          {/* 登录/注册 Tab */}
           {!twoFactor && (
-          <div className="flex items-center gap-1 p-1 mb-5 rounded-button bg-app-surface border border-app-border/60">
-            <button
-              type="button"
-              onClick={() => switchMode("login")}
-              className={`flex-1 py-2 rounded-button text-xs font-semibold transition-all duration-fast ease-soft ${
-                mode === "login"
-                  ? "bg-app-elevated text-accent-primary shadow-sm"
-                  : "text-tx-tertiary hover:text-tx-primary"
-              }`}
-            >
-              {t("auth.loginTab")}
-            </button>
-            <button
-              type="button"
-              onClick={() => allowRegistration && switchMode("register")}
-              disabled={!allowRegistration}
-              title={!allowRegistration ? t("auth.registerDisabled") : undefined}
-              className={`flex-1 py-2 rounded-button text-xs font-semibold transition-all duration-fast ease-soft ${
-                mode === "register"
-                  ? "bg-app-elevated text-accent-primary shadow-sm"
-                  : "text-tx-tertiary hover:text-tx-primary disabled:opacity-40 disabled:cursor-not-allowed"
-              }`}
-            >
-              {t("auth.registerTab")}
-            </button>
-          </div>
+            <div className="flex items-center gap-1 p-1 mb-5 rounded-xl bg-app-surface border border-app-border/70">
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-all ${
+                  mode === "login"
+                    ? "bg-app-elevated text-accent-primary shadow-sm"
+                    : "text-tx-tertiary hover:text-tx-primary"
+                }`}
+              >
+                {t("auth.loginTab")}
+              </button>
+              <button
+                type="button"
+                onClick={() => allowRegistration && switchMode("register")}
+                disabled={!allowRegistration}
+                title={!allowRegistration ? t("auth.registerDisabled") : undefined}
+                className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-all ${
+                  mode === "register"
+                    ? "bg-app-elevated text-accent-primary shadow-sm"
+                    : "text-tx-tertiary hover:text-tx-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                }`}
+              >
+                {t("auth.registerTab")}
+              </button>
+            </div>
           )}
 
-
-
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
-            {/* Phase 6: 2FA 面板（取代登录表单） */}
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-3.5">
             {twoFactor ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20">
-                  <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
-                  <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-accent-primary/8 border border-accent-primary/20">
+                  <ShieldCheck className="w-4 h-4 text-accent-primary flex-shrink-0" />
+                  <p className="text-xs text-tx-secondary">
                     {t("auth.twoFactor.prompt", { username: twoFactor.username })}
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t("auth.twoFactor.codeLabel")}
-                  </label>
+                  <label className={fieldLabelCls}>{t("auth.twoFactor.codeLabel")}</label>
                   <input
                     type="text"
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value)}
-                    className="block w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm tracking-[0.3em] font-mono text-center"
+                    className={`${fieldInputCls} pl-3 tracking-[0.3em] font-mono text-center`}
                     placeholder="123456"
                     autoFocus
                     autoComplete="one-time-code"
                     inputMode="numeric"
                     maxLength={20}
                   />
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                    {t("auth.twoFactor.codeHint")}
-                  </p>
+                  <p className="text-xs text-tx-tertiary">{t("auth.twoFactor.codeHint")}</p>
                 </div>
                 <button
                   type="button"
@@ -689,255 +664,310 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                     setTwoFactorCode("");
                     setError("");
                   }}
-                  className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
+                  className="text-xs text-tx-tertiary hover:text-tx-primary transition-colors min-h-[36px]"
                 >
                   {t("auth.twoFactor.backToLogin")}
                 </button>
               </div>
-            ) : (<>
-            {/* 服务器地址 — 仅客户端模式显示（协议 + 主机 + 端口 三段式） */}
-            <AnimatePresence>
-              {isClientMode && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-1.5 overflow-hidden"
-                >
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t("auth.serverAddress")}
-                  </label>
-                  <ServerAddressInput
-                    value={serverParts}
-                    onChange={(next) => {
-                      setServerParts(next);
-                      if (serverStatus !== "idle") setServerStatus("idle");
-                    }}
-                    onHostBlur={handleServerBlur}
-                    autoFocus={isClientMode}
-                    accent="indigo"
-                    rightSlot={serverStatusIcon()}
-                  />
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                    {t("auth.serverHint")}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* 用户名 */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {t("auth.username")}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                </div>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
-                  placeholder={isRegister ? t("auth.usernameRegisterPlaceholder") : t("auth.usernamePlaceholder")}
-                  autoComplete="username"
-                  autoFocus={!isClientMode}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* 注册时：邮箱 + 昵称 */}
-            <AnimatePresence>
-              {isRegister && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-4 overflow-hidden"
-                >
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      {t("auth.displayNameOptional")}
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <UserPlus className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+            ) : (
+              <>
+                {/* 服务器地址 */}
+                <AnimatePresence>
+                  {isClientMode && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-1.5 overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <label className={fieldLabelCls}>{t("auth.serverAddress")}</label>
+                        {!!serverParts.host.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setServerExpanded((v) => !v)}
+                            className="inline-flex items-center gap-0.5 text-xs font-medium text-accent-primary min-h-[32px] px-1"
+                          >
+                            {serverExpanded ? (
+                              <>
+                                收起 <ChevronUp size={14} />
+                              </>
+                            ) : (
+                              <>
+                                更改 <ChevronDown size={14} />
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm"
-                        placeholder={t("auth.displayNamePlaceholder")}
-                        maxLength={40}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      {t("auth.emailOptional")}
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Mail className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                      </div>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-base md:text-sm"
-                        placeholder="name@example.com"
-                        autoComplete="email"
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
-            {/* 密码 */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {t("auth.password")}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                </div>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
-                  placeholder="••••••••"
-                  autoComplete={isRegister ? "new-password" : "current-password"}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  tabIndex={-1}
-                  aria-label={showPassword ? t("auth.hidePassword", { defaultValue: "隐藏密码" }) : t("auth.showPassword", { defaultValue: "显示密码" })}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
+                      {showServerSummary ? (
+                        <button
+                          type="button"
+                          onClick={() => setServerExpanded(true)}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-app-border bg-app-surface/80 text-left active:bg-app-hover transition-colors"
+                        >
+                          <span className="shrink-0">{serverStatusIcon()}</span>
+                          <span className="flex-1 min-w-0 text-sm text-tx-primary font-medium truncate">
+                            {serverSummary}
+                          </span>
+                          <span className="text-xs text-tx-tertiary shrink-0">已连接</span>
+                        </button>
+                      ) : (
+                        <>
+                          <ServerAddressInput
+                            value={serverParts}
+                            onChange={(next) => {
+                              setServerParts(next);
+                              if (serverStatus !== "idle") setServerStatus("idle");
+                            }}
+                            onHostBlur={handleServerBlur}
+                            autoFocus={isClientMode && serverExpanded && !serverParts.host}
+                            accent="indigo"
+                            rightSlot={serverStatusIcon()}
+                          />
+                          <p className="text-xs text-tx-tertiary">{t("auth.serverHint")}</p>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            {/* 注册确认密码 */}
-            <AnimatePresence>
-              {isRegister && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-1.5 overflow-hidden"
-                >
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t("auth.confirmPassword")}
-                  </label>
+                {/* 用户名 */}
+                <div className="space-y-1.5">
+                  <label className={fieldLabelCls}>{t("auth.username")}</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <User className="h-4 w-4 text-tx-tertiary" />
                     </div>
                     <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 text-base md:text-sm ${
-                        confirmPassword && password !== confirmPassword
-                          ? "border-red-500/60 dark:border-red-500/60"
-                          : "border-zinc-200 dark:border-zinc-700"
-                      }`}
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className={fieldInputCls}
+                      placeholder={
+                        isRegister
+                          ? t("auth.usernameRegisterPlaceholder")
+                          : t("auth.usernamePlaceholder")
+                      }
+                      autoComplete="username"
+                      autoFocus={!isClientMode}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* 注册：昵称 + 邮箱 */}
+                <AnimatePresence>
+                  {isRegister && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-3.5 overflow-hidden"
+                    >
+                      <div className="space-y-1.5">
+                        <label className={fieldLabelCls}>
+                          {t("auth.displayNameOptional")}
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <UserPlus className="h-4 w-4 text-tx-tertiary" />
+                          </div>
+                          <input
+                            type="text"
+                            value={displayName}
+                            onChange={(e) => setDisplayName(e.target.value)}
+                            className={fieldInputCls}
+                            placeholder={t("auth.displayNamePlaceholder")}
+                            maxLength={40}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={fieldLabelCls}>{t("auth.emailOptional")}</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Mail className="h-4 w-4 text-tx-tertiary" />
+                          </div>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className={fieldInputCls}
+                            placeholder="name@example.com"
+                            autoComplete="email"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* 密码 */}
+                <div className="space-y-1.5">
+                  <label className={fieldLabelCls}>{t("auth.password")}</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <Lock className="h-4 w-4 text-tx-tertiary" />
+                    </div>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className={`${fieldInputCls} pr-11`}
                       placeholder="••••••••"
-                      autoComplete="new-password"
+                      autoComplete={isRegister ? "new-password" : "current-password"}
                       required
                     />
                     <button
                       type="button"
-                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      onClick={() => setShowPassword((v) => !v)}
                       tabIndex={-1}
-                      aria-label={showConfirmPassword ? t("auth.hidePassword", { defaultValue: "隐藏密码" }) : t("auth.showPassword", { defaultValue: "显示密码" })}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
+                      aria-label={
+                        showPassword
+                          ? t("auth.hidePassword", { defaultValue: "隐藏密码" })
+                          : t("auth.showPassword", { defaultValue: "显示密码" })
+                      }
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-tx-tertiary hover:text-tx-primary transition-colors min-w-[44px] justify-end"
                     >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* 图形验证码 */}
-            {captchaEnabled && !isRegister && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t("auth.captcha", { defaultValue: "验证码" })}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={captchaText}
-                    onChange={(e) => setCaptchaText(e.target.value)}
-                    className="block w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-base md:text-sm"
-                    placeholder={t("auth.captchaPlaceholder", { defaultValue: "输入图形验证码" })}
-                    required
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                  />
-                  <div
-                    onClick={() => fetchNewCaptcha()}
-                    className="flex-shrink-0 cursor-pointer select-none rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 flex items-center justify-center bg-white dark:bg-zinc-950 hover:opacity-80 transition-opacity"
-                    title={t("auth.captchaRefresh", { defaultValue: "点击刷新验证码" })}
-                    dangerouslySetInnerHTML={{ __html: captchaSvg }}
-                    style={{ width: "120px", height: "42px" }}
-                  />
                 </div>
-              </div>
+
+                {/* 确认密码 */}
+                <AnimatePresence>
+                  {isRegister && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-1.5 overflow-hidden"
+                    >
+                      <label className={fieldLabelCls}>{t("auth.confirmPassword")}</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                          <Lock className="h-4 w-4 text-tx-tertiary" />
+                        </div>
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className={`${fieldInputCls} pr-11 ${
+                            confirmPassword && password !== confirmPassword
+                              ? "border-red-500/60"
+                              : ""
+                          }`}
+                          placeholder="••••••••"
+                          autoComplete="new-password"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((v) => !v)}
+                          tabIndex={-1}
+                          aria-label={
+                            showConfirmPassword
+                              ? t("auth.hidePassword", { defaultValue: "隐藏密码" })
+                              : t("auth.showPassword", { defaultValue: "显示密码" })
+                          }
+                          className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-tx-tertiary hover:text-tx-primary transition-colors min-w-[44px] justify-end"
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* 验证码 */}
+                {captchaEnabled && !isRegister && (
+                  <div className="space-y-1.5">
+                    <label className={fieldLabelCls}>
+                      {t("auth.captcha", { defaultValue: "验证码" })}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={captchaText}
+                        onChange={(e) => setCaptchaText(e.target.value)}
+                        className={`${fieldInputCls} pl-3`}
+                        placeholder={t("auth.captchaPlaceholder", {
+                          defaultValue: "输入图形验证码",
+                        })}
+                        required
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck="false"
+                      />
+                      <div
+                        onClick={() => fetchNewCaptcha()}
+                        className="flex-shrink-0 cursor-pointer select-none rounded-xl overflow-hidden border border-app-border flex items-center justify-center bg-app-elevated hover:opacity-80 transition-opacity"
+                        title={t("auth.captchaRefresh", {
+                          defaultValue: "点击刷新验证码",
+                        })}
+                        dangerouslySetInnerHTML={{ __html: captchaSvg }}
+                        style={{ width: "120px", height: "48px" }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 记住 / 自动登录 */}
+                {!isRegister && canSavePassword && (
+                  <div className="flex items-center justify-between gap-3 pt-0.5 min-h-[40px]">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-tx-secondary">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setRememberMe(checked);
+                          if (!checked) setAutoLogin(false);
+                        }}
+                        className="w-4 h-4 rounded border-app-border text-accent-primary focus:ring-accent-primary/40"
+                      />
+                      {t("auth.rememberMe")}
+                    </label>
+                    <label
+                      className={`flex items-center gap-2.5 select-none text-sm ${
+                        rememberMe
+                          ? "cursor-pointer text-tx-secondary"
+                          : "cursor-not-allowed text-tx-tertiary opacity-60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={autoLogin}
+                        disabled={!rememberMe}
+                        onChange={(e) => setAutoLogin(e.target.checked)}
+                        className="w-4 h-4 rounded border-app-border text-accent-primary focus:ring-accent-primary/40 disabled:opacity-50"
+                      />
+                      {t("auth.autoLogin")}
+                    </label>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* 记住密码 / 自动登录（仅登录模式 + 支持落盘加密的平台显示） */}
-            {!isRegister && canSavePassword && (
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-zinc-600 dark:text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setRememberMe(checked);
-                      // 关掉记住密码时顺带关自动登录
-                      if (!checked) setAutoLogin(false);
-                    }}
-                    className="w-3.5 h-3.5 rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500/40"
-                  />
-                  {t("auth.rememberMe")}
-                </label>
-                <label className={`flex items-center gap-2 select-none text-xs ${rememberMe ? "cursor-pointer text-zinc-600 dark:text-zinc-400" : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"}`}>
-                  <input
-                    type="checkbox"
-                    checked={autoLogin}
-                    disabled={!rememberMe}
-                    onChange={(e) => setAutoLogin(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500/40 disabled:opacity-50"
-                  />
-                  {t("auth.autoLogin")}
-                </label>
-              </div>
-            )}
-            </>)}
-
-            {/* 错误提示 */}
+            {/* 错误 */}
             <AnimatePresence>
               {error && (
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                   <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -945,14 +975,14 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
               )}
             </AnimatePresence>
 
-            {/* 提交按钮 */}
+            {/* 主按钮 */}
             <button
               type="submit"
               disabled={submitDisabled}
-              className="btn-primary-glow w-full flex items-center justify-center py-3 px-4 rounded-button text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:filter-none transition-all"
+              className="btn-primary-glow w-full flex items-center justify-center h-12 px-4 rounded-xl text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:filter-none transition-all mt-1"
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : twoFactor ? (
                 t("auth.twoFactor.verifyButton")
               ) : isRegister ? (
@@ -963,36 +993,32 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             </button>
           </form>
 
-          {/* 底部提示 */}
           {isRegister && (
-            <p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-6">
+            <p className="text-center text-xs text-tx-tertiary mt-5">
               {t("auth.registerHint")}
             </p>
           )}
 
-          {/* 客户端模式：断开连接按钮 */}
           {isClientMode && getServerUrl() && (
-            <div className="mt-3 flex justify-center">
+            <div className="mt-4 flex justify-center">
               <button
                 type="button"
                 onClick={handleDisconnect}
-                className="text-xs text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 transition-colors"
+                className="text-xs text-tx-tertiary hover:text-red-500 transition-colors min-h-[36px] px-2"
               >
                 {t("auth.resetServer")}
               </button>
             </div>
           )}
 
-          {/*
-            D-1：桌面端"返回本地（零登录）"入口。
-            条件：当前已写过 super-prefer-cloud（说明用户是从 NavRail 主动切到云端模式来的）。
-            点击后清掉标记 + token + reload，App.tsx 重新走 ensureLocalAccount 流程。
-            注意：不清理 IndexedDB / 本地 SQLite 数据，本地笔记本依然完整保留。
-          */}
           {(() => {
             const isElectron = !!(window as any).superDesktop?.isDesktop;
             const preferCloud = (() => {
-              try { return localStorage.getItem("super-prefer-cloud") === "1"; } catch { return false; }
+              try {
+                return localStorage.getItem("super-prefer-cloud") === "1";
+              } catch {
+                return false;
+              }
             })();
             if (!isElectron || !preferCloud) return null;
             return (
@@ -1004,10 +1030,12 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                       localStorage.removeItem("super-prefer-cloud");
                       localStorage.removeItem("super-token");
                       clearServerUrl();
-                    } catch { /* ignore */ }
+                    } catch {
+                      /* ignore */
+                    }
                     window.location.reload();
                   }}
-                  className="text-xs text-zinc-400 hover:text-blue-500 dark:text-zinc-500 dark:hover:text-blue-400 transition-colors"
+                  className="text-xs text-tx-tertiary hover:text-accent-primary transition-colors min-h-[36px] px-2"
                 >
                   {t("auth.backToLocal", "← 返回本地模式（不登录直接使用）")}
                 </button>
@@ -1020,8 +1048,8 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-center text-[11px] text-zinc-400 dark:text-zinc-600 mt-4 px-4"
+            transition={{ delay: 0.25 }}
+            className="text-center text-[11px] text-tx-tertiary mt-4 px-2 leading-relaxed"
           >
             {t("auth.clientNote")}
           </motion.p>
