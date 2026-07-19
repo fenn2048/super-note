@@ -36,10 +36,16 @@ export default function LibraryCenter() {
   const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
   const workspaceId = getCurrentWorkspace();
 
-  /** 栈关闭：多从「我的」进入资料库 */
+  /** 栈关闭：移动默认回「我的」；桌面回笔记列表 */
   const goBack = useCallback(() => {
-    actions.setViewMode("more");
-    actions.setMobileView("list");
+    const isMobile =
+      typeof window !== "undefined" && window.innerWidth < 768;
+    if (isMobile) {
+      actions.setViewMode("more");
+      actions.setMobileView("list");
+    } else {
+      actions.setViewMode("all");
+    }
   }, [actions]);
 
   useEffect(() => {
@@ -101,22 +107,25 @@ export default function LibraryCenter() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
       <StackChrome onClose={goBack} closeLabel="关闭资料库">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => selectTab(t.id)}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 md:px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors",
-              tab === t.id
-                ? "border-accent-primary text-accent-primary bg-accent-primary/5"
-                : "border-transparent text-tx-tertiary hover:text-tx-primary hover:bg-app-hover",
-            )}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
+        {/* 三分段控件：文件 | 书库 | 媒体，三子页视觉统一 */}
+        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-app-bg border border-app-border/70 shrink-0">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => selectTab(t.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-all min-h-[36px]",
+                tab === t.id
+                  ? "bg-app-elevated text-accent-primary shadow-sm"
+                  : "text-tx-tertiary hover:text-tx-primary",
+              )}
+            >
+              {t.icon}
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
       </StackChrome>
 
       <div className="flex-1 min-h-0 overflow-hidden">

@@ -44,17 +44,17 @@ export default function StackChrome({
   return (
     <div
       className={cn(
-        "shrink-0 border-b border-app-border bg-app-surface/80 backdrop-blur-sm px-2 md:px-4 pb-0",
+        "shrink-0 border-b border-app-border bg-app-surface/90 backdrop-blur-md px-3 md:px-4",
         className,
       )}
       style={
         safeAreaTop
-          ? { paddingTop: "calc(var(--safe-area-top, 0px) + 6px)" }
+          ? { paddingTop: "calc(var(--safe-area-top, 0px) + 8px)" }
           : undefined
       }
     >
-      <div className="flex items-center gap-0.5 md:gap-1 max-w-3xl min-h-[40px]">
-        <div className="flex-1 min-w-0 flex items-center gap-0.5 md:gap-1">
+      <div className="flex items-center gap-2 max-w-4xl min-h-[48px] pb-2">
+        <div className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto scrollbar-hide">
           {children}
         </div>
         {trailing}
@@ -63,8 +63,9 @@ export default function StackChrome({
             type="button"
             onClick={handleClose}
             className={cn(
-              "inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg",
+              "inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl",
               "text-tx-tertiary hover:text-tx-primary hover:bg-app-hover active:bg-app-active shrink-0",
+              "border border-app-border/60 bg-app-elevated/80",
               !showCloseOnDesktop && "md:hidden",
             )}
             title={closeLabel}
