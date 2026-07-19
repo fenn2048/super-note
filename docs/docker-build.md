@@ -77,3 +77,24 @@ A: 运行时必须带 Alpine musl 预编译包；Dockerfile 已设 `npm_config_p
 
 **Q: `empty platform value from expression $BUILDPLATFORM`？**  
 A: 不要在 Dockerfile 顶部写 `ARG BUILDPLATFORM=`（空默认会盖掉 BuildKit 自动注入）。构建阶段用 `FROM --platform=$BUILDPLATFORM`，平台变量由 BuildKit 提供。
+
+REDIS_URL=redis://redis:6379
+OLLAMA_URL=http://ollama:11434
+OPENLIST_URL=http://openlist:5244
+MEDIA_STORAGE_URL=http://openlist:5244
+# OPENLIST_TOKEN=...   # 有 token 再填
+
+3. 常用运维：
+
+docker compose --profile full ps
+docker compose --profile full logs -f
+docker compose --profile full down          # 停全部
+
+其他档位（对照）
+
+docker compose up -d                         # 仅 super-note
+docker compose --profile ai up -d            # + Redis + Ollama
+docker compose --profile media up -d         # + OpenList
+docker compose --profile full up -d          # 全家桶
+
+访问：浏览器打开 http://localhost:3001。首次 full 时 Ollama 拉模型会比较久，可看日志：docker compose --profile full logs -f ollama。
