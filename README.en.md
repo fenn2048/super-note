@@ -17,7 +17,7 @@
 - **File manager**: Image thumbnails (sharp webp at 240/480/960, ~100x bandwidth saving on dense galleries), "My uploads" view (referenced / unreferenced), orphan cleanup
 - **Automation**: Sandboxed plugin system, Webhooks, audit log, scheduled auto-backup
 - **Cross-platform**: Web / Electron (Win/macOS/Linux) / Android (Capacitor) / NAS (fnOS / UGOS)
-- **Developer ecosystem**: MCP Server, TypeScript SDK, CLI, [browser clipper extension](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg), OpenAPI 3.0 — see [`packages/`](./packages)
+- **Developer ecosystem**: MCP Server, TypeScript SDK, CLI, [browser clipper extension](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg) — see [`packages/`](./packages)
 
 ## Stack
 
@@ -129,7 +129,6 @@ Backup policy: auto-backups are written to `/app/data/backups` by default, shari
 - Email backup configuration: [docs/backup-email-smtp.md](./docs/backup-email-smtp.md)
 - Editor mode switch: [docs/editor-mode-switch.md](./docs/editor-mode-switch.md)
 - Privacy policy: [docs/PRIVACY.md](./docs/PRIVACY.md)
-- OpenAPI: once running, visit `/api/openapi.json`
 
 ## Support
 

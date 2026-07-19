@@ -17,7 +17,7 @@
 - **文件管理**：图片缩略图（webp 三档自适应，密集图床场景流量降至 1/100）、「我的上传」分类（已引用 / 未引用细分）、孤儿清理
 - **自动化**：沙箱插件系统、Webhook、审计日志、定时自动备份
 - **多端**：Web / Electron（Win/macOS/Linux）/ Android（Capacitor）/ NAS（飞牛 fnOS / 绿联 UGOS）
-- **开发者生态**：MCP Server、TypeScript SDK、CLI、[浏览器剪藏扩展](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)、OpenAPI 3.0（见 [`packages/`](./packages)）
+- **开发者生态**：MCP Server、TypeScript SDK、CLI、[浏览器剪藏扩展](https://chromewebstore.google.com/detail/super-note-web-clipper/nglkodhfdbnfielchjpkjhenfaecafpg)（见 [`packages/`](./packages)）
 
 ## 技术栈
 
@@ -129,7 +129,6 @@ Android 可直接从 [Releases](https://github.com/cropflre/super-note/releases)
 - 邮件备份配置：[docs/backup-email-smtp.md](./docs/backup-email-smtp.md)
 - 编辑器模式切换：[docs/editor-mode-switch.md](./docs/editor-mode-switch.md)
 - 隐私策略：[docs/PRIVACY.md](./docs/PRIVACY.md)
-- OpenAPI：运行后访问 `/api/openapi.json`
 
 ## 常见问题
 

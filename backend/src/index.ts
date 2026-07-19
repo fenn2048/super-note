@@ -51,7 +51,6 @@ import mediaRouter from "./routes/media";
 import { seedDatabase } from "./db/seed";
 import { initApiTokensTable, looksLikeApiToken, resolveApiToken } from "./lib/api-tokens";
 import { getDb, closeDb } from "./db/schema";
-import { generateOpenAPISpec } from "./services/openapi";
 import { getBackupManager } from "./services/backup";
 import { attachRealtimeServer, getRealtimeStats, shutdownRealtime } from "./services/realtime";
 import { getYjsStats } from "./services/yjs";
@@ -292,9 +291,6 @@ app.get("/api/health", (c) => c.json({ status: "ok", version: resolveAppVersion(
 // 不涉及写操作、不记录审计日志。
 app.route("/api/version", versionRouter);
 app.route("/api/releases", releasesRouter);
-
-// OpenAPI 规范（无需 JWT）
-app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
 
 // 站点设置（GET 无需 JWT，允许未登录时加载品牌信息）
 app.get("/api/settings", (c) => {
@@ -778,7 +774,6 @@ try {
 
 
 console.log(`🚀 蜉蝣 API running on http://localhost:${port}`);
-console.log(`📖 OpenAPI 文档: http://localhost:${port}/api/openapi.json`);
 
 // @hono/node-server 的 serve 返回底层 http.Server；拿到后挂 WebSocket
 const server = serve({ fetch: app.fetch, port });
