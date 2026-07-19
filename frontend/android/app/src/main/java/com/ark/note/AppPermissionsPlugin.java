@@ -243,4 +243,32 @@ public class AppPermissionsPlugin extends Plugin {
             call.reject("无法打开通知设置: " + e.getMessage(), e);
         }
     }
+
+    /** 打开本应用系统设置页（权限管理） */
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        Context context = getContext();
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + context.getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("无法打开应用设置: " + e.getMessage(), e);
+        }
+    }
+
+    /** 查询相机权限是否已授予 */
+    @PluginMethod
+    public void checkCameraPermission(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put(
+                "granted",
+                getPermissionState("camera") == com.getcapacitor.PermissionState.GRANTED
+        );
+        call.resolve(ret);
+    }
 }

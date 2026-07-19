@@ -1,49 +1,51 @@
 /**
  * downloadFile —— 通用附件下载工具
  * ---------------------------------------------------------------------------
- * 解决"第一次点击不下载、第二次才下载"的问题。
- *
- * 根因：以前所有场景都走 fetch → blob → a.click()，但 fetch 是异步的；
- * 等 fetch 完成后再 click() 时，浏览器的"用户手势"上下文已经超时，
- * 第一次点击会被静默拦截；第二次点击因为命中缓存 fetch 几乎瞬时，才能下载。
- *
- * 修复策略：
- *   - 同源：走原生 <a download>，同步触发，永远不丢失用户手势。
- *   - 跨源（桌面客户端连远端服务器场景）：仍然走 fetch+blob，
- *     因为跨源下 <a download> 的 filename 属性会被忽略，体验更糟。
- *   - Android 混合 App 环境：通过 AndroidDownloadBridge 传递 Base64 数据并保存。
- *
- * 同源判断只看 origin，不依赖具体协议/端口 of window.location。
+ *   - 同源：原生 <a download>
+ *   - Android：优先原生流式 downloadFromUrl（避免 base64 OOM）
+ *   - 跨源 Web：fetch + blob
  */
+
+import { getToken } from "@/lib/api";
+
+declare global {
+  interface Window {
+    AndroidDownloadBridge?: {
+      downloadFile: (base64: string, filename: string, mimeType: string) => void;
+      downloadFromUrl?: (
+        url: string,
+        filename: string,
+        mimeType: string,
+        token: string,
+      ) => void;
+      shareText?: (text: string, title: string) => void;
+      shareFile?: (base64: string, filename: string, mimeType: string) => void;
+    };
+  }
+}
 
 export async function downloadAttachment(url: string, filename: string): Promise<void> {
   if (!url) throw new Error("缺少下载链接");
 
   const downloadUrl = withDownloadFlag(url);
+  const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
 
-  // Android WebView 环境：调用 Java 注入的原生桥接接口
-  if ((window as any).AndroidDownloadBridge) {
+  // Android：原生 HTTP 流式写入 Downloads
+  if (bridge?.downloadFromUrl) {
+    const abs = toAbsoluteUrl(downloadUrl);
+    const token = getToken() || "";
+    bridge.downloadFromUrl(abs, filename || "download.bin", "", token);
+    return;
+  }
+
+  if (bridge?.downloadFile) {
     const res = await fetch(downloadUrl, { credentials: "include" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
-    return new Promise<void>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        try {
-          const base64data = (reader.result as string).split(",")[1];
-          (window as any).AndroidDownloadBridge.downloadFile(base64data, filename, blob.type);
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+    return downloadBlob(blob, filename);
   }
 
   if (isSameOrigin(downloadUrl)) {
-    // 同源——原生 <a download>，同步触发，零手势丢失风险
     const a = document.createElement("a");
     a.href = downloadUrl;
     a.download = filename || "";
@@ -54,7 +56,6 @@ export async function downloadAttachment(url: string, filename: string): Promise
     return;
   }
 
-  // 跨源——fetch 成 blob 再触发，保留 download 属性
   const res = await fetch(downloadUrl, { credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const blob = await res.blob();
@@ -66,13 +67,13 @@ export async function downloadAttachment(url: string, filename: string): Promise
  */
 export function downloadBlob(blob: Blob, filename: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    // Android WebView 环境：调用 Java 注入的原生桥接接口
-    if ((window as any).AndroidDownloadBridge) {
+    const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
+    if (bridge?.downloadFile) {
       const reader = new FileReader();
       reader.onloadend = () => {
         try {
           const base64data = (reader.result as string).split(",")[1];
-          (window as any).AndroidDownloadBridge.downloadFile(base64data, filename, blob.type);
+          bridge.downloadFile(base64data, filename, blob.type || "application/octet-stream");
           resolve();
         } catch (e) {
           reject(e);
@@ -83,7 +84,6 @@ export function downloadBlob(blob: Blob, filename: string): Promise<void> {
       return;
     }
 
-    // 浏览器/标准 WebView 环境
     const objUrl = URL.createObjectURL(blob);
     try {
       const a = document.createElement("a");
@@ -97,13 +97,57 @@ export function downloadBlob(blob: Blob, filename: string): Promise<void> {
     } catch (e) {
       reject(e);
     } finally {
-      // 下一帧再 revoke，避免部分浏览器还没启动下载就被回收
       setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
     }
   });
 }
 
-// 给 URL 追加 download=1 query。已有就保留，不重复追加。
+/** 系统分享文本（Android 原生 chooser；其它端复制到剪贴板） */
+export async function shareText(text: string, title = "分享"): Promise<void> {
+  const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
+  if (bridge?.shareText) {
+    bridge.shareText(text, title);
+    return;
+  }
+  if (typeof navigator !== "undefined" && navigator.share) {
+    await navigator.share({ title, text });
+    return;
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  throw new Error("当前环境不支持分享");
+}
+
+/** 分享小文件（base64 经原生 FileProvider） */
+export async function shareBlob(blob: Blob, filename: string): Promise<void> {
+  const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
+  if (bridge?.shareFile) {
+    const base64 = await blobToBase64(blob);
+    bridge.shareFile(base64, filename, blob.type || "application/octet-stream");
+    return;
+  }
+  if (typeof navigator !== "undefined" && navigator.share && typeof File !== "undefined") {
+    const file = new File([blob], filename, { type: blob.type });
+    await navigator.share({ files: [file], title: filename });
+    return;
+  }
+  await downloadBlob(blob, filename);
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const s = reader.result as string;
+      resolve(s.includes(",") ? s.split(",")[1] : s);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 function withDownloadFlag(url: string): string {
   if (/[?&]download=1(?:&|$|#)/.test(url)) return url;
   const hashIdx = url.indexOf("#");
@@ -113,7 +157,6 @@ function withDownloadFlag(url: string): string {
   return `${base}${sep}download=1${hash}`;
 }
 
-// 内部判断同源——只看 origin，不依赖具体协议/端口的硬编码
 function isSameOrigin(url: string): boolean {
   try {
     if (url.startsWith("/") && !url.startsWith("//")) return true;
@@ -121,5 +164,13 @@ function isSameOrigin(url: string): boolean {
     return u.origin === window.location.origin;
   } catch {
     return false;
+  }
+}
+
+function toAbsoluteUrl(url: string): string {
+  try {
+    return new URL(url, window.location.href).href;
+  } catch {
+    return url;
   }
 }

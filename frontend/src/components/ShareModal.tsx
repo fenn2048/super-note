@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Link2, Copy, Check, Trash2, Shield, Clock, Eye, EyeOff, Globe, RefreshCw, Loader2, ExternalLink, QrCode } from "lucide-react";
+import { X, Link2, Copy, Check, Trash2, Shield, Clock, Eye, EyeOff, Globe, RefreshCw, Loader2, ExternalLink, QrCode, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, getServerUrl } from "@/lib/api";
 import { Share, SharePermission } from "@/types";
@@ -65,6 +65,16 @@ export default function ShareModal({ noteId, noteTitle, onClose }: ShareModalPro
       document.body.removeChild(input);
       setCopied(id);
       setTimeout(() => setCopied(null), 2000);
+    }
+  };
+
+  /** Android / 系统分享 sheet（Phase C） */
+  const shareViaSystem = async (text: string) => {
+    try {
+      const { shareText } = await import("@/lib/downloadFile");
+      await shareText(text, "分享笔记");
+    } catch {
+      await copyToClipboard(text, "system-share");
     }
   };
 
@@ -323,6 +333,7 @@ export default function ShareModal({ noteId, noteTitle, onClose }: ShareModalPro
                     shareUrl={getShareUrl(share.shareToken)}
                     copied={copied}
                     onCopy={copyToClipboard}
+                    onShare={shareViaSystem}
                     onDelete={handleDelete}
                     onToggleActive={handleToggleActive}
                   />
@@ -342,6 +353,7 @@ function ShareItem({
   shareUrl,
   copied,
   onCopy,
+  onShare,
   onDelete,
   onToggleActive,
 }: {
@@ -349,6 +361,7 @@ function ShareItem({
   shareUrl: string;
   copied: string | null;
   onCopy: (text: string, id: string) => void;
+  onShare: (text: string) => void;
   onDelete: (id: string) => void;
   onToggleActive: (share: Share) => void;
 }) {
@@ -396,6 +409,14 @@ function ShareItem({
               title="复制链接"
             >
               {copied === share.id ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => onShare(shareUrl)}
+              className="shrink-0 p-1 rounded hover:bg-app-hover text-tx-tertiary hover:text-tx-secondary transition-colors"
+              title="系统分享"
+            >
+              <Share2 size={13} />
             </button>
             <a
               href={shareUrl}

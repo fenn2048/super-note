@@ -94,12 +94,19 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Keep-Alive Foreground Service -->
+        <!-- Keep-Alive Foreground Service（可选后台消息轮询） -->
         <service
             android:name=".KeepAliveService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- 音频播放前台服务（通知栏控件） -->
+        <service
+            android:name=".MediaPlaybackService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
     <!-- Permissions -->

@@ -9,6 +9,11 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover, useID3Cover } from "@/lib/id3";
+import {
+  stopNativeMediaSession,
+  subscribeNativeMediaActions,
+  updateNativeMediaSession,
+} from "@/lib/nativeMedia";
 
 export default function GlobalMusicPlayer() {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -183,9 +188,21 @@ export default function GlobalMusicPlayer() {
     }
   };
 
-  // Media Session（Android 锁屏 / 系统媒体控件）
+  // Media Session（Web）+ Android 原生 FGS 通知栏控件
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !currentMedia || currentMedia.type !== "audio") {
+    if (!currentMedia || currentMedia.type !== "audio") {
+      void stopNativeMediaSession();
+      return;
+    }
+
+    // 原生前台服务（Android）
+    void updateNativeMediaSession({
+      title: currentMedia.title || "未知曲目",
+      artist: currentMedia.artist || currentMedia.album || "",
+      isPlaying,
+    });
+
+    if (!("mediaSession" in navigator)) {
       return;
     }
 
@@ -235,7 +252,28 @@ export default function GlobalMusicPlayer() {
       setHandler("nexttrack", null);
       setHandler("seekto", null);
     };
-  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, coverToUse, isPlaying]);
+  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, coverToUse, isPlaying, resumeMedia, pauseMedia, prevMedia, nextMedia, setCurrentTime]);
+
+  // 无音频时停止 FGS
+  useEffect(() => {
+    if (!currentMedia || currentMedia.type !== "audio") {
+      void stopNativeMediaSession();
+    }
+  }, [currentMedia?.id, currentMedia?.type]);
+
+  // 通知栏按钮 → store 动作
+  useEffect(() => {
+    return subscribeNativeMediaActions((action) => {
+      if (action === "play") resumeMedia();
+      else if (action === "pause") pauseMedia();
+      else if (action === "next") nextMedia(false);
+      else if (action === "prev") prevMedia();
+      else if (action === "stop") {
+        pauseMedia();
+        void stopNativeMediaSession();
+      }
+    });
+  }, [resumeMedia, pauseMedia, nextMedia, prevMedia]);
 
   // 同步 mediaSession position state
   useEffect(() => {

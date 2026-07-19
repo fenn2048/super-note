@@ -43,7 +43,13 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
           const AppPerms = registerPlugin<any>("AppPermissions");
           const camRes = await AppPerms.requestCameraPermission();
           if (!camRes.granted) {
-            toast.error("需要摄像头权限才能使用拍照功能，请在系统设置中授予");
+            toast.error("需要摄像头权限。可在系统设置中开启后重试", 4000);
+            try {
+              // 引导用户去设置（Phase C 权限体验）
+              await AppPerms.openAppSettings?.();
+            } catch {
+              /* ignore */
+            }
             onClose();
             return;
           }
@@ -78,6 +84,18 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
     } catch (err) {
       console.error("Camera access failed:", err);
       toast.error("无法启动相机，请检查摄像头和麦克风权限");
+      if (
+        typeof window !== "undefined" &&
+        (window as any).Capacitor?.getPlatform?.() === "android"
+      ) {
+        try {
+          const AppPerms = registerPlugin<any>("AppPermissions");
+          // 二次失败时仍尝试打开设置，方便用户改权限
+          void AppPerms.openAppSettings?.();
+        } catch {
+          /* ignore */
+        }
+      }
       onClose();
     } finally {
       setLoading(false);

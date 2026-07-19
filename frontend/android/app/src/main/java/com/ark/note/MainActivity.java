@@ -10,34 +10,42 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.BridgeActivity;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends BridgeActivity {
+    private static final String TAG = "MainActivity";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppPermissionsPlugin.class);
         registerPlugin(ShareReceivePlugin.class);
+        registerPlugin(MediaPlaybackPlugin.class);
         super.onCreate(savedInstanceState);
 
-        // 通知渠道（任务/消息/同步）；KeepAlive 默认关闭，仅用户开启后 startIfEnabled
+        // 通知渠道；KeepAlive 默认关闭
         NotificationChannels.ensureAll(this);
         KeepAliveService.startIfEnabled(this);
 
-        // 系统分享 / 冷启动 Intent
         handleIncomingIntent(getIntent());
 
-        // Inject download bridge and customize WebChromeClient for permissions
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
@@ -45,9 +53,7 @@ public class MainActivity extends BridgeActivity {
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
                 public void onPermissionRequest(final android.webkit.PermissionRequest request) {
-                    runOnUiThread(() -> {
-                        request.grant(request.getResources());
-                    });
+                    runOnUiThread(() -> request.grant(request.getResources()));
                 }
             });
         }
@@ -56,20 +62,15 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        // singleTask：后台再被分享唤起时走这里
         setIntent(intent);
         handleIncomingIntent(intent);
     }
 
-    /**
-     * 解析并消费分享 Intent；VIEW（微信文章）留给 Capacitor App plugin 的 appUrlOpen。
-     */
     private void handleIncomingIntent(Intent intent) {
         if (intent == null) return;
         String action = intent.getAction();
         if (Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action)) {
             ShareReceivePlugin.queueFromIntent(this, intent);
-            // 防止旋转/重建时重复入队
             intent.setAction(Intent.ACTION_MAIN);
             intent.removeExtra(Intent.EXTRA_TEXT);
             intent.removeExtra(Intent.EXTRA_STREAM);
@@ -77,63 +78,186 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private void checkAndRequestPermissions() {
-        List<String> listPermissionsNeeded = new ArrayList<>();
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            listPermissionsNeeded.add(Manifest.permission.CAMERA);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            listPermissionsNeeded.add(Manifest.permission.RECORD_AUDIO);
-        }
-        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                listPermissionsNeeded.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-            }
-        }
-        if (!listPermissionsNeeded.isEmpty()) {
-            ActivityCompat.requestPermissions(this, listPermissionsNeeded.toArray(new String[0]), 101);
-        }
-    }
-
     public class AndroidDownloadBridge {
+        /**
+         * Base64 → Downloads（小文件；大文件请用 downloadFromUrl）
+         */
         @JavascriptInterface
         public void downloadFile(String base64Data, String filename, String mimeType) {
-            try {
-                byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ContentValues values = new ContentValues();
-                    values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
-                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
-                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-
-                    Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                    if (uri != null) {
-                        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
-                            if (os != null) {
-                                os.write(data);
-                                os.flush();
-                                runOnUiThread(() -> Toast.makeText(MainActivity.this, "文件已保存至下载目录: " + filename, Toast.LENGTH_LONG).show());
-                            }
-                        }
-                    } else {
-                        throw new IOException("Failed to create MediaStore entry");
-                    }
-                } else {
-                    java.io.File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                    if (!downloadDir.exists()) {
-                        downloadDir.mkdirs();
-                    }
-                    java.io.File file = new java.io.File(downloadDir, filename);
-                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
-                        fos.write(data);
-                        fos.flush();
-                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "文件已保存至下载目录: " + filename, Toast.LENGTH_LONG).show());
-                    }
+            new Thread(() -> {
+                try {
+                    byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
+                    writeToDownloads(data, filename, mimeType != null ? mimeType : "application/octet-stream");
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "已保存: " + filename, Toast.LENGTH_SHORT).show()
+                    );
+                } catch (Exception e) {
+                    Log.e(TAG, "downloadFile", e);
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "保存失败: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                    );
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "保存文件失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }).start();
+        }
+
+        /**
+         * 原生流式下载 URL → Downloads（避免 WebView base64 OOM）
+         * token 可为 null；非空则加 Authorization: Bearer
+         */
+        @JavascriptInterface
+        public void downloadFromUrl(String urlStr, String filename, String mimeType, String token) {
+            new Thread(() -> {
+                HttpURLConnection conn = null;
+                try {
+                    URL url = new URL(urlStr);
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(20000);
+                    conn.setReadTimeout(120000);
+                    conn.setInstanceFollowRedirects(true);
+                    if (token != null && !token.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + token);
+                    }
+                    conn.connect();
+                    int code = conn.getResponseCode();
+                    if (code < 200 || code >= 300) {
+                        throw new IOException("HTTP " + code);
+                    }
+                    String ct = mimeType;
+                    if (ct == null || ct.isEmpty()) {
+                        ct = conn.getContentType();
+                        if (ct != null && ct.contains(";")) ct = ct.split(";")[0].trim();
+                    }
+                    if (ct == null || ct.isEmpty()) ct = "application/octet-stream";
+
+                    try (InputStream in = conn.getInputStream()) {
+                        streamToDownloads(in, filename, ct);
+                    }
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "已保存: " + filename, Toast.LENGTH_SHORT).show()
+                    );
+                } catch (Exception e) {
+                    Log.e(TAG, "downloadFromUrl", e);
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "下载失败: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                    );
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+            }).start();
+        }
+
+        /** 系统分享纯文本 */
+        @JavascriptInterface
+        public void shareText(String text, String title) {
+            runOnUiThread(() -> {
+                try {
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType("text/plain");
+                    send.putExtra(Intent.EXTRA_TEXT, text != null ? text : "");
+                    if (title != null && !title.isEmpty()) {
+                        send.putExtra(Intent.EXTRA_SUBJECT, title);
+                    }
+                    startActivity(Intent.createChooser(send, title != null ? title : "分享"));
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "无法分享: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        /**
+         * Base64 写入 cache 后系统分享（小文件）
+         */
+        @JavascriptInterface
+        public void shareFile(String base64Data, String filename, String mimeType) {
+            new Thread(() -> {
+                try {
+                    byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
+                    File cache = new File(getCacheDir(), "share");
+                    if (!cache.exists()) cache.mkdirs();
+                    String safeName = (filename != null && !filename.isEmpty())
+                            ? filename.replaceAll("[\\\\/:*?\"<>|]", "_")
+                            : "shared.bin";
+                    File out = new File(cache, safeName);
+                    try (FileOutputStream fos = new FileOutputStream(out)) {
+                        fos.write(data);
+                    }
+                    Uri uri = FileProvider.getUriForFile(
+                            MainActivity.this,
+                            getPackageName() + ".fileprovider",
+                            out
+                    );
+                    String mt = mimeType != null && !mimeType.isEmpty() ? mimeType : "application/octet-stream";
+                    runOnUiThread(() -> {
+                        Intent send = new Intent(Intent.ACTION_SEND);
+                        send.setType(mt);
+                        send.putExtra(Intent.EXTRA_STREAM, uri);
+                        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(Intent.createChooser(send, "分享文件"));
+                    });
+                } catch (Exception e) {
+                    Log.e(TAG, "shareFile", e);
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "分享失败: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                    );
+                }
+            }).start();
+        }
+
+        private void writeToDownloads(byte[] data, String filename, String mimeType) throws IOException {
+            String name = filename != null ? filename : "download.bin";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new IOException("MediaStore insert failed");
+                try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                    if (os == null) throw new IOException("openOutputStream null");
+                    os.write(data);
+                    os.flush();
+                }
+            } else {
+                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (!downloadDir.exists()) downloadDir.mkdirs();
+                File file = new File(downloadDir, name);
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    fos.write(data);
+                    fos.flush();
+                }
+            }
+        }
+
+        private void streamToDownloads(InputStream in, String filename, String mimeType) throws IOException {
+            String name = filename != null ? filename : "download.bin";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new IOException("MediaStore insert failed");
+                try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                    if (os == null) throw new IOException("openOutputStream null");
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        os.write(buf, 0, n);
+                    }
+                    os.flush();
+                }
+            } else {
+                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (!downloadDir.exists()) downloadDir.mkdirs();
+                File file = new File(downloadDir, name);
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        fos.write(buf, 0, n);
+                    }
+                    fos.flush();
+                }
             }
         }
     }
@@ -142,14 +266,13 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void updateAuthInfo(String serverUrl, String token, String userId) {
             android.content.SharedPreferences sharedPref =
-                    getSharedPreferences(KeepAliveService.PREFS, android.content.Context.MODE_PRIVATE);
+                    getSharedPreferences(KeepAliveService.PREFS, MODE_PRIVATE);
             sharedPref.edit()
                     .putString("serverUrl", serverUrl != null ? serverUrl : "")
                     .putString("token", token != null ? token : "")
                     .putString("userId", userId != null ? userId : "")
                     .apply();
 
-            // 仅在用户已开启后台保活时重启服务以刷新凭证
             if (KeepAliveService.isEnabled(MainActivity.this)) {
                 KeepAliveService.stop(MainActivity.this);
                 KeepAliveService.startIfEnabled(MainActivity.this);
