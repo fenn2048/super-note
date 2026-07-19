@@ -1,13 +1,20 @@
 /**
  * 全局创建菜单（P2-6）
  * 固定：笔记 | 说说 | 任务 | 拍照（可选）
+ * 按模块包隐藏未授权入口
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import { BookOpen, NotebookPen, ListTodo, Camera, Plus, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
+import {
+  filterCreateMenuItems,
+  type CreateMenuAction,
+} from "@/lib/createMenuItems";
+import { getModulePack } from "@/lib/modulePack";
 
-export type CreateMenuAction = "note" | "diary" | "task" | "camera";
+export type { CreateMenuAction };
 
 export interface CreateMenuProps {
   open: boolean;
@@ -18,37 +25,19 @@ export interface CreateMenuProps {
   showCamera?: boolean;
 }
 
-const ITEMS: Array<{
-  key: CreateMenuAction;
-  label: string;
-  icon: React.ReactNode;
-  tone: string;
-}> = [
-  {
-    key: "note",
-    label: "新建笔记",
-    icon: <BookOpen size={16} />,
-    tone: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
-  },
-  {
-    key: "diary",
-    label: "写说说",
-    icon: <NotebookPen size={16} />,
-    tone: "bg-violet-500/12 text-violet-600 dark:text-violet-400",
-  },
-  {
-    key: "task",
-    label: "新建任务",
-    icon: <ListTodo size={16} />,
-    tone: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
-  },
-  {
-    key: "camera",
-    label: "拍照",
-    icon: <Camera size={16} />,
-    tone: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
-  },
-];
+const ICONS: Record<CreateMenuAction, React.ReactNode> = {
+  note: <BookOpen size={16} aria-hidden />,
+  diary: <NotebookPen size={16} aria-hidden />,
+  task: <ListTodo size={16} aria-hidden />,
+  camera: <Camera size={16} aria-hidden />,
+};
+
+const TONES: Record<CreateMenuAction, string> = {
+  note: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  diary: "bg-violet-500/12 text-violet-600 dark:text-violet-400",
+  task: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+  camera: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
+};
 
 export default function CreateMenu({
   open,
@@ -57,16 +46,22 @@ export default function CreateMenu({
   className,
   showCamera = true,
 }: CreateMenuProps) {
-  const items = showCamera ? ITEMS : ITEMS.filter((i) => i.key !== "camera");
-
+  const [packTick, setPackTick] = React.useState(0);
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    const onPack = () => setPackTick((n) => n + 1);
+    window.addEventListener("super:module-pack-changed", onPack);
+    return () => window.removeEventListener("super:module-pack-changed", onPack);
+  }, []);
+
+  const items = useMemo(() => {
+    void packTick;
+    return filterCreateMenuItems({
+      showCamera,
+      pack: getModulePack(),
+    });
+  }, [showCamera, packTick]);
+
+  const trapRef = useModalFocusTrap(open, onClose);
 
   return (
     <AnimatePresence>
@@ -78,8 +73,12 @@ export default function CreateMenu({
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
             onClick={onClose}
+            aria-hidden
           />
           <motion.div
+            ref={trapRef as React.RefObject<HTMLDivElement>}
+            role="menu"
+            aria-label="快速创建"
             initial={{ opacity: 0, scale: 0.92, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 8 }}
@@ -96,14 +95,16 @@ export default function CreateMenu({
                 type="button"
                 onClick={onClose}
                 className="p-1 rounded-md text-tx-tertiary hover:bg-app-hover"
+                aria-label="关闭创建菜单"
               >
-                <X size={14} />
+                <X size={14} aria-hidden />
               </button>
             </div>
             {items.map((item) => (
               <button
                 key={item.key}
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   onAction(item.key);
                   onClose();
@@ -113,10 +114,10 @@ export default function CreateMenu({
                 <span
                   className={cn(
                     "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-                    item.tone,
+                    TONES[item.key],
                   )}
                 >
-                  {item.icon}
+                  {ICONS[item.key]}
                 </span>
                 {item.label}
               </button>
@@ -146,7 +147,7 @@ export function CreateFabButton({
       )}
       aria-label="快速创建"
     >
-      <Plus size={28} />
+      <Plus size={28} aria-hidden />
     </button>
   );
 }
