@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-# super-note Docker 构建脚本（Phase 0+1）
+# super-note Docker 构建脚本（Phase 0–3）
 # -----------------------------------------------------------------------------
 # 用法：
-#   ./build_docker.sh                 # 默认：不编 APK，BuildKit + 国内镜像加速
-#   ./build_docker.sh --build-assets  # 强制编剪藏 zip + Android debug APK（很慢）
-#   ./build_docker.sh --with-apk      # 同 --build-assets
-#   ./build_docker.sh --no-mirror     # 不用 DaoCloud/npmmirror，走官方源
-#   ./build_docker.sh --tag my-tag    # 自定义镜像 tag（默认 super-note）
+#   ./build_docker.sh                 # 默认：BuildKit + 国内镜像，不编 APK
+#   ./build_docker.sh --build-assets  # 编剪藏 zip + Android debug APK（很慢）
+#   ./build_docker.sh --no-mirror     # 官方源
+#   ./build_docker.sh --tag NAME      # 主 tag（默认 super-note）
+#   ./build_docker.sh --no-sha-tag    # 不额外打 git short SHA tag
+#   ./build_docker.sh --platform linux/amd64
+#   ./build_docker.sh --check-only    # 只检查 context 门禁，不 build
 # =============================================================================
 set -euo pipefail
 
@@ -17,6 +19,9 @@ cd "$ROOT"
 BUILD_ASSETS=false
 USE_MIRROR=true
 IMAGE_TAG="super-note"
+SHA_TAG=true
+PLATFORM=""
+CHECK_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,8 +37,20 @@ while [[ $# -gt 0 ]]; do
       IMAGE_TAG="${2:-super-note}"
       shift 2
       ;;
+    --no-sha-tag)
+      SHA_TAG=false
+      shift
+      ;;
+    --platform)
+      PLATFORM="${2:-}"
+      shift 2
+      ;;
+    --check-only)
+      CHECK_ONLY=true
+      shift
+      ;;
     -h|--help)
-      sed -n '2,14p' "$0"
+      sed -n '2,16p' "$0"
       exit 0
       ;;
     *)
@@ -43,11 +60,36 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# BuildKit：cache mount、并行 stage 必需
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
-# --- 可选：本机预构建下载页资产（默认跳过，避免 Gradle 拖垮）---
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+APP_VERSION="$(node -e 'try{console.log(require("./package.json").version)}catch(e){console.log("")}' 2>/dev/null || true)"
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+
+echo "==> Phase 3 docker build"
+echo "    tag=${IMAGE_TAG}  git=${GIT_SHA}  version=${APP_VERSION:-n/a}"
+
+# --- Context 门禁 ---
+if command -v node >/dev/null 2>&1 && [[ -f scripts/docker-context-size.mjs ]]; then
+  echo "==> Context size gate"
+  node scripts/docker-context-size.mjs || {
+    code=$?
+    if [[ $code -eq 2 ]]; then
+      echo "Context gate failed. Fix .dockerignore before building." >&2
+      exit 2
+    fi
+  }
+else
+  echo "==> Skip context gate (node or script missing)"
+fi
+
+if [[ "$CHECK_ONLY" == true ]]; then
+  echo "==> --check-only: done"
+  exit 0
+fi
+
+# --- 可选 APK / 扩展 ---
 CLIPPER_ZIPS=(
   "frontend/public/downloads/super-clipper-chrome.zip"
   "frontend/public/downloads/super-clipper-edge.zip"
@@ -60,62 +102,74 @@ if [[ "$BUILD_ASSETS" == true ]]; then
   if [[ -x frontend/android/build_signed_debug_apk.sh ]]; then
     (cd frontend/android && ./build_signed_debug_apk.sh)
   else
-    echo "WARN: frontend/android/build_signed_debug_apk.sh missing or not executable" >&2
+    echo "WARN: frontend/android/build_signed_debug_apk.sh missing" >&2
   fi
-  # 剪藏 zip（若脚本未覆盖）
   if [[ -f packages/supernote-clipper/package.json ]]; then
     (cd packages/supernote-clipper && npm run pack:all 2>/dev/null || npm run build) || true
   fi
 else
   echo "==> Skip APK/Gradle (default). Use --build-assets to force."
-  MISSING=()
   for f in "${CLIPPER_ZIPS[@]}"; do
-    [[ -f "$f" ]] || MISSING+=("$f")
+    [[ -f "$f" ]] || echo "    warn: missing $f"
   done
-  if [[ ! -f "$APK_PATH" ]]; then
-    echo "    note: $APK_PATH not present (excluded from image by .dockerignore anyway)"
-  fi
-  if [[ ${#MISSING[@]} -gt 0 ]]; then
-    echo "    warn: clipper zips missing (download page empty for those):"
-    printf '      - %s\n' "${MISSING[@]}"
-    echo "    rebuild with: $0 --build-assets   or pack packages/supernote-clipper"
-  fi
+  [[ -f "$APK_PATH" ]] || echo "    note: APK absent (excluded from image by .dockerignore)"
 fi
 
-# --- context 体积提示 ---
-if command -v du >/dev/null 2>&1; then
-  echo "==> Rough context (git-clean estimate; docker still applies .dockerignore):"
-  du -sh backend/src frontend/src frontend/public backend/package-lock.json 2>/dev/null || true
-fi
-
-BUILD_ARGS=()
+BUILD_ARGS=(
+  --build-arg "APP_VERSION=${APP_VERSION}"
+  --build-arg "BUILD_DATE=${BUILD_DATE}"
+)
 if [[ "$USE_MIRROR" == true ]]; then
   BUILD_ARGS+=(
     --build-arg "DOCKER_REGISTRY=docker.m.daocloud.io/"
     --build-arg "APK_MIRROR=mirrors.aliyun.com"
     --build-arg "NPM_REGISTRY=https://registry.npmmirror.com"
   )
-  echo "==> Using China mirrors (DaoCloud / Aliyun apk / npmmirror). --no-mirror to disable."
+  echo "==> Mirrors: DaoCloud / Aliyun apk / npmmirror"
 else
-  echo "==> Using official registries."
+  echo "==> Official registries"
 fi
 
-# 版本元信息（可选）
-APP_VERSION="$(node -e 'try{console.log(require("./package.json").version)}catch(e){console.log("")}' 2>/dev/null || true)"
-BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
-BUILD_ARGS+=(
-  --build-arg "APP_VERSION=${APP_VERSION}"
-  --build-arg "BUILD_DATE=${BUILD_DATE}"
-)
+TAGS=(-t "${IMAGE_TAG}" -t "${IMAGE_TAG}:latest")
+if [[ "$SHA_TAG" == true && "$GIT_SHA" != "unknown" ]]; then
+  TAGS+=(-t "${IMAGE_TAG}:${GIT_SHA}")
+  echo "==> Extra tag: ${IMAGE_TAG}:${GIT_SHA}"
+fi
 
-echo "==> docker build -t ${IMAGE_TAG} ..."
-# shellcheck disable=SC2086
+PLATFORM_ARGS=()
+if [[ -n "$PLATFORM" ]]; then
+  PLATFORM_ARGS+=(--platform "$PLATFORM")
+  echo "==> platform=${PLATFORM}"
+fi
+
+echo "==> docker build ${TAGS[*]} ..."
+START_TS=$(date +%s)
+
 docker build \
   "${BUILD_ARGS[@]}" \
-  -t "${IMAGE_TAG}" \
+  "${PLATFORM_ARGS[@]}" \
+  "${TAGS[@]}" \
   .
 
-echo "==> Done: ${IMAGE_TAG}"
-docker image inspect "${IMAGE_TAG}" --format 'Size: {{.Size}} bytes ({{printf "%.1f" (div .Size 1000000.0)}} MB approx)' 2>/dev/null \
-  || docker images "${IMAGE_TAG}" --format 'Size: {{.Size}}'
-echo "Tip: rebuild after only source changes should hit npm ci cache layers."
+END_TS=$(date +%s)
+ELAPSED=$((END_TS - START_TS))
+
+echo "==> Done in ${ELAPSED}s"
+docker images "${IMAGE_TAG}" --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}' 2>/dev/null || true
+
+# 体积软报告
+if docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+  SIZE=$(docker image inspect "${IMAGE_TAG}" --format '{{.Size}}')
+  python3 - <<PY
+size = int("${SIZE}")
+mb = size / 1_000_000
+print(f"Image size ≈ {mb:.1f} MB ({size} bytes)")
+if size > 450_000_000:
+    print("[WARN] soft gate: image > 450 MB")
+else:
+    print("[OK] soft gate: image ≤ 450 MB")
+PY
+fi
+
+echo "Docs: docs/docker-build.md"
+echo "Release: ./scripts/release.sh"

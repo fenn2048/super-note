@@ -1,0 +1,96 @@
+# Phase 3：PR / 主分支 Docker 构建冒烟 + BuildKit 缓存
+name: Docker Build
+
+on:
+  push:
+    branches: [main, master, jules]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-entrypoint.sh"
+      - "package.json"
+      - "backend/**"
+      - "frontend/**"
+      - "build_docker.sh"
+      - ".github/workflows/docker-build.yml"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-entrypoint.sh"
+      - "package.json"
+      - "backend/**"
+      - "frontend/**"
+      - "build_docker.sh"
+      - ".github/workflows/docker-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: docker-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  context-size:
+    name: Context size gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Estimate docker context
+        run: node scripts/docker-context-size.mjs
+
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    needs: [context-size]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: |
+            super-note:ci
+            super-note:sha-${{ github.sha }}
+          # GitHub Actions 官方源；不在此使用国内镜像，避免 runner 访问失败
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+            APP_VERSION=${{ github.sha }}
+          cache-from: type=gha,scope=super-note-docker
+          cache-to: type=gha,mode=max,scope=super-note-docker
+
+      - name: Report image size
+        run: |
+          docker images super-note --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}'
+          SIZE=$(docker image inspect super-note:ci --format '{{.Size}}')
+          echo "Image size bytes: $SIZE"
+          # 软门禁 450MB（含原生模块后的合理上限）
+          python3 - <<'PY'
+          import os, subprocess
+          out = subprocess.check_output(["docker","image","inspect","super-note:ci","--format","{{.Size}}"], text=True).strip()
+          size = int(out)
+          mb = size / 1e6
+          print(f"Image ≈ {mb:.1f} MB")
+          if size > 450_000_000:
+              raise SystemExit(f"Image too large: {mb:.1f} MB > 450 MB soft gate")
+          print("Size gate OK")
+          PY
+
+      - name: Smoke start
+        run: |
+          docker run -d --name sn-ci -p 13001:3001 \
+            -e JWT_SECRET=ci-test-secret-key-32chars-min \
+            super-note:ci
+          sleep 4
+          curl -fsS "http://127.0.0.1:13001/api/version" || curl -fsS "http://127.0.0.1:13001/api/openapi.json" | head -c 200
+          docker logs sn-ci 2>&1 | tail -30
+          docker rm -f sn-ci

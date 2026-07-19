@@ -21,17 +21,21 @@ services:
       dockerfile: Dockerfile
       # 在 x86 主机上可以通过以下命令构建 arm64 镜像（A311D/RK3566 等板子）：
       #   docker buildx build --platform linux/arm64 -t super-note:arm64 --load .
-      # 或直接使用统一脚本：scripts/release.sh --build-only --arch arm64
-      # compose 原生的 `platforms:` 字段在非 buildx 流程下会被忽略，这里仅做声明。
+      # 或：./scripts/release.sh --build-only --arch arm64
+      # compose 的 platforms 在非 buildx 下常被忽略，仅作声明。
       platforms:
         - linux/amd64
         - linux/arm64
-      # 构建参数（中国大陆用户取消下方注释以加速构建）：
-      # args:
-      #   DOCKER_REGISTRY: docker.m.daocloud.io/
-      #   APK_MIRROR: mirrors.ustc.edu.cn
-      #   NPM_REGISTRY: https://registry.npmmirror.com
-    image: super-note:latest
+      # 加速参数：可用环境变量覆盖（空 = 官方源）
+      #   DOCKER_REGISTRY=docker.m.daocloud.io/ APK_MIRROR=mirrors.aliyun.com \
+      #   NPM_REGISTRY=https://registry.npmmirror.com docker compose build
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
+        APK_MIRROR: ${APK_MIRROR:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        APP_VERSION: ${APP_VERSION:-}
+        BUILD_DATE: ${BUILD_DATE:-}
+    image: ${SUPER_NOTE_IMAGE:-super-note:latest}
     # 若在 x86 主机上拉起 arm64 镜像做冒烟测试，取消下一行注释（需已启用 binfmt/qemu）：
     # platform: linux/arm64
     container_name: super-note
