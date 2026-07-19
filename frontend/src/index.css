@@ -282,20 +282,61 @@ html[data-native="ios"] {
 }
 
 /* ===== 全局排版字号与提示框优化 ===== */
+/* Web 桌面：略放大默认 rem */
 html {
-  font-size: 112.5% !important; /* 全局提升默认 rem 比例（16px -> 18px） */
+  font-size: 112.5%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Android 原生：勿用 !important 盖住系统无障碍字体缩放；WebView 会按系统缩放 1rem */
+html[data-native="android"] {
+  font-size: 100%;
 }
 
 @media (max-width: 767px) {
   :root {
     --toast-top: calc(var(--safe-area-top) + 3.75rem);
   }
-  html {
-    font-size: 118.75% !important; /* 提升移动端全局 rem 比例（16px -> 19px） */
+  /* 浏览器移动端仍略放大；原生 Android 走 data-native 规则 */
+  html:not([data-native="android"]) {
+    font-size: 118.75%;
   }
   .ProseMirror {
-    font-size: 1.0625rem; /* 独立提升编辑器字号至 ~18px，保障输入体验 */
+    font-size: 1.0625rem;
   }
+}
+
+/* 大字体（系统无障碍）：收紧列表预览、保证触控高度 */
+html[data-text-scale="lg"] .note-list-preview,
+html[data-text-scale="xl"] .note-list-preview {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+html[data-text-scale="xl"] .mobile-tab-bar span {
+  font-size: 0.65rem;
+  line-height: 1.1;
+}
+html[data-text-scale="lg"] button,
+html[data-text-scale="xl"] button,
+html[data-text-scale="lg"] [role="button"],
+html[data-text-scale="xl"] [role="button"] {
+  min-height: 44px;
+}
+
+/* 分屏 / 矮屏紧凑壳：压低 tab 与预览 */
+html[data-shell-compact="1"] .mobile-tab-bar {
+  min-height: 48px;
+}
+html[data-shell-compact="1"] .mobile-tab-bar span {
+  display: none; /* 仅图标，省高度 */
+}
+html[data-shell-compact="1"] .note-list-preview {
+  display: none;
+}
+html[data-shell-split="1"] .mobile-tab-bar {
+  /* 分屏时底栏略透明减少遮挡 */
+  background-color: color-mix(in srgb, var(--color-elevated, #fff) 92%, transparent);
 }
 
 body {

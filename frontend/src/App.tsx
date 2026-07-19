@@ -44,6 +44,7 @@ import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
 import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic, ensureNotificationChannels } from "@/hooks/useCapacitor";
 import { useShareReceive } from "@/hooks/useShareReceive";
+import { useShellLayout } from "@/hooks/useShellLayout";
 import { stashSharePayload, subscribeShareReceive } from "@/lib/shareReceive";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import { useEditorSwipeBack } from "@/hooks/useEditorSwipeBack";
@@ -938,6 +939,9 @@ function AppLayout() {
 
   // Android 返回键 / Escape 入口
   useMobileBackButton();
+
+  // Phase D：分屏/矮屏/大字体壳层标记
+  useShellLayout();
 
   // Android 系统分享入站（已登录：落库为笔记并跳转）
   useShareReceive({

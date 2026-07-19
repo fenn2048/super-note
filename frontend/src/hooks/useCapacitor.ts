@@ -31,13 +31,11 @@ if (typeof document !== "undefined") {
 }
 
 /**
- * P0 / PR2: Android 返回键 + Web Escape
+ * P0 / PR2 / Phase D: Android 返回键 + Predictive Back + Web Escape
  *
- * 优先走 useMobileBackStack 注册的层（设置/撰写/侧栏/编辑器/子页…）；
- * 无层可关时：原生双击退出 App；Web 上 Escape 不退出。
- *
- * 旧签名 useBackButton({ mobileView, ... }) 已废弃——层由各处
- * useRegisterBackLayer 声明，本 hook 只负责按键入口。
+ * 优先走 useMobileBackStack 注册的层；无层可关时：原生双击退出。
+ * Manifest 已开 enableOnBackInvokedCallback，与系统预测性返回动画对齐。
+ * 层 dismiss 时派发 super:back-layer-dismissed，便于做过渡。
  */
 export function useMobileBackButton(options?: {
   /** 再按退出时的提示文案；传 null 则只震动不 toast */
@@ -49,9 +47,32 @@ export function useMobileBackButton(options?: {
   useEffect(() => {
     let cancelled = false;
 
-    const handleBack = async () => {
-      const { tryDismissTopBackLayer } = await import("@/hooks/useMobileBackStack");
-      if (tryDismissTopBackLayer()) return;
+    const handleBack = async (canGoBack?: boolean) => {
+      const { tryDismissTopBackLayer, getBackLayerIds } = await import(
+        "@/hooks/useMobileBackStack"
+      );
+      const hadLayers = getBackLayerIds().length > 0;
+      if (tryDismissTopBackLayer()) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("super:back-layer-dismissed", {
+              detail: { remaining: getBackLayerIds().length },
+            }),
+          );
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+
+      // 无业务层时：若 WebView 历史可回退且非 SPA 根，交给 history（兼容部分外链页）
+      if (canGoBack && window.history.length > 1) {
+        const path = window.location.pathname + window.location.hash;
+        if (path !== "/" && path !== "/#" && path !== "/#/" && !path.endsWith("#/")) {
+          window.history.back();
+          return;
+        }
+      }
 
       if (!isNativePlatform()) return;
 
@@ -70,14 +91,19 @@ export function useMobileBackButton(options?: {
           /* toast 不可用时忽略 */
         }
       }
+      // 避免 unused
+      void hadLayers;
     };
 
     const cleanups: Array<() => void> = [];
 
     if (isNativePlatform()) {
-      const handlerPromise = CapApp.addListener("backButton", () => {
-        if (!cancelled) void handleBack();
-      });
+      const handlerPromise = CapApp.addListener(
+        "backButton",
+        (ev: { canGoBack?: boolean }) => {
+          if (!cancelled) void handleBack(ev?.canGoBack);
+        },
+      );
       cleanups.push(() => {
         handlerPromise.then((h) => h.remove());
       });
@@ -86,7 +112,6 @@ export function useMobileBackButton(options?: {
     // Web / 桌面调试：Escape 只关层，不退出
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      // 输入框内 Escape 交给业务（关闭搜索等），不抢
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
         return;
