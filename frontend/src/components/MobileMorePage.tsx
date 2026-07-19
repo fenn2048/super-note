@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import {
-  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book,
+  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
@@ -73,6 +73,15 @@ export default function MobileMorePage() {
       desc: mod.moreDesc || "",
       onClick: () => handleNavigate(mod),
     })),
+    {
+      id: "search",
+      label: "搜索",
+      icon: <Search className="w-6 h-6 text-amber-600 dark:text-amber-400" />,
+      desc: "全局搜索笔记、说说、任务与命令",
+      onClick: () => {
+        window.dispatchEvent(new CustomEvent("super:open-command-palette"));
+      },
+    },
     {
       id: "settings",
       label: t("sidebar.settings", { defaultValue: "设置" }),
