@@ -17,8 +17,6 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover } from "@/lib/id3";
-import MobileChromeHeader from "@/components/common/MobileChromeHeader";
-import { useAppActions } from "@/store/AppContext";
 
 interface Collection {
   id: string;
@@ -64,7 +62,6 @@ interface Review {
 
 export default function MediaCenter() {
   const { t } = useTranslation();
-  const actions = useAppActions();
   const [workspaceId, setWorkspaceId] = useState<string | null>(() => {
     const ws = getCurrentWorkspace();
     return !ws || ws === "personal" ? null : ws;
@@ -377,11 +374,6 @@ export default function MediaCenter() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const goBackToMore = () => {
-    actions.setViewMode("more");
-    actions.setMobileView("list");
-  };
-
   // Reviews interactive Tiptap editor setup
   const reviewEditor = useEditor({
     extensions: [StarterKit, TimestampExtension],
@@ -482,15 +474,7 @@ export default function MediaCenter() {
 
   return (
     <div className="flex flex-col h-full bg-app-bg text-tx-primary select-none">
-      {/* 移动端顶栏：从「我的」进入时有返回 */}
-      {!selectedItem && (
-        <MobileChromeHeader
-          variant="stack"
-          title="媒体库"
-          subtitle={mediaType === "video" ? "视频" : "音乐"}
-          onLeadingClick={goBackToMore}
-        />
-      )}
+      {/* 列表态不再叠一层 MobileChromeHeader：资料库 Tab 已提供入口上下文，省垂直空间 */}
       
       {/* 1. Detail view mode */}
       <AnimatePresence mode="wait">
@@ -785,42 +769,46 @@ export default function MediaCenter() {
             className="flex-1 flex flex-col min-h-0 md:flex-row overflow-hidden"
           >
             
-            {/* Sidebar / Top filter list for mobile */}
-            <div className="w-full md:w-56 bg-app-sidebar border-b md:border-b-0 md:border-r border-app-border shrink-0 p-3 md:p-4 flex flex-row md:flex-col gap-3 md:gap-4 overflow-x-auto md:overflow-y-auto max-md:whitespace-nowrap items-center md:items-stretch">
+            {/* Sidebar / Top filter list for mobile — 移动端压成单行紧凑条 */}
+            <div className="w-full md:w-56 bg-app-sidebar border-b md:border-b-0 md:border-r border-app-border shrink-0 px-2 py-1.5 md:p-4 flex flex-row md:flex-col gap-1.5 md:gap-4 overflow-x-auto md:overflow-y-auto max-md:whitespace-nowrap items-center md:items-stretch">
               
               {/* Type Switcher */}
               <div className="flex md:flex-col gap-1.5 shrink-0">
                 <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider select-none max-md:hidden">媒体类型</span>
-                <div className="flex gap-2">
+                <div className="flex gap-1 md:gap-2">
                   <button
                     onClick={() => { setMediaType("video"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-1.5 md:py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
+                      "flex-1 py-1 md:py-2 px-2 md:px-3 rounded-lg md:rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
                       mediaType === "video" 
-                        ? "bg-accent-primary border-accent-primary text-white shadow-lg shadow-accent-primary/10" 
+                        ? "bg-accent-primary border-accent-primary text-white shadow-md shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
                     )}
+                    title="视频库"
+                    aria-label="视频库"
                   >
-                    <Film size={16} />
+                    <Film size={15} />
                     <span className="max-md:hidden">视频库</span>
                   </button>
                   <button
                     onClick={() => { setMediaType("audio"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-1.5 md:py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
+                      "flex-1 py-1 md:py-2 px-2 md:px-3 rounded-lg md:rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
                       mediaType === "audio" 
-                        ? "bg-accent-primary border-accent-primary text-white shadow-lg shadow-accent-primary/10" 
+                        ? "bg-accent-primary border-accent-primary text-white shadow-md shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
                     )}
+                    title="音乐库"
+                    aria-label="音乐库"
                   >
-                    <Music size={16} />
+                    <Music size={15} />
                     <span className="max-md:hidden">音乐库</span>
                   </button>
                 </div>
               </div>
 
               {/* Collections Navigation list */}
-              <div className="flex flex-row md:flex-col gap-2 flex-1 items-center md:items-stretch">
+              <div className="flex flex-row md:flex-col gap-1 md:gap-2 flex-1 min-w-0 items-center md:items-stretch">
                 <div className="flex items-center justify-between select-none shrink-0">
                   <span className="text-xs font-bold text-tx-tertiary uppercase tracking-wider max-md:hidden">全部合集</span>
                   {isAdmin && (
@@ -834,31 +822,31 @@ export default function MediaCenter() {
                   )}
                 </div>
 
-                <div className="flex flex-row md:flex-col gap-2 md:gap-1 overflow-x-auto md:overflow-y-auto max-md:pb-1 max-md:scrollbar-hide">
+                <div className="flex flex-row md:flex-col gap-1 md:gap-1 overflow-x-auto md:overflow-y-auto max-md:scrollbar-hide min-w-0">
                   <button
                     onClick={() => setSelectedCollection(null)}
                     className={cn(
-                      "w-auto md:w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center justify-between transition-colors shrink-0",
+                      "w-auto md:w-full text-left py-1 md:py-1.5 px-2 md:px-2.5 rounded-md md:rounded-lg text-xs md:text-sm font-semibold flex items-center justify-between transition-colors shrink-0",
                       selectedCollection === null 
                         ? "bg-accent-primary/10 text-accent-primary" 
                         : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
                     )}
                   >
-                    <span>全部单品 ({items.length})</span>
+                    <span>全部 ({items.length})</span>
                   </button>
                   {collections.map(col => (
                     <button
                       key={col.id}
                       onClick={() => setSelectedCollection(col)}
                       className={cn(
-                        "w-auto md:w-full text-left py-1.5 px-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 md:justify-between transition-colors shrink-0",
+                        "w-auto md:w-full text-left py-1 md:py-1.5 px-2 md:px-2.5 rounded-md md:rounded-lg text-xs md:text-sm font-semibold flex items-center gap-1.5 md:gap-2 md:justify-between transition-colors shrink-0",
                         selectedCollection?.id === col.id 
                           ? "bg-accent-primary/10 text-accent-primary" 
                           : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
                       )}
                     >
-                      <span className="truncate max-w-[150px]">{col.title}</span>
-                      <span className="text-xs px-1.5 py-0.5 bg-app-border/40 text-tx-tertiary rounded font-normal shrink-0">
+                      <span className="truncate max-w-[100px] md:max-w-[150px]">{col.title}</span>
+                      <span className="text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 bg-app-border/40 text-tx-tertiary rounded font-normal shrink-0">
                         {col.item_count}
                       </span>
                     </button>
@@ -882,9 +870,11 @@ export default function MediaCenter() {
                         console.error("Failed to load Alist config:", err);
                       }
                     }}
-                    className="w-auto md:w-full py-1.5 md:py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                    className="w-auto md:w-full py-1 md:py-2 px-2 md:px-3 border border-app-border hover:bg-app-hover rounded-lg md:rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                    title="Alist 挂载配置"
+                    aria-label="Alist 挂载配置"
                   >
-                    <Settings size={16} />
+                    <Settings size={15} />
                     <span className="max-md:hidden">Alist 挂载配置</span>
                   </button>
                 </div>
@@ -895,87 +885,92 @@ export default function MediaCenter() {
             {/* Grid browser view */}
             <div className="flex-1 flex flex-col min-w-0 bg-app-bg">
               
-              {/* Header filter actions */}
-              <div className="p-4 border-b border-app-border flex flex-col md:flex-row md:items-center justify-between gap-3 select-none">
+              {/* Header filter actions — 移动端单行：搜索 + 排序/视图/操作图标 */}
+              <div className="px-2 py-1.5 md:p-4 border-b border-app-border flex flex-row items-center gap-1.5 md:gap-3 select-none">
                 
                 {/* Search & Sort */}
-                <div className="flex items-center gap-2 flex-1 max-w-md">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 w-4.5 h-4.5 text-tx-tertiary" />
+                <div className="flex items-center gap-1.5 md:gap-2 flex-1 min-w-0 md:max-w-md">
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-2.5 md:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4.5 md:h-4.5 text-tx-tertiary" />
                     <input
                       type="text"
-                      placeholder="搜索标题、标签、介绍..."
+                      placeholder="搜索..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 bg-app-sidebar border border-app-border text-sm rounded-xl outline-none text-tx-primary focus:border-accent-primary transition-colors"
+                      className="w-full pl-8 md:pl-9 pr-2 md:pr-4 py-1.5 md:py-2 bg-app-sidebar border border-app-border text-xs md:text-sm rounded-lg md:rounded-xl outline-none text-tx-primary focus:border-accent-primary transition-colors"
                     />
                   </div>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="bg-app-sidebar border border-app-border text-sm rounded-xl p-2 text-tx-secondary outline-none"
+                    className="bg-app-sidebar border border-app-border text-[11px] md:text-sm rounded-lg md:rounded-xl py-1.5 md:p-2 px-1.5 md:px-2 text-tx-secondary outline-none shrink-0 max-w-[5.5rem] md:max-w-none"
+                    title="排序"
+                    aria-label="排序"
                   >
-                    <option value="sort_order">自定义排序</option>
-                    <option value="newest">最新上传</option>
-                    <option value="oldest">最早上传</option>
-                    <option value="play_count">最常播放</option>
-                    <option value="title">拼音顺序</option>
+                    <option value="sort_order">排序</option>
+                    <option value="newest">最新</option>
+                    <option value="oldest">最早</option>
+                    <option value="play_count">热门</option>
+                    <option value="title">拼音</option>
                   </select>
 
                   {/* Layout Switcher */}
-                  <div className="flex items-center bg-app-sidebar border border-app-border rounded-xl p-0.5 shrink-0">
+                  <div className="flex items-center bg-app-sidebar border border-app-border rounded-lg md:rounded-xl p-0.5 shrink-0">
                     <button
                       onClick={() => setViewStyle("grid")}
                       className={cn(
-                        "p-1.5 rounded-lg transition-colors",
+                        "p-1 md:p-1.5 rounded-md md:rounded-lg transition-colors",
                         viewStyle === "grid" 
                           ? "bg-accent-primary text-white" 
                           : "text-tx-secondary hover:text-tx-primary"
                       )}
                       title="网格视图"
                     >
-                      <Grid size={16} />
+                      <Grid size={14} className="md:w-4 md:h-4" />
                     </button>
                     <button
                       onClick={() => setViewStyle("list")}
                       className={cn(
-                        "p-1.5 rounded-lg transition-colors",
+                        "p-1 md:p-1.5 rounded-md md:rounded-lg transition-colors",
                         viewStyle === "list" 
                           ? "bg-accent-primary text-white" 
                           : "text-tx-secondary hover:text-tx-primary"
                       )}
                       title="列表视图"
                     >
-                      <ListIcon size={16} />
+                      <ListIcon size={14} className="md:w-4 md:h-4" />
                     </button>
                   </div>
                 </div>
 
-                {/* Import actions (admin/owner only) — 移动隐藏 JSON 导入 / 下载模板 */}
+                {/* Import actions (admin/owner only) — 移动端图标化，与搜索同一行 */}
                 {isAdmin && (
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1 md:gap-2 shrink-0">
                     <button
                       onClick={() => {
                         setIsBatchMode(!isBatchMode);
                         setSelectedItemIds(new Set());
                       }}
                       className={cn(
-                        "text-sm font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all border",
+                        "text-sm font-semibold py-1.5 md:py-2 px-2 md:px-3 rounded-lg md:rounded-xl flex items-center gap-1.5 transition-all border",
                         isBatchMode 
                           ? "bg-accent-danger/10 border-accent-danger/25 text-accent-danger hover:bg-accent-danger/20"
                           : "bg-app-sidebar border-app-border hover:bg-app-hover text-tx-secondary"
                       )}
+                      title={isBatchMode ? "退出管理" : "批量管理"}
+                      aria-label={isBatchMode ? "退出管理" : "批量管理"}
                     >
-                      <SlidersHorizontal size={16} />
+                      <SlidersHorizontal size={15} />
                       <span className="max-md:hidden">{isBatchMode ? "退出管理" : "批量管理"}</span>
                     </button>
                     <button
                       onClick={() => setShowAlistBrowser(true)}
-                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-2 px-3 md:px-4 rounded-xl shadow-lg shadow-accent-primary/10 flex items-center gap-1.5 transition-all"
+                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-1.5 md:py-2 px-2 md:px-4 rounded-lg md:rounded-xl shadow-md shadow-accent-primary/10 flex items-center gap-1 transition-all"
+                      title="网盘导入"
+                      aria-label="网盘导入"
                     >
-                      <Plus size={16} />
+                      <Plus size={15} />
                       <span className="max-md:hidden">网盘导入</span>
-                      <span className="md:hidden">导入</span>
                     </button>
                     <button
                       onClick={() => setShowImportJson(true)}
@@ -997,7 +992,7 @@ export default function MediaCenter() {
               </div>
 
               {/* Items content list */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-6">
+              <div className="flex-1 overflow-y-auto p-3 md:p-6">
                 
                 {selectedCollection && (
                   <div className="mb-6 p-4 bg-app-sidebar/20 border border-app-border/40 rounded-2xl flex flex-col gap-2 relative group">
