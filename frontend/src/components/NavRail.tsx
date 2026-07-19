@@ -143,6 +143,22 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [desktopInfo, setDesktopInfo] = useState<AppInfo | null>(null);
 
+  // 全局快捷键 Alt+C：打开/关闭创建菜单（App.tsx 派发事件）
+  useEffect(() => {
+    if (isMobile) return;
+    const onToggle = () => setCreateMenuOpen((v) => !v);
+    const onOpen = () => setCreateMenuOpen(true);
+    const onClose = () => setCreateMenuOpen(false);
+    window.addEventListener("super:toggle-create-menu", onToggle);
+    window.addEventListener("super:open-create-menu", onOpen);
+    window.addEventListener("super:close-create-menu", onClose);
+    return () => {
+      window.removeEventListener("super:toggle-create-menu", onToggle);
+      window.removeEventListener("super:open-create-menu", onOpen);
+      window.removeEventListener("super:close-create-menu", onClose);
+    };
+  }, [isMobile]);
+
   useEffect(() => {
     if (!isDesktopApp()) return;
     let cancelled = false;
@@ -353,7 +369,45 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
       <div className={cn("my-2 border-t border-app-border/60", showLabel ? "w-8" : "w-6")} aria-hidden />
 
-
+      {/* 桌面全局「+」：主操作区顶部（折叠按钮下方），快捷键 Alt+C */}
+      {!isMobile && (
+        <div className="relative mb-1">
+          <button
+            type="button"
+            onClick={() => setCreateMenuOpen((v) => !v)}
+            title="快速创建 (Alt+C)"
+            aria-label="快速创建"
+            aria-keyshortcuts="Alt+C"
+            aria-expanded={createMenuOpen}
+            className={cn(
+              itemBaseClass,
+              "text-white bg-accent-primary hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/25",
+            )}
+          >
+            <Plus size={18} strokeWidth={2.5} />
+            {showLabel && (
+              <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1 font-medium">
+                创建
+              </span>
+            )}
+          </button>
+          <CreateMenu
+            open={createMenuOpen}
+            onClose={() => setCreateMenuOpen(false)}
+            showCamera={false}
+            className="absolute left-full ml-2 top-0"
+            onAction={(action) => {
+              if (action === "note") {
+                window.dispatchEvent(new CustomEvent("super:quick-new-note"));
+              } else if (action === "diary") {
+                window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+              } else if (action === "task") {
+                window.dispatchEvent(new CustomEvent("super:quick-new-task"));
+              }
+            }}
+          />
+        </div>
+      )}
 
       {/* 主导航：主路径 + 次要工具，组间细线分隔。来源：navigation.config */}
       <div className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar flex flex-col items-center gap-1 px-1">
@@ -400,45 +454,6 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
           )}>
             {(currentUser.displayName || currentUser.username || "").slice(0, 1)}
           </span>
-        </div>
-      )}
-
-      {/* 桌面全局「+」：与移动端 CreateMenu 一致 */}
-      {!isMobile && (
-        <div className="relative mb-1">
-          <button
-            type="button"
-            onClick={() => setCreateMenuOpen(true)}
-            title={showLabel ? undefined : "快速创建"}
-            aria-label="快速创建"
-            className={cn(
-              itemBaseClass,
-              "text-white bg-accent-primary hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/25",
-            )}
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            {showLabel && (
-              <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1 font-medium">
-                创建
-              </span>
-            )}
-          </button>
-          <CreateMenu
-            open={createMenuOpen}
-            onClose={() => setCreateMenuOpen(false)}
-            showCamera={false}
-            className="absolute left-full ml-2 bottom-0"
-            onAction={(action) => {
-              if (action === "note") {
-                window.dispatchEvent(new CustomEvent("super:quick-new-note"));
-              } else if (action === "diary") {
-                window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
-              } else if (action === "task") {
-                // 桌面/移动均打开任务创建弹窗（不强制跳转，避免打断当前页）
-                window.dispatchEvent(new CustomEvent("super:quick-new-task"));
-              }
-            }}
-          />
         </div>
       )}
 

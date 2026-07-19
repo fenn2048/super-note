@@ -37,6 +37,7 @@ import {
   Sidebar as SidebarIcon,
   Book,
   BookOpen as BookOpenIcon,
+  Plus,
 } from "lucide-react";
 import { useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
@@ -156,6 +157,17 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   // 全局命令列表定义（创建类指令按模块包过滤）
   const commands = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [];
+    list.push({
+      id: "open-create-menu",
+      type: "command",
+      title: "打开快速创建菜单",
+      subtitle: "笔记 / 说说 / 任务",
+      shortcut: "Alt+C",
+      icon: Plus,
+      handler: () => {
+        window.dispatchEvent(new CustomEvent("super:open-create-menu"));
+      },
+    });
     if (isModuleAllowedByPack("notes")) {
       list.push({
         id: "new-note",
@@ -175,6 +187,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         type: "command",
         title: "新建说说",
         subtitle: "发布一段 Says 碎碎念说说或录音",
+        shortcut: "Alt+S",
         icon: NotebookPen,
         handler: () => {
           window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
@@ -187,6 +200,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         type: "command",
         title: "新建任务",
         subtitle: "在「我的任务」中创建一条任务（统一项目任务体系）",
+        shortcut: "Alt+T",
         icon: ListTodo,
         handler: () => {
           actions.setViewMode("projects");

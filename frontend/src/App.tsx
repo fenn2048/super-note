@@ -1062,12 +1062,33 @@ function AppLayout() {
     }
   }, [state.selectedNotebookId, state.notebooks, actions, t]);
 
-  // Alt+N 全局快捷键：快速新建笔记
+  // 全局创建快捷键（桌面为主；不与 Ctrl/Cmd 组合，避免抢浏览器默认）
+  //   Alt+C  打开/关闭快速创建菜单
+  //   Alt+N  新建笔记
+  //   Alt+S  新建说说（不用 Alt+D，Chrome 会抢地址栏）
+  //   Alt+T  新建任务
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key.toLowerCase() === "n") {
+      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "c") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("super:toggle-create-menu"));
+        return;
+      }
+      if (key === "n") {
         e.preventDefault();
         void quickCreateNote();
+        return;
+      }
+      if (key === "s") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
+        return;
+      }
+      if (key === "t") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("super:quick-new-task"));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
