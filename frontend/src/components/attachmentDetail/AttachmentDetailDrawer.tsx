@@ -29,6 +29,7 @@ import {
   Link2,
   Maximize2,
   Minimize2,
+  ChevronLeft,
 } from "lucide-react";
 import { api, resolveAttachmentUrl } from "@/lib/api";
 import { FileDetail } from "@/types";
@@ -284,34 +285,48 @@ export default function AttachmentDetailDrawer({
 
   return (
     <>
-      {/* 遮罩 */}
+      {/* 遮罩（桌面抽屉）；移动端全屏无需点遮罩 */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-40 bg-zinc-900/40 backdrop-blur-sm"
+        className="fixed inset-0 z-40 bg-zinc-900/40 backdrop-blur-sm md:block"
         onClick={onClose}
       />
-      {/* 抽屉 */}
+      {/* 抽屉：移动全屏；桌面右侧面板 */}
       <motion.div
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", bounce: 0, duration: 0.3 }}
         className={cn(
-          "fixed right-0 top-0 bottom-0 z-50 bg-app-surface border-l border-app-border shadow-2xl flex flex-col transition-[width] duration-200",
+          "fixed z-50 bg-app-surface shadow-2xl flex flex-col transition-[width] duration-200",
+          // 移动：全屏；桌面：右侧抽屉
+          "inset-0 md:inset-y-0 md:left-auto md:right-0 md:border-l md:border-app-border",
           expanded
-            ? "w-full sm:w-[90vw] md:w-[90vw]"
-            : "w-full sm:w-[480px] md:w-[520px]",
+            ? "w-full md:w-[90vw]"
+            : "w-full md:w-[520px]",
         )}
       >
-        {/* Drawer header */}
+        {/* Drawer header：左返回 + 中标题 + 右操作 */}
         <div
-          className="flex items-center justify-between px-4 py-3 border-b border-app-border shrink-0"
-          style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
+          className="flex items-center gap-1 px-2 md:px-4 py-2 border-b border-app-border shrink-0 relative"
+          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 8px)" }}
         >
-          <h3 className="text-sm font-semibold text-tx-primary">文件详情</h3>
-          <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-accent-primary hover:bg-app-hover shrink-0"
+            onClick={onClose}
+            aria-label="返回"
+            title="返回"
+          >
+            <ChevronLeft size={24} className="md:hidden" />
+            <X size={18} className="hidden md:block" />
+          </button>
+          <h3 className="flex-1 text-center md:text-left text-[15px] font-bold text-tx-primary truncate px-1">
+            文件详情
+          </h3>
+          <div className="flex items-center gap-1 shrink-0 min-w-[40px] justify-end">
             {extraHeaderActions}
             <button
               className="hidden sm:inline-flex p-1.5 rounded-md text-tx-tertiary hover:text-tx-primary hover:bg-app-hover"
@@ -319,13 +334,6 @@ export default function AttachmentDetailDrawer({
               title={expanded ? "还原宽度" : "放大查看（适合 docx 等文档）"}
             >
               {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-            <button
-              className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-primary hover:bg-app-hover"
-              onClick={onClose}
-              aria-label="关闭"
-            >
-              <X size={16} />
             </button>
           </div>
         </div>
@@ -389,15 +397,15 @@ export default function AttachmentDetailDrawer({
                       readOnly
                       value={fullUrl}
                       onFocus={(e) => e.currentTarget.select()}
-                      className="w-full px-2 py-1.5 rounded-md border border-app-border bg-app-surface text-[11px] text-tx-primary font-mono outline-none focus:border-accent-primary"
+                      className="w-full px-2 py-1.5 rounded-md border border-app-border bg-app-surface text-[11px] text-tx-primary font-mono outline-none focus:border-accent-primary break-all"
                     />
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                       {(["url", "markdown", "html"] as ImageHostFormat[]).map((fmt) => (
                         <button
                           key={fmt}
                           onClick={() => copySnippet(fmt)}
                           className={cn(
-                            "px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1 transition-colors",
+                            "px-2.5 py-2 rounded-md text-[11px] flex items-center justify-center gap-1 transition-colors min-h-[40px]",
                             isImageHostMode
                               ? "bg-indigo-500 hover:bg-indigo-600 text-white"
                               : "bg-app-surface border border-app-border hover:bg-app-hover text-tx-primary",
@@ -496,10 +504,10 @@ export default function AttachmentDetailDrawer({
                       href={resolveAttachmentUrl(detail.url)}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-accent-primary hover:underline inline-flex items-center gap-1 truncate"
+                      className="text-accent-primary hover:underline inline-flex items-start gap-1 max-w-full"
                     >
-                      <Download size={11} />
-                      <span className="truncate">{detail.url}</span>
+                      <Download size={11} className="shrink-0 mt-0.5" />
+                      <span className="break-all text-[11px] leading-snug">{detail.url}</span>
                     </a>
                   }
                 />
@@ -564,11 +572,14 @@ export default function AttachmentDetailDrawer({
               </div>
 
               {/* 操作按钮区：下载 + （可选）删除 */}
-              <div className="pt-3 border-t border-app-border space-y-2">
+              <div
+                className="pt-3 border-t border-app-border space-y-2"
+                style={{ paddingBottom: "calc(var(--safe-area-bottom, 0px) + 12px)" }}
+              >
                 <Button
                   variant="default"
                   size="sm"
-                  className="w-full"
+                  className="w-full min-h-[44px]"
                   onClick={handleDownload}
                   disabled={downloading}
                 >
