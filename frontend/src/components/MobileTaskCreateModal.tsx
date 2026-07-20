@@ -45,7 +45,8 @@ export default function MobileTaskCreateModal({
   const [isAssigneeDrawerOpen, setIsAssigneeDrawerOpen] = useState(false);
 
   const workspaceId = getCurrentWorkspace();
-  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+  // 原生壳（iOS / Android）都走 adjustNothing + --keyboard-height，遮罩底边抬到键盘上方
+  const isNative = Capacitor.isNativePlatform();
 
   // Load projects and current user
   useEffect(() => {
@@ -191,7 +192,7 @@ export default function MobileTaskCreateModal({
             isDesktop ? "items-center" : "items-end",
           )}
           style={
-            !isDesktop && isIOS
+            !isDesktop && isNative
               ? { bottom: "var(--keyboard-height, 0px)" }
               : undefined
           }
@@ -231,12 +232,15 @@ export default function MobileTaskCreateModal({
               "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
               isDesktop
                 ? "w-full max-w-lg max-h-[min(88vh,720px)] rounded-2xl border border-app-border"
-                : "w-full h-[min(92dvh,100%)] rounded-t-3xl border-t border-app-border",
+                : "w-full rounded-t-3xl border-t border-app-border",
             )}
             style={
               isDesktop
                 ? undefined
                 : {
+                    // 遮罩 bottom 已扣键盘；此处吃满遮罩可用高度
+                    height: "100%",
+                    maxHeight: "100%",
                     paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
                   }
             }
@@ -266,10 +270,13 @@ export default function MobileTaskCreateModal({
               </button>
             </div>
 
-            {/* Form Content：min-h-0 保证 flex 子项可滚 */}
+            {/* Form Content：min-h-0 保证 flex 子项可滚；minHeight 防键盘压扁 */}
             <div
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4"
-              style={{ WebkitOverflowScrolling: "touch" }}
+              style={{
+                WebkitOverflowScrolling: "touch",
+                minHeight: "min(40vh, 280px)",
+              }}
             >
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-2">

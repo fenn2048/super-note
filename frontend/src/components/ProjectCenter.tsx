@@ -2956,16 +2956,16 @@ export default function ProjectCenter() {
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text"
           style={{
-            // 键盘弹起时整体上移（与 adjustNothing + --keyboard-height 配套）
-            paddingBottom: "var(--keyboard-height, 0px)",
+            // 键盘弹起时把遮罩底边抬到键盘上方（adjustNothing + 校准后的 --keyboard-height）
+            bottom: "var(--keyboard-height, 0px)",
           }}
         >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
           <div
             className={cn(
               "relative bg-app-elevated w-full shadow-2xl overflow-hidden flex flex-col text-sm text-tx-primary z-10",
-              // 移动：固定高度 sheet 才能让内部 overflow 滚动；桌面居中卡片
-              "h-[min(92dvh,100%)] md:h-auto md:max-h-[85vh] md:max-w-xl",
+              // 移动：吃满遮罩（遮罩 bottom 已扣键盘；resize 模式下 keyboard=0 遮罩即可视区）
+              "h-full max-h-full md:h-auto md:max-h-[85vh] md:max-w-xl",
               "rounded-t-2xl md:rounded-2xl border-t md:border border-app-border",
               "animate-in slide-in-from-bottom md:slide-in-from-bottom-0 md:scale-in duration-200",
             )}
@@ -2987,10 +2987,13 @@ export default function ProjectCenter() {
               </button>
             </div>
 
-            {/* Body：原生 overflow 滚动（避免 Radix ScrollArea 在动态高度 sheet 内无法滚） */}
+            {/* Body：原生 overflow 滚动；min-height 防止键盘弹起时被压成一条 */}
             <div
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-8 py-4 md:py-6"
-              style={{ WebkitOverflowScrolling: "touch" }}
+              style={{
+                WebkitOverflowScrolling: "touch",
+                minHeight: "min(40vh, 280px)",
+              }}
             >
               <div className="space-y-5 md:space-y-6.5 pb-2">
               {/* Title */}
