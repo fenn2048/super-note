@@ -354,7 +354,10 @@ export default function TaskDetailModal({
       />
       <div className="relative bg-app-elevated w-full md:max-w-2xl h-[100dvh] md:h-auto rounded-none md:rounded-2xl border-0 md:border border-app-border shadow-2xl flex flex-col max-h-none md:max-h-[85vh] animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:scale-in duration-200 overflow-hidden">
         {/* Modal Header */}
-        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+        <div
+          className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0"
+          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
+        >
           <div className="flex items-center gap-2">
             <button
               onClick={() => {

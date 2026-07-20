@@ -3,7 +3,7 @@ import {
   Bot, Send, Trash2, X, Loader2, FileText, Sparkles, User,
   BookOpen, Database, MessageCircleQuestion, ArrowRight,
   Upload, FileUp, Wand2, FolderUp, Check, Copy, ChevronDown, ChevronUp,
-  Paperclip, Plus, MessageSquare, Menu, Pencil, Brain
+  Paperclip, Plus, MessageSquare, Menu, Pencil, Brain, ChevronLeft
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -662,17 +662,23 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
       <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
       {window.innerWidth < 768 ? (
-        <div 
-          className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0"
-          style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
+        <div
+          className="flex items-center gap-1 px-2 py-2 border-b border-app-border bg-app-surface/50 shrink-0"
+          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 8px)" }}
         >
-          <span className="text-sm font-semibold text-tx-primary">AI问答</span>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
+            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-accent-primary hover:bg-app-hover shrink-0"
+            aria-label="返回"
+            title="返回"
           >
-            <X size={16} />
+            <ChevronLeft size={24} />
           </button>
+          <span className="flex-1 text-center text-[15px] font-bold text-tx-primary truncate">
+            AI问答
+          </span>
+          <div className="w-10 h-10 shrink-0" aria-hidden />
         </div>
       ) : (
         <div className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50">

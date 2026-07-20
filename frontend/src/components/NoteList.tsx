@@ -986,7 +986,7 @@ const NoteCard = React.memo(function NoteCard({
             isActive || isSelected ? "text-tx-primary" : "text-tx-secondary group-hover:text-tx-primary"
           )}>
             {note.visibility && note.workspaceId && (
-              <span className="text-[10px] shrink-0" title={note.visibility === "WORKSPACE" ? "所有人可见" : "仅自己可见"}>
+              <span className="text-[10px] shrink-0" title={note.visibility === "WORKSPACE" ? "所有人可见" : "私有"}>
                 {note.visibility === "WORKSPACE" ? "🌐" : "🔒"}
               </span>
             )}
@@ -2628,7 +2628,7 @@ export default function NoteList() {
       ) : state.viewMode === "favorites" || state.viewMode === "trash" ? (
         <MobileChromeHeader
           variant="stack"
-          stackAction="close"
+          stackAction="back"
           title={viewTitles[state.viewMode]}
           onLeadingClick={() => {
             actions.setViewMode("more");
