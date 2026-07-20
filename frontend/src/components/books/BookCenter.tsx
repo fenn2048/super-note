@@ -492,39 +492,38 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                     onClick={() => onOpenBook(book.bookHash)}
                     className="group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all"
                   >
+                    {/*
+                      封面层：底色 + 书名始终铺在底层；有 coverUrl 时 img 盖在上面。
+                      图片 404/跨域失败时 onError 藏图，自动露出书名色块（避免纯色无字）。
+                    */}
                     <div
-                      className="aspect-[3/4] w-full relative overflow-hidden rounded-md shadow-sm border border-app-border/30 select-none bg-app-surface"
-                      style={{ backgroundColor: coverUrl ? undefined : coverBg }}
+                      className="aspect-[3/4] w-full relative overflow-hidden rounded-md shadow-sm border border-app-border/30 select-none"
+                      style={{ backgroundColor: coverBg }}
                     >
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 z-[1] bg-gradient-to-r from-black/25 via-white/10 to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-2 text-center pointer-events-none">
+                        <h3 className="text-[11px] sm:text-xs font-bold text-white leading-tight font-serif line-clamp-4 drop-shadow">
+                          {book.title}
+                        </h3>
+                        <p className="text-[9px] text-white/80 mt-1 line-clamp-1 hidden sm:block">
+                          {book.author || "未知作者"}
+                        </p>
+                      </div>
                       {coverUrl ? (
                         <img
                           src={coverUrl}
                           alt={book.title}
-                          className="w-full h-full object-cover"
+                          className="absolute inset-0 z-[2] w-full h-full object-cover"
                           loading="lazy"
+                          decoding="async"
                           onError={(e) => {
-                            // 封面失败时隐藏 img，露出下方色块标题
+                            // 藏图后露出底层色块+书名
                             e.currentTarget.style.display = "none";
-                            const parent = e.currentTarget.parentElement;
-                            if (parent) parent.style.backgroundColor = coverBg;
                           }}
                         />
                       ) : null}
-                      {!coverUrl && (
-                        <>
-                          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-r from-black/25 via-white/10 to-transparent"></div>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
-                            <h3 className="text-[11px] sm:text-xs font-bold text-white leading-tight font-serif line-clamp-4">
-                              {book.title}
-                            </h3>
-                            <p className="text-[9px] text-white/80 mt-1 line-clamp-1 hidden sm:block">
-                              {book.author || "未知作者"}
-                            </p>
-                          </div>
-                        </>
-                      )}
 
-                      <div className="absolute top-1.5 left-1.5 opacity-0 md:group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
+                      <div className="absolute top-1.5 left-1.5 z-[3] opacity-0 md:group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
                         <button
                           onClick={(e) => handleEditClick(book, e)}
                           className="p-1 text-white hover:text-accent-primary hover:bg-white/10 rounded transition-all"
