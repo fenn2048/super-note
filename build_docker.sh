@@ -139,7 +139,7 @@ if command -v node >/dev/null 2>&1 && [[ -f scripts/docker-context-size.mjs ]]; 
   node scripts/docker-context-size.mjs "${GATE_ARGS[@]+"${GATE_ARGS[@]}"}" || {
     code=$?
     if [[ $code -eq 2 ]]; then
-      echo "Context gate failed. Fix .dockerignore before building." >&2
+    
       exit 2
     fi
   }
