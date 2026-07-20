@@ -22,6 +22,7 @@
  */
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { EditorState, Compartment, StateEffect } from "@codemirror/state";
 import {
   EditorView,
@@ -88,7 +89,9 @@ import {
   Paperclip,
   Undo,
   Code as CodeIcon,
+  MoreHorizontal,
 } from "lucide-react";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 
 import { Note, Tag } from "@/types";
 import TagInput from "@/components/TagInput";
@@ -1145,14 +1148,12 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Toolbar
-          v2026-05-18：与 TiptapEditor 对齐——取消「键盘弹起隐藏主工具栏」
-          方案，改为始终保留单一顶部工具栏并 sticky 在容器顶端：
-          保证移动端输入时仍能看到完整格式按钮，不再依赖独立的浮动工具栏。 */}
+      {/* Toolbar：桌面 sticky 顶栏；移动端改底部固定栏（贴键盘上方），见 MobileMdToolbar */}
       {editable && (
         <div
           className={cn(
-            "sticky top-0 z-20 flex items-center gap-0.5 px-4 py-2 border-b border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 md:flex-wrap overflow-x-auto hide-scrollbar touch-pan-x transition-colors",
+            "sticky top-0 z-20 items-center gap-0.5 px-4 py-2 border-b border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 md:flex-wrap overflow-x-auto hide-scrollbar touch-pan-x transition-colors",
+            "hidden md:flex",
           )}
         >
           {/* Group 1: History */}
@@ -1313,13 +1314,13 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         )}
       </div>
 
-      {/* 编辑器主体
-          paddingBottom 只吃键盘高度，避免光标被输入法挡住。
-          v2026-05-18 起移除移动浮动工具栏，由顶部 sticky 主工具栏统一
-          承担格式化命令。 */}
+      {/* 编辑器主体：底部预留移动工具栏 + 键盘高度，避免光标被挡 */}
       <div
         className="flex-1 overflow-auto px-4 md:px-8"
-        style={{ paddingBottom: "var(--keyboard-height, 0px)" }}
+        style={{
+          paddingBottom:
+            "calc(3.25rem + var(--keyboard-height, 0px))",
+        }}
       >
         <div
           ref={hostRef}
@@ -1413,12 +1414,134 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         />
       )}
 
-      {/*
-        移动端浮动工具栏（吸附键盘正上方）
-      {/* 移动端工具栏已迁移到主 Toolbar 之后，参考下方组件渲染处 */}
+      {/* 移动端底部格式栏：portal 到 body，贴键盘上方 */}
+      {editable && (
+        <MobileMdToolbar
+          withView={withView}
+          openAIAssistant={isGuest ? undefined : openAIAssistant}
+          triggerImagePicker={triggerImagePicker}
+        />
+      )}
     </div>
   );
 });
+
+/** 移动端 MD 格式栏：fixed 贴键盘上方，portal 到 body 规避父级 transform */
+function MobileMdToolbar({
+  withView,
+  openAIAssistant,
+  triggerImagePicker,
+}: {
+  withView: (fn: (v: EditorView) => void) => void;
+  openAIAssistant?: () => void;
+  triggerImagePicker: () => void;
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const { visible: kbVisible } = useKeyboardVisible();
+
+  const bar = (
+    <div
+      className="md:hidden fixed left-0 right-0 z-[60] border-t border-app-border bg-app-elevated/95 backdrop-blur-md supports-[backdrop-filter]:bg-app-elevated/80 shadow-[0_-4px_20px_rgba(28,25,23,0.08)]"
+      style={{
+        bottom: "var(--keyboard-height, 0px)",
+        paddingBottom: kbVisible ? 4 : "var(--safe-area-bottom)",
+      }}
+      data-swipe-blocker
+      data-mobile-editor-toolbar
+    >
+      {moreOpen && (
+        <div className="flex items-center justify-center gap-1 px-2 py-1.5 border-b border-app-border/60 overflow-x-auto hide-scrollbar">
+          <ToolbarButton
+            onClick={() => withView((v) => toggleOrderedList(v))}
+            title="有序列表"
+          >
+            <ListOrdered size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleBlockquote(v))}
+            title="引用"
+          >
+            <Quote size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleInlineCode(v))}
+            title="行内代码"
+          >
+            <CodeIcon size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => insertHorizontalRule(v))}
+            title="分隔线"
+          >
+            <Minus size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => insertLink(v))}
+            title="链接"
+          >
+            <LinkIcon size={16} />
+          </ToolbarButton>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-0.5 px-1.5 py-1.5">
+        <div className="flex items-center gap-0.5 overflow-x-auto hide-scrollbar flex-1 min-w-0">
+          <ToolbarButton onClick={() => withView((v) => undo(v))} title="撤销">
+            <Undo size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleHeading(v, 2))}
+            title="标题"
+          >
+            <Heading2 size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleWrap(v, "**"))}
+            title="加粗"
+          >
+            <Bold size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleWrap(v, "*"))}
+            title="斜体"
+          >
+            <Italic size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleBulletList(v))}
+            title="列表"
+          >
+            <List size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => withView((v) => toggleTaskList(v))}
+            title="待办"
+          >
+            <CheckSquare size={16} />
+          </ToolbarButton>
+          <ToolbarButton onClick={triggerImagePicker} title="图片">
+            <ImagePlus size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => setMoreOpen((v) => !v)}
+            title="更多"
+          >
+            <MoreHorizontal size={16} />
+          </ToolbarButton>
+        </div>
+        {openAIAssistant && (
+          <div className="shrink-0 pl-1 border-l border-app-border/50 ml-0.5">
+            <ToolbarButton onClick={openAIAssistant} title="AI 助手">
+              <Sparkles size={16} className="text-violet-500" />
+            </ToolbarButton>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (typeof document === "undefined") return bar;
+  return createPortal(bar, document.body);
+}
 
 // ---------------------------------------------------------------------------
 // 开发辅助：防止 Vite HMR 时残留 view
