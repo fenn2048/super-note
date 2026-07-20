@@ -15,7 +15,14 @@ import WorkspaceManagement from "@/components/WorkspaceManagement";
 import ManualPanel from "@/components/ManualPanel";
 import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
-import { getCustomSplashDataUrl, saveCustomSplashFromFile, clearCustomSplash } from "@/lib/splashStorage";
+import {
+  getCustomSplashDataUrl,
+  saveCustomSplashFromFile,
+  clearCustomSplash,
+  getCustomScreensaverDataUrl,
+  saveCustomScreensaverFromFile,
+  clearCustomScreensaver,
+} from "@/lib/splashStorage";
 import BrandMark from "@/components/BrandMark";
 import { MODULE_PACK_META, getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
 import { api, getServerUrl } from "@/lib/api";
@@ -1043,9 +1050,14 @@ function AppearancePanel() {
   const [splashBusy, setSplashBusy] = useState(false);
   const [splashMsg, setSplashMsg] = useState("");
   const splashInputRef = useRef<HTMLInputElement>(null);
+  const [ssPreview, setSsPreview] = useState<string | null>(null);
+  const [ssBusy, setSsBusy] = useState(false);
+  const [ssMsg, setSsMsg] = useState("");
+  const ssInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let cancelled = false;
     getCustomSplashDataUrl().then((u) => { if (!cancelled) setSplashPreview(u); }).catch(() => {});
+    getCustomScreensaverDataUrl().then((u) => { if (!cancelled) setSsPreview(u); }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
   const [previewIcon, setPreviewIcon] = useState(siteConfig.favicon);
@@ -1365,9 +1377,89 @@ function AppearancePanel() {
                 )}
               </div>
               <p className="text-[11px] text-tx-tertiary">
-                {t("settings.customSplashHint", { defaultValue: "建议竖图，≤5MB。JPG / PNG / WebP。" })}
+                {t("settings.customSplashHint", { defaultValue: "建议竖图，≤5MB。JPG / PNG / WebP。仅保存在本机，不会上传到服务器。" })}
               </p>
               {splashMsg && <p className="text-[11px] text-accent-primary">{splashMsg}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* 本机休息屏保图 */}
+        <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-tx-primary">
+              {t("settings.customScreensaver", { defaultValue: "休息屏保照片" })}
+            </h3>
+            <p className="text-xs text-tx-tertiary mt-1">
+              {t("settings.customScreensaverDesc", {
+                defaultValue: "健康休息提醒弹出时显示的背景图。仅保存在本机，不会上传到云服务器。未设置时使用默认壁纸。",
+              })}
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start gap-4">
+            <div className="w-28 h-16 rounded-lg border border-app-border overflow-hidden bg-zinc-900 flex items-center justify-center shrink-0">
+              {ssPreview ? (
+                <img src={ssPreview} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[10px] text-zinc-400">默认壁纸</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 min-w-0 flex-1">
+              <input
+                ref={ssInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  setSsBusy(true);
+                  setSsMsg("");
+                  try {
+                    const url = await saveCustomScreensaverFromFile(f);
+                    setSsPreview(url);
+                    setSsMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
+                  } catch (err: any) {
+                    setSsMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
+                  } finally {
+                    setSsBusy(false);
+                  }
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={ssBusy}
+                  onClick={() => ssInputRef.current?.click()}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
+                >
+                  {ssBusy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
+                </button>
+                {ssPreview && (
+                  <button
+                    type="button"
+                    disabled={ssBusy}
+                    onClick={async () => {
+                      setSsBusy(true);
+                      try {
+                        await clearCustomScreensaver();
+                        setSsPreview(null);
+                        setSsMsg("");
+                      } finally {
+                        setSsBusy(false);
+                      }
+                    }}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
+                  >
+                    {t("settings.customSplashClear", { defaultValue: "恢复默认" })}
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-tx-tertiary">
+                建议横图，≤5MB。JPG / PNG / WebP。仅本机存储。
+              </p>
+              {ssMsg && <p className="text-[11px] text-accent-primary">{ssMsg}</p>}
             </div>
           </div>
         </div>
@@ -1761,19 +1853,23 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
           // Mobile H5 UI Flow (Menu -> Subpage)
           currentMobilePage === "menu" ? (
             <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-[#0c0e14] overflow-hidden h-full">
-              {/* Mobile Header */}
-              <div 
-                className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/60 bg-zinc-50 dark:bg-[#0c0e14] px-4 py-3 shrink-0"
-                style={{ paddingTop: 'calc(var(--safe-area-top) + 12px)' }}
+              {/* Mobile Header：左返回关闭设置，右侧无叉子 */}
+              <div
+                className="sticky top-0 z-10 flex items-center gap-1 border-b border-zinc-200/80 dark:border-zinc-800/60 bg-zinc-50 dark:bg-[#0c0e14] px-2 py-2 shrink-0"
+                style={{ paddingTop: "calc(var(--safe-area-top) + 8px)" }}
               >
-                <h2 className="text-base font-bold text-tx-primary">{t('settings.title')}</h2>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg transition-colors"
+                  className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-accent-primary hover:bg-app-hover active:scale-95 transition-colors"
+                  title="返回"
+                  aria-label="返回"
                 >
-                  <X className="w-5 h-5" />
+                  <ChevronRight className="w-5 h-5 rotate-180" />
                 </button>
+                <h2 className="flex-1 text-center text-[15px] font-bold text-tx-primary truncate pr-10">
+                  {t("settings.title")}
+                </h2>
               </div>
 
               {/* Menu List — 分组 */}
@@ -1822,34 +1918,24 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
             </div>
           ) : (
             <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-[#0c0e14] overflow-hidden h-full">
-              {/* Mobile Subpage Header */}
-              {/* 移动子页顶栏：对齐 StackChrome（返回菜单 + 关闭整窗） */}
+              {/* Mobile Subpage Header：左返回上一级，右侧无叉子 */}
               <div
-                className="sticky top-0 z-10 flex items-center gap-2 border-b border-app-border bg-app-surface/90 backdrop-blur-md px-3 py-2.5 shrink-0"
-                style={{ paddingTop: "calc(var(--safe-area-top) + 10px)" }}
+                className="sticky top-0 z-10 flex items-center gap-1 border-b border-app-border bg-app-surface/90 backdrop-blur-md px-2 py-2 shrink-0"
+                style={{ paddingTop: "calc(var(--safe-area-top) + 8px)" }}
               >
                 <button
                   type="button"
                   onClick={() => setCurrentMobilePage("menu")}
-                  className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 transition-colors"
+                  className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-accent-primary hover:bg-app-hover active:scale-95 transition-colors"
                   title="返回设置菜单"
                   aria-label="返回设置菜单"
                 >
                   <ChevronRight className="w-5 h-5 rotate-180" />
                 </button>
-                <h2 className="text-base font-bold text-tx-primary flex-1 truncate">
+                <h2 className="flex-1 text-center text-[15px] font-bold text-tx-primary truncate pr-10">
                   {SETTING_TABS.find((t) => t.id === currentMobilePage)?.label ||
                     "设置"}
                 </h2>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-tx-tertiary hover:text-tx-primary hover:bg-app-hover border border-app-border/60 bg-app-elevated/80 transition-colors"
-                  title="关闭"
-                  aria-label="关闭设置"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
               {/* Subpage Content */}

@@ -1,14 +1,17 @@
 /**
- * 用户自定义启动闪屏图（P2-7）
+ * 用户自定义本机图片（启动闪屏 / 休息屏保）
  * ---------------------------------------------------------------------------
  * 存 IndexedDB（Web / Capacitor WebView 通用）；展示侧走 data URL。
- * 原生 Capacitor SplashScreen 资源仍用品牌默认图（打包写死）。
+ * 不上云；原生 Capacitor SplashScreen 资源仍用品牌默认图（打包写死）。
  */
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "fuyou-splash";
 const STORE = "images";
-const KEY = "custom-splash";
+const KEY_SPLASH = "custom-splash";
+const KEY_SCREENSAVER = "custom-screensaver";
+/** @deprecated 兼容旧调用 */
+const KEY = KEY_SPLASH;
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_EDGE = 1920;
 
@@ -25,20 +28,10 @@ function getDb() {
   return dbPromise;
 }
 
-export async function hasCustomSplash(): Promise<boolean> {
+async function getImageDataUrl(key: string): Promise<string | null> {
   try {
     const db = await getDb();
-    const v = await db.get(STORE, KEY);
-    return !!v;
-  } catch {
-    return false;
-  }
-}
-
-export async function getCustomSplashDataUrl(): Promise<string | null> {
-  try {
-    const db = await getDb();
-    const blob = (await db.get(STORE, KEY)) as Blob | undefined;
+    const blob = (await db.get(STORE, key)) as Blob | undefined;
     if (!blob) return null;
     return await blobToDataUrl(blob);
   } catch {
@@ -46,16 +39,12 @@ export async function getCustomSplashDataUrl(): Promise<string | null> {
   }
 }
 
-export async function clearCustomSplash(): Promise<void> {
+async function clearImage(key: string): Promise<void> {
   const db = await getDb();
-  await db.delete(STORE, KEY);
+  await db.delete(STORE, key);
 }
 
-/**
- * 压缩并保存用户选择的图片。
- * @returns data URL 预览
- */
-export async function saveCustomSplashFromFile(file: File): Promise<string> {
+async function saveImageFromFile(key: string, file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error("请选择图片文件");
   }
@@ -68,8 +57,56 @@ export async function saveCustomSplashFromFile(file: File): Promise<string> {
     throw new Error("压缩后仍超过 5MB，请换更小的图片");
   }
   const db = await getDb();
-  await db.put(STORE, blob, KEY);
+  await db.put(STORE, blob, key);
   return dataUrl;
+}
+
+export async function hasCustomSplash(): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const v = await db.get(STORE, KEY_SPLASH);
+    return !!v;
+  } catch {
+    return false;
+  }
+}
+
+export async function getCustomSplashDataUrl(): Promise<string | null> {
+  return getImageDataUrl(KEY_SPLASH);
+}
+
+export async function clearCustomSplash(): Promise<void> {
+  await clearImage(KEY_SPLASH);
+}
+
+/**
+ * 压缩并保存用户选择的启动闪屏图（本机，不上云）。
+ * @returns data URL 预览
+ */
+export async function saveCustomSplashFromFile(file: File): Promise<string> {
+  return saveImageFromFile(KEY_SPLASH, file);
+}
+
+/** 本机休息屏保图 */
+export async function getCustomScreensaverDataUrl(): Promise<string | null> {
+  return getImageDataUrl(KEY_SCREENSAVER);
+}
+
+export async function clearCustomScreensaver(): Promise<void> {
+  await clearImage(KEY_SCREENSAVER);
+}
+
+export async function saveCustomScreensaverFromFile(file: File): Promise<string> {
+  return saveImageFromFile(KEY_SCREENSAVER, file);
+}
+
+export async function hasCustomScreensaver(): Promise<boolean> {
+  try {
+    const db = await getDb();
+    return !!(await db.get(STORE, KEY_SCREENSAVER));
+  } catch {
+    return false;
+  }
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
