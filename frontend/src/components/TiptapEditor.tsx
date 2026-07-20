@@ -3282,14 +3282,13 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
   return (
     <div className="flex flex-col h-full relative">
       {/* Toolbar
-          v2026-05-18：取消「键盘弹起时隐藏 + 浮动工具栏顶替」方案，改为始终保留
-          单一顶部工具栏并 sticky 在容器顶端：
-            - 键盘弹起时不再隐藏，避免移动端找不到格式按钮；
-            - sticky top-0 让长内容滚动时也能随时点到工具栏；
-            - z 索引压在选区/链接气泡之下（z-50），保留气泡的覆盖能力。 */}
+          桌面：sticky 顶栏完整格式按钮。
+          移动：隐藏顶栏，仅用底部 MobileEditorToolbar，避免双栏遮挡正文。 */}
       <div
         className={cn(
-          "sticky top-0 z-20 flex items-center gap-0.5 px-4 py-2 border-b border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 md:flex-wrap overflow-x-auto hide-scrollbar touch-pan-x transition-shadow duration-200",
+          "sticky top-0 z-20 items-center gap-0.5 px-4 py-2 border-b border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 md:flex-wrap overflow-x-auto hide-scrollbar touch-pan-x transition-shadow duration-200",
+          // 移动端不显示顶栏（由 MobileEditorToolbar 接管）；桌面显示
+          "hidden md:flex",
           // 滚动离顶后加底部阴影，表达「工具栏浮于内容之上」
           toolbarShadow && "shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4)]",
         )}
