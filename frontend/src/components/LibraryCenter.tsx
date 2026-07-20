@@ -1,10 +1,11 @@
 /**
  * 资料库统一壳（P1-3 + Phase A StackChrome）
- * Tab：文件 | 书库 | 媒体 —— 内部复用既有业务组件，不复制逻辑。
- * 移动：栈页（无底栏/FAB），右上 × 关闭。
+ * ---------------------------------------------------------------------------
+ * 桌面：分段 Tab（文件 | 书库 | 媒体）+ 内容
+ * 移动：先进入 Hub 三行列表 → 再进对应子界面；顶栏左返回
  */
 import React, { Suspense, useCallback, useEffect, useState } from "react";
-import { FolderOpen, Book, Film } from "lucide-react";
+import { FolderOpen, Book, Film, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLibraryTab, setLibraryTab, type LibraryTab } from "@/lib/navigation.config";
 import { getCurrentWorkspace } from "@/lib/api";
@@ -16,6 +17,36 @@ const FileManager = React.lazy(() => import("@/components/FileManager"));
 const BookCenter = React.lazy(() => import("@/components/books/BookCenter"));
 const BookReader = React.lazy(() => import("@/components/books/BookReader"));
 const MediaCenter = React.lazy(() => import("@/components/media/MediaCenter"));
+
+const HUB_ITEMS: {
+  id: LibraryTab;
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+  iconBg: string;
+}[] = [
+  {
+    id: "files",
+    label: "文件",
+    desc: "附件与上传文件管理",
+    icon: <FolderOpen size={22} className="text-emerald-500" />,
+    iconBg: "bg-emerald-500/10 border-emerald-500/20",
+  },
+  {
+    id: "books",
+    label: "书库",
+    desc: "电子书阅读与划线",
+    icon: <Book size={22} className="text-orange-500" />,
+    iconBg: "bg-orange-500/10 border-orange-500/20",
+  },
+  {
+    id: "media",
+    label: "媒体",
+    desc: "视频与音频库",
+    icon: <Film size={22} className="text-sky-500" />,
+    iconBg: "bg-sky-500/10 border-sky-500/20",
+  },
+];
 
 const TABS: { id: LibraryTab; label: string; icon: React.ReactNode }[] = [
   { id: "files", label: "文件", icon: <FolderOpen size={15} /> },
@@ -31,23 +62,58 @@ function Fallback() {
   );
 }
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768,
+  );
+  useEffect(() => {
+    const onResize = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return mobile;
+}
+
 export default function LibraryCenter() {
   const actions = useAppActions();
-  const [tab, setTab] = useState<LibraryTab>(() => getLibraryTab());
+  const isMobile = useIsMobile();
+  // 移动端：null = Hub 列表；有值 = 已进入子 Tab
+  // 桌面：始终有 tab
+  const [tab, setTab] = useState<LibraryTab | null>(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      // 深链 / 外部 setLibraryTab 时直接进子页；默认 Hub
+      try {
+        const forced = sessionStorage.getItem("super-library-enter-tab");
+        if (forced === "files" || forced === "books" || forced === "media") {
+          sessionStorage.removeItem("super-library-enter-tab");
+          return forced;
+        }
+      } catch { /* ignore */ }
+      return null;
+    }
+    return getLibraryTab();
+  });
   const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
   const workspaceId = getCurrentWorkspace();
 
-  /** 栈关闭：移动默认回「我的」；桌面回笔记列表 */
-  const goBack = useCallback(() => {
-    const isMobile =
-      typeof window !== "undefined" && window.innerWidth < 768;
+  /** 退出资料库：回「我的」或笔记 */
+  const leaveLibrary = useCallback(() => {
     if (isMobile) {
       actions.setViewMode("more");
       actions.setMobileView("list");
     } else {
       actions.setViewMode("all");
     }
-  }, [actions]);
+  }, [actions, isMobile]);
+
+  /** 子页返回：移动回 Hub；桌面关资料库 */
+  const goBack = useCallback(() => {
+    if (isMobile && tab !== null) {
+      setTab(null);
+      return;
+    }
+    leaveLibrary();
+  }, [isMobile, tab, leaveLibrary]);
 
   useEffect(() => {
     const onTab = (e: Event) => {
@@ -90,7 +156,7 @@ export default function LibraryCenter() {
     if (next !== "books") setActiveBookHash(null);
   }, []);
 
-  // 全屏阅读器：不显示 Tab 栏
+  // 全屏阅读器
   if (tab === "books" && activeBookHash) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -105,11 +171,58 @@ export default function LibraryCenter() {
     );
   }
 
+  // ── 移动 Hub：文件 / 书库 / 媒体 三行 ──
+  if (isMobile && tab === null) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
+        <StackChrome
+          title="资料库"
+          onClose={leaveLibrary}
+          closeLabel="返回"
+          leadingAction="back"
+        />
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 pb-[calc(1.5rem+var(--safe-area-bottom))]">
+          {HUB_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => selectTab(item.id)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl border border-app-border/60 bg-app-elevated shadow-xs active:scale-[0.99] transition-all text-left"
+            >
+              <div
+                className={cn(
+                  "w-11 h-11 rounded-xl border flex items-center justify-center shrink-0",
+                  item.iconBg,
+                )}
+              >
+                {item.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-tx-primary">{item.label}</div>
+                <div className="text-[11px] text-tx-tertiary mt-0.5">{item.desc}</div>
+              </div>
+              <ChevronRight size={18} className="text-tx-tertiary shrink-0" />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const activeTab = tab || "files";
+  const tabLabel =
+    HUB_ITEMS.find((h) => h.id === activeTab)?.label || "资料库";
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-      <StackChrome onClose={goBack} closeLabel="关闭资料库">
-        {/* 三分段控件：文件 | 书库 | 媒体，三子页视觉统一 */}
-        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-app-bg border border-app-border/70 shrink-0">
+      <StackChrome
+        title={isMobile ? tabLabel : undefined}
+        onClose={goBack}
+        closeLabel={isMobile && tab !== null ? "返回资料库" : "关闭资料库"}
+        leadingAction="back"
+      >
+        {/* 桌面三分段控件 */}
+        <div className="hidden md:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-app-bg border border-app-border/70 shrink-0">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -117,7 +230,7 @@ export default function LibraryCenter() {
               onClick={() => selectTab(t.id)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-all min-h-[36px]",
-                tab === t.id
+                activeTab === t.id
                   ? "bg-app-elevated text-accent-primary shadow-sm"
                   : "text-tx-tertiary hover:text-tx-primary",
               )}
@@ -131,14 +244,14 @@ export default function LibraryCenter() {
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <Suspense fallback={<Fallback />}>
-          {tab === "files" && <FileManager />}
-          {tab === "books" && (
+          {activeTab === "files" && <FileManager />}
+          {activeTab === "books" && (
             <BookCenter
               onOpenBook={(hash) => setActiveBookHash(hash)}
               workspaceId={workspaceId}
             />
           )}
-          {tab === "media" && <MediaCenter />}
+          {activeTab === "media" && <MediaCenter />}
         </Suspense>
       </div>
     </div>
