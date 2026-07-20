@@ -1136,10 +1136,10 @@ const handleEmojiSelect = (emoji: string) => {
       className={cn(
         "bg-app-bg flex flex-col overflow-hidden",
         isMobile
-          ? "fixed z-[60] inset-x-0 top-0"
+          ? "fixed z-[60] inset-0"
           : "relative w-full max-w-2xl max-h-[min(88vh,820px)] rounded-2xl border border-app-border shadow-2xl shadow-black/20 dark:shadow-black/50",
       )}
-      style={isMobile ? { height: viewportHeight, bottom: "auto" } : undefined}
+      style={isMobile ? { height: "100%", maxHeight: "100%" } : undefined}
       role="dialog"
       aria-modal="true"
       aria-label="新建说说"

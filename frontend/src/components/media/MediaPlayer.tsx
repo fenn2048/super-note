@@ -352,8 +352,12 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
         <button
           type="button"
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             exitFullscreenAndPause();
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
           }}
           className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-[10000] w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
           title="退出全屏"

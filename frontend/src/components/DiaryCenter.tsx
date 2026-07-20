@@ -3240,10 +3240,9 @@ function DiaryEditor({
       style={
         dockToKeyboard
           ? {
-              // resize 模式下 keyboard-height=0，bottom:0 即贴键盘；叠层模式用精确高度
-              bottom: "var(--keyboard-height, 0px)",
+              bottom: 0,
               maxHeight:
-                "min(70vh, calc(100dvh - var(--keyboard-height, 0px) - var(--safe-area-top, 0px) - 8px))",
+                "min(70vh, calc(100dvh - var(--safe-area-top, 0px) - 8px))",
             }
           : undefined
       }

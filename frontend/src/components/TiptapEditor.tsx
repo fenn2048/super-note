@@ -7,6 +7,7 @@ import { useEditor, Editor, EditorContent, Extension, ReactNodeViewRenderer } fr
 const DocxAttachmentPreview = lazy(() => import("@/office/word/DocxAttachmentPreview"));
 // 复用的附件详情抽屉（与 FileManager 同一份实现）
 import AttachmentDetailDrawer from "@/components/attachmentDetail/AttachmentDetailDrawer";
+import { useAppState } from "@/store/AppContext";
 import { posToDOMRect } from "@tiptap/core";
 import { AnimatePresence, motion } from "framer-motion";import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -4282,36 +4283,16 @@ function MobileEditorToolbar({
   onAI: () => void;
   toggleHeadingSmart: (editor: any, level: 1 | 2 | 3 | 4 | 5 | 6) => void;
 }) {
+  const state = useAppState();
+  const mobileView = state.mobileView;
   const [moreOpen, setMoreOpen] = useState(false);
-  const { visible: kbVisible } = useKeyboardVisible();
+  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
 
-  // 编辑器聚焦时隐藏全局 Tab/FAB，腾出读写空间
-  useEffect(() => {
-    if (!editor) return;
-    const onFocus = () => {
-      try {
-        window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
-      } catch { /* ignore */ }
-    };
-    const onBlur = () => {
-      // 延迟，避免点工具栏按钮时误 show
-      window.setTimeout(() => {
-        if (!editor.isFocused) {
-          try {
-            window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
-          } catch { /* ignore */ }
-        }
-      }, 180);
-    };
-    editor.on("focus", onFocus);
-    editor.on("blur", onBlur);
-    return () => {
-      editor.off("focus", onFocus);
-      editor.off("blur", onBlur);
-    };
-  }, [editor]);
+  console.log("[MobileToolbar Debug - Tiptap]", { mobileView, hasEditor: !!editor, kbVisible, kbHeight });
 
-  if (!editor) return null;
+  if (!editor || mobileView !== "editor") return null;
+
+  const bottomOffset = kbVisible && kbHeight > 0 ? `${kbHeight}px` : "var(--keyboard-height, 0px)";
 
   const btn = (
     onClick: () => void,
@@ -4337,8 +4318,7 @@ function MobileEditorToolbar({
     <div
       className="md:hidden fixed left-0 right-0 z-[60] border-t border-app-border bg-app-elevated/95 backdrop-blur-md supports-[backdrop-filter]:bg-app-elevated/80 shadow-[0_-4px_20px_rgba(28,25,23,0.08)]"
       style={{
-        // 单一来源：useKeyboardLayout 已防双计
-        bottom: "var(--keyboard-height, 0px)",
+        bottom: bottomOffset,
         paddingBottom: kbVisible ? 4 : "var(--safe-area-bottom)",
       }}
       data-swipe-blocker

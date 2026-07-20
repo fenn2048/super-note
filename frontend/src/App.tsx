@@ -485,7 +485,11 @@ function AppLayout() {
     if (state.viewMode === "books" || state.viewMode === "library") {
       // books 深链 / library 由 LibraryCenter 内部处理阅读器；hash 统一 #/library
       const target = state.viewMode === "library" ? "#/library" : "#/books";
-      if (window.location.hash !== target && !window.location.hash.startsWith("#/books/")) {
+      if (
+        window.location.hash !== target &&
+        !window.location.hash.startsWith("#/books/") &&
+        !(state.viewMode === "library" && window.location.hash.startsWith("#/media/items/"))
+      ) {
         window.location.hash = target;
       }
     } else {
@@ -915,8 +919,13 @@ function AppLayout() {
   );
   useRegisterBackLayer(
     "book-reader",
-    state.viewMode === "books" && !!activeBookHash,
-    () => setActiveBookHash(null),
+    (state.viewMode === "books" || state.viewMode === "library") && !!activeBookHash,
+    () => {
+      console.log("[BookReader Back Debug - App]", { viewMode: state.viewMode, activeBookHash });
+      setLibraryTab("books");
+      setActiveBookHash(null);
+      window.dispatchEvent(new CustomEvent("super:close-book"));
+    },
     400
   );
 

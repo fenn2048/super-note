@@ -188,6 +188,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
   const currentSectionIndexRef = useRef(0);
   const clickTimeoutRef = useRef<any>(null);
+  const lastTapTimeRef = useRef<number>(0);
+  const lastTapTimerRef = useRef<any>(null);
 
   // Sidebar size state
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -399,7 +401,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     loadBookAndReader();
     return () => {
       // Clean up TTS
-      window.speechSynthesis.cancel();
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [bookHash]);
 
@@ -718,21 +722,41 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     }
 
     const clientWidth = doc.documentElement.clientWidth;
-    const ratio = e.clientX / clientWidth;
     const isMobile = window.innerWidth < 768;
 
-    if (isMobile) {
-      if (ratio >= 0.3 && ratio <= 0.7) {
-        setIsImmersive(prev => !prev);
-      } else if (ratio < 0.3) {
-        viewRef.current?.prev();
-      } else {
-        viewRef.current?.next();
+    const now = Date.now();
+    const isDoubleTap = now - lastTapTimeRef.current < 300;
+    lastTapTimeRef.current = now;
+
+    if (isDoubleTap) {
+      // 捕获双击：取消待执行的单击翻页，在阅读器任意地方轻点两下均可切换/退出沉浸态
+      if (lastTapTimerRef.current) {
+        clearTimeout(lastTapTimerRef.current);
+        lastTapTimerRef.current = null;
       }
+      setIsImmersive((prev) => !prev);
     } else {
-      if (ratio >= 0.3 && ratio <= 0.7) {
-        setIsImmersive(prev => !prev);
+      // 单击：延迟 200ms 触发翻页，等待是否会触发第二次点击（双击）
+      const clientX = e.clientX;
+      const ratio = clientX / clientWidth;
+
+      if (lastTapTimerRef.current) {
+        clearTimeout(lastTapTimerRef.current);
       }
+
+      lastTapTimerRef.current = setTimeout(() => {
+        lastTapTimerRef.current = null;
+        if (isMobile) {
+          // 移动端单击：左侧 50% 区域上一页，右侧 50% 区域下一页
+          if (ratio < 0.5) {
+            viewRef.current?.prev();
+          } else {
+            viewRef.current?.next();
+          }
+        } else {
+          setIsImmersive((prev) => !prev);
+        }
+      }, 200);
     }
   }, []);
 
@@ -748,23 +772,36 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (touchStartY.current !== null && touchStartX.current !== null && e.changedTouches.length > 0) {
+      const startX = touchStartX.current;
       const endY = e.changedTouches[0].clientY;
       const endX = e.changedTouches[0].clientX;
       const deltaY = endY - touchStartY.current;
-      const deltaX = endX - touchStartX.current;
+      const deltaX = endX - startX;
       const mode = settingsRef.current?.layoutMode || "paginated";
+      const windowWidth = window.innerWidth;
 
-      // 左右翻页模式：竖直滑动翻页；竖向滚动模式交给原生滚动，不抢事件
-      if (mode === "paginated" && Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50) {
-        if (deltaY > 0) {
-          viewRef.current?.prev();
-        } else {
-          viewRef.current?.next();
+      // 1. 如果起点在系统手势边缘区（左右各 25px 内），避让 Android/iOS 系统侧滑返回手势
+      const isEdgeGesture = startX < 25 || startX > windowWidth - 25;
+
+      // 2. 如果移动距离极小（Tap 点击），交由 handleClickListener 统一处理，避免二次点击冲突
+      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+        touchStartY.current = null;
+        touchStartX.current = null;
+        return;
+      }
+
+      // 3. 滑动手势判断（避开边缘区）
+      if (!isEdgeGesture) {
+        // 横向轻扫（横向主导且滑动距离 > 50px）
+        if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+          if (deltaX > 0) viewRef.current?.prev();
+          else viewRef.current?.next();
+        } 
+        // 左右翻页模式下的竖直滑动（纵向主导且滑动距离 > 60px）
+        else if (mode === "paginated" && Math.abs(deltaY) > 60 && Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
+          if (deltaY > 0) viewRef.current?.prev();
+          else viewRef.current?.next();
         }
-      } else if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
-        // 横向轻扫：两种模式都可翻
-        if (deltaX > 0) viewRef.current?.prev();
-        else viewRef.current?.next();
       }
     }
     touchStartY.current = null;
@@ -1704,7 +1741,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const handleToggleTts = () => {
     if (ttsState === "playing") {
       // Manual pause: cancel synthesis and remember where we stopped
-      window.speechSynthesis.cancel();
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       ttsPausedAtIndexRef.current = ttsParagraphIndex;
       ttsPausedListRef.current = ttsParagraphs;
       setTtsState("paused");
@@ -1780,7 +1819,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     pitch: number;
     rateMultiplier: number;
   } => {
-    const voices = window.speechSynthesis.getVoices();
+    const voices = (typeof window !== "undefined" && window.speechSynthesis) ? window.speechSynthesis.getVoices() : [];
     const zhVoices = voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('cmn'));
     const allVoices = zhVoices.length > 0 ? zhVoices : voices;
 
@@ -1823,7 +1862,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     const currentRate   = ttsRateRef.current;
     const currentVoiceType = ttsVoiceTypeRef.current;
 
-    window.speechSynthesis.cancel();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     setTtsParagraphIndex(index);
     setTtsState("playing");
     updateMediaSession("playing", index, paragraphsList);
@@ -1872,7 +1913,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     };
 
     ttsUtteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   const handleVolumeChange = (v: number) => {
@@ -1885,7 +1928,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   };
 
   const startTts = () => {
-    window.speechSynthesis.cancel();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
 
     // Extract text paragraphs from iframe body
     const iframe = getActiveIframe();
@@ -1940,7 +1985,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   };
 
   const handleStopTts = () => {
-    window.speechSynthesis.cancel();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     setTtsState("stopped");
     setTtsParagraphIndex(-1);
     setTtsShowPlayer(false);
@@ -2003,7 +2050,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
     navigator.mediaSession.setActionHandler("play", () => {
       if (ttsState === "paused") {
-        window.speechSynthesis.resume();
+        if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.resume();
         setTtsState("playing");
         updateMediaSession("playing", ttsParagraphIndex, ttsParagraphs);
       } else if (ttsState === "stopped") {
@@ -2013,7 +2060,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
     navigator.mediaSession.setActionHandler("pause", () => {
       if (ttsState === "playing") {
-        window.speechSynthesis.pause();
+        if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.pause();
         setTtsState("paused");
         updateMediaSession("paused", ttsParagraphIndex, ttsParagraphs);
       }
@@ -2626,7 +2673,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
           桌面：保留完整动作区 */}
       <div 
         className={cn(
-          "absolute top-0 left-0 right-0 border-b border-app-border/40 px-3 md:px-4 flex items-center justify-between bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
+          "absolute top-0 left-0 right-0 border-b border-app-border/40 px-3 md:px-4 flex items-center justify-between bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary cursor-pointer",
           isImmersive ? "-translate-y-full" : "translate-y-0"
         )}
         style={{
@@ -2634,6 +2681,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
           paddingTop: "var(--safe-area-top, 0px)",
           color: theme.fg,
           backgroundColor: `${theme.bg}e6`,
+        }}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (!target.closest("button") && !target.closest("a") && !target.closest("input")) {
+            setIsImmersive(true);
+          }
         }}
       >
         <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">

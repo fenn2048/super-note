@@ -22,6 +22,7 @@ import { toast } from "@/lib/toast";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
@@ -580,6 +581,8 @@ export default function ProjectCenter() {
     () => projects.find((p) => p.name === "个人TODO"),
     [projects]
   );
+
+  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
 
   // Full Screen / Detailed Task Creation Modal State
   const [showTaskCreateModal, setShowTaskCreateModal] = useState(false);
@@ -2041,7 +2044,7 @@ export default function ProjectCenter() {
                           title={
                             projectSearchQuery
                               ? "没有匹配的任务"
-                              : t("projects.noMyTasks") || "还没有任务"
+                              : "还没有任务"
                           }
                           description={
                             projectSearchQuery
@@ -2953,22 +2956,20 @@ export default function ProjectCenter() {
 
       {/* 6. Detailed Task Create Modal */}
       {showTaskCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text"
-          style={{
-            // 键盘弹起时把遮罩底边抬到键盘上方（adjustNothing + 校准后的 --keyboard-height）
-            bottom: "var(--keyboard-height, 0px)",
-          }}
-        >
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
           <div
             className={cn(
               "relative bg-app-elevated w-full shadow-2xl overflow-hidden flex flex-col text-sm text-tx-primary z-10",
-              // 移动：吃满遮罩（遮罩 bottom 已扣键盘；resize 模式下 keyboard=0 遮罩即可视区）
-              "h-full max-h-full md:h-auto md:max-h-[85vh] md:max-w-xl",
+              "md:h-auto md:max-h-[85vh] md:max-w-xl",
               "rounded-t-2xl md:rounded-2xl border-t md:border border-app-border",
               "animate-in slide-in-from-bottom md:slide-in-from-bottom-0 md:scale-in duration-200",
             )}
+            style={{
+              marginBottom: kbVisible && kbHeight > 0 ? `${kbHeight}px` : "0px",
+              maxHeight: kbVisible && kbHeight > 0 ? `calc(100vh - ${kbHeight}px - 40px)` : "85vh",
+              transition: "margin-bottom 0.15s ease-out, max-height 0.15s ease-out",
+            }}
           >
             {/* Header：移动端含 safe-area */}
             <div

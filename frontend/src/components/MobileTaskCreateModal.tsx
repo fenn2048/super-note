@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Capacitor } from "@capacitor/core";
 import OCRModal from "@/components/OCRModal";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 
 interface MobileTaskCreateModalProps {
   isOpen: boolean;
@@ -178,6 +179,8 @@ export default function MobileTaskCreateModal({
     }
   };
 
+  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
+
   // 桌面居中大弹窗；移动底部 sheet（原 md:hidden 导致 Web 端点「+」任务无界面）
   const isDesktop =
     typeof window !== "undefined" && window.innerWidth >= 768;
@@ -191,11 +194,6 @@ export default function MobileTaskCreateModal({
             "fixed inset-0 z-[100] flex justify-center select-text p-0 md:p-6",
             isDesktop ? "items-center" : "items-end",
           )}
-          style={
-            !isDesktop && isNative
-              ? { bottom: "var(--keyboard-height, 0px)" }
-              : undefined
-          }
         >
           {/* Backdrop */}
           <motion.div
@@ -238,10 +236,10 @@ export default function MobileTaskCreateModal({
               isDesktop
                 ? undefined
                 : {
-                    // 遮罩 bottom 已扣键盘；此处吃满遮罩可用高度
-                    height: "100%",
-                    maxHeight: "100%",
-                    paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
+                    marginBottom: kbVisible && kbHeight > 0 ? `${kbHeight}px` : "0px",
+                    maxHeight: kbVisible && kbHeight > 0 ? `calc(100vh - ${kbHeight}px - 40px)` : "85vh",
+                    paddingBottom: kbVisible ? 12 : "calc(var(--safe-area-bottom) + 16px)",
+                    transition: "margin-bottom 0.15s ease-out, max-height 0.15s ease-out",
                   }
             }
             role="dialog"

@@ -23,6 +23,7 @@
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useAppState } from "@/store/AppContext";
 import { EditorState, Compartment, StateEffect } from "@codemirror/state";
 import {
   EditorView,
@@ -1436,14 +1437,22 @@ function MobileMdToolbar({
   openAIAssistant?: () => void;
   triggerImagePicker: () => void;
 }) {
+  const state = useAppState();
+  const mobileView = state.mobileView;
   const [moreOpen, setMoreOpen] = useState(false);
-  const { visible: kbVisible } = useKeyboardVisible();
+  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
+
+  console.log("[MobileToolbar Debug - MD]", { mobileView, kbVisible, kbHeight });
+
+  if (mobileView !== "editor") return null;
+
+  const bottomOffset = kbVisible && kbHeight > 0 ? `${kbHeight}px` : "var(--keyboard-height, 0px)";
 
   const bar = (
     <div
       className="md:hidden fixed left-0 right-0 z-[60] border-t border-app-border bg-app-elevated/95 backdrop-blur-md supports-[backdrop-filter]:bg-app-elevated/80 shadow-[0_-4px_20px_rgba(28,25,23,0.08)]"
       style={{
-        bottom: "var(--keyboard-height, 0px)",
+        bottom: bottomOffset,
         paddingBottom: kbVisible ? 4 : "var(--safe-area-bottom)",
       }}
       data-swipe-blocker

@@ -243,6 +243,10 @@ export function useApp() {
   return context;
 }
 
+export function useAppState() {
+  return useApp().state;
+}
+
 export function useAppActions() {
   const { dispatch } = useApp();
 

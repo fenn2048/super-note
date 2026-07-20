@@ -288,6 +288,17 @@ export function useKeyboardLayout() {
     let keyboardOpen = false;
     let lastWritten = -1;
 
+    // ── 探针元素 ──────────────────────────────────────────────────
+    // 插入一个不可见的 fixed bottom:0 元素，用它的 getBoundingClientRect
+    // 来**实测**浏览器是否已把 fixed 定位推到 visualViewport 底部。
+    // 这比靠 vvInset 阈值猜测可靠得多——不同 Android OEM/输入法/Chromium
+    // 版本的行为差异很大，阈值判断无法覆盖所有设备。
+    const probe = document.createElement("div");
+    probe.style.cssText =
+      "position:fixed;bottom:0;left:-9999px;width:1px;height:1px;" +
+      "pointer-events:none;z-index:-99999;opacity:0;";
+    document.body.appendChild(probe);
+
     const readVvInset = (): number => {
       try {
         const vv = window.visualViewport;
@@ -300,44 +311,61 @@ export function useKeyboardLayout() {
       }
     };
 
+    /**
+     * 用探针检测 CSS `fixed bottom:0` 是否已被浏览器引擎自动推到
+     * visualViewport 底部（键盘正上方）。
+     *
+     * 返回 true  → 浏览器已自动处理，--keyboard-height 应为 0
+     * 返回 false → fixed 元素仍在 layout viewport 底部（被键盘遮挡），
+     *              需要手动设置 --keyboard-height
+     */
+    const isFixedAutoRepositioned = (): boolean => {
+      try {
+        const vh = window.innerHeight || 0;
+        if (vh <= 0) return false;
+        const probeBottom = probe.getBoundingClientRect().bottom;
+        // 如果探针底部距屏幕底部差值 > 50px，说明浏览器确实把 fixed 推上去了
+        return (vh - probeBottom) > 50;
+      } catch {
+        return false;
+      }
+    };
+
     const softCap = (h: number): number => {
       const vh = window.innerHeight || 0;
       if (vh <= 0) return Math.max(0, h);
-      const maxH = Math.floor(vh * 0.45);
-      const typicalH = Math.floor(vh * 0.38);
       let out = Math.max(0, Math.round(h));
       if (out > 0 && out < 80) out = 0;
-      if (out > maxH) out = typicalH;
+      const maxH = Math.floor(vh * 0.75);
+      if (out > maxH) out = maxH;
       return out;
     };
 
     /**
      * 计算 fixed 元素应使用的 bottom inset：
      *
-     *   vvInset = innerHeight - vv.offsetTop - vv.height
+     * 使用探针实测代替 vvInset 阈值猜测：
+     *   - 探针（fixed bottom:0）被浏览器推上去了 → 写 0，防二次推高
+     *   - 探针仍在屏幕底部（被键盘遮挡） → 使用 pluginHeight 手动抬高
      *
-     * 三种机型：
-     *   1) adjustResize（layout 已缩）：vv 几乎铺满 layout → vvInset≈0 → bottom:0 ✓
-     *   2) adjustNothing + vv 仍缩：vvInset≈真实键盘高 → 用 vvInset ✓
-     *   3) adjustNothing + vv 不缩：vvInset≈0 → 用 plugin 高度 ✓
-     *
-     * 绝不要「vvInset>0 就写 0」——那会在 (2) 把工具栏压到键盘下面。
+     * 这确保了在所有 Android 设备上（无论 OEM、输入法、Chromium 版本）
+     * 都能正确定位工具栏/弹窗到键盘正上方。
      */
     const resolveInset = (): number => {
+      if (!keyboardOpen) {
+        return 0;
+      }
       const vvInset = readVvInset();
-      if (!keyboardOpen && vvInset < 80) return 0;
-
-      // visualViewport 给出的 inset 最贴近「layout 底到可视区底」
-      if (vvInset >= 80) {
-        return softCap(vvInset);
-      }
-
-      // vv 无感知：退回 Capacitor 原生高度
-      if (pluginHeight > 0) {
-        return softCap(pluginHeight);
-      }
-
-      return 0;
+      const effective = pluginHeight > 0 ? pluginHeight : vvInset;
+      const res = softCap(effective);
+      console.log("[KeyboardLayout Debug]", {
+        keyboardOpen,
+        pluginHeight,
+        vvInset,
+        effective,
+        resolvedInset: res,
+      });
+      return res;
     };
 
     const writeInset = (force = false) => {
@@ -356,38 +384,54 @@ export function useKeyboardLayout() {
       }
     };
 
+    const resetWindowScroll = () => {
+      if (window.scrollY > 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
     const onPluginShow = (height: number) => {
       keyboardOpen = true;
       pluginHeight = Math.max(0, Math.round(height || 0));
-      writeInset(true);
+      resetWindowScroll();
+      // 延迟一帧再写入，确保探针的 getBoundingClientRect 已反映最新布局
       requestAnimationFrame(() => {
-        const activeEl = document.activeElement;
-        if (activeEl && "scrollIntoView" in activeEl) {
-          (activeEl as HTMLElement).scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-          });
-        }
+        resetWindowScroll();
+        writeInset(true);
+        requestAnimationFrame(() => {
+          resetWindowScroll();
+          // 二次校正：部分设备上 vv resize 事件比 plugin 事件晚到
+          writeInset(true);
+        });
       });
     };
 
     const onPluginHide = () => {
       keyboardOpen = false;
       pluginHeight = 0;
+      resetWindowScroll();
       writeInset(true);
     };
 
     // visualViewport：键盘期间持续校正（部分 OEM 只缩 vv 不缩 layout）
     const onVvChange = () => {
-      const inset = readVvInset();
-      if (inset >= 80) keyboardOpen = true;
-      else if (!keyboardOpen) return;
+      if (!keyboardOpen) {
+        // 即使 plugin 未报开，vv 缩 > 80 也视为键盘打开
+        const inset = readVvInset();
+        if (inset >= 80) {
+          keyboardOpen = true;
+        } else {
+          return;
+        }
+      }
+      resetWindowScroll();
       writeInset();
     };
 
     const vv = window.visualViewport;
     vv?.addEventListener("resize", onVvChange);
     vv?.addEventListener("scroll", onVvChange);
+    window.addEventListener("scroll", resetWindowScroll);
 
     const willShowHandler = Keyboard.addListener("keyboardWillShow", (info) => {
       onPluginShow(info.keyboardHeight);
@@ -405,10 +449,12 @@ export function useKeyboardLayout() {
     return () => {
       vv?.removeEventListener("resize", onVvChange);
       vv?.removeEventListener("scroll", onVvChange);
+      window.removeEventListener("scroll", resetWindowScroll);
       willShowHandler.then((h) => h.remove());
       didShowHandler.then((h) => h.remove());
       willHideHandler.then((h) => h.remove());
       didHideHandler.then((h) => h.remove());
+      probe.remove();
       document.documentElement.style.setProperty("--keyboard-height", "0px");
       document.documentElement.style.setProperty("--keyboard-height-raw", "0px");
       document.documentElement.removeAttribute("data-keyboard");

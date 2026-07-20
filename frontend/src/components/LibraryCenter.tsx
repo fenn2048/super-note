@@ -108,6 +108,16 @@ export default function LibraryCenter() {
 
   /** 子页返回：移动回 Hub；桌面关资料库 */
   const goBack = useCallback(() => {
+    console.log("[LibraryCenter Back Debug]", { isMobile, tab, hash: window.location.hash });
+    if (tab === "media") {
+      if (window.location.hash.startsWith("#/media/items/")) {
+        window.dispatchEvent(new CustomEvent("super:media-close-detail"));
+        return;
+      }
+      if (window.location.hash.startsWith("#/media")) {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
     if (isMobile && tab !== null) {
       setTab(null);
       return;
@@ -151,19 +161,36 @@ export default function LibraryCenter() {
   }, []);
 
   const selectTab = useCallback((next: LibraryTab) => {
+    if (next === "media") {
+      if (window.location.hash.startsWith("#/media/items/")) {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
     setTab(next);
     setLibraryTab(next);
     if (next !== "books") setActiveBookHash(null);
   }, []);
 
   // 全屏阅读器
-  if (tab === "books" && activeBookHash) {
+  if (activeBookHash) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Suspense fallback={<Fallback />}>
           <BookReader
             bookHash={activeBookHash}
-            onBack={() => setActiveBookHash(null)}
+            onBack={() => {
+              setActiveBookHash(null);
+              setTab("books");
+              setLibraryTab("books");
+              try {
+                sessionStorage.removeItem("super-open-book-hash");
+                sessionStorage.setItem("super-library-enter-tab", "books");
+              } catch {}
+              if (window.location.hash.startsWith("#/books/")) {
+                window.location.hash = "#/library";
+              }
+              window.dispatchEvent(new CustomEvent("super:close-book"));
+            }}
             workspaceId={workspaceId}
           />
         </Suspense>

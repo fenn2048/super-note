@@ -189,12 +189,10 @@ export default function MediaCenter() {
           }).catch(err => {
             console.error("Failed to load item from hash:", err);
             setSelectedItem(null);
-            if (window.location.hash !== "#/media") {
-              window.location.hash = "#/media";
-            }
+            history.replaceState(null, "", window.location.pathname + window.location.search);
           });
         }
-      } else if (hash === "#/media" || hash === "#/media/") {
+      } else {
         if (selectedItemRef.current) {
           setSelectedItem(null);
         }
@@ -202,10 +200,25 @@ export default function MediaCenter() {
     };
 
     window.addEventListener("hashchange", handleHashChange);
-    // Call once on mount to handle initial load
-    handleHashChange();
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []); // Run only once to prevent re-binding and loops
+
+  useEffect(() => {
+    const handleCloseDetail = () => {
+      console.log("[MediaCenter Debug] Received super:media-close-detail");
+      setSelectedItem(null);
+      if (window.location.hash.startsWith("#/media/items/")) {
+        window.location.hash = "#/media";
+      }
+    };
+    window.addEventListener("super:media-close-detail", handleCloseDetail);
+    return () => {
+      window.removeEventListener("super:media-close-detail", handleCloseDetail);
+      if (window.location.hash.startsWith("#/media/items/")) {
+        window.location.hash = "#/media";
+      }
+    };
+  }, []);
 
   // Sync selected item state back to URL hash
   useEffect(() => {
