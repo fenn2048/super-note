@@ -3261,7 +3261,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         : "opacity-75 hover:opacity-100"
                     )}
                   >
-                    🔒 仅自己可见
+                    🔒 私有
                   </button>
                 </div>
               </div>
@@ -3590,7 +3590,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         </div>
                         {isPrivate && (
                           <span className="text-[9px] px-1.5 py-0.5 rounded-full border opacity-70 flex items-center gap-1" style={{ borderColor: `${theme.fg}20` }}>
-                            🔒 仅自己可见
+                            🔒 私有
                           </span>
                         )}
                       </div>

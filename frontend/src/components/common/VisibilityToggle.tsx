@@ -8,12 +8,12 @@ interface VisibilityToggleProps {
 }
 
 const LABELS = {
-  PRIVATE: "仅自己可见",
+  PRIVATE: "私有",
   WORKSPACE: "所有人可见",
 } as const;
 
 const SHORT_LABELS = {
-  PRIVATE: "私密",
+  PRIVATE: "私有",
   WORKSPACE: "公开",
 } as const;
 

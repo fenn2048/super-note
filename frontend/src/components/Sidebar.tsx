@@ -565,7 +565,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
           <>
             <span className="flex-1 min-w-0 truncate">{notebook.name}</span>
             {notebook.visibility && notebook.workspaceId && (
-              <span className="text-[10px] shrink-0 mr-1" title={notebook.visibility === "WORKSPACE" ? "所有人可见" : "仅自己可见"}>
+              <span className="text-[10px] shrink-0 mr-1" title={notebook.visibility === "WORKSPACE" ? "所有人可见" : "私有"}>
                 {notebook.visibility === "WORKSPACE" ? "🌐" : "🔒"}
               </span>
             )}
@@ -1552,7 +1552,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     const isCurrentlyPublic = visTarget?.visibility === "WORKSPACE";
     items.push({
       id: "toggle_visibility",
-      label: isCurrentlyPublic ? t('sidebar.makePrivate', '设为仅自己可见') : t('sidebar.makePublic', '设为所有人可见'),
+      label: isCurrentlyPublic ? t('sidebar.makePrivate', '设为私有') : t('sidebar.makePublic', '设为所有人可见'),
       icon: isCurrentlyPublic ? <Lock size={14} /> : <Globe size={14} />,
     });
     items.push({ id: "sep2", label: "", separator: true });
@@ -2069,7 +2069,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             actions.setNotebooks(
               state.notebooks.map((nb) => nb.id === targetId ? { ...nb, visibility: newVisibility } : nb)
             );
-            toast.success(newVisibility === "WORKSPACE" ? "已设为所有人可见" : "已设为仅自己可见");
+            toast.success(newVisibility === "WORKSPACE" ? "已设为所有人可见" : "已设为私有");
           } catch (e: any) {
             console.error("Toggle notebook visibility failed:", e);
             toast.error("可见性切换失败");

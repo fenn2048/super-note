@@ -759,7 +759,7 @@
   },
   "workspace": {
     "personal": "个人空间",
-    "personalSubtitle": "仅自己可见",
+    "personalSubtitle": "私有",
     "create": "创建工作区",
     "join": "使用邀请码加入工作区",
     "joinPlaceholder": "ABCDEF1234",

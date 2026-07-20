@@ -1399,7 +1399,7 @@ export default function EditorPane() {
       const updated = await api.updateNote(activeNote.id, { visibility } as any);
       actions.setActiveNote(updated);
       actions.updateNoteInList({ id: updated.id, visibility: updated.visibility });
-      toast.success(visibility === "WORKSPACE" ? "已设为所有人可见" : "已设为仅自己可见");
+      toast.success(visibility === "WORKSPACE" ? "已设为所有人可见" : "已设为私有");
     } catch (e: any) {
       console.error("Visibility change failed:", e);
       toast.error("可见性切换失败");
