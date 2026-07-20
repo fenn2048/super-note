@@ -269,40 +269,97 @@ export function useStatusBarSync() {
 
 /**
  * P5: 键盘弹出布局适配
- * 监听软键盘显示/隐藏事件，动态调整可视区域高度
- * 确保编辑器光标始终可见，不被键盘遮挡
+ * ------------------------------------------------------------------
+ * 不动 body/html 尺寸，只写 CSS 变量 `--keyboard-height`，由 sheet / 工具栏
+ * 通过 `bottom: var(--keyboard-height)` 贴键盘顶。
+ *
+ * 关键：防「双计」
+ *   - 若 WebView 实际走了 resize（visualViewport 已缩小），fixed bottom:0
+ *     本身已在键盘上方 → 必须写 0，再叠加 plugin 高度会把 UI 顶飞。
+ *   - 若真正 adjustNothing 叠层（vv 不缩），才用 Capacitor plugin 高度。
+ *
+ * 优先序：visualViewport inset →（仅 vv≈0 时）plugin 高度 → 软上限。
  */
 export function useKeyboardLayout() {
   useEffect(() => {
     if (!isNativePlatform()) return;
 
-    // 键盘弹出策略（重要 —— 别再回退到旧版做法）
-    // ------------------------------------------------------------------
-    // 之前的做法是：键盘弹起时把 `document.body.style.height` 压缩成
-    // `innerHeight - keyboardHeight`，并对光标 `scrollIntoView({block:"center"})`。
-    // 这会整体把 App 容器（含 `h-[100dvh]` 根 div）顶高变小，然后 scrollIntoView
-    // 为把光标推到"中央"只能把整个页面向上滚 —— 用户看到的现象就是
-    // **编辑器顶栏（返回/云/锁/三点）和格式化工具栏（H1/B/I/...）在打字时
-    // 被顶出视口**。业务上编辑时最需要随手能点到的就是工具栏，体验灾难。
-    //
-    // 新策略：
-    //   1) 不动 body/html 尺寸。只把 keyboardHeight 暴露为 CSS 变量
-    //      `--keyboard-height`，由内部滚动容器（MarkdownEditor 的
-    //      `.flex-1 .overflow-auto`）通过 `padding-bottom` 避让。
-    //      这样顶栏/工具栏仍然稳稳 sticky 在最外层 flex 顶部，不会被挤走。
-    //   2) scrollIntoView 从 `center` 改为 `nearest`：光标已经在视口里
-    //      就什么都不做；只在被键盘盖住时才最小程度滚动，避免整页上移。
-    //
-    // 注：Android AndroidManifest 未显式声明 windowSoftInputMode，Capacitor 默认
-    // 走 adjustResize；但无论是 resize 还是 pan 模式，我们都以 JS 侧的 CSS 变量
-    // 为单一事实来源，不依赖原生布局调整。
-    const showHandler = Keyboard.addListener("keyboardWillShow", (info) => {
-      const height = info.keyboardHeight;
-      document.documentElement.style.setProperty("--keyboard-height", `${height}px`);
-      // 给 html 打标记，便于编辑器容器条件添加 padding-bottom
-      document.documentElement.setAttribute("data-keyboard", "open");
+    let pluginHeight = 0;
+    let keyboardOpen = false;
+    let lastWritten = -1;
 
-      // 最小程度滚动：仅当光标被键盘遮挡才滚
+    const readVvInset = (): number => {
+      try {
+        const vv = window.visualViewport;
+        if (!vv) return 0;
+        const vh = window.innerHeight || 0;
+        if (vh <= 0) return 0;
+        return Math.max(0, Math.round(vh - vv.height - (vv.offsetTop || 0)));
+      } catch {
+        return 0;
+      }
+    };
+
+    const softCap = (h: number): number => {
+      const vh = window.innerHeight || 0;
+      if (vh <= 0) return Math.max(0, h);
+      const maxH = Math.floor(vh * 0.45);
+      const typicalH = Math.floor(vh * 0.38);
+      let out = Math.max(0, Math.round(h));
+      if (out > 0 && out < 80) out = 0;
+      if (out > maxH) out = typicalH;
+      return out;
+    };
+
+    /**
+     * 计算 fixed 元素应使用的 bottom inset：
+     *
+     *   vvInset = innerHeight - vv.offsetTop - vv.height
+     *
+     * 三种机型：
+     *   1) adjustResize（layout 已缩）：vv 几乎铺满 layout → vvInset≈0 → bottom:0 ✓
+     *   2) adjustNothing + vv 仍缩：vvInset≈真实键盘高 → 用 vvInset ✓
+     *   3) adjustNothing + vv 不缩：vvInset≈0 → 用 plugin 高度 ✓
+     *
+     * 绝不要「vvInset>0 就写 0」——那会在 (2) 把工具栏压到键盘下面。
+     */
+    const resolveInset = (): number => {
+      const vvInset = readVvInset();
+      if (!keyboardOpen && vvInset < 80) return 0;
+
+      // visualViewport 给出的 inset 最贴近「layout 底到可视区底」
+      if (vvInset >= 80) {
+        return softCap(vvInset);
+      }
+
+      // vv 无感知：退回 Capacitor 原生高度
+      if (pluginHeight > 0) {
+        return softCap(pluginHeight);
+      }
+
+      return 0;
+    };
+
+    const writeInset = (force = false) => {
+      const next = resolveInset();
+      if (!force && next === lastWritten) return;
+      lastWritten = next;
+      document.documentElement.style.setProperty("--keyboard-height", `${next}px`);
+      document.documentElement.style.setProperty(
+        "--keyboard-height-raw",
+        `${Math.max(0, Math.round(pluginHeight))}px`,
+      );
+      if (keyboardOpen) {
+        document.documentElement.setAttribute("data-keyboard", "open");
+      } else {
+        document.documentElement.removeAttribute("data-keyboard");
+      }
+    };
+
+    const onPluginShow = (height: number) => {
+      keyboardOpen = true;
+      pluginHeight = Math.max(0, Math.round(height || 0));
+      writeInset(true);
       requestAnimationFrame(() => {
         const activeEl = document.activeElement;
         if (activeEl && "scrollIntoView" in activeEl) {
@@ -312,16 +369,49 @@ export function useKeyboardLayout() {
           });
         }
       });
-    });
+    };
 
-    const hideHandler = Keyboard.addListener("keyboardWillHide", () => {
-      document.documentElement.style.setProperty("--keyboard-height", "0px");
-      document.documentElement.removeAttribute("data-keyboard");
+    const onPluginHide = () => {
+      keyboardOpen = false;
+      pluginHeight = 0;
+      writeInset(true);
+    };
+
+    // visualViewport：键盘期间持续校正（部分 OEM 只缩 vv 不缩 layout）
+    const onVvChange = () => {
+      const inset = readVvInset();
+      if (inset >= 80) keyboardOpen = true;
+      else if (!keyboardOpen) return;
+      writeInset();
+    };
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", onVvChange);
+    vv?.addEventListener("scroll", onVvChange);
+
+    const willShowHandler = Keyboard.addListener("keyboardWillShow", (info) => {
+      onPluginShow(info.keyboardHeight);
+    });
+    const didShowHandler = Keyboard.addListener("keyboardDidShow", (info) => {
+      onPluginShow(info.keyboardHeight);
+    });
+    const willHideHandler = Keyboard.addListener("keyboardWillHide", () => {
+      onPluginHide();
+    });
+    const didHideHandler = Keyboard.addListener("keyboardDidHide", () => {
+      onPluginHide();
     });
 
     return () => {
-      showHandler.then((h) => h.remove());
-      hideHandler.then((h) => h.remove());
+      vv?.removeEventListener("resize", onVvChange);
+      vv?.removeEventListener("scroll", onVvChange);
+      willShowHandler.then((h) => h.remove());
+      didShowHandler.then((h) => h.remove());
+      willHideHandler.then((h) => h.remove());
+      didHideHandler.then((h) => h.remove());
+      document.documentElement.style.setProperty("--keyboard-height", "0px");
+      document.documentElement.style.setProperty("--keyboard-height-raw", "0px");
+      document.documentElement.removeAttribute("data-keyboard");
     };
   }, []);
 }
