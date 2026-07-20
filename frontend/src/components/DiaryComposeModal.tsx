@@ -128,9 +128,13 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     return "#";
   };
 
+  const memberDisplayName = (m: WorkspaceMember) =>
+    (m.displayName && m.displayName.trim()) || m.username;
+
   const filteredMembers = members.filter((m) =>
     m.userId !== me?.id && (
       m.username.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+      (m.displayName && m.displayName.toLowerCase().includes(memberSearchQuery.toLowerCase())) ||
       (m.email && m.email.toLowerCase().includes(memberSearchQuery.toLowerCase()))
     )
   );
@@ -143,7 +147,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     groups["#"] = [];
 
     filteredMembers.forEach((m) => {
-      const initial = getMemberInitial(m.username);
+      const initial = getMemberInitial(memberDisplayName(m));
       if (groups[initial]) {
         groups[initial].push(m);
       } else {
@@ -1527,7 +1531,7 @@ const handleEmojiSelect = (emoji: string) => {
                 isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-full text-xs",
                 visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
               )}
-              title={visibility === "PUBLIC" ? "公开可见" : "自己可见"}
+              title={visibility === "PUBLIC" ? "公开可见" : "私有"}
             >
               {visibility === "PUBLIC" ? (
                 <>
@@ -1537,7 +1541,7 @@ const handleEmojiSelect = (emoji: string) => {
               ) : (
                 <>
                   <Lock size={isMobile ? 16 : 13} />
-                  {!isMobile && <span>自己可见</span>}
+                  {!isMobile && <span>私有</span>}
                 </>
               )}
             </button>
@@ -1970,15 +1974,19 @@ const handleEmojiSelect = (emoji: string) => {
                               {/* 头像 */}
                               <div className="w-9 h-9 rounded-full bg-accent-primary/10 flex items-center justify-center text-accent-primary font-bold text-sm overflow-hidden shrink-0 border border-app-border/30">
                                 {m.avatarUrl ? (
-                                  <img src={m.avatarUrl} alt={m.username} className="w-full h-full object-cover" />
+                                  <img src={m.avatarUrl} alt={memberDisplayName(m)} className="w-full h-full object-cover" />
                                 ) : (
-                                  m.username.charAt(0).toUpperCase()
+                                  memberDisplayName(m).charAt(0).toUpperCase()
                                 )}
                               </div>
-                              {/* 名字 */}
+                              {/* 名字：优先昵称，副文案保留用户名 */}
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm text-tx-primary font-medium truncate">{m.username}</p>
-                                {m.email && <p className="text-[10px] text-tx-tertiary truncate">{m.email}</p>}
+                                <p className="text-sm text-tx-primary font-medium truncate">{memberDisplayName(m)}</p>
+                                {m.displayName && m.displayName.trim() && m.displayName !== m.username ? (
+                                  <p className="text-[10px] text-tx-tertiary truncate">@{m.username}</p>
+                                ) : m.email ? (
+                                  <p className="text-[10px] text-tx-tertiary truncate">{m.email}</p>
+                                ) : null}
                               </div>
                             </div>
                           );

@@ -1406,7 +1406,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                   ) : (
                     <>
                       <Lock size={11} className="opacity-70" />
-                      <span>仅自己可见</span>
+                      <span>私有</span>
                     </>
                   )}
                   <ChevronDown size={11} className="opacity-60" />
@@ -1449,7 +1449,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                         )}
                       >
                         <Lock size={11} />
-                        <span>仅自己可见</span>
+                        <span>私有</span>
                       </button>
                     </motion.div>
                   )}
@@ -2300,7 +2300,7 @@ function DiaryCard({
                   ) : (
                     <>
                       <Lock size={11} className="opacity-60" />
-                      <span>仅自己可见</span>
+                      <span>私有</span>
                     </>
                   )}
                 </div>
@@ -3193,14 +3193,15 @@ function DiaryEditor({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="bg-app-surface/60 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm"
+      className="bg-app-surface/60 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm max-h-[min(70vh,560px)] flex flex-col overflow-hidden"
     >
-      <div className="p-4 pb-2">
+      <div className="p-4 pb-2 flex-1 min-h-0 overflow-y-auto">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-1.5 text-[11px] text-accent-primary min-w-0">
             <Edit2 size={11} className="shrink-0" />
             <span className="truncate">{t("diary.editing") || "编辑中…"}</span>
           </div>
+          {/* 右上角关闭：取消编辑（移动端去掉底部重复的取消按钮） */}
           <button
             type="button"
             onClick={onCancel}
@@ -3226,12 +3227,13 @@ function DiaryEditor({
           autoFocus
         />
 
-        {/* 标签选择（支持创建新标签） */}
-        <div className="mt-2">
+        {/* 标签选择：抬高最小高度，避免移动端过矮难点 */}
+        <div className="mt-2 min-h-[48px]">
           <GenericTagInput
             selectedTags={editorTags}
             onTagsChange={setEditorTags}
             placeholder="添加或创建标签..."
+            className="min-h-[44px] py-1.5"
           />
         </div>
 
@@ -3275,184 +3277,163 @@ function DiaryEditor({
         )}
       </div>
 
-      {/* 底部操作栏 */}
-      <div className="flex items-center justify-between px-4 pb-3">
-        <div className="flex items-center gap-1">
-          {/* 心情按钮 */}
-          <div ref={moodRef} className="relative">
-            <button
-              onClick={() => setShowMoods(!showMoods)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
-                mood
-                  ? "bg-accent-primary/10 text-accent-primary"
-                  : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
-              )}
-            >
-              {selectedMoodEmoji ? (
-                <span className="text-base">{selectedMoodEmoji}</span>
-              ) : (
-                <Smile size={18} />
-              )}
-              <span className="hidden sm:inline">
-                {mood ? t(`diary.mood${mood.charAt(0).toUpperCase() + mood.slice(1)}`) : t("diary.mood")}
-              </span>
-            </button>
-
-            <AnimatePresence>
-              {showMoods && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-full left-0 mt-2 p-2.5 bg-app-elevated rounded-xl border border-app-border shadow-lg z-20 w-[220px]"
-                >
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {MOODS.map(({ value: v, emoji }) => (
-                      <button
-                        key={v}
-                        onClick={() => {
-                          setMood(mood === v ? "" : v);
-                          setShowMoods(false);
-                        }}
-                        className={cn(
-                          "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-all",
-                          mood === v
-                            ? "bg-accent-primary/15 scale-110 ring-1 ring-accent-primary/30"
-                            : "hover:bg-app-hover hover:scale-110",
-                        )}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* 图片按钮 */}
+      {/* 底部操作栏：单行展示（图标 | 可见性 | 字数 | 保存） */}
+      <div className="flex items-center gap-1 px-3 py-2.5 border-t border-app-border/40 shrink-0 min-w-0">
+        {/* 心情 */}
+        <div ref={moodRef} className="relative shrink-0">
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={remainingSlots <= 0}
+            onClick={() => setShowMoods(!showMoods)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs transition-all",
-              remainingSlots <= 0
-                ? "text-tx-tertiary/50 cursor-not-allowed"
+              "flex items-center justify-center w-9 h-9 rounded-full text-xs transition-all",
+              mood
+                ? "bg-accent-primary/10 text-accent-primary"
                 : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
             )}
-            title={
-              remainingSlots <= 0
-                ? t("diary.imageLimitReached").replace(
-                    "{{n}}",
-                    String(MAX_IMAGES_PER_DIARY),
-                  )
-                : t("diary.addImage")
-            }
+            title={t("diary.mood") || "心情"}
           >
-            <ImagePlus size={18} />
-            <span className="hidden sm:inline">{t("diary.image")}</span>
-            {images.length > 0 && (
-              <span className="text-[10px] text-tx-tertiary tabular-nums">
-                {images.length}/{MAX_IMAGES_PER_DIARY}
-              </span>
+            {selectedMoodEmoji ? (
+              <span className="text-base leading-none">{selectedMoodEmoji}</span>
+            ) : (
+              <Smile size={18} />
             )}
           </button>
-          
-          {/* 超链接按钮 */}
-          <button
-            type="button"
-            onClick={() => {
-              const url = window.prompt("输入链接地址 (URL)", "https://");
-              if (!url) return;
-              const textVal = window.prompt("输入链接文字", "链接");
-              if (!textVal) return;
-              const formatted = `[${textVal}](${url})`;
-              const textarea = textareaRef.current;
-              if (textarea) {
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const updated = text.substring(0, start) + formatted + text.substring(end);
-                setText(updated);
-              } else {
-                setText(text + formatted);
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-all"
-            title="插入超链接"
-          >
-            <Link size={18} />
-            <span className="hidden sm:inline">超链接</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"
-            multiple
-            className="hidden"
-            onChange={handleFileChange}
-          />
+
+          <AnimatePresence>
+            {showMoods && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="absolute bottom-full left-0 mb-2 p-2.5 bg-app-elevated rounded-xl border border-app-border shadow-lg z-20 w-[220px]"
+              >
+                <div className="grid grid-cols-6 gap-1.5">
+                  {MOODS.map(({ value: v, emoji }) => (
+                    <button
+                      key={v}
+                      onClick={() => {
+                        setMood(mood === v ? "" : v);
+                        setShowMoods(false);
+                      }}
+                      className={cn(
+                        "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-all",
+                        mood === v
+                          ? "bg-accent-primary/15 scale-110 ring-1 ring-accent-primary/30"
+                          : "hover:bg-app-hover hover:scale-110",
+                      )}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* 可见性范围选择 - 个人空间无需选择，始终仅自己可见 */}
-          {getCurrentWorkspace() !== "personal" && (
+        {/* 图片 */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={remainingSlots <= 0}
+          className={cn(
+            "flex items-center justify-center w-9 h-9 rounded-full text-xs transition-all shrink-0",
+            remainingSlots <= 0
+              ? "text-tx-tertiary/50 cursor-not-allowed"
+              : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
+          )}
+          title={
+            remainingSlots <= 0
+              ? t("diary.imageLimitReached").replace(
+                  "{{n}}",
+                  String(MAX_IMAGES_PER_DIARY),
+                )
+              : t("diary.addImage")
+          }
+        >
+          <ImagePlus size={18} />
+        </button>
+
+        {/* 超链接 */}
+        <button
+          type="button"
+          onClick={() => {
+            const url = window.prompt("输入链接地址 (URL)", "https://");
+            if (!url) return;
+            const textVal = window.prompt("输入链接文字", "链接");
+            if (!textVal) return;
+            const formatted = `[${textVal}](${url})`;
+            const textarea = textareaRef.current;
+            if (textarea) {
+              const start = textarea.selectionStart;
+              const end = textarea.selectionEnd;
+              const updated = text.substring(0, start) + formatted + text.substring(end);
+              setText(updated);
+            } else {
+              setText(text + formatted);
+            }
+          }}
+          className="flex items-center justify-center w-9 h-9 rounded-full text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-all shrink-0"
+          title="插入超链接"
+        >
+          <Link size={18} />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"
+          multiple
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        <div className="flex-1 min-w-0" />
+
+        {/* 可见性 */}
+        {getCurrentWorkspace() !== "personal" && (
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value)}
-            className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2.5 py-1 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium"
+            className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2 py-1.5 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium shrink-0 max-w-[5.5rem]"
           >
-            <option value="PRIVATE">🔒 自己可见</option>
-            <option value="PUBLIC"> 公开</option>
+            <option value="PRIVATE">🔒 私有</option>
+            <option value="PUBLIC">公开</option>
           </select>
+        )}
+        {/* 字数 */}
+        <span
+          className={cn(
+            "text-[11px] tabular-nums transition-colors shrink-0 min-w-[1rem] text-right",
+            text.length > 500 ? "text-red-400" : "text-tx-tertiary",
           )}
-          {/* 字数计数 */}
-          <span
-            className={cn(
-              "text-[11px] tabular-nums transition-colors",
-              text.length > 500 ? "text-red-400" : "text-tx-tertiary",
-            )}
-          >
-            {text.length > 0 && text.length}
-          </span>
+        >
+          {text.length > 0 ? text.length : ""}
+        </span>
 
-          {/* 取消 */}
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={saving}
-            className="px-3 py-1.5 rounded-full text-xs font-medium text-tx-secondary hover:bg-app-hover active:scale-95 transition-all disabled:opacity-50"
-          >
-            {t("common.cancel") || "取消"}
-          </button>
-
-          {/* 保存按钮 */}
-          <button
-            onClick={handleSave}
-            disabled={!canSave}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-all",
-              canSave
-                ? "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/20 active:scale-95"
-                : "bg-app-hover text-tx-tertiary cursor-not-allowed",
-            )}
-            title={
-              hasPendingUploads
-                ? t("diary.waitingUpload")
-                : hasErrorImages
-                ? t("diary.errorImagesHint")
-                : undefined
-            }
-          >
-            {saving ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Send size={13} />
-            )}
-            <span>{t("diary.save") || "保存"}</span>
-          </button>
-        </div>
+        {/* 保存 */}
+        <button
+          onClick={handleSave}
+          disabled={!canSave}
+          className={cn(
+            "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0",
+            canSave
+              ? "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/20 active:scale-95"
+              : "bg-app-hover text-tx-tertiary cursor-not-allowed",
+          )}
+          title={
+            hasPendingUploads
+              ? t("diary.waitingUpload")
+              : hasErrorImages
+              ? t("diary.errorImagesHint")
+              : undefined
+          }
+        >
+          {saving ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Send size={13} />
+          )}
+          <span>{t("diary.save") || "保存"}</span>
+        </button>
       </div>
     </motion.div>
   );
@@ -3769,7 +3750,7 @@ export default function DiaryCenter() {
   const activeFilterLabel = useMemo(() => {
     if (filterMode === "all") return null;
     if (filterMode === "public") return { name: "公开", icon: <Globe size={11} className="opacity-70" /> };
-    if (filterMode === "private") return { name: "仅自己可见", icon: <Lock size={11} className="opacity-70" /> };
+    if (filterMode === "private") return { name: "私有", icon: <Lock size={11} className="opacity-70" /> };
     if (filterMode === "liked") return { name: "我赞过的", icon: <span className="text-[10px]">❤️</span> };
     
     const tag = state.tags.find((t) => t.id === filterMode);
@@ -4393,7 +4374,7 @@ export default function DiaryCenter() {
               <span>🌐 公开</span>
             </button>
 
-            {/* 仅自己可见 */}
+            {/* 私有 */}
             <button
               onClick={() => setFilterMode("private")}
               className={cn(
@@ -4404,7 +4385,7 @@ export default function DiaryCenter() {
               )}
             >
               <span className="w-2 h-2 rounded-full bg-zinc-500 shrink-0" />
-              <span>🔒 仅自己可见</span>
+              <span>🔒 私有</span>
             </button>
 
             {/* 我赞过的 */}
