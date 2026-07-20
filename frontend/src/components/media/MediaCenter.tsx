@@ -516,12 +516,13 @@ export default function MediaCenter() {
               )}
             </div>
 
-            {/* Media Player wrapper */}
-            <div className="w-full md:px-6">
+            {/* Media Player wrapper：上滑评论时吸顶 */}
+            <div className="w-full md:px-6 sticky top-0 z-20 bg-app-bg md:static md:z-auto">
               {selectedItem.type === "video" ? (
                 <MediaPlayer
                   mediaId={selectedItem.id}
-                  onExitFullscreen={() => setSelectedItem(null)}
+                  // 全屏返回：仅退出全屏并暂停，不离开详情页
+                  onExitFullscreen={undefined}
                 />
               ) : (
                 <MusicPlayer mediaId={selectedItem.id} />
@@ -1256,10 +1257,22 @@ export default function MediaCenter() {
                             />
                           ) : item.cover_url ? (
                             <img
-                              src={resolveAttachmentUrl(item.cover_url)}
+                              src={
+                                item.cover_url.startsWith("/") && !item.cover_url.startsWith("/api")
+                                  ? item.cover_url
+                                  : resolveAttachmentUrl(item.cover_url)
+                              }
                               alt={item.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               loading="lazy"
+                              onError={(e) => {
+                                const el = e.currentTarget;
+                                if (!el.dataset.fallback) {
+                                  el.dataset.fallback = "1";
+                                  el.src = "/default_video_cover.jpg";
+                                  el.classList.add("opacity-75");
+                                }
+                              }}
                             />
                           ) : (
                             <img

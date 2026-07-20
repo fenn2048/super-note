@@ -371,13 +371,23 @@ export function AudioCover({ item, className, fallbackIconSize = 28 }: AudioCove
   const { coverUrl, loading } = useID3Cover(item.id, item.cover_url, (item as any).type);
   const coverToUse = coverUrl || item.cover_url;
 
-  if (coverToUse) {
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [coverToUse, item.id]);
+
+  if (coverToUse && !imgFailed) {
     return (
       <img
-        src={resolveAttachmentUrl(coverToUse)}
+        src={
+          coverToUse.startsWith("/") && !coverToUse.startsWith("/api")
+            ? coverToUse // 本地静态资源（如 /default_audio_cover.jpg）
+            : resolveAttachmentUrl(coverToUse)
+        }
         alt={item.title || "audio cover"}
         className={cn("w-full h-full object-cover", className)}
         loading="lazy"
+        onError={() => setImgFailed(true)}
       />
     );
   }

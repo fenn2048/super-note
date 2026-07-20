@@ -497,8 +497,20 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                       style={{ backgroundColor: coverUrl ? undefined : coverBg }}
                     >
                       {coverUrl ? (
-                        <img src={coverUrl} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
-                      ) : (
+                        <img
+                          src={coverUrl}
+                          alt={book.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            // 封面失败时隐藏 img，露出下方色块标题
+                            e.currentTarget.style.display = "none";
+                            const parent = e.currentTarget.parentElement;
+                            if (parent) parent.style.backgroundColor = coverBg;
+                          }}
+                        />
+                      ) : null}
+                      {!coverUrl && (
                         <>
                           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-r from-black/25 via-white/10 to-transparent"></div>
                           <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
@@ -659,7 +671,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                       }`}
                     >
                       <Lock size={14} />
-                      <span>仅自己可见</span>
+                      <span>私有</span>
                     </button>
                     <button
                       type="button"

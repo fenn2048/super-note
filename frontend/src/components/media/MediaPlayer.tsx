@@ -14,6 +14,15 @@ interface MediaPlayerProps {
 }
 
 async function lockLandscape() {
+  // 1) Capacitor 原生插件（即使系统关闭自动旋转也可锁横屏）
+  try {
+    const { ScreenOrientation } = await import("@capacitor/screen-orientation");
+    await ScreenOrientation.lock({ orientation: "landscape" });
+    return;
+  } catch {
+    /* 插件未安装或非原生：继续 fallback */
+  }
+  // 2) 标准 Screen Orientation API（需全屏上下文）
   try {
     const orient = (screen as any).orientation;
     if (orient?.lock) {
@@ -25,6 +34,13 @@ async function lockLandscape() {
 }
 
 async function unlockOrientation() {
+  try {
+    const { ScreenOrientation } = await import("@capacitor/screen-orientation");
+    await ScreenOrientation.unlock();
+    return;
+  } catch {
+    /* ignore */
+  }
   try {
     const orient = (screen as any).orientation;
     if (orient?.unlock) {
@@ -67,11 +83,13 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
     }
   };
 
-  const exitFullscreenAndBack = () => {
+  /** 退出全屏：暂停视频，留在详情页（不再退回媒体列表） */
+  const exitFullscreenAndPause = () => {
     const player = playerRef.current;
     try {
-      if (player?.fullscreen) {
-        player.fullscreen = false;
+      if (player) {
+        player.pause();
+        if (player.fullscreen) player.fullscreen = false;
       }
     } catch { /* ignore */ }
     try {
@@ -82,6 +100,7 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
     void unlockOrientation();
     setIsFullscreen(false);
     isFullscreenRef.current = false;
+    // 可选回调：仅通知 UI 层更新，不应卸载详情
     onExitFullscreen?.();
   };
 
@@ -219,7 +238,7 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
             if (!btn) return;
             btn.addEventListener("click", (ev) => {
               ev.stopPropagation();
-              exitFullscreenAndBack();
+              exitFullscreenAndPause();
             });
           },
         });
@@ -326,17 +345,17 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
         isTheaterMode && !isFullscreen ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10"
       )}>
 
-      {/* 全屏时左上角返回箭头 → 回媒体库列表 */}
+      {/* 全屏时左上角返回 → 退出全屏并暂停，留在视频详情 */}
       {isFullscreen && (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            exitFullscreenAndBack();
+            exitFullscreenAndPause();
           }}
           className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-[10000] w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
-          title="返回媒体库"
-          aria-label="返回媒体库"
+          title="退出全屏"
+          aria-label="退出全屏"
         >
           <ChevronLeft size={22} />
         </button>
