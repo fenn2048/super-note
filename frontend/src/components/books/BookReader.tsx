@@ -752,14 +752,19 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       const endX = e.changedTouches[0].clientX;
       const deltaY = endY - touchStartY.current;
       const deltaX = endX - touchStartX.current;
-      
-      // 竖直滑动翻页 (仅在水平偏移较小的情况下判定)
-      if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50) {
+      const mode = settingsRef.current?.layoutMode || "paginated";
+
+      // 左右翻页模式：竖直滑动翻页；竖向滚动模式交给原生滚动，不抢事件
+      if (mode === "paginated" && Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50) {
         if (deltaY > 0) {
-          viewRef.current?.prev(); // 向下滑动，上一页
+          viewRef.current?.prev();
         } else {
-          viewRef.current?.next(); // 向上滑动，下一页
+          viewRef.current?.next();
         }
+      } else if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+        // 横向轻扫：两种模式都可翻
+        if (deltaX > 0) viewRef.current?.prev();
+        else viewRef.current?.next();
       }
     }
     touchStartY.current = null;
@@ -823,31 +828,47 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     handleTouchEndRef.current(e);
   }, []);
 
-  // Re-attach listeners when activeSidebar changes
-  useEffect(() => {
-    const attach = () => {
-      const iframe = getActiveIframe();
-      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
-      if (doc) {
-        doc.removeEventListener("mouseup", mouseUpWrapper);
-        doc.removeEventListener("mousedown", mouseDownWrapper);
-        doc.removeEventListener("mousemove", mouseMoveWrapper);
-        doc.removeEventListener("click", clickWrapper);
-        doc.removeEventListener("touchstart", touchStartWrapper);
-        doc.removeEventListener("touchend", touchEndWrapper);
+  // 把点击/滑动监听绑到当前 iframe 文档。
+  // 必须在 loadingState→ready、章节 load、侧栏开关后重绑，否则首次进入无法翻页。
+  const attachDocListeners = useCallback(() => {
+    const iframe = getActiveIframe();
+    const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+    if (!doc) return false;
+    doc.removeEventListener("mouseup", mouseUpWrapper);
+    doc.removeEventListener("mousedown", mouseDownWrapper);
+    doc.removeEventListener("mousemove", mouseMoveWrapper);
+    doc.removeEventListener("click", clickWrapper);
+    doc.removeEventListener("touchstart", touchStartWrapper);
+    doc.removeEventListener("touchend", touchEndWrapper);
 
-        doc.addEventListener("mouseup", mouseUpWrapper);
-        doc.addEventListener("mousedown", mouseDownWrapper);
-        doc.addEventListener("mousemove", mouseMoveWrapper);
-        doc.addEventListener("click", clickWrapper);
-        doc.addEventListener("touchstart", touchStartWrapper, { passive: true });
-        doc.addEventListener("touchend", touchEndWrapper, { passive: true });
+    doc.addEventListener("mouseup", mouseUpWrapper);
+    doc.addEventListener("mousedown", mouseDownWrapper);
+    doc.addEventListener("mousemove", mouseMoveWrapper);
+    doc.addEventListener("click", clickWrapper);
+    doc.addEventListener("touchstart", touchStartWrapper, { passive: true });
+    doc.addEventListener("touchend", touchEndWrapper, { passive: true });
+    return true;
+  }, [mouseUpWrapper, mouseDownWrapper, mouseMoveWrapper, clickWrapper, touchStartWrapper, touchEndWrapper]);
+
+  useEffect(() => {
+    if (loadingState !== "ready") return;
+    let cancelled = false;
+    const tryAttach = (attempt: number) => {
+      if (cancelled) return;
+      if (attachDocListeners()) return;
+      if (attempt < 5) {
+        window.setTimeout(() => tryAttach(attempt + 1), 120 * (attempt + 1));
       }
     };
-    attach();
-    const timer = setTimeout(attach, 350);
-    return () => clearTimeout(timer);
-  }, [activeSidebar, mouseUpWrapper, mouseDownWrapper, mouseMoveWrapper, clickWrapper, touchStartWrapper, touchEndWrapper]);
+    tryAttach(0);
+    const t1 = window.setTimeout(() => tryAttach(0), 350);
+    const t2 = window.setTimeout(() => tryAttach(0), 800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [loadingState, activeSidebar, attachDocListeners]);
 
   const drawAnnotationsOnCurrentSection = useCallback(() => {
     if (!viewRef.current) return;
@@ -948,15 +969,20 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       }
     });
 
+    // 章节切换后重绑（含 touch 上下滑）；attachDocListeners 内部先 remove 再 add
     doc.removeEventListener("mouseup", mouseUpWrapper);
     doc.removeEventListener("mousedown", mouseDownWrapper);
     doc.removeEventListener("mousemove", mouseMoveWrapper);
     doc.removeEventListener("click", clickWrapper);
-
     doc.addEventListener("mouseup", mouseUpWrapper);
     doc.addEventListener("mousedown", mouseDownWrapper);
     doc.addEventListener("mousemove", mouseMoveWrapper);
     doc.addEventListener("click", clickWrapper);
+    // touch 走统一入口，避免与上方横向滑动逻辑重复绑两套 vertical handler
+    doc.removeEventListener("touchstart", touchStartWrapper);
+    doc.removeEventListener("touchend", touchEndWrapper);
+    doc.addEventListener("touchstart", touchStartWrapper, { passive: true });
+    doc.addEventListener("touchend", touchEndWrapper, { passive: true });
   };
 
   const handleCreateOverlay = (e: any) => {
@@ -1188,22 +1214,36 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       updateSetting(settingKey, Math.min(max, next));
     };
 
+    const themeNow = THEMES[settings.theme as keyof typeof THEMES] || THEMES.sepia;
     return (
-      <div className="flex justify-between items-center text-xs py-1 border-b border-app-border/10">
-        <span className="text-tx-secondary font-medium">{label}</span>
+      <div
+        className="flex justify-between items-center text-xs py-2 border-b"
+        style={{ borderColor: `${themeNow.fg}18`, color: themeNow.fg }}
+      >
+        <span className="font-medium opacity-90">{label}</span>
         <div className="flex items-center gap-1.5">
           <span className="font-semibold w-10 text-right tabular-nums mr-1">{val}</span>
           <button
             onClick={handleDecrease}
             disabled={val <= min}
-            className="w-6 h-6 rounded-full border border-app-border bg-app-surface hover:bg-app-hover flex items-center justify-center font-bold text-xs disabled:opacity-40 select-none"
+            className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm disabled:opacity-40 select-none"
+            style={{
+              border: `1px solid ${themeNow.fg}40`,
+              backgroundColor: `${themeNow.fg}10`,
+              color: themeNow.fg,
+            }}
           >
             －
           </button>
           <button
             onClick={handleIncrease}
             disabled={val >= max}
-            className="w-6 h-6 rounded-full border border-app-border bg-app-surface hover:bg-app-hover flex items-center justify-center font-bold text-xs disabled:opacity-40 select-none"
+            className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm disabled:opacity-40 select-none"
+            style={{
+              border: `1px solid ${themeNow.fg}40`,
+              backgroundColor: `${themeNow.fg}10`,
+              color: themeNow.fg,
+            }}
           >
             ＋
           </button>
@@ -1214,14 +1254,19 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
   const renderToggleSetting = (label: string, settingKey: string) => {
     const val = !!(settings as any)[settingKey];
+    const themeNow = THEMES[settings.theme as keyof typeof THEMES] || THEMES.sepia;
     return (
-      <div className="flex justify-between items-center text-xs py-1.5 border-b border-app-border/10">
-        <span className="text-tx-secondary font-medium">{label}</span>
+      <div
+        className="flex justify-between items-center text-xs py-2 border-b"
+        style={{ borderColor: `${themeNow.fg}18`, color: themeNow.fg }}
+      >
+        <span className="font-medium opacity-90">{label}</span>
         <button
           onClick={() => updateSetting(settingKey, !val)}
           className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 select-none ${
-            val ? "bg-accent-primary" : "bg-app-border"
+            val ? "bg-accent-primary" : ""
           }`}
+          style={!val ? { backgroundColor: `${themeNow.fg}33` } : undefined}
         >
           <div
             className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -2146,9 +2191,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
           <div 
             style={{
               width: window.innerWidth < 768 ? "100%" : `${sidebarWidth}px`,
-              paddingTop: isImmersive ? "0px" : "calc(56px + var(--safe-area-top, 0px))"
+              // 移动全屏侧栏从顶安全区起；跟随阅读主题色，避免字看不清
+              paddingTop: "var(--safe-area-top, 0px)",
+              backgroundColor: theme.bg,
+              color: theme.fg,
             }}
-            className="absolute inset-y-0 left-0 w-full md:relative md:h-full border-r border-app-border/40 bg-app-surface md:bg-black/5 md:dark:bg-white/5 backdrop-blur-lg flex flex-col shrink-0 z-30 md:z-20 animate-slide-in"
+            className="absolute inset-y-0 left-0 w-full md:relative md:h-full border-r border-black/10 flex flex-col shrink-0 z-40 md:z-20 animate-slide-in"
           >
             {/* Drag Resize Handle (hidden on mobile) */}
             {window.innerWidth >= 768 && (
@@ -2157,19 +2205,31 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                 onMouseDown={handleSidebarDragInit}
               />
             )}
-            {/* Sidebar header */}
-            <div className="px-4 py-3 border-b border-app-border/40 flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider">
+            {/* Sidebar header：大关闭钮，高对比 */}
+            <div
+              className="px-3 py-2.5 border-b flex items-center justify-between shrink-0 gap-2"
+              style={{ borderColor: `${theme.fg}22` }}
+            >
+              <h3 className="text-sm font-bold tracking-wide min-w-0 truncate" style={{ color: theme.fg }}>
                 {activeSidebar === "toc" && "书籍大纲"}
                 {activeSidebar === "search" && "全文搜索"}
                 {(activeSidebar as any) === "notes" && "读书笔记"}
                 {activeSidebar === "settings" && "排版设置"}
               </h3>
               <button
+                type="button"
                 onClick={() => setActiveSidebar(null)}
-                className="p-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-all"
+                className="inline-flex items-center gap-1 min-w-[44px] min-h-[44px] px-2.5 rounded-xl font-semibold text-xs shrink-0 active:scale-95 transition-all"
+                style={{
+                  color: theme.fg,
+                  backgroundColor: `${theme.fg}14`,
+                  border: `1px solid ${theme.fg}33`,
+                }}
+                aria-label="关闭"
+                title="关闭"
               >
-                <X size={14} />
+                <X size={18} strokeWidth={2.25} />
+                <span className="md:hidden">关闭</span>
               </button>
             </div>
 
@@ -2311,12 +2371,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                 </div>
               )}
 
-              {/* 4. Reading settings panel */}
+              {/* 4. Reading settings panel —— 颜色跟随阅读主题 */}
               {activeSidebar === "settings" && (
-                <div className="space-y-4 text-left">
+                <div className="space-y-4 text-left pb-8" style={{ color: theme.fg }}>
                   {/* 排版设置 */}
                   <div className="space-y-3">
-                    <h4 className="font-bold text-tx-secondary">字体样式</h4>
+                    <h4 className="font-bold opacity-90">字体样式</h4>
                     
                     {/* Font family selection */}
                     <div className="grid grid-cols-2 gap-2">
@@ -2329,11 +2389,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         <button
                           key={item.id}
                           onClick={() => updateSetting("fontFamily", item.id)}
-                          className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                            settings.fontFamily === item.id
-                              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
-                              : "border-app-border hover:bg-app-surface text-tx-secondary"
-                          }`}
+                          className="py-2 px-3 rounded-lg border text-xs font-semibold transition-all"
+                          style={{
+                            borderColor: settings.fontFamily === item.id ? "var(--color-accent-primary, #8b7cf6)" : `${theme.fg}33`,
+                            backgroundColor: settings.fontFamily === item.id ? `${theme.fg}12` : "transparent",
+                            color: theme.fg,
+                          }}
                         >
                           {item.name}
                         </button>
@@ -2347,30 +2408,31 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   </div>
 
                   {/* 布局主题 */}
-                  <div className="space-y-2 border-t border-app-border/40 pt-4">
-                    <h4 className="font-bold text-tx-secondary">阅读主题</h4>
+                  <div className="space-y-2 border-t pt-4" style={{ borderColor: `${theme.fg}22` }}>
+                    <h4 className="font-bold opacity-90">阅读主题</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(THEMES).map(([key, value]) => (
                         <button
                           key={key}
                           onClick={() => updateSetting("theme", key)}
-                          className={`py-2 px-3 rounded-lg border flex items-center justify-between text-xs font-semibold transition-all ${
-                            settings.theme === key
-                              ? "border-accent-primary text-accent-primary"
-                              : "border-app-border hover:bg-app-surface text-tx-secondary"
-                          }`}
-                          style={{ backgroundColor: value.bg, color: value.fg }}
+                          className="py-2 px-3 rounded-lg border flex items-center justify-between text-xs font-semibold transition-all"
+                          style={{
+                            backgroundColor: value.bg,
+                            color: value.fg,
+                            borderColor: settings.theme === key ? "var(--color-accent-primary, #8b7cf6)" : `${value.fg}33`,
+                            boxShadow: settings.theme === key ? `0 0 0 1px var(--color-accent-primary, #8b7cf6)` : undefined,
+                          }}
                         >
                           <span>{value.name}</span>
-                          {settings.theme === key && <Check size={12} className="text-accent-primary" />}
+                          {settings.theme === key && <Check size={12} />}
                         </button>
                       ))}
                     </div>
                   </div>
 
                   {/* 分栏与布局 */}
-                  <div className="space-y-2 border-t border-app-border/40 pt-4">
-                    <h4 className="font-bold text-tx-secondary">页面排版模式</h4>
+                  <div className="space-y-2 border-t pt-4" style={{ borderColor: `${theme.fg}22` }}>
+                    <h4 className="font-bold opacity-90">页面排版模式</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: "paginated", name: "左右翻页" },
@@ -2379,11 +2441,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         <button
                           key={item.id}
                           onClick={() => updateSetting("layoutMode", item.id)}
-                          className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                            settings.layoutMode === item.id
-                              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
-                              : "border-app-border hover:bg-app-surface text-tx-secondary"
-                          }`}
+                          className="py-2 px-3 rounded-lg border text-xs font-semibold transition-all"
+                          style={{
+                            borderColor: settings.layoutMode === item.id ? "var(--color-accent-primary, #8b7cf6)" : `${theme.fg}33`,
+                            backgroundColor: settings.layoutMode === item.id ? `${theme.fg}12` : "transparent",
+                            color: theme.fg,
+                          }}
                         >
                           {item.name}
                         </button>
@@ -2392,8 +2455,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   </div>
 
                   {/* 详细版面规格调整 */}
-                  <div className="space-y-2 border-t border-app-border/40 pt-4">
-                    <h4 className="font-bold text-tx-secondary">版面规格设置</h4>
+                  <div className="space-y-2 border-t pt-4" style={{ borderColor: `${theme.fg}22` }}>
+                    <h4 className="font-bold opacity-90">版面规格设置</h4>
                     <div className="space-y-1">
                       {renderStepperSetting("上边距", "marginTop", 0, 120, 2)}
                       {renderStepperSetting("下边距", "marginBottom", 0, 120, 2)}
@@ -2407,16 +2470,16 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   </div>
 
                   {/* 其他设置 */}
-                  <div className="space-y-2 border-t border-app-border/40 pt-4">
-                    <h4 className="font-bold text-tx-secondary">其他设置</h4>
+                  <div className="space-y-2 border-t pt-4" style={{ borderColor: `${theme.fg}22` }}>
+                    <h4 className="font-bold opacity-90">其他设置</h4>
                     <div className="space-y-1">
                       {renderToggleSetting("显示当前时间", "showTimeDisplay")}
                     </div>
                   </div>
 
                   {/* TTS Speech Synthesis Settings */}
-                  <div className="space-y-2 border-t border-app-border/40 pt-4">
-                    <h4 className="font-bold text-tx-secondary flex items-center gap-1.5">
+                  <div className="space-y-2 border-t pt-4" style={{ borderColor: `${theme.fg}22` }}>
+                    <h4 className="font-bold opacity-90 flex items-center gap-1.5">
                       <Volume2 size={14} />
                       语音朗读速度
                     </h4>
@@ -2428,7 +2491,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                           ttsRateRef.current = rate;
                           if (ttsState === "playing") startTts();
                         }}
-                        className="flex-1 py-1.5 rounded-lg border border-app-border hover:bg-app-surface text-center"
+                        className="flex-1 py-2 rounded-lg border text-center text-xs font-semibold"
+                        style={{ borderColor: `${theme.fg}33`, color: theme.fg }}
                       >
                         慢速
                       </button>
@@ -2440,7 +2504,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                           ttsRateRef.current = rate;
                           if (ttsState === "playing") startTts();
                         }}
-                        className="flex-1 py-1.5 rounded-lg border border-app-border hover:bg-app-surface text-center"
+                        className="flex-1 py-2 rounded-lg border text-center text-xs font-semibold"
+                        style={{ borderColor: `${theme.fg}33`, color: theme.fg }}
                       >
                         快速
                       </button>
@@ -2467,7 +2532,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   {/* Reset Settings */}
                   <button
                     onClick={handleResetSettings}
-                    className="w-full mt-4 py-2 border border-app-border text-tx-secondary rounded-lg hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-all flex items-center justify-center gap-2 font-semibold"
+                    className="w-full mt-4 py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 font-semibold text-sm"
+                    style={{
+                      border: `1px solid ${theme.fg}33`,
+                      color: theme.fg,
+                      backgroundColor: `${theme.fg}08`,
+                    }}
                   >
                     <RotateCcw size={12} />
                     <span>恢复默认排版设置</span>
@@ -2551,40 +2621,43 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         </div>
       </div>
 
-      {/* Top Header Bar Overlay */}
+      {/* Top Header Bar Overlay
+          移动：仅返回 + 标题（避免右侧按钮挤出屏幕）
+          桌面：保留完整动作区 */}
       <div 
         className={cn(
-          "absolute top-0 left-0 right-0 border-b border-app-border/40 px-4 flex items-center justify-between bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
+          "absolute top-0 left-0 right-0 border-b border-app-border/40 px-3 md:px-4 flex items-center justify-between bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
           isImmersive ? "-translate-y-full" : "translate-y-0"
         )}
         style={{
           height: "calc(56px + var(--safe-area-top, 0px))",
           paddingTop: "var(--safe-area-top, 0px)",
-          color: theme.fg
+          color: theme.fg,
+          backgroundColor: `${theme.bg}e6`,
         }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
           <button
             onClick={onBack}
-            className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-all active:scale-95"
+            className="p-2 -ml-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-all active:scale-95 shrink-0"
+            aria-label="返回"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={18} />
           </button>
-          <div className="flex flex-col">
-            <span className="text-xs font-bold truncate max-w-[120px] sm:max-w-md">
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-xs font-bold truncate">
               {book?.title}
             </span>
             {chapterTitle && (
-              <span className="text-[10px] opacity-75 truncate max-w-[100px] sm:max-w-xs font-medium">
+              <span className="text-[10px] opacity-75 truncate font-medium">
                 {chapterTitle}
               </span>
             )}
           </div>
         </div>
 
-        {/* Action Panel Toggles */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* Fullscreen toggle — first in toolbar */}
+        {/* 桌面端顶栏动作 */}
+        <div className="hidden md:flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={handleToggleFullscreen}
             className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all text-inherit"
@@ -2592,60 +2665,41 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
           >
             {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
           </button>
-
-          {/* TTS Controls */}
           {ttsState !== "stopped" && (
             <div className="flex items-center gap-1 bg-black/10 dark:bg-white/10 rounded-lg px-2 py-1 text-xs">
-              <button
-                onClick={handleStopTts}
-                className="p-1 hover:text-red-500 rounded transition-colors"
-                title="停止播放"
-              >
+              <button onClick={handleStopTts} className="p-1 hover:text-red-500 rounded" title="停止播放">
                 <Square size={12} fill="currentColor" />
               </button>
-              <button
-                onClick={handleToggleTts}
-                className="p-1 hover:text-accent-primary rounded transition-colors"
-                title={ttsState === "playing" ? "暂停" : "继续播放"}
-              >
+              <button onClick={handleToggleTts} className="p-1 hover:text-accent-primary rounded" title={ttsState === "playing" ? "暂停" : "继续播放"}>
                 {ttsState === "playing" ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
               </button>
               <span className="text-[9px] opacity-75">{ttsRate}x</span>
             </div>
           )}
-
           <button
-            onClick={() => setActiveSidebar(activeSidebar === "toc" ? null : "toc")}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
-              activeSidebar === "toc" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
-            }`}
+            onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "toc" ? null : "toc"); }}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "toc" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="大纲目录"
           >
             <List size={16} />
           </button>
           <button
-            onClick={() => setActiveSidebar(activeSidebar === "search" ? null : "search")}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
-              activeSidebar === "search" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
-            }`}
+            onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "search" ? null : "search"); }}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "search" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="全文搜索"
           >
             <Search size={16} />
           </button>
           <button
-            onClick={() => setActiveSidebar(activeSidebar === "notes" ? null : "notes")}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
-              activeSidebar === "notes" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
-            }`}
+            onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "notes" ? null : "notes"); }}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "notes" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="读书笔记"
           >
             <MessageSquare size={16} />
           </button>
           <button
-            onClick={() => setActiveSidebar(activeSidebar === "settings" ? null : "settings")}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${
-              activeSidebar === "settings" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""
-            }`}
+            onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "settings" ? null : "settings"); }}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "settings" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="字体排版设置"
           >
             <Settings size={16} />
@@ -2660,26 +2714,91 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         </div>
       </div>
 
-      {/* Bottom Bar progress info Overlay */}
+      {/* Bottom chrome：移动 = 动作栏 + 进度；桌面 = 仅进度 */}
       {loadingState === "ready" && (
         <div 
           className={cn(
-            "absolute bottom-0 left-0 right-0 border-t border-app-border/30 px-6 flex items-center justify-between text-[10px] opacity-70 bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
+            "absolute bottom-0 left-0 right-0 border-t border-app-border/30 bg-app-surface/90 dark:bg-zinc-950/90 backdrop-blur-md transition-transform duration-300 z-20 shrink-0 select-none text-tx-primary",
             isImmersive ? "translate-y-full" : "translate-y-0"
           )}
           style={{
-            height: "calc(32px + var(--safe-area-bottom, 0px))",
             paddingBottom: "var(--safe-area-bottom, 0px)",
-            color: theme.fg
+            color: theme.fg,
+            backgroundColor: `${theme.bg}e6`,
           }}
         >
-          <span className="truncate max-w-[120px] sm:max-w-md">{chapterTitle || "阅读中..."}</span>
-          <div className="flex items-center gap-4">
-            {settings.showTimeDisplay && currentTime && (
-              <span className="font-semibold mr-2 tabular-nums">{currentTime}</span>
-            )}
-            <span>页码: {currentPage}/{totalPages}</span>
-            <span>进度: {readingProgressText}</span>
+          {/* 移动端动作栏（原顶栏右侧按钮下沉） */}
+          <div className="md:hidden flex items-center justify-around gap-0.5 px-1 pt-1.5 pb-0.5">
+            <button
+              type="button"
+              onClick={() => viewRef.current?.prev()}
+              className="flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10"
+              title="上一页"
+              aria-label="上一页"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "toc" ? null : "toc"); }}
+              className={cn("flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10", activeSidebar === "toc" && "text-accent-primary")}
+              title="大纲"
+            >
+              <List size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "search" ? null : "search"); }}
+              className={cn("flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10", activeSidebar === "search" && "text-accent-primary")}
+              title="搜索"
+            >
+              <Search size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "notes" ? null : "notes"); }}
+              className={cn("flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10", activeSidebar === "notes" && "text-accent-primary")}
+              title="笔记"
+            >
+              <MessageSquare size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "settings" ? null : "settings"); }}
+              className={cn("flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10", activeSidebar === "settings" && "text-accent-primary")}
+              title="设置"
+              aria-label="排版设置"
+            >
+              <Settings size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={handleShareBookToTalk}
+              className="flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10"
+              title="分享"
+            >
+              <Share2 size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => viewRef.current?.next()}
+              className="flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10"
+              title="下一页"
+              aria-label="下一页"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          {/* 进度信息 */}
+          <div className="px-4 md:px-6 flex items-center justify-between text-[10px] opacity-80 py-1.5 md:py-2">
+            <span className="truncate max-w-[40%] md:max-w-[120px] sm:max-w-md">{chapterTitle || "阅读中..."}</span>
+            <div className="flex items-center gap-3 shrink-0">
+              {settings.showTimeDisplay && currentTime && (
+                <span className="font-semibold tabular-nums">{currentTime}</span>
+              )}
+              <span>页码: {currentPage}/{totalPages}</span>
+              <span>进度: {readingProgressText}</span>
+            </div>
           </div>
         </div>
       )}
