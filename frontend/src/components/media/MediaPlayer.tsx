@@ -147,9 +147,11 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
         aspectRatio: true,
         setting: true,
         hotkey: true,
-        pip: true,
+        // 关闭画中画：与全屏按钮视觉重复，且 Android WebView 上 PiP 体验差
+        pip: false,
         fullscreen: true,
-        fullscreenWeb: true,
+        // 关闭网页全屏：与原生 fullscreen 图标几乎一样，造成「按钮重复」
+        fullscreenWeb: false,
         playsInline: true,
         theme: "#23ade5",
         type: rawUrl.includes(".m3u8") ? "m3u8" : "auto",

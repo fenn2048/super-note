@@ -488,12 +488,10 @@ export default function MediaCenter() {
             exit={{ opacity: 0, x: -20 }}
             className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full flex flex-col md:gap-6 pb-[calc(1.5rem+var(--safe-area-bottom))] md:pb-6"
           >
-            {/* Navigation back */}
-            <div
-              className="flex items-center justify-between shrink-0 px-4 md:px-6 md:pt-6 mb-4 md:mb-0"
-              style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
-            >
-              <button 
+            {/* 桌面端保留「返回列表」；移动端 StackChrome 已有返回，去掉冗余条。
+                删除单品改为顶栏右侧 icon（portal fixed）。 */}
+            <div className="hidden md:flex items-center justify-between shrink-0 px-6 pt-6 mb-0">
+              <button
                 onClick={() => setSelectedItem(null)}
                 className="flex items-center gap-1.5 text-xs font-semibold text-tx-secondary hover:text-tx-primary bg-app-sidebar/40 border border-app-border/40 px-3 py-1.5 rounded-lg transition-colors"
               >
@@ -516,8 +514,33 @@ export default function MediaCenter() {
               )}
             </div>
 
-            {/* Media Player wrapper：上滑评论时吸顶 */}
-            <div className="w-full md:px-6 sticky top-0 z-20 bg-app-bg md:static md:z-auto">
+            {/* 移动端：删除 icon 放到顶栏右上角（StackChrome 右侧空位，见蓝框） */}
+            {isAdmin &&
+              createPortal(
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm("确认要删除这个单品吗？")) {
+                      await api.request(`/media/items/${selectedItem.id}`, { method: "DELETE" });
+                      setSelectedItem(null);
+                      fetchData();
+                    }
+                  }}
+                  className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-accent-danger hover:bg-accent-danger/10 active:scale-95 flex items-center justify-center"
+                  style={{
+                    top: "calc(var(--safe-area-top, 0px) + 12px)",
+                    right: "10px",
+                  }}
+                  title="删除单品"
+                  aria-label="删除单品"
+                >
+                  <Trash2 size={18} />
+                </button>,
+                document.body,
+              )}
+
+            {/* Media Player wrapper：上滑评论时吸顶；移动端去掉冗余导航条后顶到 StackChrome 下方 */}
+            <div className="relative w-full md:px-6 sticky top-0 z-20 bg-app-bg md:static md:z-auto">
               {selectedItem.type === "video" ? (
                 <MediaPlayer
                   mediaId={selectedItem.id}
