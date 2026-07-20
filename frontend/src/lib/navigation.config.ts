@@ -275,6 +275,17 @@ export function openTasksEntry(): void {
   window.dispatchEvent(
     new CustomEvent("super:project-filter-changed", { detail: filter }),
   );
+  // 懒加载 ProjectCenter 时监听器可能尚未注册：下一帧再派一次，确保落到 my-tasks
+  if (typeof window !== "undefined") {
+    window.setTimeout(() => {
+      try {
+        sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
+      } catch { /* ignore */ }
+      window.dispatchEvent(
+        new CustomEvent("super:project-filter-changed", { detail: filter }),
+      );
+    }, 0);
+  }
 }
 
 /**

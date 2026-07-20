@@ -496,13 +496,14 @@ export default function ProjectCenter() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
-  // Navigation Filter State (synced with Sidebar)
+  // Navigation Filter State (synced with Sidebar / 底栏任务入口)
+  // 默认 my-tasks：移动底栏「任务」语义是待办列表，不是项目网格
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
       const val = sessionStorage.getItem("super-active-project-filter");
-      return val ? JSON.parse(val) : { type: "all" };
+      return val ? JSON.parse(val) : { type: "my-tasks" };
     } catch {
-      return { type: "all" };
+      return { type: "my-tasks" };
     }
   });
 
@@ -727,8 +728,17 @@ export default function ProjectCenter() {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  // Sync state filter from Sidebar
+  // Sync state filter from Sidebar / 底栏；挂载时再读 sessionStorage，
+  // 避免冷启动懒加载时错过 openTasksEntry 派发的事件。
   useEffect(() => {
+    try {
+      const val = sessionStorage.getItem("super-active-project-filter");
+      if (val) {
+        const parsed = JSON.parse(val);
+        if (parsed?.type) setActiveFilter(parsed);
+      }
+    } catch { /* ignore */ }
+
     const handler = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail) {
@@ -2943,27 +2953,46 @@ export default function ProjectCenter() {
 
       {/* 6. Detailed Task Create Modal */}
       {showTaskCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-text">
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text"
+          style={{
+            // 键盘弹起时整体上移（与 adjustNothing + --keyboard-height 配套）
+            paddingBottom: "var(--keyboard-height, 0px)",
+          }}
+        >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
           <div
-            className="relative bg-app-elevated w-full max-w-xl rounded-2xl border border-app-border shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in scale-in duration-200 text-sm text-tx-primary"
+            className={cn(
+              "relative bg-app-elevated w-full shadow-2xl overflow-hidden flex flex-col text-sm text-tx-primary z-10",
+              // 移动：固定高度 sheet 才能让内部 overflow 滚动；桌面居中卡片
+              "h-[min(92dvh,100%)] md:h-auto md:max-h-[85vh] md:max-w-xl",
+              "rounded-t-2xl md:rounded-2xl border-t md:border border-app-border",
+              "animate-in slide-in-from-bottom md:slide-in-from-bottom-0 md:scale-in duration-200",
+            )}
           >
-            {/* Header */}
-            <div className="px-8 py-5 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+            {/* Header：移动端含 safe-area */}
+            <div
+              className="px-4 md:px-8 pb-3 md:py-5 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0"
+              style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
+            >
               <h3 className="text-sm font-bold text-tx-primary">
                 新建任务
               </h3>
               <button
                 type="button"
                 onClick={() => setShowTaskCreateModal(false)}
-                className="p-1 hover:bg-app-hover rounded-lg text-tx-tertiary hover:text-tx-primary transition-colors"
+                className="p-1.5 hover:bg-app-hover rounded-lg text-tx-tertiary hover:text-tx-primary transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Body */}
-            <ScrollArea className="flex-1 min-h-0 px-8 py-6 space-y-6.5">
+            {/* Body：原生 overflow 滚动（避免 Radix ScrollArea 在动态高度 sheet 内无法滚） */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-8 py-4 md:py-6"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              <div className="space-y-5 md:space-y-6.5 pb-2">
               {/* Title */}
               <div className="space-y-2.5 relative">
                 <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">任务标题</label>
@@ -2998,9 +3027,9 @@ export default function ProjectCenter() {
               </div>
 
               {/* Project & Assignee Row */}
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
                 {/* Project Selection */}
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">所属项目</label>
                   <select
                     value={taskProjId}
@@ -3017,7 +3046,7 @@ export default function ProjectCenter() {
                 </div>
 
                 {/* Assignee Selection */}
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">指派给</label>
                   <select
                     value={taskAssigneeId}
@@ -3059,9 +3088,9 @@ export default function ProjectCenter() {
               </div>
 
               {/* Timeline & Reminder Date Row */}
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
                 {/* Due Date */}
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">截止日期</label>
                   <SleekDatePicker
                     value={taskDueDate}
@@ -3082,7 +3111,7 @@ export default function ProjectCenter() {
                 </div>
 
                 {/* Reminder Offset */}
-                <div className="space-y-2.5">
+                <div className="space-y-2 min-w-0">
                   {(taskDueDate || taskIsRecurring) ? (
                     <>
                       <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">提醒设置</label>
@@ -3154,10 +3183,14 @@ export default function ProjectCenter() {
                   </div>
                 )}
               </div>
-            </ScrollArea>
+              </div>
+            </div>
 
-            {/* Footer */}
-            <div className="px-8 py-4 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0">
+            {/* Footer：移动端可换行 + safe-area */}
+            <div
+              className="px-4 md:px-8 py-3 md:py-4 border-t border-app-border bg-app-sidebar/30 flex flex-wrap justify-end gap-2 shrink-0"
+              style={{ paddingBottom: "calc(var(--safe-area-bottom, 0px) + 12px)" }}
+            >
               <Button
                 type="button"
                 variant="ghost"

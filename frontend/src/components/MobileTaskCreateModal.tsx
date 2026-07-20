@@ -231,13 +231,12 @@ export default function MobileTaskCreateModal({
               "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
               isDesktop
                 ? "w-full max-w-lg max-h-[min(88vh,720px)] rounded-2xl border border-app-border"
-                : "w-full rounded-t-3xl border-t border-app-border",
+                : "w-full h-[min(92dvh,100%)] rounded-t-3xl border-t border-app-border",
             )}
             style={
               isDesktop
                 ? undefined
                 : {
-                    maxHeight: "92%",
                     paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
                   }
             }
@@ -267,8 +266,11 @@ export default function MobileTaskCreateModal({
               </button>
             </div>
 
-            {/* Form Content */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            {/* Form Content：min-h-0 保证 flex 子项可滚 */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-2">
                   <Loader2 size={24} className="animate-spin text-accent-primary" />
