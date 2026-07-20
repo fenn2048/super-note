@@ -50,6 +50,7 @@ import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import { useEditorSwipeBack } from "@/hooks/useEditorSwipeBack";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
+import { resetScrollHideBars } from "@/hooks/useScrollHideBars";
 import CommandPalette from "@/components/common/CommandPalette";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
@@ -402,7 +403,9 @@ function AppLayout() {
   }, []);
 
   useEffect(() => {
+    // 切页时强制显示底栏，并同步 hook 内部状态（避免无法再 hide）
     setBarsVisible(true);
+    resetScrollHideBars();
   }, [state.viewMode, state.mobileView, showSettings]);
 
 
@@ -1275,17 +1278,19 @@ function AppLayout() {
     keyboardVisible,
   };
   const showMobileTabBar = shouldShowMobileTabBar(shellCtx);
-  const showMobileFAB =
-    shouldShowMobileFAB(shellCtx) && barsVisible && !keyboardVisible;
+  // FAB 结构是否存在：与滚动隐栏解耦，避免 unmount/mount 闪烁
+  const showMobileFAB = shouldShowMobileFAB(shellCtx) && !keyboardVisible;
+  // 滚动隐栏只控制视觉 visible，不卸载
+  const barsVisuallyVisible = barsVisible && !keyboardVisible;
 
-  // 底栏显隐 → CSS 变量（迷你播放器 / 批量条 / content padding 共用）
+  // 底栏 CSS 避让高度：只随「是否根页有底栏」变化，
+  // 不随滚动隐栏 barsVisible 变化——否则 padding 跳变会改 scrollTop，导致 tab/FAB 闪烁。
   useEffect(() => {
-    const tabShown = showMobileTabBar && barsVisible && !keyboardVisible;
-    syncMobileShellCssVars({ tabBarVisible: tabShown });
+    syncMobileShellCssVars({ tabBarVisible: showMobileTabBar });
     return () => {
       syncMobileShellCssVars({ tabBarVisible: true });
     };
-  }, [showMobileTabBar, barsVisible, keyboardVisible]);
+  }, [showMobileTabBar]);
 
   // 工作区检测：新用户若无工作区则显示引导页
   const [hasFamilySpace, setHasFamilySpace] = useState<boolean | null>(null);
@@ -1519,34 +1524,40 @@ function AppLayout() {
         <GlobalMusicPlayer />
       </div>
 
-      {showMobileTabBar && <MobileTabBar visible={barsVisible && !keyboardVisible} />}
+      {showMobileTabBar && <MobileTabBar visible={barsVisuallyVisible} />}
 
-      <AnimatePresence>
-        {showMobileFAB && barsVisible && !keyboardVisible && (
-          <>
-            <div className="mobile-fab-anchor fixed right-4 z-40 md:hidden">
-              <CreateFabButton onClick={() => setCreateMenuOpen(true)} />
-            </div>
-            <CreateMenu
-              open={createMenuOpen}
-              onClose={() => setCreateMenuOpen(false)}
-              className="right-4 bottom-[calc(5.5rem+var(--safe-area-bottom))] md:hidden"
-              showCamera={isNativePlatform()}
-              onAction={(action) => {
-                if (action === "note") void quickCreateNote();
-                else if (action === "diary") {
-                  setComposerInitialImages([]);
-                  setShowDiaryComposer(true);
-                } else if (action === "task") {
-                  setShowTaskComposer(true);
-                } else if (action === "camera") {
-                  setShowCameraModal(true);
-                }
-              }}
-            />
-          </>
-        )}
-      </AnimatePresence>
+      {/* FAB：始终挂载（根页），用 opacity/transform 隐栏，避免 AnimatePresence 闪烁 */}
+      {showMobileFAB && (
+        <>
+          <div
+            className={cn(
+              "mobile-fab-anchor fixed right-4 z-40 md:hidden transition-all duration-300 ease-soft",
+              barsVisuallyVisible
+                ? "opacity-100 translate-y-0 pointer-events-auto"
+                : "opacity-0 translate-y-4 pointer-events-none",
+            )}
+          >
+            <CreateFabButton onClick={() => setCreateMenuOpen(true)} />
+          </div>
+          <CreateMenu
+            open={createMenuOpen && barsVisuallyVisible}
+            onClose={() => setCreateMenuOpen(false)}
+            className="right-4 bottom-[calc(5.5rem+var(--safe-area-bottom))] md:hidden"
+            showCamera={isNativePlatform()}
+            onAction={(action) => {
+              if (action === "note") void quickCreateNote();
+              else if (action === "diary") {
+                setComposerInitialImages([]);
+                setShowDiaryComposer(true);
+              } else if (action === "task") {
+                setShowTaskComposer(true);
+              } else if (action === "camera") {
+                setShowCameraModal(true);
+              }
+            }}
+          />
+        </>
+      )}
 
       <MobileCameraModal
         isOpen={showCameraModal}
@@ -1684,7 +1695,7 @@ function MobileTopBar() {
     return (
       <MobileChromeHeader
         variant="stack"
-        stackAction="close"
+        stackAction="back"
         title={getTitle()}
         onLeadingClick={closeToMore}
         visible={visible}
@@ -1696,7 +1707,7 @@ function MobileTopBar() {
     return (
       <MobileChromeHeader
         variant="stack"
-        stackAction="close"
+        stackAction="back"
         title={
           <span className="flex items-center gap-2 min-w-0">
             <Bell size={16} className="text-accent-primary shrink-0" />
@@ -1724,6 +1735,27 @@ function MobileTopBar() {
             </button>
           ) : undefined
         }
+      />
+    );
+  }
+
+  // 「我的」子页：收藏 / 回收站 / AI 等统一左返回
+  if (
+    ["favorites", "trash", "ai-chat", "home"].includes(state.viewMode)
+  ) {
+    const titles: Record<string, string> = {
+      favorites: "收藏",
+      trash: "回收站",
+      "ai-chat": "AI",
+      home: "首页",
+    };
+    return (
+      <MobileChromeHeader
+        variant="stack"
+        stackAction="back"
+        title={titles[state.viewMode] || getTitle()}
+        onLeadingClick={closeToMore}
+        visible={visible}
       />
     );
   }
@@ -1768,6 +1800,7 @@ function MobileTabBar({ visible }: { visible: boolean }) {
 
   const handleTabClick = (mode: ViewMode, opts?: { openMyTasks?: boolean }) => {
     haptic.light();
+    // 先写 filter 再切 viewMode，保证 ProjectCenter 挂载时能读到 my-tasks
     if (opts?.openMyTasks) {
       openTasksEntry();
     }
@@ -1776,6 +1809,10 @@ function MobileTabBar({ visible }: { visible: boolean }) {
     actions.setMobileView("list");
     if (mode === "books" || mode === "library") {
       window.dispatchEvent(new CustomEvent("super:close-book"));
+    }
+    // 已在 projects 视图时 setViewMode 不会 remount，再补一次 filter 同步
+    if (opts?.openMyTasks) {
+      openTasksEntry();
     }
   };
 

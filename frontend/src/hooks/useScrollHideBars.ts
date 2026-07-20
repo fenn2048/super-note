@@ -4,19 +4,45 @@
  * 向上滚或到顶 → super:scroll-show-bars
  *
  * 兼容原生 overflow 容器与 Radix ScrollArea viewport。
+ *
+ * 防闪烁：
+ *  - 方向阈值 + 冷却，避免微抖 / 布局回流来回切换
+ *  - 同一状态不重复派发事件
+ *  - 隐栏只应「视觉隐藏」，内容 bottom padding 勿随 barsVisible 变化
+ *    （见 App.tsx syncMobileShellCssVars 与 showMobileTabBar 解耦）
  */
 import { useEffect, type RefObject } from "react";
 
-export function dispatchShowBars() {
+/** 当前已对外宣称的栏显隐（模块级，跨 hook 实例共享） */
+let barsAnnouncedVisible = true;
+/** 冷却截止时间戳，期间忽略方向翻转 */
+let cooldownUntil = 0;
+
+const DEFAULT_THRESHOLD = 16;
+/** 状态切换后最短锁定 ms，防止橡皮筋/回流抖动 */
+const COOLDOWN_MS = 280;
+
+export function dispatchShowBars(force = false) {
+  if (!force && barsAnnouncedVisible) return;
+  barsAnnouncedVisible = true;
+  cooldownUntil = Date.now() + COOLDOWN_MS;
   try {
     window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
   } catch { /* ignore */ }
 }
 
 export function dispatchHideBars() {
+  if (!barsAnnouncedVisible) return;
+  barsAnnouncedVisible = false;
+  cooldownUntil = Date.now() + COOLDOWN_MS;
   try {
     window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
   } catch { /* ignore */ }
+}
+
+/** 切页 / 打开设置时强制恢复底栏并重置内部状态 */
+export function resetScrollHideBars() {
+  dispatchShowBars(true);
 }
 
 function resolveScrollEl(root: HTMLElement | null): HTMLElement | null {
@@ -37,7 +63,7 @@ export function attachScrollHideBars(
   const viewport = resolveScrollEl(element);
   if (!viewport) return () => {};
 
-  const threshold = options?.threshold ?? 8;
+  const threshold = options?.threshold ?? DEFAULT_THRESHOLD;
   let lastScrollTop = viewport.scrollTop;
   let ticking = false;
 
@@ -46,14 +72,29 @@ export function attachScrollHideBars(
     ticking = true;
     requestAnimationFrame(() => {
       const st = viewport.scrollTop;
-      if (st <= 2) {
+      const delta = st - lastScrollTop;
+      lastScrollTop = st;
+
+      // 到顶强制显示（不受冷却限制，体验更稳）
+      if (st <= 4) {
         dispatchShowBars();
-      } else if (st > lastScrollTop + threshold) {
+        ticking = false;
+        return;
+      }
+
+      // 冷却期内忽略方向翻转，避免往上/往下微抖闪烁
+      if (Date.now() < cooldownUntil) {
+        ticking = false;
+        return;
+      }
+
+      if (delta > threshold) {
+        // 内容向下滚（手指上滑）→ 藏栏
         dispatchHideBars();
-      } else if (st < lastScrollTop - threshold) {
+      } else if (delta < -threshold) {
+        // 内容向上滚（手指下滑）→ 显栏
         dispatchShowBars();
       }
-      lastScrollTop = st;
       ticking = false;
     });
   };
