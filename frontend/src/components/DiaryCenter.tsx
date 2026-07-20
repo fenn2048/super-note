@@ -44,6 +44,7 @@ import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { cn, detectSuMention, getTagColor } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { registerPlugin } from "@capacitor/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -2997,12 +2998,13 @@ function DiaryEditor({
   onSaved: (updated: Diary) => void;
 }) {
   const { t } = useTranslation();
-  const [text, setText] = useState(item.contentText || "");
-  const [mood, setMood] = useState(item.mood || "");
+  // 惰性初始化，避免 item 引用变化时意外丢字
+  const [text, setText] = useState(() => item.contentText ?? "");
+  const [mood, setMood] = useState(() => item.mood || "");
   const [showMoods, setShowMoods] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [visibility, setVisibility] = useState<string>(item.visibility || "PRIVATE");
-  const [editorTags, setEditorTags] = useState<Tag[]>(item.tags || []);
+  const [visibility, setVisibility] = useState<string>(() => item.visibility || "PRIVATE");
+  const [editorTags, setEditorTags] = useState<Tag[]>(() => item.tags || []);
   const [images, setImages] = useState<PendingImage[]>(() =>
     (item.images || []).map((id) => ({
       localKey: id,
@@ -3017,16 +3019,32 @@ function DiaryEditor({
   const moodRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 切换到另一条说说时重置（同 id 不覆盖用户正在编辑的草稿）
+  useEffect(() => {
+    setText(item.contentText ?? "");
+    setMood(item.mood || "");
+    setVisibility(item.visibility || "PRIVATE");
+    setEditorTags(item.tags || []);
+    setImages(
+      (item.images || []).map((id) => ({
+        localKey: id,
+        id,
+        previewUrl: api.diaryImages.urlFor(id),
+        status: "ready" as const,
+      })),
+    );
+  }, [item.id]);
+
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 300) + "px";
+      el.style.height = Math.min(el.scrollHeight, 320) + "px";
     }
   }, []);
   useEffect(() => {
     autoResize();
-  }, [autoResize]);
+  }, [autoResize, text]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -3187,15 +3205,50 @@ function DiaryEditor({
 
   const selectedMoodEmoji = getMoodEmoji(mood);
   const remainingSlots = MAX_IMAGES_PER_DIARY - images.length;
+  const { visible: kbVisible } = useKeyboardVisible();
+  // 键盘弹起时整卡 dock 到键盘上方，标签/操作栏紧贴键盘顶（避免被遮挡）
+  const dockToKeyboard = kbVisible;
+
+  useEffect(() => {
+    if (!dockToKeyboard) return;
+    try {
+      window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
+    } catch { /* ignore */ }
+    return () => {
+      try {
+        window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
+      } catch { /* ignore */ }
+    };
+  }, [dockToKeyboard]);
 
   return (
+    <>
+    {/* 占位：fixed 后避免时间线塌缩跳动（小占位即可） */}
+    {dockToKeyboard && (
+      <div className="md:hidden h-40" aria-hidden />
+    )}
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="bg-app-surface/60 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm max-h-[min(70vh,560px)] flex flex-col overflow-hidden"
+      className={cn(
+        "bg-app-surface/95 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm flex flex-col overflow-hidden",
+        dockToKeyboard
+          ? "fixed left-2 right-2 z-[56] md:static md:left-auto md:right-auto md:z-auto"
+          : "max-h-[min(70vh,560px)]",
+      )}
+      style={
+        dockToKeyboard
+          ? {
+              // resize 模式下 keyboard-height=0，bottom:0 即贴键盘；叠层模式用精确高度
+              bottom: "var(--keyboard-height, 0px)",
+              maxHeight:
+                "min(70vh, calc(100dvh - var(--keyboard-height, 0px) - var(--safe-area-top, 0px) - 8px))",
+            }
+          : undefined
+      }
     >
-      <div className="p-4 pb-2 flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 pb-2 flex-1 min-h-0 overflow-y-auto" style={{ minHeight: "8rem" }}>
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-1.5 text-[11px] text-accent-primary min-w-0">
             <Edit2 size={11} className="shrink-0" />
@@ -3223,19 +3276,9 @@ function DiaryEditor({
           onKeyDown={handleKeyDown}
           placeholder={t("diary.editPlaceholder")}
           rows={4}
-          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[100px] no-focus-ring"
+          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[120px] no-focus-ring"
           autoFocus
         />
-
-        {/* 标签选择：抬高最小高度，避免移动端过矮难点 */}
-        <div className="mt-2 min-h-[48px]">
-          <GenericTagInput
-            selectedTags={editorTags}
-            onTagsChange={setEditorTags}
-            placeholder="添加或创建标签..."
-            className="min-h-[44px] py-1.5"
-          />
-        </div>
 
         {/* 图片缩略图 */}
         {images.length > 0 && (
@@ -3277,8 +3320,17 @@ function DiaryEditor({
         )}
       </div>
 
-      {/* 底部操作栏：单行展示（图标 | 可见性 | 字数 | 保存） */}
-      <div className="flex items-center gap-1 px-3 py-2.5 border-t border-app-border/40 shrink-0 min-w-0">
+      {/* 底部：标签 + 操作栏（shrink-0，dock 时紧贴键盘上方） */}
+      <div className="shrink-0 border-t border-app-border/40 bg-app-surface/95">
+        <div className="px-3 pt-2 min-h-[44px]">
+          <GenericTagInput
+            selectedTags={editorTags}
+            onTagsChange={setEditorTags}
+            placeholder="添加或创建标签..."
+            className="min-h-[40px] py-1"
+          />
+        </div>
+      <div className="flex items-center gap-1 px-3 py-2.5 min-w-0">
         {/* 心情 */}
         <div ref={moodRef} className="relative shrink-0">
           <button
@@ -3435,7 +3487,9 @@ function DiaryEditor({
           <span>{t("diary.save") || "保存"}</span>
         </button>
       </div>
+      </div>
     </motion.div>
+    </>
   );
 }
 
