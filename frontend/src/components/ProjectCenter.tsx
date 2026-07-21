@@ -22,7 +22,6 @@ import { toast } from "@/lib/toast";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
-import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
@@ -581,8 +580,6 @@ export default function ProjectCenter() {
     () => projects.find((p) => p.name === "个人TODO"),
     [projects]
   );
-
-  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
 
   // Full Screen / Detailed Task Creation Modal State
   const [showTaskCreateModal, setShowTaskCreateModal] = useState(false);
@@ -2956,7 +2953,18 @@ export default function ProjectCenter() {
 
       {/* 6. Detailed Task Create Modal */}
       {showTaskCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text">
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text"
+          /* 移动端：遮罩底边抬到键盘上方，sheet 不再 marginBottom + 二次减键盘高 */
+          style={
+            typeof window !== "undefined" && window.innerWidth < 768
+              ? {
+                  bottom: "var(--keyboard-height, 0px)",
+                  transition: "bottom 0.15s ease-out",
+                }
+              : undefined
+          }
+        >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
           <div
             className={cn(
@@ -2966,9 +2974,8 @@ export default function ProjectCenter() {
               "animate-in slide-in-from-bottom md:slide-in-from-bottom-0 md:scale-in duration-200",
             )}
             style={{
-              marginBottom: kbVisible && kbHeight > 0 ? `${kbHeight}px` : "0px",
-              maxHeight: kbVisible && kbHeight > 0 ? `calc(100vh - ${kbHeight}px - 40px)` : "85vh",
-              transition: "margin-bottom 0.15s ease-out, max-height 0.15s ease-out",
+              // 父层移动端 bottom 已扣键盘；100% = 可用高度，85vh 限制收起时高度
+              maxHeight: "min(85vh, 100%)",
             }}
           >
             {/* Header：移动端含 safe-area */}

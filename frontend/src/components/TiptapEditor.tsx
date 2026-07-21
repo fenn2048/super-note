@@ -4286,13 +4286,9 @@ function MobileEditorToolbar({
   const state = useAppState();
   const mobileView = state.mobileView;
   const [moreOpen, setMoreOpen] = useState(false);
-  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
-
-  console.log("[MobileToolbar Debug - Tiptap]", { mobileView, hasEditor: !!editor, kbVisible, kbHeight });
+  const { visible: kbVisible } = useKeyboardVisible();
 
   if (!editor || mobileView !== "editor") return null;
-
-  const bottomOffset = kbVisible && kbHeight > 0 ? `${kbHeight}px` : "var(--keyboard-height, 0px)";
 
   const btn = (
     onClick: () => void,
@@ -4314,12 +4310,14 @@ function MobileEditorToolbar({
 
   // portal 到 body：避免父级 transform/filter 把 fixed 变成相对定位，
   // 导致键盘弹起后工具栏卡在标题下方而不是键盘正上方。
+  // bottom 仅用 --keyboard-height（useKeyboardLayout 已防双计），勿再叠加 JS 高度。
   const bar = (
     <div
       className="md:hidden fixed left-0 right-0 z-[60] border-t border-app-border bg-app-elevated/95 backdrop-blur-md supports-[backdrop-filter]:bg-app-elevated/80 shadow-[0_-4px_20px_rgba(28,25,23,0.08)]"
       style={{
-        bottom: bottomOffset,
+        bottom: "var(--keyboard-height, 0px)",
         paddingBottom: kbVisible ? 4 : "var(--safe-area-bottom)",
+        transition: "bottom 0.15s ease-out",
       }}
       data-swipe-blocker
       data-mobile-editor-toolbar

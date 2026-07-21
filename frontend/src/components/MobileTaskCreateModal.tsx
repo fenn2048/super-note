@@ -9,7 +9,6 @@ import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Capacitor } from "@capacitor/core";
 import OCRModal from "@/components/OCRModal";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
@@ -46,8 +45,6 @@ export default function MobileTaskCreateModal({
   const [isAssigneeDrawerOpen, setIsAssigneeDrawerOpen] = useState(false);
 
   const workspaceId = getCurrentWorkspace();
-  // 原生壳（iOS / Android）都走 adjustNothing + --keyboard-height，遮罩底边抬到键盘上方
-  const isNative = Capacitor.isNativePlatform();
 
   // Load projects and current user
   useEffect(() => {
@@ -179,7 +176,7 @@ export default function MobileTaskCreateModal({
     }
   };
 
-  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
+  const { visible: kbVisible } = useKeyboardVisible();
 
   // 桌面居中大弹窗；移动底部 sheet（原 md:hidden 导致 Web 端点「+」任务无界面）
   const isDesktop =
@@ -194,6 +191,15 @@ export default function MobileTaskCreateModal({
             "fixed inset-0 z-[100] flex justify-center select-text p-0 md:p-6",
             isDesktop ? "items-center" : "items-end",
           )}
+          /* 移动端：遮罩底边抬到键盘上方（单一 --keyboard-height），sheet 吃满遮罩高度，避免再减一次键盘高被压扁 */
+          style={
+            !isDesktop
+              ? {
+                  bottom: "var(--keyboard-height, 0px)",
+                  transition: "bottom 0.15s ease-out",
+                }
+              : undefined
+          }
         >
           {/* Backdrop */}
           <motion.div
@@ -236,10 +242,12 @@ export default function MobileTaskCreateModal({
               isDesktop
                 ? undefined
                 : {
-                    marginBottom: kbVisible && kbHeight > 0 ? `${kbHeight}px` : "0px",
-                    maxHeight: kbVisible && kbHeight > 0 ? `calc(100vh - ${kbHeight}px - 40px)` : "85vh",
-                    paddingBottom: kbVisible ? 12 : "calc(var(--safe-area-bottom) + 16px)",
-                    transition: "margin-bottom 0.15s ease-out, max-height 0.15s ease-out",
+                    // 父层 bottom 已扣键盘 → 100% = 键盘上方可用高度；
+                    // 键盘收起时 85vh 限制底栏高度，避免铺满全屏。
+                    maxHeight: "min(85vh, 100%)",
+                    paddingBottom: kbVisible
+                      ? 12
+                      : "calc(var(--safe-area-bottom) + 16px)",
                   }
             }
             role="dialog"

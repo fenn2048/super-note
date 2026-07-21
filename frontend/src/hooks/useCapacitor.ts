@@ -273,12 +273,13 @@ export function useStatusBarSync() {
  * 不动 body/html 尺寸，只写 CSS 变量 `--keyboard-height`，由 sheet / 工具栏
  * 通过 `bottom: var(--keyboard-height)` 贴键盘顶。
  *
- * 关键：防「双计」
- *   - 若 WebView 实际走了 resize（visualViewport 已缩小），fixed bottom:0
- *     本身已在键盘上方 → 必须写 0，再叠加 plugin 高度会把 UI 顶飞。
- *   - 若真正 adjustNothing 叠层（vv 不缩），才用 Capacitor plugin 高度。
+ * 关键：防「双计」（工具栏/弹窗与键盘之间空出一整段键盘高度）
+ *   1) layout 已被系统压矮（adjustResize / 部分 OEM）：fixed bottom:0 已在键盘上 → 写 0
+ *   2) Chromium 把 fixed 自动推到 visualViewport 底：探针抬起 → 写 0
+ *   3) adjustNothing + vv 缩：用 vvInset
+ *   4) adjustNothing + vv 不缩：用 Capacitor plugin 高度
  *
- * 优先序：visualViewport inset →（仅 vv≈0 时）plugin 高度 → 软上限。
+ * 绝不要在未检测双计时无条件用 pluginHeight —— 会把 UI 再抬高一整段键盘高度。
  */
 export function useKeyboardLayout() {
   useEffect(() => {
@@ -287,12 +288,10 @@ export function useKeyboardLayout() {
     let pluginHeight = 0;
     let keyboardOpen = false;
     let lastWritten = -1;
+    /** 键盘收起时的 layout 高度，用于判断系统是否在弹键盘时压矮了 WebView */
+    let layoutHeightWhenClosed = window.innerHeight || 0;
 
-    // ── 探针元素 ──────────────────────────────────────────────────
-    // 插入一个不可见的 fixed bottom:0 元素，用它的 getBoundingClientRect
-    // 来**实测**浏览器是否已把 fixed 定位推到 visualViewport 底部。
-    // 这比靠 vvInset 阈值猜测可靠得多——不同 Android OEM/输入法/Chromium
-    // 版本的行为差异很大，阈值判断无法覆盖所有设备。
+    // ── 探针：实测 fixed bottom:0 是否已被引擎推到可视区底部 ──
     const probe = document.createElement("div");
     probe.style.cssText =
       "position:fixed;bottom:0;left:-9999px;width:1px;height:1px;" +
@@ -312,23 +311,26 @@ export function useKeyboardLayout() {
     };
 
     /**
-     * 用探针检测 CSS `fixed bottom:0` 是否已被浏览器引擎自动推到
-     * visualViewport 底部（键盘正上方）。
-     *
-     * 返回 true  → 浏览器已自动处理，--keyboard-height 应为 0
-     * 返回 false → fixed 元素仍在 layout viewport 底部（被键盘遮挡），
-     *              需要手动设置 --keyboard-height
+     * fixed bottom:0 是否已在「当前 layout 视口」底部之上。
+     * true → 浏览器已处理，--keyboard-height 必须为 0，否则双计。
      */
     const isFixedAutoRepositioned = (): boolean => {
       try {
         const vh = window.innerHeight || 0;
         if (vh <= 0) return false;
         const probeBottom = probe.getBoundingClientRect().bottom;
-        // 如果探针底部距屏幕底部差值 > 50px，说明浏览器确实把 fixed 推上去了
-        return (vh - probeBottom) > 50;
+        // 探针底边距 layout 底 > 50px → 已被抬到 visualViewport 底
+        return vh - probeBottom > 50;
       } catch {
         return false;
       }
+    };
+
+    /** layout 视口是否已相对键盘关闭时明显变矮（系统 adjustResize 等） */
+    const isLayoutShrunkByKeyboard = (): boolean => {
+      const vh = window.innerHeight || 0;
+      if (vh <= 0 || layoutHeightWhenClosed <= 0) return false;
+      return layoutHeightWhenClosed - vh >= 80;
     };
 
     const softCap = (h: number): number => {
@@ -336,36 +338,45 @@ export function useKeyboardLayout() {
       if (vh <= 0) return Math.max(0, h);
       let out = Math.max(0, Math.round(h));
       if (out > 0 && out < 80) out = 0;
-      const maxH = Math.floor(vh * 0.75);
+      // 键盘一般不超过屏高 55%；过高多半是双计或异常上报
+      const maxH = Math.floor(vh * 0.55);
       if (out > maxH) out = maxH;
       return out;
     };
 
     /**
-     * 计算 fixed 元素应使用的 bottom inset：
-     *
-     * 使用探针实测代替 vvInset 阈值猜测：
-     *   - 探针（fixed bottom:0）被浏览器推上去了 → 写 0，防二次推高
-     *   - 探针仍在屏幕底部（被键盘遮挡） → 使用 pluginHeight 手动抬高
-     *
-     * 这确保了在所有 Android 设备上（无论 OEM、输入法、Chromium 版本）
-     * 都能正确定位工具栏/弹窗到键盘正上方。
+     * 计算 fixed / sheet 应使用的 bottom inset（写入 --keyboard-height）。
      */
     const resolveInset = (): number => {
+      const vvInset = readVvInset();
+
       if (!keyboardOpen) {
+        // plugin 未报开，但 vv 已明显缩 → 仍视为键盘打开
+        if (vvInset < 80) return 0;
+        keyboardOpen = true;
+      }
+
+      // ① layout 已被系统压矮：fixed bottom:0 已在键盘上
+      if (isLayoutShrunkByKeyboard()) {
         return 0;
       }
-      const vvInset = readVvInset();
-      const effective = pluginHeight > 0 ? pluginHeight : vvInset;
-      const res = softCap(effective);
-      console.log("[KeyboardLayout Debug]", {
-        keyboardOpen,
-        pluginHeight,
-        vvInset,
-        effective,
-        resolvedInset: res,
-      });
-      return res;
+
+      // ② 引擎把 fixed 推到了 VV 底：同样不可再叠加
+      if (isFixedAutoRepositioned()) {
+        return 0;
+      }
+
+      // ③ vv 给出 layout 底 → 可视底 的真实间隙（adjustNothing + vv 缩）
+      if (vvInset >= 80) {
+        return softCap(vvInset);
+      }
+
+      // ④ vv 无感知：退回 Capacitor 原生高度
+      if (pluginHeight > 0) {
+        return softCap(pluginHeight);
+      }
+
+      return 0;
     };
 
     const writeInset = (force = false) => {
@@ -391,16 +402,19 @@ export function useKeyboardLayout() {
     };
 
     const onPluginShow = (height: number) => {
+      // 在 layout 可能被压矮之前尽量锁一次关闭态高度（若已缩则保持旧基线）
+      if (!keyboardOpen && !isLayoutShrunkByKeyboard()) {
+        layoutHeightWhenClosed = window.innerHeight || layoutHeightWhenClosed;
+      }
       keyboardOpen = true;
       pluginHeight = Math.max(0, Math.round(height || 0));
       resetWindowScroll();
-      // 延迟一帧再写入，确保探针的 getBoundingClientRect 已反映最新布局
+      // 延迟一帧再写入，等 vv / layout / 探针反映最新几何
       requestAnimationFrame(() => {
         resetWindowScroll();
         writeInset(true);
         requestAnimationFrame(() => {
           resetWindowScroll();
-          // 二次校正：部分设备上 vv resize 事件比 plugin 事件晚到
           writeInset(true);
         });
       });
@@ -411,16 +425,23 @@ export function useKeyboardLayout() {
       pluginHeight = 0;
       resetWindowScroll();
       writeInset(true);
+      // 收起后再采基线（等 layout 恢复）
+      requestAnimationFrame(() => {
+        layoutHeightWhenClosed = window.innerHeight || layoutHeightWhenClosed;
+      });
     };
 
     // visualViewport：键盘期间持续校正（部分 OEM 只缩 vv 不缩 layout）
     const onVvChange = () => {
       if (!keyboardOpen) {
-        // 即使 plugin 未报开，vv 缩 > 80 也视为键盘打开
         const inset = readVvInset();
         if (inset >= 80) {
           keyboardOpen = true;
         } else {
+          // 键盘关闭时同步基线
+          if (!isLayoutShrunkByKeyboard()) {
+            layoutHeightWhenClosed = window.innerHeight || layoutHeightWhenClosed;
+          }
           return;
         }
       }

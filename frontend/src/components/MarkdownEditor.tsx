@@ -1440,20 +1440,18 @@ function MobileMdToolbar({
   const state = useAppState();
   const mobileView = state.mobileView;
   const [moreOpen, setMoreOpen] = useState(false);
-  const { visible: kbVisible, height: kbHeight } = useKeyboardVisible();
-
-  console.log("[MobileToolbar Debug - MD]", { mobileView, kbVisible, kbHeight });
+  const { visible: kbVisible } = useKeyboardVisible();
 
   if (mobileView !== "editor") return null;
 
-  const bottomOffset = kbVisible && kbHeight > 0 ? `${kbHeight}px` : "var(--keyboard-height, 0px)";
-
+  // 单一事实来源：useKeyboardLayout 写入的 --keyboard-height（已防双计）
   const bar = (
     <div
       className="md:hidden fixed left-0 right-0 z-[60] border-t border-app-border bg-app-elevated/95 backdrop-blur-md supports-[backdrop-filter]:bg-app-elevated/80 shadow-[0_-4px_20px_rgba(28,25,23,0.08)]"
       style={{
-        bottom: bottomOffset,
+        bottom: "var(--keyboard-height, 0px)",
         paddingBottom: kbVisible ? 4 : "var(--safe-area-bottom)",
+        transition: "bottom 0.15s ease-out",
       }}
       data-swipe-blocker
       data-mobile-editor-toolbar
