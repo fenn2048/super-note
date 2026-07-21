@@ -20,7 +20,7 @@
  * 挂载一次，处理完后再 unmount。
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Loader2, Fingerprint } from "lucide-react";
 import {
   isQuickLoginPlatformSupported,
@@ -58,55 +58,73 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
   const [username, setUsername] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
 
-  // probe 阶段：判断是否需要展示 UI 并发起认证。
-  // 整个流程仅在挂载时跑一次；如果用户取消后回到密码页，组件会被 unmount，
-  // 不会反复弹出。
+  // 父组件常传内联 onSettled；splash 淡出等会触发重渲染换引用。
+  // 若把 onSettled 放进 effect deps，指纹认证中途会 cleanup→cancelled，
+  // 解锁成功后结果被丢弃，表现为「指纹过了却进密码页」。
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
+  const isClientModeRef = useRef(isClientMode);
+  isClientModeRef.current = isClientMode;
+  /** 本会话是否已发起过认证（防 StrictMode / 重渲染二次弹窗） */
+  const startedRef = useRef(false);
+
+  // 仅挂载时跑一轮；结算一律走 ref，避免依赖变化中断指纹后的 verify。
   useEffect(() => {
-    let cancelled = false;
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    let alive = true;
     (async () => {
+      const settle = (
+        used: boolean,
+        payload?: { token: string; user: User },
+      ) => {
+        if (!alive) return;
+        onSettledRef.current(used, payload);
+      };
+
       if (!isQuickLoginPlatformSupported()) {
-        if (!cancelled) onSettled(false);
+        settle(false);
         return;
       }
-      if (!isClientMode) {
-        if (!cancelled) onSettled(false);
+      if (!isClientModeRef.current) {
+        settle(false);
         return;
       }
       const enabled = await isQuickLoginEnabled();
-      if (cancelled) return;
+      if (!alive) return;
       if (!enabled) {
-        onSettled(false);
+        settle(false);
         return;
       }
 
       // 取一下用户名，UI 上能展示"以 xxx 身份解锁"
       try {
         const u = await getQuickLoginUsername();
-        if (!cancelled && u) setUsername(u);
+        if (alive && u) setUsername(u);
       } catch {
         /* ignore */
       }
 
-      if (cancelled) return;
+      if (!alive) return;
       setPhase("authenticating");
 
       const result = await attemptQuickLogin();
-      if (cancelled) return;
-
+      // 指纹已出结果：即使组件即将卸载也尽量完成登录，避免 silent drop
       if (!result.ok) {
-        // 用户取消、生物识别不可用 → 静默回退到密码登录
         if (
           result.reason === "user_cancel" ||
           result.reason === "biometry_unavailable" ||
           result.reason === "not_enabled"
         ) {
-          // biometry_unavailable 通常是用户清掉了所有指纹 / 关掉锁屏 ——
-          // 这种状态下"快速登录"已不再可用，主动 disable 释放凭据，避免下次
-          // 启动还卡在这里。
           if (result.reason === "biometry_unavailable") {
             await disableQuickLogin();
           }
-          onSettled(false);
+          settle(false);
+          return;
+        }
+        if (!alive) {
+          settle(false);
           return;
         }
         setErrorMsg(result.message || "解锁失败，请使用密码登录");
@@ -114,11 +132,9 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
         return;
       }
 
-      // 取到 token → 恢复 serverUrl 后 verify
-      setPhase("verifying");
+      // 取到 token → 恢复 serverUrl 后 verify（此阶段不再因 unmount 丢弃成功结果）
+      if (alive) setPhase("verifying");
 
-      // 同步服务器 URL：secure storage 与 token 一一对应，优先于 localStorage。
-      // 必须在 getBaseUrl()/verify 之前写回，否则原生端会打到 https://localhost/api。
       const ssServer = normalizeServerUrl(result.serverUrl);
       const lsServer = normalizeServerUrl(getServerUrl());
       if (ssServer) {
@@ -126,21 +142,21 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
           setServerUrl(ssServer);
         }
       } else if (!lsServer) {
-        // 两边都没有地址：无法 verify，也不该误报"网络异常"
-        if (cancelled) return;
-        setErrorMsg("未找到服务器地址，请使用密码登录");
-        setPhase("fallback");
+        if (alive) {
+          setErrorMsg("未找到服务器地址，请使用密码登录");
+          setPhase("fallback");
+        } else {
+          settle(false);
+        }
         return;
       }
 
-      // 尽早写回 token：后续缓存兜底 / 其它模块都从 super-token 读
       try {
         localStorage.setItem("super-token", result.token);
       } catch {
         /* ignore */
       }
 
-      // 指纹弹窗关闭后 Android WebView 偶发首请求失败 → 内部会重试 + 离线缓存兜底
       const verified = await verifyAuthToken(result.token, {
         attempts: 3,
         retryDelayMs: 500,
@@ -148,40 +164,56 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
         allowCacheFallback: true,
       });
 
-      if (cancelled) return;
-
       if (verified.ok) {
-        onSettled(true, { token: result.token, user: verified.user });
+        // 成功：即使用户界面已切走也写入登录态
+        onSettledRef.current(true, {
+          token: result.token,
+          user: verified.user,
+        });
         return;
       }
 
       if (verified.reason === "auth_invalid") {
-        // token 已被吊销 / 改密：清掉 Keystore 镜像与 local token
         await disableQuickLogin();
         try {
           localStorage.removeItem("super-token");
         } catch {
           /* ignore */
         }
-        setErrorMsg(verified.message || "登录态已失效，请重新输入密码");
-        setPhase("fallback");
+        if (alive) {
+          setErrorMsg(verified.message || "登录态已失效，请重新输入密码");
+          setPhase("fallback");
+        } else {
+          settle(false);
+        }
         return;
       }
 
       if (verified.reason === "no_server") {
-        setErrorMsg(verified.message || "未找到服务器地址，请使用密码登录");
-        setPhase("fallback");
+        if (alive) {
+          setErrorMsg(verified.message || "未找到服务器地址，请使用密码登录");
+          setPhase("fallback");
+        } else {
+          settle(false);
+        }
         return;
       }
 
-      // 网络类失败：保留 token 与快速登录开关，方便网络恢复后重试 / 密码登录
-      setErrorMsg(verified.message || "网络异常，请使用密码登录");
-      setPhase("fallback");
+      if (alive) {
+        setErrorMsg(verified.message || "网络异常，请使用密码登录");
+        setPhase("fallback");
+      } else {
+        // 网络失败且组件已卸载：不要 silent，交给密码页
+        settle(false);
+      }
     })();
+
     return () => {
-      cancelled = true;
+      alive = false;
     };
-  }, [isClientMode, onSettled]);
+    // 故意只跑一次：指纹流程不可因父组件重渲染重启
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (phase === "probing") {
     // 还在探测，避免视觉闪烁，渲染一个最小 loading
@@ -241,7 +273,7 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
             </p>
             <button
               type="button"
-              onClick={() => onSettled(false)}
+              onClick={() => onSettledRef.current(false)}
               className="mt-4 w-full py-2.5 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
             >
               使用密码登录
