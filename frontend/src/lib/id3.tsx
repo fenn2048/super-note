@@ -6,6 +6,33 @@ import { cn } from "@/lib/utils";
 // Memory cache to prevent parsing the same audio repeatedly during current session
 const id3CoverCache = new Map<string, string>();
 const id3MetaCache = new Map<string, ID3Metadata>();
+/** In-flight parse promises so concurrent play hooks share one request per item */
+const id3ParseInflight = new Map<string, Promise<ID3Metadata | null>>();
+/** Listeners so list covers can react when play-time parse fills the cache */
+const id3CacheListeners = new Set<() => void>();
+
+function notifyId3CacheUpdate() {
+  id3CacheListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      /* ignore listener errors */
+    }
+  });
+}
+
+function setId3CoverCache(itemId: string, url: string) {
+  id3CoverCache.set(itemId, url);
+  notifyId3CacheUpdate();
+}
+
+function setId3MetaCache(itemId: string, meta: ID3Metadata) {
+  id3MetaCache.set(itemId, meta);
+  if (meta.coverUrl) {
+    id3CoverCache.set(itemId, meta.coverUrl);
+  }
+  notifyId3CacheUpdate();
+}
 
 export interface ID3Metadata {
   artist?: string;
@@ -13,6 +40,25 @@ export interface ID3Metadata {
   title?: string;
   coverUrl?: string;
   coverBlob?: Blob;
+}
+
+export interface UseID3CoverOptions {
+  /**
+   * When true, fetch play-url and parse ID3 if not already cached.
+   * Only enable while the track is the active playback target.
+   * Default false: read DB cover + memory cache only (no network parse).
+   */
+  parse?: boolean;
+}
+
+/** Read cover from memory cache (session). Empty string means "parsed, no cover". */
+export function getCachedID3Cover(itemId: string): string | undefined {
+  return id3CoverCache.get(itemId);
+}
+
+/** Read full metadata from memory cache (session). */
+export function getCachedID3Meta(itemId: string): ID3Metadata | undefined {
+  return id3MetaCache.get(itemId);
 }
 
 function decodeId3Text(encoding: number, data: Uint8Array): string {
@@ -227,120 +273,186 @@ export async function getID3CoverUrl(url: string): Promise<{ url: string; blob: 
 }
 
 /**
- * Custom React Hook to load and cache ID3 cover + text metadata dynamically
+ * Resolve display cover: DB cover_url first, then session memory cache.
  */
-export function useID3Cover(itemId: string | undefined, dbCoverUrl: string | undefined, mediaType?: string) {
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [meta, setMeta] = useState<ID3Metadata | null>(null);
+function resolveCoverFromCache(itemId: string, dbCoverUrl?: string): string | null {
+  if (dbCoverUrl) return dbCoverUrl;
+  const cached = id3CoverCache.get(itemId);
+  if (cached) return cached;
+  const meta = id3MetaCache.get(itemId);
+  if (meta?.coverUrl) return meta.coverUrl;
+  return null;
+}
+
+/**
+ * Parse ID3 once per item (deduped). Writes session cache; optionally uploads cover
+ * and patches artist/album when DB fields are empty.
+ */
+async function ensureID3Parsed(
+  itemId: string,
+  dbCoverUrl: string | undefined,
+): Promise<ID3Metadata | null> {
+  if (id3MetaCache.has(itemId)) {
+    return id3MetaCache.get(itemId)!;
+  }
+
+  const inflight = id3ParseInflight.get(itemId);
+  if (inflight) return inflight;
+
+  const promise = (async (): Promise<ID3Metadata | null> => {
+    try {
+      const res = await api.request<{ url: string }>(`/media/items/${itemId}/play-url`);
+      if (!res?.url) return null;
+
+      const id3Data = await getID3Metadata(res.url);
+
+      if (id3Data) {
+        setId3MetaCache(itemId, id3Data);
+
+        // 回写歌手/专辑到服务端（空字段才写）
+        if (id3Data.artist || id3Data.album) {
+          try {
+            await api.request(`/media/items/${itemId}/metadata`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                artist: id3Data.artist || null,
+                album: id3Data.album || null,
+              }),
+            });
+          } catch (err) {
+            console.warn("Failed to patch ID3 text metadata:", err);
+          }
+        }
+
+        // Upload cover to server so next load can use DB cover without re-parse
+        if (id3Data.coverBlob && !dbCoverUrl) {
+          try {
+            const formData = new FormData();
+            formData.append("file", id3Data.coverBlob, "cover.jpg");
+
+            const token = localStorage.getItem("super-token");
+            const uploadResRaw = await fetch(`${getBaseUrl()}/media/upload-cover`, {
+              method: "POST",
+              body: formData,
+              headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            });
+
+            if (uploadResRaw.ok) {
+              const uploadRes = await uploadResRaw.json();
+              if (uploadRes && uploadRes.url) {
+                await api.request(`/media/items/${itemId}/cover`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ cover_url: uploadRes.url }),
+                });
+                // Prefer durable server URL over blob URL in cache
+                setId3CoverCache(itemId, uploadRes.url);
+                const prev = id3MetaCache.get(itemId) || id3Data;
+                setId3MetaCache(itemId, { ...prev, coverUrl: uploadRes.url });
+              }
+            }
+          } catch (err) {
+            console.warn("Failed to upload ID3 cover to server:", err);
+          }
+        }
+
+        return id3MetaCache.get(itemId) || id3Data;
+      }
+
+      // Parsed but empty — mark so we don't re-fetch on every play
+      setId3CoverCache(itemId, "");
+      setId3MetaCache(itemId, {});
+      return null;
+    } catch (e) {
+      console.warn("ID3 metadata extraction error:", e);
+      return null;
+    } finally {
+      id3ParseInflight.delete(itemId);
+    }
+  })();
+
+  id3ParseInflight.set(itemId, promise);
+  return promise;
+}
+
+/**
+ * Cover + ID3 metadata hook.
+ *
+ * - Default (`parse: false`): only DB cover_url and session cache — used by list tiles.
+ * - `parse: true`: fetch & parse ID3 when not cached — only while the track is playing.
+ * - After a successful parse, cover is cached in memory and uploaded to the server;
+ *   subsequent displays prefer cache / DB cover without re-parsing.
+ */
+export function useID3Cover(
+  itemId: string | undefined,
+  dbCoverUrl: string | undefined,
+  mediaType?: string,
+  options?: UseID3CoverOptions,
+) {
+  const shouldParse = options?.parse === true;
+  const [coverUrl, setCoverUrl] = useState<string | null>(() =>
+    itemId && !mediaType?.startsWith("video") ? resolveCoverFromCache(itemId, dbCoverUrl) : null,
+  );
+  const [meta, setMeta] = useState<ID3Metadata | null>(() =>
+    itemId && id3MetaCache.has(itemId) ? id3MetaCache.get(itemId)! : null,
+  );
   const [loading, setLoading] = useState<boolean>(false);
 
+  // Keep display state in sync with DB cover + session cache (incl. play-time fills)
   useEffect(() => {
     if (!itemId || mediaType?.startsWith("video")) {
       setCoverUrl(null);
       setMeta(null);
       return;
     }
-    const activeItemId = itemId;
-    if (dbCoverUrl) {
-      setCoverUrl(dbCoverUrl);
-    }
 
-    if (id3MetaCache.has(activeItemId)) {
-      const cached = id3MetaCache.get(activeItemId)!;
-      setMeta(cached);
-      if (!dbCoverUrl && cached.coverUrl) setCoverUrl(cached.coverUrl);
+    const syncFromCache = () => {
+      setCoverUrl(resolveCoverFromCache(itemId, dbCoverUrl));
+      if (id3MetaCache.has(itemId)) {
+        setMeta(id3MetaCache.get(itemId)!);
+      }
+    };
+
+    syncFromCache();
+    id3CacheListeners.add(syncFromCache);
+    return () => {
+      id3CacheListeners.delete(syncFromCache);
+    };
+  }, [itemId, dbCoverUrl, mediaType]);
+
+  // Parse only when explicitly requested (audio playback)
+  useEffect(() => {
+    if (!shouldParse || !itemId || mediaType?.startsWith("video")) {
+      setLoading(false);
       return;
     }
 
-    if (id3CoverCache.has(activeItemId) && dbCoverUrl) {
-      setCoverUrl(id3CoverCache.get(activeItemId)! || dbCoverUrl);
-      // still try text meta if not cached
+    if (id3MetaCache.has(itemId)) {
+      setMeta(id3MetaCache.get(itemId)!);
+      setCoverUrl(resolveCoverFromCache(itemId, dbCoverUrl));
+      setLoading(false);
+      return;
     }
 
     let active = true;
     setLoading(true);
 
-    async function extractMeta() {
-      try {
-        const res = await api.request<{ url: string }>(`/media/items/${activeItemId}/play-url`);
-        if (!active || !res?.url) {
-          setLoading(false);
-          return;
-        }
-
-        const id3Data = await getID3Metadata(res.url);
-        if (!active) return;
-
-        if (id3Data) {
-          id3MetaCache.set(activeItemId, id3Data);
-          setMeta(id3Data);
-
-          if (id3Data.coverUrl) {
-            id3CoverCache.set(activeItemId, id3Data.coverUrl);
-            if (!dbCoverUrl) setCoverUrl(id3Data.coverUrl);
-          }
-
-          // 回写歌手/专辑到服务端（空字段才写）
-          if (id3Data.artist || id3Data.album) {
-            try {
-              await api.request(`/media/items/${activeItemId}/metadata`, {
-                method: "PATCH",
-                body: JSON.stringify({
-                  artist: id3Data.artist || null,
-                  album: id3Data.album || null,
-                }),
-              });
-            } catch (err) {
-              console.warn("Failed to patch ID3 text metadata:", err);
-            }
-          }
-
-          // Upload cover to server in the background
-          if (id3Data.coverBlob && !dbCoverUrl) {
-            try {
-              const formData = new FormData();
-              formData.append("file", id3Data.coverBlob, "cover.jpg");
-
-              const token = localStorage.getItem("super-token");
-              const uploadResRaw = await fetch(`${getBaseUrl()}/media/upload-cover`, {
-                method: "POST",
-                body: formData,
-                headers: {
-                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-              });
-
-              if (uploadResRaw.ok) {
-                const uploadRes = await uploadResRaw.json();
-                if (uploadRes && uploadRes.url) {
-                  await api.request(`/media/items/${activeItemId}/cover`, {
-                    method: "PATCH",
-                    body: JSON.stringify({ cover_url: uploadRes.url }),
-                  });
-                  id3CoverCache.set(activeItemId, uploadRes.url);
-                }
-              }
-            } catch (err) {
-              console.warn("Failed to upload ID3 cover to server:", err);
-            }
-          }
-        } else {
-          id3CoverCache.set(activeItemId, "");
-          id3MetaCache.set(activeItemId, {});
-          if (!dbCoverUrl) setCoverUrl(null);
-        }
-      } catch (e) {
-        console.warn("ID3 metadata extraction hook error:", e);
-      } finally {
-        if (active) setLoading(false);
+    ensureID3Parsed(itemId, dbCoverUrl).then((id3Data) => {
+      if (!active) return;
+      if (id3Data) {
+        setMeta(id3Data);
+        setCoverUrl(resolveCoverFromCache(itemId, dbCoverUrl));
+      } else if (!dbCoverUrl) {
+        setCoverUrl(null);
       }
-    }
+      setLoading(false);
+    });
 
-    extractMeta();
     return () => {
       active = false;
     };
-  }, [itemId, dbCoverUrl]);
+  }, [itemId, dbCoverUrl, mediaType, shouldParse]);
 
   return { coverUrl, loading, meta };
 }
@@ -365,10 +477,13 @@ function coverHue(seed: string): number {
 }
 
 /**
- * Drop-in component to display the audio cover (dynamically reading ID3 if DB cover is missing)
+ * Drop-in component to display the audio cover.
+ * Prefers DB cover_url / session ID3 cache; does not parse ID3 (parsing happens on play).
  */
 export function AudioCover({ item, className, fallbackIconSize = 28 }: AudioCoverProps) {
-  const { coverUrl, loading } = useID3Cover(item.id, item.cover_url, (item as any).type);
+  const { coverUrl, loading } = useID3Cover(item.id, item.cover_url, (item as any).type, {
+    parse: false,
+  });
   const coverToUse = coverUrl || item.cover_url;
 
   const [imgFailed, setImgFailed] = useState(false);

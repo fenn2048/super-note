@@ -60,19 +60,27 @@ export default function GlobalMusicPlayer() {
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  const { coverUrl: id3Cover, meta: id3Meta } = useID3Cover(currentMedia?.id, currentMedia?.cover_url, currentMedia?.type);
+  // 仅在音频成为当前播放项时解析 ID3 封面；列表展示走缓存 / DB cover
+  const { coverUrl: id3Cover, meta: id3Meta } = useID3Cover(
+    currentMedia?.id,
+    currentMedia?.cover_url,
+    currentMedia?.type,
+    { parse: currentMedia?.type === "audio" },
+  );
   const coverToUse = id3Cover || currentMedia?.cover_url;
 
-  // ID3 歌手/专辑回填到播放状态
+  // ID3 歌手/专辑/封面回填到播放状态
   useEffect(() => {
-    if (!currentMedia || !id3Meta) return;
-    const patch: { artist?: string; album?: string } = {};
-    if (id3Meta.artist && !currentMedia.artist) patch.artist = id3Meta.artist;
-    if (id3Meta.album && !currentMedia.album) patch.album = id3Meta.album;
+    if (!currentMedia) return;
+    const patch: { artist?: string; album?: string; cover_url?: string } = {};
+    if (id3Meta?.artist && !currentMedia.artist) patch.artist = id3Meta.artist;
+    if (id3Meta?.album && !currentMedia.album) patch.album = id3Meta.album;
+    const cover = id3Cover || id3Meta?.coverUrl;
+    if (cover && !currentMedia.cover_url) patch.cover_url = cover;
     if (Object.keys(patch).length > 0) {
       patchCurrentMedia(patch);
     }
-  }, [currentMedia?.id, id3Meta?.artist, id3Meta?.album]);
+  }, [currentMedia?.id, id3Meta?.artist, id3Meta?.album, id3Meta?.coverUrl, id3Cover]);
 
   // 1. Fetch play URL when currentMedia changes (only for audio)
   useEffect(() => {

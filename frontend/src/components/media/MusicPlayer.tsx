@@ -114,7 +114,13 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
   };
 
   // hooks must run before any early return
-  const { meta: id3Meta } = useID3Cover(mediaItem?.id, mediaItem?.cover_url, "audio");
+  // 仅当本曲目是全局当前播放项时解析 ID3；否则只读缓存 / DB
+  const { meta: id3Meta } = useID3Cover(
+    mediaItem?.id,
+    mediaItem?.cover_url,
+    "audio",
+    { parse: isCurrentActive },
+  );
   const displayTitle = mediaItem?.title;
   const displayArtist = mediaItem?.artist || id3Meta?.artist || "未知歌手";
   const displayAlbum = mediaItem?.album || id3Meta?.album;
