@@ -90,9 +90,23 @@ export default function QuickLoginEnrollDialog({
     setError("");
     setSubmitting(true);
     try {
+      // 优先 localStorage 当前服务器；再兜底 last 地址，避免刚登录瞬间 getServerUrl 为空
+      const serverUrl =
+        getServerUrl() ||
+        (() => {
+          try {
+            return localStorage.getItem("super-server-url-last") || "";
+          } catch {
+            return "";
+          }
+        })();
+      if (!serverUrl) {
+        setError("缺少服务器地址，请返回登录页确认已连接服务器");
+        return;
+      }
       const result = await enableQuickLogin({
         token,
-        serverUrl: getServerUrl() || "",
+        serverUrl,
         username,
       });
       if (!result.ok) {

@@ -30,6 +30,7 @@ import {
   getQuickLoginUsername,
 } from "@/lib/quickLogin";
 import { setServerUrl, getServerUrl } from "@/lib/api";
+import { verifyAuthToken } from "@/lib/authVerify";
 import type { User } from "@/types";
 
 interface Props {
@@ -47,6 +48,10 @@ interface Props {
 }
 
 type Phase = "probing" | "authenticating" | "verifying" | "fallback";
+
+function normalizeServerUrl(url: string): string {
+  return (url || "").trim().replace(/\/+$/, "");
+}
 
 export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
   const [phase, setPhase] = useState<Phase>("probing");
@@ -109,59 +114,69 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
         return;
       }
 
-      // 取到 token → verify 一次
+      // 取到 token → 恢复 serverUrl 后 verify
       setPhase("verifying");
 
-      // 同步服务器 URL：如果 secure storage 里存的服务器地址与当前
-      // localStorage 不一致，以 secure storage 为准（更可信，因为它是和
-      // 当时登录成功的 token 一一对应的）。
-      const ssServer = result.serverUrl || "";
-      const lsServer = getServerUrl();
-      if (ssServer && ssServer !== lsServer) {
-        setServerUrl(ssServer);
+      // 同步服务器 URL：secure storage 与 token 一一对应，优先于 localStorage。
+      // 必须在 getBaseUrl()/verify 之前写回，否则原生端会打到 https://localhost/api。
+      const ssServer = normalizeServerUrl(result.serverUrl);
+      const lsServer = normalizeServerUrl(getServerUrl());
+      if (ssServer) {
+        if (ssServer !== lsServer) {
+          setServerUrl(ssServer);
+        }
+      } else if (!lsServer) {
+        // 两边都没有地址：无法 verify，也不该误报"网络异常"
+        if (cancelled) return;
+        setErrorMsg("未找到服务器地址，请使用密码登录");
+        setPhase("fallback");
+        return;
       }
 
-      const baseUrl = ssServer || lsServer || "";
-      const verifyUrl = baseUrl
-        ? `${baseUrl}/api/auth/verify`
-        : "/api/auth/verify";
-
+      // 尽早写回 token：后续缓存兜底 / 其它模块都从 super-token 读
       try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(verifyUrl, {
-          headers: { Authorization: `Bearer ${result.token}` },
-          signal: ctrl.signal,
-        });
-        clearTimeout(timer);
-        if (!res.ok) {
-          // 401 / 403：token 已被吊销 / 改密。secure storage 凭据失效 → 清空
-          if (res.status === 401 || res.status === 403) {
-            await disableQuickLogin();
-          }
-          if (cancelled) return;
-          setErrorMsg("登录态已失效，请重新输入密码");
-          setPhase("fallback");
-          return;
-        }
-        const data = await res.json();
-        if (cancelled) return;
-        // 同步到 localStorage：项目其它地方还是从 super-token 读
+        localStorage.setItem("super-token", result.token);
+      } catch {
+        /* ignore */
+      }
+
+      // 指纹弹窗关闭后 Android WebView 偶发首请求失败 → 内部会重试 + 离线缓存兜底
+      const verified = await verifyAuthToken(result.token, {
+        attempts: 3,
+        retryDelayMs: 500,
+        timeoutMs: 10000,
+        allowCacheFallback: true,
+      });
+
+      if (cancelled) return;
+
+      if (verified.ok) {
+        onSettled(true, { token: result.token, user: verified.user });
+        return;
+      }
+
+      if (verified.reason === "auth_invalid") {
+        // token 已被吊销 / 改密：清掉 Keystore 镜像与 local token
+        await disableQuickLogin();
         try {
-          localStorage.setItem("super-token", result.token);
+          localStorage.removeItem("super-token");
         } catch {
           /* ignore */
         }
-        onSettled(true, { token: result.token, user: data.user });
-      } catch (e: any) {
-        if (cancelled) return;
-        setErrorMsg(
-          e?.name === "AbortError"
-            ? "服务器无响应，请检查网络"
-            : "网络异常，请使用密码登录",
-        );
+        setErrorMsg(verified.message || "登录态已失效，请重新输入密码");
         setPhase("fallback");
+        return;
       }
+
+      if (verified.reason === "no_server") {
+        setErrorMsg(verified.message || "未找到服务器地址，请使用密码登录");
+        setPhase("fallback");
+        return;
+      }
+
+      // 网络类失败：保留 token 与快速登录开关，方便网络恢复后重试 / 密码登录
+      setErrorMsg(verified.message || "网络异常，请使用密码登录");
+      setPhase("fallback");
     })();
     return () => {
       cancelled = true;

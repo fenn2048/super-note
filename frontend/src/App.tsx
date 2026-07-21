@@ -41,6 +41,11 @@ import { toast } from "@/lib/toast";
 import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
 import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
+import {
+  getAuthCacheScope,
+  saveCachedAuthUser,
+  loadCachedAuthUser,
+} from "@/lib/authVerify";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
 import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic, ensureNotificationChannels } from "@/hooks/useCapacitor";
 import { useShareReceive } from "@/hooks/useShareReceive";
@@ -69,8 +74,6 @@ import AppSplashGate from "@/components/AppSplashGate";
 import CreateMenu, { CreateFabButton } from "@/components/common/CreateMenu";
 
 import { App as CapApp } from "@capacitor/app";
-
-const AUTH_USER_CACHE_PREFIX = "super-auth-user:";
 
 /** 遗留 viewMode=tasks → 项目「我的任务」（任务模型方案 A） */
 function TasksToProjectsRedirect() {
@@ -112,84 +115,6 @@ function LegacyLibraryRedirect({ tab }: { tab: "files" | "books" | "media" }) {
       <Loader2 size={20} className="animate-spin text-accent-primary" />
     </div>
   );
-}
-
-function normalizeAuthUrl(url: string): string {
-  return url.replace(/\/+$/, "").toLowerCase();
-}
-
-function isLoopbackAuthUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "::1";
-  } catch {
-    return false;
-  }
-}
-
-function getAuthCacheScope(serverUrl: string): string {
-  const origin = typeof window !== "undefined" && window.location.origin.startsWith("http")
-    ? window.location.origin
-    : "";
-  const isDesktop = typeof window !== "undefined" && !!(window as any).superDesktop?.isDesktop;
-  if (isDesktop && ((serverUrl && isLoopbackAuthUrl(serverUrl)) || (!serverUrl && origin && isLoopbackAuthUrl(origin)))) {
-    return "local-desktop";
-  }
-  if (serverUrl) return normalizeAuthUrl(serverUrl);
-  if (origin) return normalizeAuthUrl(origin);
-  return "same-origin";
-}
-
-function getAuthUserCacheKey(scope: string): string {
-  return `${AUTH_USER_CACHE_PREFIX}${scope}`;
-}
-
-function decodeUserFromToken(token: string): User | null {
-  try {
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const json = decodeURIComponent(
-      Array.from(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")))
-        .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`)
-        .join("")
-    );
-    const data = JSON.parse(json) as { userId?: string; username?: string };
-    if (!data.userId || !data.username) return null;
-    return {
-      id: data.userId,
-      username: data.username,
-      email: null,
-      avatarUrl: null,
-      displayName: data.username,
-      createdAt: new Date(0).toISOString(),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function saveCachedAuthUser(scope: string, token: string, user: User): void {
-  try {
-    localStorage.setItem(
-      getAuthUserCacheKey(scope),
-      JSON.stringify({ token, user, cachedAt: Date.now() }),
-    );
-  } catch { /* ignore */ }
-}
-
-function loadCachedAuthUser(scope: string, token: string): User | null {
-  try {
-    const raw = localStorage.getItem(getAuthUserCacheKey(scope));
-    if (raw) {
-      const cached = JSON.parse(raw) as { token?: string; user?: User };
-      const decoded = decodeUserFromToken(token);
-      if (cached.user?.id && (cached.token === token || cached.user.id === decoded?.id)) {
-        return cached.user;
-      }
-    }
-  } catch { /* ignore */ }
-  return decodeUserFromToken(token);
 }
 
 function isVerifyNetworkFailure(err: any): boolean {

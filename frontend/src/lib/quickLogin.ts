@@ -199,7 +199,7 @@ export async function getQuickLoginUsername(): Promise<string | null> {
  */
 export async function enableQuickLogin(params: {
   token: string;
-  serverUrl: string; // 允许空字符串（Web 端同源），但客户端模式下应非空
+  serverUrl: string; // 客户端模式下必须非空（原生无同源后端）
   username: string;
 }): Promise<{ ok: boolean; error?: string }> {
   if (!isCapacitorNative()) {
@@ -207,6 +207,23 @@ export async function enableQuickLogin(params: {
   }
   if (!params.token) {
     return { ok: false, error: "缺少登录凭证" };
+  }
+
+  // 原生端 verify 必须能拼出 `${server}/api/auth/verify`；空地址冷启动必然"网络异常"
+  const serverUrl = (params.serverUrl || "").trim().replace(/\/+$/, "");
+  if (!serverUrl) {
+    return {
+      ok: false,
+      error: "缺少服务器地址，请先在登录页填写并连接服务器后再启用",
+    };
+  }
+  try {
+    const u = new URL(serverUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return { ok: false, error: "服务器地址无效" };
+    }
+  } catch {
+    return { ok: false, error: "服务器地址无效" };
   }
 
   const bio = await loadBiometric();
@@ -244,7 +261,7 @@ export async function enableQuickLogin(params: {
   // 写入安全存储。任意一项失败都视为整体失败并回滚。
   try {
     await ss.SecureStorage.set(SS_TOKEN_KEY, params.token);
-    await ss.SecureStorage.set(SS_SERVER_URL_KEY, params.serverUrl || "");
+    await ss.SecureStorage.set(SS_SERVER_URL_KEY, serverUrl);
     await ss.SecureStorage.set(SS_USERNAME_KEY, params.username || "");
     await ss.SecureStorage.set(SS_ENABLED_KEY, true);
     return { ok: true };
@@ -372,7 +389,7 @@ export async function attemptQuickLogin(): Promise<QuickLoginAttemptResult> {
     const t = await ss.SecureStorage.get(SS_TOKEN_KEY);
     if (typeof t === "string" && t) token = t;
     const s = await ss.SecureStorage.get(SS_SERVER_URL_KEY);
-    if (typeof s === "string") serverUrl = s;
+    if (typeof s === "string") serverUrl = s.trim().replace(/\/+$/, "");
     const u = await ss.SecureStorage.get(SS_USERNAME_KEY);
     if (typeof u === "string") username = u;
   } catch (e: any) {
@@ -383,6 +400,28 @@ export async function attemptQuickLogin(): Promise<QuickLoginAttemptResult> {
     // 数据丢失（卸载部分残留？）→ 关闭开关并降级
     await disableQuickLogin();
     return { ok: false, reason: "not_enabled" };
+  }
+
+  // 历史版本可能写入空 serverUrl，冷启动 verify 会打到 localhost 报"网络异常"。
+  // 尝试从 localStorage 回填并写回 Keystore，自愈一次。
+  if (!serverUrl) {
+    try {
+      const fromLs =
+        localStorage.getItem("super-server-url") ||
+        localStorage.getItem("super-server-url-last") ||
+        "";
+      const repaired = fromLs.trim().replace(/\/+$/, "");
+      if (repaired) {
+        serverUrl = repaired;
+        try {
+          await ss.SecureStorage.set(SS_SERVER_URL_KEY, repaired);
+        } catch {
+          /* 写回失败不阻断本次登录 */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   return { ok: true, token, serverUrl, username };
