@@ -7,7 +7,8 @@
  *   - 快捷入口：创建工作区、加入工作区（输入邀请码）
  *   - 管理成员入口
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -50,6 +51,13 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
   const [editing, setEditing] = useState<Workspace | null>(null);
   const [deleting, setDeleting] = useState<Workspace | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  /** header 变体：下拉 portal 到 body，避免被 MobileChromeHeader overflow-hidden 裁切 */
+  const [headerMenuPos, setHeaderMenuPos] = useState<{
+    top: number;
+    right: number;
+    width: number;
+  } | null>(null);
   const { menu, menuRef, openMenu, closeMenu } = useContextMenu();
 
   const loadWorkspaces = async () => {
@@ -81,11 +89,39 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
     };
   }, []);
 
-  // 点击外部关闭下拉
+  // header 下拉：按触发按钮定位到 viewport（fixed + portal）
+  useLayoutEffect(() => {
+    if (!open || variant !== "header") {
+      setHeaderMenuPos(null);
+      return;
+    }
+    const update = () => {
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setHeaderMenuPos({
+        top: r.bottom + 4,
+        right: Math.max(8, window.innerWidth - r.right),
+        width: Math.max(r.width, 180),
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, variant]);
+
+  // 点击外部关闭下拉（含 portal 面板）
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (menuPanelRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -118,6 +154,71 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
     };
     return role ? (roles[role] || role) : "";
   };
+
+  const renderWorkspaceMenuBody = () => (
+    <>
+      <div className="max-h-[min(320px,50vh)] overflow-auto py-1">
+        {workspaces.length === 0 && (
+          <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+            {t("workspace.noWorkspaces") || "暂无工作区"}
+          </div>
+        )}
+        {workspaces.map((w) => (
+          <WorkspaceItem
+            key={w.id}
+            icon={w.icon || "🏢"}
+            name={w.name}
+            subtitle={`${getRoleLabel(w.role)} · ${t("workspaceManagement.members", { count: w.memberCount })}`}
+            active={current === w.id}
+            onClick={() => switchTo(w.id)}
+            onManage={
+              w.role === "owner" || w.role === "admin" || isAdmin
+                ? () => {
+                    setOpen(false);
+                    setShowMembers(w.id);
+                  }
+                : undefined
+            }
+            onContextMenu={(e) => {
+              // 只有 owner / 工作区 admin / 系统管理员 才有右键菜单。
+              // 注意：这里**不**主动 setOpen(false)——之前那样写会导致
+              // 下拉立即收起、用户视觉上看到"菜单弹出但下拉消失"的割裂
+              // 体验。下拉与右键菜单本就互不重叠（菜单跟随鼠标，下拉
+              // 锚定按钮），完全可以共存；用户做完动作（点菜单项 / 点空白）
+              // 后下拉会自然关闭。
+              if (w.role === "owner" || w.role === "admin" || isAdmin) {
+                openMenu(e, w.id, "workspace");
+              }
+            }}
+          />
+        ))}
+      </div>
+      <div className="border-t border-border p-1">
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent"
+          onClick={() => {
+            setOpen(false);
+            setShowCreate(true);
+          }}
+        >
+          <Plus className="w-4 h-4" />
+          {t("workspace.create")}
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent"
+          onClick={() => {
+            setOpen(false);
+            setShowJoin(true);
+          }}
+        >
+          <LogIn className="w-4 h-4" />
+          {t("workspace.join")}
+        </button>
+      </div>
+    </>
+  );
 
   // 在入口按钮（展开/收起态）上右键当前工作区时，直接弹出对应右键菜单。
   const handleEntryContextMenu = (e: React.MouseEvent) => {
@@ -291,80 +392,50 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
           </button>
         )}
 
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.15 }}
-              className={cn(
-                "absolute top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden",
-                variant === "header" ? "right-0 w-[180px]" : "left-0 right-0"
-              )}
-            >
-              <div className="max-h-[320px] overflow-auto py-1">
-                {workspaces.length === 0 && (
-                  <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                    {t("workspace.noWorkspaces") || "暂无工作区"}
-                  </div>
-                )}
-                {workspaces.map((w) => (
-                  <WorkspaceItem
-                    key={w.id}
-                    icon={w.icon || "🏢"}
-                    name={w.name}
-                    subtitle={`${getRoleLabel(w.role)} · ${t("workspaceManagement.members", { count: w.memberCount })}`}
-                    active={current === w.id}
-                    onClick={() => switchTo(w.id)}
-                    onManage={
-                      w.role === "owner" || w.role === "admin" || isAdmin
-                        ? () => {
-                            setOpen(false);
-                            setShowMembers(w.id);
-                          }
-                        : undefined
-                    }
-                    onContextMenu={(e) => {
-                      // 只有 owner / 工作区 admin / 系统管理员 才有右键菜单。
-                      // 注意：这里**不**主动 setOpen(false)——之前那样写会导致
-                      // 下拉立即收起、用户视觉上看到"菜单弹出但下拉消失"的割裂
-                      // 体验。下拉与右键菜单本就互不重叠（菜单跟随鼠标，下拉
-                      // 锚定按钮），完全可以共存；用户做完动作（点菜单项 / 点空白）
-                      // 后下拉会自然关闭。
-                      if (w.role === "owner" || w.role === "admin" || isAdmin) {
-                        openMenu(e, w.id, "workspace");
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="border-t border-border p-1">
-                <button
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent"
-                  onClick={() => {
-                    setOpen(false);
-                    setShowCreate(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4" />
-                  {t("workspace.create")}
-                </button>
-                <button
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent"
-                  onClick={() => {
-                    setOpen(false);
-                    setShowJoin(true);
-                  }}
-                >
-                  <LogIn className="w-4 h-4" />
-                  {t("workspace.join")}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* sidebar：相对定位下拉；header：portal 到 body，避免顶栏 overflow-hidden 裁切 */}
+        {variant !== "header" && (
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                ref={menuPanelRef}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+                className="absolute top-full mt-1 left-0 right-0 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden"
+              >
+                {renderWorkspaceMenuBody()}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </div>
+
+      {variant === "header" &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && headerMenuPos && (
+              <motion.div
+                ref={menuPanelRef}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+                className="fixed bg-popover border border-border rounded-lg shadow-xl z-[200] overflow-hidden"
+                style={{
+                  top: headerMenuPos.top,
+                  right: headerMenuPos.right,
+                  width: headerMenuPos.width,
+                  maxWidth: "min(280px, calc(100vw - 16px))",
+                }}
+              >
+                {renderWorkspaceMenuBody()}
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
 
       {showCreate && (
         <CreateWorkspaceDialog

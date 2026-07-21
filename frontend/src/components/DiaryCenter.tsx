@@ -3037,10 +3037,14 @@ function DiaryEditor({
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 320) + "px";
-    }
+    if (!el) return;
+    el.style.height = "auto";
+    // 移动端 dock 时由外层 maxHeight 约束整体卡片，textarea 跟内容长；
+    // 桌面仍限制单框高度避免撑破时间线。
+    const cap = typeof window !== "undefined" && window.innerWidth < 768
+      ? Math.min(el.scrollHeight, Math.floor(window.innerHeight * 0.55))
+      : Math.min(el.scrollHeight, 320);
+    el.style.height = Math.max(cap, 48) + "px";
   }, []);
   useEffect(() => {
     autoResize();
@@ -3206,11 +3210,20 @@ function DiaryEditor({
   const selectedMoodEmoji = getMoodEmoji(mood);
   const remainingSlots = MAX_IMAGES_PER_DIARY - images.length;
   const { visible: kbVisible } = useKeyboardVisible();
-  // 键盘弹起时整卡 dock 到键盘上方，标签/操作栏紧贴键盘顶（避免被遮挡）
-  const dockToKeyboard = kbVisible;
+  // 移动端编辑：整卡 dock 到键盘上方（底贴工具栏/键盘）；高度随原文内容自适应，向上扩展至顶栏下。
+  // 桌面保持就地编辑。
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768,
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const dockMobile = isMobile;
 
   useEffect(() => {
-    if (!dockToKeyboard) return;
+    if (!dockMobile) return;
     try {
       window.dispatchEvent(new CustomEvent("super:scroll-hide-bars"));
     } catch { /* ignore */ }
@@ -3219,13 +3232,18 @@ function DiaryEditor({
         window.dispatchEvent(new CustomEvent("super:scroll-show-bars"));
       } catch { /* ignore */ }
     };
-  }, [dockToKeyboard]);
+  }, [dockMobile]);
+
+  useEffect(() => {
+    // 键盘高度变化后重新量 textarea，避免残留过大空白
+    if (dockMobile) autoResize();
+  }, [dockMobile, kbVisible, autoResize]);
 
   return (
     <>
-    {/* 占位：fixed 后避免时间线塌缩跳动（小占位即可） */}
-    {dockToKeyboard && (
-      <div className="md:hidden h-40" aria-hidden />
+    {/* 占位：fixed 后避免时间线塌缩跳动 */}
+    {dockMobile && (
+      <div className="md:hidden h-36" aria-hidden />
     )}
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -3233,21 +3251,28 @@ function DiaryEditor({
       transition={{ duration: 0.18 }}
       className={cn(
         "bg-app-surface/95 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm flex flex-col overflow-hidden",
-        dockToKeyboard
+        dockMobile
           ? "fixed left-2 right-2 z-[56] md:static md:left-auto md:right-auto md:z-auto"
           : "max-h-[min(70vh,560px)]",
       )}
       style={
-        dockToKeyboard
+        dockMobile
           ? {
-              bottom: 0,
+              // 底边贴键盘（--keyboard-height 已防双计）；收起时贴屏幕底 + safe area
+              bottom: "var(--keyboard-height, 0px)",
+              // 不设 height，仅 maxHeight：卡片高度随内容，向上长到顶栏下为止
               maxHeight:
-                "min(70vh, calc(100dvh - var(--safe-area-top, 0px) - 8px))",
+                "calc(100dvh - var(--safe-area-top, 0px) - 12px - var(--keyboard-height, 0px))",
+              paddingBottom: kbVisible
+                ? 0
+                : "var(--safe-area-bottom, 0px)",
+              transition: "bottom 0.15s ease-out, max-height 0.15s ease-out",
             }
           : undefined
       }
     >
-      <div className="p-4 pb-2 flex-1 min-h-0 overflow-y-auto" style={{ minHeight: "8rem" }}>
+      {/* flex: 0 1 auto — 短内容不撑高；超 maxHeight 时收缩并可滚，底栏始终可见 */}
+      <div className="p-4 pb-2 min-h-0 overflow-y-auto overscroll-contain shrink">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-1.5 text-[11px] text-accent-primary min-w-0">
             <Edit2 size={11} className="shrink-0" />
@@ -3274,8 +3299,11 @@ function DiaryEditor({
           }}
           onKeyDown={handleKeyDown}
           placeholder={t("diary.editPlaceholder")}
-          rows={4}
-          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none min-h-[120px] no-focus-ring"
+          rows={2}
+          className={cn(
+            "w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-sm leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none no-focus-ring",
+            dockMobile ? "min-h-[3rem]" : "min-h-[120px]",
+          )}
           autoFocus
         />
 
