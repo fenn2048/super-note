@@ -290,6 +290,17 @@ export function useKeyboardLayout() {
     let lastWritten = -1;
     /** 键盘收起时的 layout 高度，用于判断系统是否在弹键盘时压矮了 WebView */
     let layoutHeightWhenClosed = window.innerHeight || 0;
+    /**
+     * 本轮键盘会话的 inset 策略：
+     * - "pending"：尚未稳定，允许探测
+     * - "zero"：系统/引擎已处理，固定写 0（防 300→0→300 抖动）
+     * - "manual"：需要我们叠 --keyboard-height
+     * 同一次键盘弹起期间不在 zero/manual 之间来回跳。
+     */
+    let sessionMode: "pending" | "zero" | "manual" = "pending";
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let showRaf1 = 0;
+    let showRaf2 = 0;
 
     // ── 探针：实测 fixed bottom:0 是否已被引擎推到可视区底部 ──
     const probe = document.createElement("div");
@@ -356,23 +367,31 @@ export function useKeyboardLayout() {
         keyboardOpen = true;
       }
 
-      // ① layout 已被系统压矮：fixed bottom:0 已在键盘上
-      if (isLayoutShrunkByKeyboard()) {
+      // 已锁定 zero：本会话不再叠高度（避免弹窗 bottom 来回跳）
+      if (sessionMode === "zero") {
         return 0;
       }
 
-      // ② 引擎把 fixed 推到了 VV 底：同样不可再叠加
-      if (isFixedAutoRepositioned()) {
+      // ① layout 已被系统压矮 / ② 引擎自动抬 fixed
+      if (isLayoutShrunkByKeyboard() || isFixedAutoRepositioned()) {
+        sessionMode = "zero";
         return 0;
       }
 
-      // ③ vv 给出 layout 底 → 可视底 的真实间隙（adjustNothing + vv 缩）
+      // 已锁定 manual：优先用当前测量，不切回 zero（除非上面条件）
+      if (sessionMode === "manual") {
+        if (vvInset >= 80) return softCap(vvInset);
+        if (pluginHeight > 0) return softCap(pluginHeight);
+        return lastWritten > 0 ? lastWritten : 0;
+      }
+
+      // pending：择优
       if (vvInset >= 80) {
+        sessionMode = "manual";
         return softCap(vvInset);
       }
-
-      // ④ vv 无感知：退回 Capacitor 原生高度
       if (pluginHeight > 0) {
+        sessionMode = "manual";
         return softCap(pluginHeight);
       }
 
@@ -381,6 +400,8 @@ export function useKeyboardLayout() {
 
     const writeInset = (force = false) => {
       const next = resolveInset();
+      // 非 force 时：忽略小幅抖动（≤8px），减少 sheet 闪烁
+      if (!force && Math.abs(next - lastWritten) <= 8) return;
       if (!force && next === lastWritten) return;
       lastWritten = next;
       document.documentElement.style.setProperty("--keyboard-height", `${next}px`);
@@ -401,21 +422,37 @@ export function useKeyboardLayout() {
       }
     };
 
+    const scheduleSettleWrite = () => {
+      // 等几何稳定后再写一次；合并 willShow/didShow 的多次回调
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        settleTimer = null;
+        resetWindowScroll();
+        writeInset(true);
+      }, 48);
+    };
+
     const onPluginShow = (height: number) => {
       // 在 layout 可能被压矮之前尽量锁一次关闭态高度（若已缩则保持旧基线）
       if (!keyboardOpen && !isLayoutShrunkByKeyboard()) {
         layoutHeightWhenClosed = window.innerHeight || layoutHeightWhenClosed;
       }
+      const wasOpen = keyboardOpen;
       keyboardOpen = true;
       pluginHeight = Math.max(0, Math.round(height || 0));
+      // 新一轮键盘会话才重置策略
+      if (!wasOpen) {
+        sessionMode = "pending";
+      }
       resetWindowScroll();
-      // 延迟一帧再写入，等 vv / layout / 探针反映最新几何
-      requestAnimationFrame(() => {
-        resetWindowScroll();
-        writeInset(true);
-        requestAnimationFrame(() => {
+      // 双 rAF + 短延时：等 vv / 探针稳定，避免 0↔plugin 来回写
+      if (showRaf1) cancelAnimationFrame(showRaf1);
+      if (showRaf2) cancelAnimationFrame(showRaf2);
+      showRaf1 = requestAnimationFrame(() => {
+        showRaf2 = requestAnimationFrame(() => {
           resetWindowScroll();
           writeInset(true);
+          scheduleSettleWrite();
         });
       });
     };
@@ -423,7 +460,17 @@ export function useKeyboardLayout() {
     const onPluginHide = () => {
       keyboardOpen = false;
       pluginHeight = 0;
+      sessionMode = "pending";
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+      if (showRaf1) cancelAnimationFrame(showRaf1);
+      if (showRaf2) cancelAnimationFrame(showRaf2);
+      showRaf1 = 0;
+      showRaf2 = 0;
       resetWindowScroll();
+      lastWritten = -1;
       writeInset(true);
       // 收起后再采基线（等 layout 恢复）
       requestAnimationFrame(() => {
@@ -437,6 +484,7 @@ export function useKeyboardLayout() {
         const inset = readVvInset();
         if (inset >= 80) {
           keyboardOpen = true;
+          sessionMode = "pending";
         } else {
           // 键盘关闭时同步基线
           if (!isLayoutShrunkByKeyboard()) {
@@ -446,7 +494,8 @@ export function useKeyboardLayout() {
         }
       }
       resetWindowScroll();
-      writeInset();
+      // 会话已锁定时避免每帧重写；pending 时轻量校正
+      writeInset(false);
     };
 
     const vv = window.visualViewport;
@@ -471,6 +520,9 @@ export function useKeyboardLayout() {
       vv?.removeEventListener("resize", onVvChange);
       vv?.removeEventListener("scroll", onVvChange);
       window.removeEventListener("scroll", resetWindowScroll);
+      if (settleTimer) clearTimeout(settleTimer);
+      if (showRaf1) cancelAnimationFrame(showRaf1);
+      if (showRaf2) cancelAnimationFrame(showRaf2);
       willShowHandler.then((h) => h.remove());
       didShowHandler.then((h) => h.remove());
       willHideHandler.then((h) => h.remove());
