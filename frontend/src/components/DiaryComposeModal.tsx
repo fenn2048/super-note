@@ -16,6 +16,7 @@ import { WorkspaceMember } from "@/types";
 import RecordingPanel from "@/components/RecordingPanel";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 
 
 interface DiaryComposeModalProps {
@@ -226,7 +227,6 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   // Mobile viewport stickiness
   const isMobile = window.innerWidth < 768;
-  const [viewportHeight, setViewportHeight] = useState<number | string>("100%");
   const [showCamera, setShowCamera] = useState(false);
   const [showOCRModal, setShowOCRModal] = useState(false);
   const [showPhotoCamera, setShowPhotoCamera] = useState(false);
@@ -283,34 +283,17 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
 
   useEffect(() => {
     if (isOpen) {
-      // Auto focus textarea
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 100);
+      // 延迟聚焦 + preventScroll：避免与弹层挂载 / 键盘 inset 写入叠在一起抖动
+      const delay = isMobile ? 320 : 80;
+      const t = window.setTimeout(() => {
+        textareaRef.current?.focus({ preventScroll: true });
+      }, delay);
+      return () => window.clearTimeout(t);
     } else {
       setSelectionMode(false);
       setMenuCoords(null);
       setHistory([]);
     }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isMobile || !isOpen) return;
-
-    const handleResize = () => {
-      if (window.visualViewport) {
-        setViewportHeight(window.visualViewport.height);
-      }
-    };
-
-    window.visualViewport?.addEventListener("resize", handleResize);
-    window.visualViewport?.addEventListener("scroll", handleResize);
-    handleResize();
-
-    return () => {
-      window.visualViewport?.removeEventListener("resize", handleResize);
-      window.visualViewport?.removeEventListener("scroll", handleResize);
-    };
   }, [isOpen, isMobile]);
 
   // Blink recording indicator
@@ -1126,20 +1109,28 @@ const handleEmojiSelect = (emoji: string) => {
   };
 
   const trapRef = useModalFocusTrap(isOpen && !isMobile, onClose);
+  const { visible: kbVisible } = useKeyboardVisible();
 
   if (!isOpen) return null;
 
-  // 桌面 Web：居中大弹窗；移动：全屏 sheet（键盘适配保留）
+  // 桌面 Web：居中大弹窗；移动：全屏 sheet（底边贴键盘，不改 height 避免闪烁）
   const shell = (
     <div
       ref={trapRef as React.RefObject<HTMLDivElement>}
       className={cn(
         "bg-app-bg flex flex-col overflow-hidden",
         isMobile
-          ? "fixed z-[60] inset-0"
+          ? "fixed z-[60] left-0 right-0 top-0"
           : "relative w-full max-w-2xl max-h-[min(88vh,820px)] rounded-2xl border border-app-border shadow-2xl shadow-black/20 dark:shadow-black/50",
       )}
-      style={isMobile ? { height: "100%", maxHeight: "100%" } : undefined}
+      style={
+        isMobile
+          ? {
+              // 用 bottom 贴键盘，避免 height 随 visualViewport 每帧变化导致整页闪
+              bottom: "var(--keyboard-height, 0px)",
+            }
+          : undefined
+      }
       role="dialog"
       aria-modal="true"
       aria-label="新建说说"
@@ -1509,7 +1500,7 @@ const handleEmojiSelect = (emoji: string) => {
         )}
       </AnimatePresence>
 
-      {/* 底部操作工具栏 (紧挨着键盘上方右侧，屏幕底端对齐) */}
+      {/* 底部操作工具栏（移动：父层 bottom 已贴键盘；有键盘时不再叠 safe-area） */}
       <div
         className={cn(
           "p-3 bg-app-surface border-t border-app-border flex items-center justify-between shrink-0",
@@ -1517,7 +1508,11 @@ const handleEmojiSelect = (emoji: string) => {
         )}
         style={
           isMobile
-            ? { paddingBottom: "calc(var(--safe-area-bottom) + 8px)" }
+            ? {
+                paddingBottom: kbVisible
+                  ? 8
+                  : "calc(var(--safe-area-bottom, 0px) + 8px)",
+              }
             : undefined
         }
       >

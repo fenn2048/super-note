@@ -2685,17 +2685,6 @@ export default function NoteList() {
               >
                 <Search size={18} />
               </MobileChromeIconButton>
-              {showSortMenu && (
-                <SortMenu
-                  value={sortPref}
-                  anchorRef={sortBtnMobileRef}
-                  onChange={(next) => {
-                    setSortPref(next);
-                    saveSortPref(next);
-                  }}
-                  onClose={() => setShowSortMenu(false)}
-                />
-              )}
             </div>
           }
         />
@@ -2804,20 +2793,25 @@ export default function NoteList() {
               </button>
             </div>
           )}
-          {/* 排序下拉（桌面端） */}
-          {showSortMenu && (
-            <SortMenu
-              value={sortPref}
-              anchorRef={sortBtnDesktopRef}
-              onChange={(next) => {
-                setSortPref(next);
-                saveSortPref(next);
-              }}
-              onClose={() => setShowSortMenu(false)}
-            />
-          )}
         </div>
       </div>
+
+      {/* 排序下拉：移动/桌面共用一份，避免双浮层 */}
+      {showSortMenu && (
+        <SortMenu
+          value={sortPref}
+          anchorRef={
+            typeof window !== "undefined" && window.innerWidth < 768
+              ? sortBtnMobileRef
+              : sortBtnDesktopRef
+          }
+          onChange={(next) => {
+            setSortPref(next);
+            saveSortPref(next);
+          }}
+          onClose={() => setShowSortMenu(false)}
+        />
+      )}
 
       {/* 日历筛选面板 */}
       {showCalendar && state.viewMode !== "trash" && state.viewMode !== "search" && (

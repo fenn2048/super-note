@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Folder, User, Flag, Calendar, Loader2, ChevronDown, Check, ScanText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, getCurrentWorkspace } from "@/lib/api";
@@ -177,11 +177,36 @@ export default function MobileTaskCreateModal({
   };
 
   const { visible: kbVisible } = useKeyboardVisible();
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  /** 入场动画结束后再聚焦，避免键盘高度与 spring 同时抢布局导致抖动 */
+  const [enterDone, setEnterDone] = useState(false);
 
   // 桌面居中大弹窗；移动底部 sheet（原 md:hidden 导致 Web 端点「+」任务无界面）
   const isDesktop =
     typeof window !== "undefined" && window.innerWidth >= 768;
   const trapRef = useModalFocusTrap(isOpen && isDesktop, onClose);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setEnterDone(false);
+      return;
+    }
+    // 桌面可立即聚焦；移动端等 enterDone
+    if (isDesktop) {
+      const t = window.setTimeout(() => {
+        titleInputRef.current?.focus({ preventScroll: true });
+      }, 80);
+      return () => window.clearTimeout(t);
+    }
+  }, [isOpen, isDesktop]);
+
+  useEffect(() => {
+    if (!isOpen || isDesktop || !enterDone) return;
+    const t = window.setTimeout(() => {
+      titleInputRef.current?.focus({ preventScroll: true });
+    }, 40);
+    return () => window.clearTimeout(t);
+  }, [isOpen, isDesktop, enterDone]);
 
   return (
     <AnimatePresence>
@@ -191,12 +216,12 @@ export default function MobileTaskCreateModal({
             "fixed inset-0 z-[100] flex justify-center select-text p-0 md:p-6",
             isDesktop ? "items-center" : "items-end",
           )}
-          /* 移动端：遮罩底边抬到键盘上方（单一 --keyboard-height），sheet 吃满遮罩高度，避免再减一次键盘高被压扁 */
+          /* 移动端：遮罩底边抬到键盘上方。勿对 bottom 做 CSS transition——
+             会与 sheet 入场动画叠在一起产生「闪几下」的抖动。 */
           style={
             !isDesktop
               ? {
                   bottom: "var(--keyboard-height, 0px)",
-                  transition: "bottom 0.15s ease-out",
                 }
               : undefined
           }
@@ -206,6 +231,7 @@ export default function MobileTaskCreateModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm"
           />
@@ -227,9 +253,12 @@ export default function MobileTaskCreateModal({
             }
             transition={
               isDesktop
-                ? { type: "spring", duration: 0.35, bounce: 0 }
-                : { type: "spring", damping: 25, stiffness: 220 }
+                ? { type: "tween", duration: 0.22, ease: [0.22, 1, 0.36, 1] }
+                : { type: "tween", duration: 0.28, ease: [0.22, 1, 0.36, 1] }
             }
+            onAnimationComplete={() => {
+              if (isOpen && !isDesktop) setEnterDone(true);
+            }}
             onClick={(e) => e.stopPropagation()}
             ref={trapRef as React.RefObject<HTMLDivElement>}
             className={cn(
@@ -242,9 +271,10 @@ export default function MobileTaskCreateModal({
               isDesktop
                 ? undefined
                 : {
-                    // 父层 bottom 已扣键盘 → 100% = 键盘上方可用高度；
-                    // 键盘收起时 85vh 限制底栏高度，避免铺满全屏。
-                    maxHeight: "min(85vh, 100%)",
+                    // 吃满遮罩高度（遮罩 bottom 已贴键盘），顶到状态栏下，
+                    // 避免键盘弹起时上方露出背后「新任务」顶栏。
+                    height: "100%",
+                    maxHeight: "100%",
                     paddingBottom: kbVisible
                       ? 12
                       : "calc(var(--safe-area-bottom) + 16px)",
@@ -291,14 +321,15 @@ export default function MobileTaskCreateModal({
                 </div>
               ) : (
                 <>
-                  {/* Task Title Input */}
+                  {/* Task Title Input — 聚焦由 enterDone 延迟触发，勿 autoFocus */}
                   <div className="border border-app-border focus-within:border-accent-primary focus-within:ring-1 focus-within:ring-accent-primary/20 rounded-xl px-3 py-1 bg-app-surface transition-all">
                     <input
+                      ref={titleInputRef}
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="输入任务标题..."
                       className="w-full bg-transparent border-none outline-none py-1.5 text-sm font-medium focus:ring-0 placeholder:text-tx-tertiary"
-                      autoFocus
+                      enterKeyHint="done"
                     />
                   </div>
 

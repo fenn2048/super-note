@@ -3250,7 +3250,8 @@ function DiaryEditor({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
       className={cn(
-        "bg-app-surface/95 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm flex flex-col overflow-hidden",
+        // 实色底：半透明时底下时间线透出，编辑时看不清
+        "bg-app-elevated rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-lg flex flex-col overflow-hidden",
         dockMobile
           ? "fixed left-2 right-2 z-[56] md:static md:left-auto md:right-auto md:z-auto"
           : "max-h-[min(70vh,560px)]",
