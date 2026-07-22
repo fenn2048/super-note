@@ -4,9 +4,13 @@
  * 与启动时 QuickLoginGate 不同：本组件叠在已登录主界面之上，
  * 不卸载 AppLayout / GlobalMusicPlayer，避免音频被中断。
  * 认证成功仅关闭遮罩；失败可回退到密码登录（真正登出）。
+ *
+ * Portal 到 document.body + 高 z-index：避免与 GlobalMusicPlayer 的 body portal
+ * 迷你条发生层叠上下文竞争（否则迷你播放器会漏在蒙层之上）。
  */
 
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Fingerprint, Loader2 } from "lucide-react";
 import {
   attemptQuickLogin,
@@ -39,6 +43,15 @@ export default function AppLockOverlay({
   const onFallbackRef = useRef(onFallbackToPassword);
   onUnlockedRef.current = onUnlocked;
   onFallbackRef.current = onFallbackToPassword;
+
+  // 锁定期间隐藏全局播放器 UI（音频继续），避免迷你条/全屏层漏出
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-app-locked", "true");
+    return () => {
+      root.removeAttribute("data-app-locked");
+    };
+  }, []);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -136,9 +149,11 @@ export default function AppLockOverlay({
     })();
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-zinc-950/95 backdrop-blur-md px-5"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-zinc-950/95 backdrop-blur-md px-5"
       style={{
         paddingTop: "var(--safe-area-top)",
         paddingBottom: "var(--safe-area-bottom)",
@@ -197,6 +212,7 @@ export default function AppLockOverlay({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

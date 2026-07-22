@@ -558,6 +558,18 @@ body::before {
   bottom: var(--mobile-music-bottom);
 }
 
+/* 指纹/锁屏蒙层期间隐藏全局播放器 UI（音频节点继续播） */
+html[data-app-locked] .mobile-music-mini,
+html[data-app-locked] [data-global-music-ui] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 全屏播放器展开时隐藏媒体页 portal 到 titlebar 的搜索/更多等 chrome */
+html[data-global-player-expanded] [data-media-chrome] {
+  display: none !important;
+}
+
 /* 移动端迷你播放器顶部 seek：透明 range 铺满触控高度，系统拇指可拖 */
 .mobile-music-seek {
   -webkit-appearance: none;
