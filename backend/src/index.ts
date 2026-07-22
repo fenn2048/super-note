@@ -121,7 +121,7 @@ function resolveCorsOrigin(origin: string): string | null | undefined {
 app.use("*", logger());
 app.use("*", cors({
   origin: (origin) => resolveCorsOrigin(origin || ""),
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
   // 注意：自定义 header 必须在这里逐一列出，浏览器/WebView 跨域时才会让 OPTIONS 预检放行。
   //   - X-Sudo-Token：管理员高危操作（备份配置、删除、恢复、邮件发送等）必带；
   //     之前漏掉会让手机 App / Capacitor webview 跨域调用时直接 "TypeError: Failed to fetch"
@@ -297,9 +297,9 @@ app.use("/api/shared/*/verify", async (c, next) => {
 
 app.route("/api/shared", sharedRouter);
 
-// 健康检查（无需 JWT）
+// 健康检查（无需 JWT，支持 GET/HEAD）
 // version 字段动态读取根 package.json / ENV，避免常年停在 1.0.0 误导运维。
-app.get("/api/health", (c) => c.json({ status: "ok", version: resolveAppVersion() }));
+app.on(["GET", "HEAD"], "/api/health", (c) => c.json({ status: "ok", version: resolveAppVersion() }));
 
 // 版本信息 & GitHub 最新 release（无需 JWT）
 //

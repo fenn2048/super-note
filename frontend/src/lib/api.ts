@@ -13,6 +13,8 @@ import {
   readNote as _readNote,
 } from "@/lib/offlineRead";
 import { downloadBlob } from "@/lib/downloadFile";
+import { notifyNetworkAlive } from "@/hooks/useNetworkStatus";
+import { logger } from "@/lib/logger";
 
 // 服务器地址管理
 const SERVER_URL_KEY = "super-server-url";
@@ -624,6 +626,9 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
     }
   } catch (fetchErr: any) {
     // fetch 抛出 = 网络不可达（TypeError: Failed to fetch 等）
+    if (fetchErr?.name !== "AbortError") {
+      logger.error("API", `Fetch error on ${method} ${url}`, fetchErr?.message || fetchErr);
+    }
     // 用户主动 abort → 原样抛
     if (fetchErr?.name === "AbortError" && userSignal?.aborted) throw fetchErr;
     const isTimeout = fetchErr?.name === "AbortError";
@@ -636,6 +641,10 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
     throw fetchErr;
   } finally {
     clearTimeout(timeoutId);
+  }
+
+  if (res.ok || res.status < 500) {
+    notifyNetworkAlive();
   }
 
   // 401 / 403 + ACCOUNT_DISABLED：会话已失效（token 无效、用户被禁用、tokenVersion 被吊销等），

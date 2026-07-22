@@ -2,9 +2,10 @@
  * useNetworkStatus — 网络在线/离线状态探测
  * =========================================================================
  *   1) navigator.onLine + online/offline
- *   2) 定期 HEAD 探活后端
- *   3) Capacitor 回前台时立即探活（Android 后台切网常见）
- *   4) online 恢复时 flush offlineQueue
+ *   2) 定期探活后端（GET /api/health，平滑 6s 超时）
+ *   3) 全局 API 调通自动即时恢复在线状态（无需等待 30s 探活）
+ *   4) Capacitor 回前台时立即探活（Android 后台切网常见）
+ *   5) online 恢复时 flush offlineQueue
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -14,7 +15,16 @@ import { flushQueue, getQueueLength, subscribe } from "@/lib/offlineQueue";
 import { offlineQueueFetch } from "@/lib/offlineQueueFetch";
 import { isNativePlatform } from "@/hooks/useCapacitor";
 
+import { logger } from "@/lib/logger";
+
 const PROBE_INTERVAL = 30_000;
+
+const aliveListeners = new Set<() => void>();
+
+/** 当任何常规 API 调通成功时调用，立刻反向恢复在线状态 */
+export function notifyNetworkAlive() {
+  aliveListeners.forEach((fn) => fn());
+}
 
 export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState(() =>
@@ -32,14 +42,14 @@ export function useNetworkStatus() {
     }
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(`${getBaseUrl()}/health`, {
-        method: "HEAD",
+        method: "GET",
         cache: "no-store",
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      return res.ok || res.status === 404;
+      return res.ok || res.status === 404 || res.status === 405;
     } catch {
       return false;
     }
@@ -75,6 +85,16 @@ export function useNetworkStatus() {
     },
     [doFlush],
   );
+
+  useEffect(() => {
+    const handleAliveSignal = () => {
+      markOnline(true);
+    };
+    aliveListeners.add(handleAliveSignal);
+    return () => {
+      aliveListeners.delete(handleAliveSignal);
+    };
+  }, [markOnline]);
 
   useEffect(() => {
     const handleOnline = async () => {
