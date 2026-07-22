@@ -94,6 +94,8 @@ export default function LibraryCenter() {
     return getLibraryTab();
   });
   const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
+  /** 媒体内页动态标题，如「雍正王朝（108）」；null 时用默认 Tab 名 */
+  const [mediaChromeTitle, setMediaChromeTitle] = useState<string | null>(null);
   const workspaceId = getCurrentWorkspace();
 
   /** 退出资料库：回「我的」或笔记 */
@@ -114,6 +116,14 @@ export default function LibraryCenter() {
         window.dispatchEvent(new CustomEvent("super:media-close-detail"));
         return;
       }
+      // 媒体中心内部多级导航（类型 → 合集 → 列表）优先消费返回
+      if (isMobile) {
+        const detail = { handled: false };
+        window.dispatchEvent(
+          new CustomEvent("super:media-navigate-back", { detail }),
+        );
+        if (detail.handled) return;
+      }
       if (window.location.hash.startsWith("#/media")) {
         history.replaceState(null, "", window.location.pathname + window.location.search);
       }
@@ -131,10 +141,21 @@ export default function LibraryCenter() {
       if (detail === "files" || detail === "books" || detail === "media") {
         setTab(detail);
         if (detail !== "books") setActiveBookHash(null);
+        if (detail !== "media") setMediaChromeTitle(null);
       }
     };
     window.addEventListener("super:library-tab-changed", onTab);
     return () => window.removeEventListener("super:library-tab-changed", onTab);
+  }, []);
+
+  // 媒体中心上报 titlebar 文案（合集列表：合集名（数量））
+  useEffect(() => {
+    const onMediaTitle = (e: Event) => {
+      const title = (e as CustomEvent<{ title?: string | null }>).detail?.title;
+      setMediaChromeTitle(title && String(title).trim() ? String(title).trim() : null);
+    };
+    window.addEventListener("super:media-chrome-title", onMediaTitle);
+    return () => window.removeEventListener("super:media-chrome-title", onMediaTitle);
   }, []);
 
   // 从笔记链接 / 全局事件打开某本书
@@ -239,11 +260,17 @@ export default function LibraryCenter() {
   const activeTab = tab || "files";
   const tabLabel =
     HUB_ITEMS.find((h) => h.id === activeTab)?.label || "资料库";
+  const mobileTitle =
+    isMobile && activeTab === "media" && mediaChromeTitle
+      ? mediaChromeTitle
+      : isMobile
+        ? tabLabel
+        : undefined;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
       <StackChrome
-        title={isMobile ? tabLabel : undefined}
+        title={mobileTitle}
         onClose={goBack}
         closeLabel={isMobile && tab !== null ? "返回资料库" : "关闭资料库"}
         leadingAction="back"
