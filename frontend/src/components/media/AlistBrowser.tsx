@@ -176,48 +176,52 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
   };
 
   return (
-    <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-app-border" style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}>
+    <div
+      className="flex flex-col h-full min-h-0 rounded-2xl overflow-hidden border border-app-border"
+      style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
+    >
       {/* Header */}
-      <div className="px-6 py-4 bg-app-sidebar border-b border-app-border flex items-center justify-between shrink-0">
-        <div>
-          <h3 className="text-lg font-bold text-tx-primary">从 Alist 挂载网盘导入</h3>
+      <div className="px-4 sm:px-6 py-3 sm:py-4 bg-app-sidebar border-b border-app-border flex items-center justify-between shrink-0">
+        <div className="min-w-0 pr-2">
+          <h3 className="text-base sm:text-lg font-bold text-tx-primary truncate">从 Alist 挂载网盘导入</h3>
           <p className="text-xs text-tx-tertiary">勾选网盘内文件，一键录入本系统</p>
         </div>
-        <button 
+        <button
+          type="button"
           onClick={onClose}
-          className="text-tx-tertiary hover:text-tx-primary transition-colors text-sm font-semibold hover:bg-app-hover px-3 py-1.5 rounded-lg"
+          className="text-tx-tertiary hover:text-tx-primary transition-colors text-sm font-semibold hover:bg-app-hover px-3 py-1.5 rounded-lg shrink-0 min-h-[40px]"
         >
           关闭
         </button>
       </div>
 
-      {/* Main Grid View */}
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        
+      {/* Main：移动端列布局时，文件列表 flex-1 可滚，导入配置贴底 shrink-0 */}
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
         {/* Left Side: Browser */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-app-border/60 bg-app-sidebar/10">
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col border-b md:border-b-0 md:border-r border-app-border/60 bg-app-sidebar/10">
           {/* Path Navigation & Breadcrumb */}
-          <div className="px-4 py-3 border-b border-app-border/40 flex items-center gap-2 shrink-0 overflow-x-auto no-scrollbar">
+          <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-app-border/40 flex items-center gap-2 shrink-0 overflow-x-auto no-scrollbar">
             {currentPath !== "/" && (
-              <button 
+              <button
+                type="button"
                 onClick={handleGoUp}
-                className="p-1 rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary shrink-0"
+                className="p-1.5 rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
               >
                 <ArrowLeft size={16} />
               </button>
             )}
-            <span className="text-xs text-tx-tertiary font-semibold select-none">路径:</span>
-            <div className="flex items-center text-xs font-mono text-tx-secondary">
-              <span 
+            <span className="text-xs text-tx-tertiary font-semibold select-none shrink-0">路径:</span>
+            <div className="flex items-center text-xs font-mono text-tx-secondary min-w-0">
+              <span
                 onClick={() => setCurrentPath("/")}
-                className="cursor-pointer hover:text-accent-primary hover:underline"
+                className="cursor-pointer hover:text-accent-primary hover:underline shrink-0"
               >
                 root
               </span>
               {currentPath.split("/").filter(Boolean).map((segment, index, arr) => (
                 <React.Fragment key={index}>
                   <ChevronRight size={12} className="mx-1 text-tx-tertiary shrink-0" />
-                  <span 
+                  <span
                     onClick={() => {
                       const target = "/" + arr.slice(0, index + 1).join("/");
                       setCurrentPath(target);
@@ -231,10 +235,18 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
             </div>
           </div>
 
-          {/* Browser List Area */}
-          <div className="flex-1 overflow-y-auto px-2">
+          {/*
+            文件列表滚动区：
+            - min-h-0 + flex-1：在列 flex 中真正拿到剩余高度
+            - overflow-y-auto + overscroll-contain：Android WebView 可滑动且不把滚动传给底层
+            - touch-pan-y：明确纵向手势
+          */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-1 sm:px-2 touch-pan-y"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {loading ? (
-              <div className="h-64 flex flex-col items-center justify-center">
+              <div className="h-48 flex flex-col items-center justify-center">
                 <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
                 <span className="text-xs text-tx-secondary">载入目录内容中...</span>
               </div>
@@ -244,15 +256,16 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
                 <p className="text-xs text-tx-tertiary">请确保 Alist 后台服务运行正常，并在系统设置中连接无误。</p>
               </div>
             ) : files.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-xs text-tx-tertiary">
+              <div className="h-48 flex items-center justify-center text-xs text-tx-tertiary">
                 当前目录下没有文件或子目录
               </div>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
-                <thead>
+                <thead className="sticky top-0 z-[1]" style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}>
                   <tr className="border-b border-app-border/30 text-tx-tertiary select-none">
                     <th className="py-2 px-3 w-10 text-center">
-                      <button 
+                      <button
+                        type="button"
                         onClick={handleSelectAllInDir}
                         className="p-1 rounded hover:bg-app-hover"
                       >
@@ -260,7 +273,7 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
                       </button>
                     </th>
                     <th className="py-2 px-2">名称</th>
-                    <th className="py-2 px-2 w-24">大小</th>
+                    <th className="py-2 px-2 w-20 sm:w-24">大小</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -268,20 +281,21 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
                     const fullPath = currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
                     const isSelected = selectedPaths.has(fullPath);
                     return (
-                      <tr 
+                      <tr
                         key={idx}
                         className={cn(
                           "border-b border-app-border/10 hover:bg-app-hover/40 group transition-colors",
                           isSelected ? "bg-accent-primary/5 hover:bg-accent-primary/10" : ""
                         )}
                       >
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           {file.is_dir ? (
                             <div className="w-4 h-4 mx-auto" />
                           ) : (
-                            <button 
+                            <button
+                              type="button"
                               onClick={() => toggleSelectFile(file)}
-                              className="p-1 rounded text-tx-tertiary hover:text-accent-primary transition-colors"
+                              className="p-1.5 rounded text-tx-tertiary hover:text-accent-primary transition-colors"
                             >
                               {isSelected ? (
                                 <CheckSquare size={16} className="text-accent-primary" />
@@ -291,26 +305,27 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
                             </button>
                           )}
                         </td>
-                        <td className="py-2 px-2 font-medium">
+                        <td className="py-2.5 px-2 font-medium">
                           {file.is_dir ? (
                             <button
+                              type="button"
                               onClick={() => handleFolderClick(file.name)}
-                              className="flex items-center gap-2 text-tx-primary hover:text-accent-primary text-left truncate w-full"
+                              className="flex items-center gap-2 text-tx-primary hover:text-accent-primary text-left truncate w-full min-h-[36px]"
                             >
                               <Folder size={16} className="text-amber-500 fill-amber-500/20 shrink-0" />
                               <span className="truncate">{file.name}</span>
                             </button>
                           ) : (
-                            <div 
+                            <div
                               onClick={() => toggleSelectFile(file)}
-                              className="flex items-center gap-2 text-tx-secondary group-hover:text-tx-primary cursor-pointer truncate w-full"
+                              className="flex items-center gap-2 text-tx-secondary group-hover:text-tx-primary cursor-pointer truncate w-full min-h-[36px]"
                             >
                               <File size={16} className="text-tx-tertiary shrink-0" />
                               <span className="truncate">{file.name}</span>
                             </div>
                           )}
                         </td>
-                        <td className="py-2 px-2 text-tx-tertiary">
+                        <td className="py-2.5 px-2 text-tx-tertiary whitespace-nowrap">
                           {file.is_dir ? "目录" : formatBytes(file.size)}
                         </td>
                       </tr>
@@ -322,32 +337,34 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
           </div>
         </div>
 
-        {/* Right Side: Setup & Action Panel */}
-        <div className="w-full md:w-64 bg-app-sidebar/30 p-4 shrink-0 flex flex-col justify-between">
-          <div className="flex flex-col gap-4">
+        {/* Right / Bottom: Setup & Action Panel — 移动端固定高度不抢列表滚动区 */}
+        <div className="w-full md:w-64 md:max-h-none shrink-0 bg-app-sidebar/30 p-3 sm:p-4 flex flex-col gap-3 border-t md:border-t-0 border-app-border/40">
+          <div className="flex flex-col gap-3">
             <h4 className="text-xs font-bold text-tx-tertiary tracking-wider uppercase">导入配置</h4>
-            
+
             {/* Media Type Selection */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-tx-secondary font-medium">导入类型</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
+                  type="button"
                   onClick={() => setImportType("video")}
                   className={cn(
-                    "py-1.5 rounded-lg border text-xs font-semibold transition-all",
-                    importType === "video" 
-                      ? "bg-accent-primary text-white border-accent-primary shadow-sm shadow-accent-primary/20" 
+                    "py-2 rounded-lg border text-xs font-semibold transition-all",
+                    importType === "video"
+                      ? "bg-accent-primary text-white border-accent-primary shadow-sm shadow-accent-primary/20"
                       : "border-app-border bg-app-bg text-tx-secondary hover:bg-app-hover"
                   )}
                 >
                   视频 (Movie)
                 </button>
                 <button
+                  type="button"
                   onClick={() => setImportType("audio")}
                   className={cn(
-                    "py-1.5 rounded-lg border text-xs font-semibold transition-all",
-                    importType === "audio" 
-                      ? "bg-accent-primary text-white border-accent-primary shadow-sm shadow-accent-primary/20" 
+                    "py-2 rounded-lg border text-xs font-semibold transition-all",
+                    importType === "audio"
+                      ? "bg-accent-primary text-white border-accent-primary shadow-sm shadow-accent-primary/20"
                       : "border-app-border bg-app-bg text-tx-secondary hover:bg-app-hover"
                   )}
                 >
@@ -362,7 +379,7 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
               <select
                 value={selectedCollectionId}
                 onChange={(e) => setSelectedCollectionId(e.target.value)}
-                className="w-full p-2 text-xs bg-app-bg rounded-lg border border-app-border text-tx-primary outline-none focus:border-accent-primary"
+                className="w-full p-2.5 text-xs bg-app-bg rounded-lg border border-app-border text-tx-primary outline-none focus:border-accent-primary"
               >
                 <option value="">不关联到任何合集</option>
                 {collections.filter(c => c.type === importType).map(col => (
@@ -372,25 +389,26 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
             </div>
 
             {/* Selected Count */}
-            <div className="p-3 bg-app-bg rounded-xl border border-app-border flex items-center justify-between text-xs">
+            <div className="p-2.5 sm:p-3 bg-app-bg rounded-xl border border-app-border flex items-center justify-between text-xs">
               <span className="text-tx-tertiary">已选择单品</span>
               <span className="font-bold text-accent-primary text-sm">{selectedFiles.length} 个</span>
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             {error && !loading && (
               <p className="text-[10px] text-accent-danger leading-relaxed bg-accent-danger/5 p-2 rounded-lg border border-accent-danger/10">
                 {error}
               </p>
             )}
             <button
+              type="button"
               onClick={handleImport}
               disabled={selectedFiles.length === 0 || importing}
               className={cn(
-                "w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2",
-                selectedFiles.length === 0 
-                  ? "bg-tx-tertiary/20 text-tx-tertiary cursor-not-allowed" 
+                "w-full py-3 rounded-xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2 min-h-[44px]",
+                selectedFiles.length === 0
+                  ? "bg-tx-tertiary/20 text-tx-tertiary cursor-not-allowed"
                   : "bg-accent-primary hover:bg-accent-primary-hover shadow-lg shadow-accent-primary/10 hover:shadow-accent-primary/20 cursor-pointer"
               )}
             >
@@ -408,7 +426,6 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );
