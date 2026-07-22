@@ -399,6 +399,25 @@ export function useID3Cover(
   );
   const [loading, setLoading] = useState<boolean>(false);
 
+  /**
+   * 切歌时必须同步清掉上一首的 meta/cover。
+   * 若只在 useEffect 里清，会有一帧旧 meta 泄漏到 GlobalMusicPlayer，
+   * 再被 patchCurrentMedia 写进新曲（表现为标题/封面已变、歌手专辑仍是上一首）。
+   */
+  const [boundItemId, setBoundItemId] = useState(itemId);
+  if (boundItemId !== itemId) {
+    setBoundItemId(itemId);
+    if (!itemId || mediaType?.startsWith("video")) {
+      setCoverUrl(null);
+      setMeta(null);
+      setLoading(false);
+    } else {
+      setCoverUrl(resolveCoverFromCache(itemId, dbCoverUrl));
+      setMeta(id3MetaCache.has(itemId) ? id3MetaCache.get(itemId)! : null);
+      setLoading(false);
+    }
+  }
+
   // Keep display state in sync with DB cover + session cache (incl. play-time fills)
   useEffect(() => {
     if (!itemId || mediaType?.startsWith("video")) {
@@ -409,9 +428,8 @@ export function useID3Cover(
 
     const syncFromCache = () => {
       setCoverUrl(resolveCoverFromCache(itemId, dbCoverUrl));
-      if (id3MetaCache.has(itemId)) {
-        setMeta(id3MetaCache.get(itemId)!);
-      }
+      // 无缓存时必须置 null，禁止保留上一首歌的歌手/专辑
+      setMeta(id3MetaCache.has(itemId) ? id3MetaCache.get(itemId)! : null);
     };
 
     syncFromCache();
@@ -434,6 +452,10 @@ export function useID3Cover(
       setLoading(false);
       return;
     }
+
+    // 解析前先清空，避免异步返回前 UI / patch 仍用旧 meta
+    setMeta(null);
+    setCoverUrl(resolveCoverFromCache(itemId, dbCoverUrl));
 
     let active = true;
     setLoading(true);
