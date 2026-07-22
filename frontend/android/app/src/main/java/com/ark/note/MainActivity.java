@@ -37,6 +37,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        AppLogger.init(this);
+        AppLogger.i(TAG, "MainActivity onCreate");
         registerPlugin(AppPermissionsPlugin.class);
         registerPlugin(ShareReceivePlugin.class);
         registerPlugin(MediaPlaybackPlugin.class);
@@ -51,6 +53,7 @@ public class MainActivity extends BridgeActivity {
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
+            this.bridge.getWebView().addJavascriptInterface(new AndroidLogBridge(), "AndroidLogBridge");
 
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
@@ -58,6 +61,21 @@ public class MainActivity extends BridgeActivity {
                     runOnUiThread(() -> request.grant(request.getResources()));
                 }
             });
+        }
+    }
+
+    public class AndroidLogBridge {
+        @JavascriptInterface
+        public void log(String level, String tag, String message) {
+            if ("ERROR".equalsIgnoreCase(level)) {
+                AppLogger.e(tag != null ? tag : "JS", message != null ? message : "");
+            } else if ("WARN".equalsIgnoreCase(level)) {
+                AppLogger.w(tag != null ? tag : "JS", message != null ? message : "");
+            } else if ("DEBUG".equalsIgnoreCase(level)) {
+                AppLogger.d(tag != null ? tag : "JS", message != null ? message : "");
+            } else {
+                AppLogger.i(tag != null ? tag : "JS", message != null ? message : "");
+            }
         }
     }
 

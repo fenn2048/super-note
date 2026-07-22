@@ -67,38 +67,34 @@ public class AppPermissionsPlugin extends Plugin {
     @PluginMethod
     public void exportLogs(PluginCall call) {
         try {
-            // Use PID-filtered logcat to capture this app's own logs.
-            // On Android 11+ (API 30+), regular apps cannot read system-wide logs;
-            // filtering by PID returns the app's own log output.
-            int pid = android.os.Process.myPid();
-            Process process = Runtime.getRuntime().exec(
-                new String[] { "logcat", "-d", "-v", "threadtime", "--pid=" + pid }
-            );
-            BufferedReader bufferedReader = new BufferedReader(
-                new InputStreamReader(process.getInputStream())
-            );
-
             StringBuilder log = new StringBuilder();
-            log.append("=== Super Note App Logs ===\n");
-            log.append("Package: ").append(getContext().getPackageName()).append("\n");
-            log.append("PID: ").append(pid).append("\n");
-            log.append("Android: ").append(Build.VERSION.RELEASE)
-              .append(" (SDK ").append(Build.VERSION.SDK_INT).append(")\n");
-            log.append("===========================\n\n");
+            // 1. 读取持久化文件系统日志（包含 Java 服务生命周期、崩溃堆栈与 JS 侧埋点日志）
+            String fileLogs = AppLogger.readAllLogs(getContext());
+            log.append(fileLogs).append("\n");
 
-            String line;
-            boolean hasContent = false;
-            while ((line = bufferedReader.readLine()) != null) {
-                log.append(line).append("\n");
-                hasContent = true;
+            // 2. 附加实时 logcat 缓冲输出
+            int pid = android.os.Process.myPid();
+            log.append("--- 系统 Logcat 实时输出 (PID: ").append(pid).append(") ---\n");
+            boolean hasLogcat = false;
+            try {
+                Process process = Runtime.getRuntime().exec(
+                    new String[] { "logcat", "-d", "-v", "threadtime", "--pid=" + pid }
+                );
+                BufferedReader bufferedReader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream())
+                );
+                String line;
+                while ((line = bufferedReader.readLine()) != null) {
+                    log.append(line).append("\n");
+                    hasLogcat = true;
+                }
+                process.waitFor();
+            } catch (Exception ex) {
+                log.append("(无法读取系统 Logcat 缓冲区: ").append(ex.getMessage()).append(")\n");
             }
-            process.waitFor();
 
-            if (!hasContent) {
-                log.append("\n(应用运行日志为空 — 可能设备限制了 logcat 读取权限)\n");
-                log.append("请尝试通过以下方式获取日志：\n");
-                log.append("1. 使用 Android Studio 的 Logcat 工具\n");
-                log.append("2. 或在终端执行: adb logcat -d --pid=").append(pid).append("\n");
+            if (!hasLogcat) {
+                log.append("(系统 Logcat 缓冲区为空)\n");
             }
 
             // Write to a cache file
@@ -128,7 +124,7 @@ public class AppPermissionsPlugin extends Plugin {
 
             JSObject ret = new JSObject();
             ret.put("success", true);
-            ret.put("hasContent", hasContent);
+            ret.put("hasContent", true);
             call.resolve(ret);
         } catch (Exception e) {
             JSObject ret = new JSObject();
