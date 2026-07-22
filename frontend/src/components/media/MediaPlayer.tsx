@@ -1,10 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type ArtplayerType from "artplayer";
-import { useMediaStore, isGlobalPlayerItem, type MediaPlayItem } from "@/store/mediaStore";
+import {
+  useMediaStore,
+  isGlobalPlayerItem,
+  cacheMediaPlayUrl,
+  type MediaPlayItem,
+} from "@/store/mediaStore";
 import { api } from "@/lib/api";
 import { Loader2, AlertTriangle, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import {
+  stopNativeMediaSession,
+  updateNativeMediaSession,
+} from "@/lib/nativeMedia";
+import { isNativePlatform } from "@/hooks/useCapacitor";
 
 export interface MediaPlayerMediaMeta {
   title: string;
@@ -85,6 +95,8 @@ export default function MediaPlayer({
   const audioOnlyHandoffRef = useRef(false);
   const mediaMetaRef = useRef(media);
   mediaMetaRef.current = media;
+  /** 本片预取到的直链（与 store cache 双写） */
+  const playUrlRef = useRef<string>("");
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -98,13 +110,23 @@ export default function MediaPlayer({
     resumeMedia,
     setCurrentTime,
     setDuration,
-    playAsAudioOnly,
     stopMedia,
     currentMedia,
     isPlaying: storeIsPlaying,
+    backgroundAudioArmed,
+    armBackgroundAudio,
+    disarmBackgroundAudio,
+    currentTime: storeCurrentTime,
   } = useMediaStore();
 
   const lastReportedTime = useRef<number>(0);
+  const isArmedForThis =
+    !!backgroundAudioArmed && backgroundAudioArmed.id === mediaId;
+  const isAudioOnlyActive =
+    !!currentMedia &&
+    currentMedia.id === mediaId &&
+    !!currentMedia.audioOnly &&
+    isGlobalPlayerItem(currentMedia);
 
   const reportProgress = async (progressSeconds: number) => {
     try {
@@ -141,19 +163,158 @@ export default function MediaPlayer({
     onExitFullscreen?.();
   };
 
-  /** 耳机：暂停视频画面，进度交给全局播放器后台听 */
-  const handoffToAudioOnly = useCallback(() => {
-    const player = playerRef.current;
-    const meta = mediaMetaRef.current;
-    const t = player?.currentTime ?? 0;
-    const dur =
-      (player?.duration && !Number.isNaN(player.duration) ? player.duration : 0) ||
-      meta?.duration ||
-      0;
+  const buildMediaItem = useCallback(
+    (audioOnly: boolean): MediaPlayItem => {
+      const player = playerRef.current;
+      const meta = mediaMetaRef.current;
+      const dur =
+        (player?.duration && !Number.isNaN(player.duration) ? player.duration : 0) ||
+        meta?.duration ||
+        0;
+      return {
+        id: mediaId,
+        title: meta?.title || "视频",
+        type: "video",
+        alist_path: meta?.alist_path || "",
+        cover_url: meta?.cover_url,
+        duration: dur > 0 ? Math.floor(dur) : meta?.duration,
+        artist: meta?.artist,
+        album: meta?.album,
+        ...(audioOnly ? { audioOnly: true as const } : {}),
+      };
+    },
+    [mediaId],
+  );
 
-    // 退出全屏，方便看全局迷你条
+  /** 维持 Android FGS：武装后即拉起，退后台时 WebView 不会被 Capacitor onPause 挂死 */
+  const ensureNativeSessionAlive = useCallback(
+    (playing: boolean) => {
+      const meta = mediaMetaRef.current;
+      const player = playerRef.current;
+      const pos = player?.currentTime ?? storeCurrentTime ?? 0;
+      const dur =
+        (player?.duration && !Number.isNaN(player.duration) ? player.duration : 0) ||
+        meta?.duration ||
+        0;
+      void updateNativeMediaSession({
+        title: meta?.title || "视频",
+        artist: "后台仅听已开启",
+        isPlaying: playing,
+        position: pos > 0 ? pos : undefined,
+        duration: dur > 0 ? dur : undefined,
+      });
+    },
+    [storeCurrentTime],
+  );
+
+  /** 回前台：仅听 → 视频画面（仍保持武装，下次退后台再转音频） */
+  const reverseHandoffToVideo = useCallback(() => {
+    const st = useMediaStore.getState();
+    if (!(st.currentMedia?.id === mediaId && st.currentMedia.audioOnly)) {
+      return;
+    }
+    const t = st.currentTime > 0 ? st.currentTime : 0;
+    const wasPlaying = st.isPlaying;
+    const armed =
+      st.backgroundAudioArmed?.id === mediaId
+        ? st.backgroundAudioArmed
+        : buildMediaItem(false);
+
+    // 停掉全局仅听，但保留 armed，避免中间态把 FGS 拆掉
+    useMediaStore.setState({
+      isPlaying: false,
+      currentMedia: null,
+      currentTime: t,
+      duration: armed.duration || 0,
+      playlist: [],
+      currentIndex: -1,
+      seekTime: null,
+      backgroundAudioArmed: armed,
+    });
+
+    audioOnlyHandoffRef.current = false;
+    const player = playerRef.current;
+    if (player) {
+      try {
+        player.muted = false;
+        if ((player as any).video) (player as any).video.muted = false;
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (t > 0.25) player.currentTime = t;
+      } catch {
+        /* ignore */
+      }
+      if (wasPlaying) {
+        try {
+          void player.play();
+        } catch {
+          /* ignore */
+        }
+        resumeMedia();
+      }
+    }
+    // 前台视频播放时仍维持 FGS，保证再次退后台 keep-alive
+    ensureNativeSessionAlive(wasPlaying);
+  }, [mediaId, buildMediaItem, resumeMedia, ensureNativeSessionAlive]);
+
+  /** 耳机按钮：仅武装/解除；前台不立刻切仅听 */
+  const toggleBackgroundAudioArm = useCallback(() => {
+    const st = useMediaStore.getState();
+    if (st.backgroundAudioArmed?.id === mediaId) {
+      // 解除
+      if (st.currentMedia?.id === mediaId && st.currentMedia.audioOnly) {
+        reverseHandoffToVideo();
+      }
+      disarmBackgroundAudio(mediaId);
+      // 若没有其它全局音频在播，停 FGS
+      const after = useMediaStore.getState();
+      if (!isGlobalPlayerItem(after.currentMedia)) {
+        void stopNativeMediaSession();
+      }
+      toast.success("已关闭后台仅听");
+      return;
+    }
+
+    const item = buildMediaItem(false);
+    armBackgroundAudio(item);
+    // 预取直链 + 拉起 FGS（关键：必须在退后台前完成）
+    ensureNativeSessionAlive(true);
+    const warmUrl = async () => {
+      try {
+        if (playUrlRef.current) {
+          cacheMediaPlayUrl(mediaId, playUrlRef.current);
+          return;
+        }
+        const res = await api.request<{ url?: string }>(`/media/items/${mediaId}/play-url`);
+        if (res?.url) {
+          playUrlRef.current = res.url;
+          cacheMediaPlayUrl(mediaId, res.url);
+        }
+      } catch (e) {
+        console.warn("preload play-url for background audio failed:", e);
+      }
+    };
+    void warmUrl();
+    toast.success("已开启后台仅听：退到后台将继续播放音频");
+  }, [
+    mediaId,
+    buildMediaItem,
+    armBackgroundAudio,
+    disarmBackgroundAudio,
+    reverseHandoffToVideo,
+    ensureNativeSessionAlive,
+  ]);
+
+  // 全局仍在播本片仅听时：强制视频保持暂停/静音（避免与 <audio> 双开）
+  useEffect(() => {
+    if (!isAudioOnlyActive) return;
+    audioOnlyHandoffRef.current = true;
+    const player = playerRef.current;
+    if (!player) return;
     try {
-      if (player?.fullscreen) player.fullscreen = false;
+      if (player.fullscreen) player.fullscreen = false;
     } catch {
       /* ignore */
     }
@@ -165,70 +326,63 @@ export default function MediaPlayer({
     void unlockOrientation();
     setIsFullscreen(false);
     isFullscreenRef.current = false;
-
-    audioOnlyHandoffRef.current = true;
-
     try {
-      if (player) {
-        player.pause();
-        // 避免与全局 <audio> 双开声音
-        if ((player as any).video) {
-          try {
-            (player as any).video.muted = true;
-          } catch {
-            /* ignore */
-          }
-        }
-        try {
-          player.muted = true;
-        } catch {
-          /* ignore */
-        }
-      }
+      player.pause();
     } catch {
       /* ignore */
     }
+    try {
+      player.muted = true;
+      if ((player as any).video) (player as any).video.muted = true;
+    } catch {
+      /* ignore */
+    }
+  }, [storeIsPlaying, isAudioOnlyActive]);
 
-    const item: MediaPlayItem = {
-      id: mediaId,
-      title: meta?.title || "视频",
-      type: "video",
-      alist_path: meta?.alist_path || "",
-      cover_url: meta?.cover_url,
-      duration: dur > 0 ? Math.floor(dur) : meta?.duration,
-      artist: meta?.artist,
-      album: meta?.album,
-      audioOnly: true,
+  // 回前台且本片仍在仅听：还原视频画面（退后台 handoff 由 GlobalMusicPlayer 全局处理）
+  useEffect(() => {
+    if (!isArmedForThis) return;
+
+    const onForeground = () => {
+      reverseHandoffToVideo();
     };
 
-    playAsAudioOnly(item, { startAt: t > 0 ? t : 0 });
-    toast.success("已切换为仅听音频，可退到后台继续播放");
-  }, [mediaId, playAsAudioOnly]);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onForeground();
+    };
 
-  // 全局仍在播本片仅听时：强制视频保持暂停/静音
-  useEffect(() => {
-    if (
-      storeIsPlaying &&
-      currentMedia?.id === mediaId &&
-      isGlobalPlayerItem(currentMedia) &&
-      currentMedia.audioOnly
-    ) {
-      audioOnlyHandoffRef.current = true;
-      const player = playerRef.current;
-      if (player) {
-        try {
-          player.pause();
-        } catch {
-          /* ignore */
-        }
-        try {
-          player.muted = true;
-        } catch {
-          /* ignore */
-        }
-      }
+    document.addEventListener("visibilitychange", onVisibility);
+
+    let removeApp: (() => void) | undefined;
+    if (isNativePlatform()) {
+      void import("@capacitor/app").then(({ App }) => {
+        const p = App.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) onForeground();
+        });
+        void p.then((h) => {
+          removeApp = () => void h.remove();
+        });
+      });
     }
-  }, [storeIsPlaying, currentMedia?.id, currentMedia?.audioOnly, mediaId]);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      removeApp?.();
+    };
+  }, [isArmedForThis, reverseHandoffToVideo]);
+
+  // 武装期间周期性刷新 FGS 进度，并保持服务存活
+  useEffect(() => {
+    if (!isArmedForThis || isAudioOnlyActive) return;
+    ensureNativeSessionAlive(true);
+    const id = window.setInterval(() => {
+      const p = playerRef.current;
+      const videoEl = p ? ((p as any).video as HTMLVideoElement | undefined) : undefined;
+      const playing = videoEl ? !videoEl.paused : true;
+      ensureNativeSessionAlive(playing);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [isArmedForThis, isAudioOnlyActive, ensureNativeSessionAlive]);
 
   const fetchAndInitPlayer = async (active: { current: boolean }) => {
     try {
@@ -251,6 +405,9 @@ export default function MediaPlayer({
       } else {
         throw new Error("未能从服务器获取到播放直链");
       }
+
+      playUrlRef.current = rawUrl;
+      cacheMediaPlayUrl(mediaId, rawUrl);
 
       if (!containerRef.current) return;
 
@@ -286,9 +443,9 @@ export default function MediaPlayer({
             name: "audioOnly",
             position: "right",
             html: HEADPHONE_SVG,
-            tooltip: "仅听音频（后台可继续播）",
+            tooltip: "后台仅听（退后台继续播）",
             click: function () {
-              handoffToAudioOnly();
+              toggleBackgroundAudioArm();
             },
           },
           {
@@ -415,13 +572,14 @@ export default function MediaPlayer({
       });
 
       player.on("play", () => {
-        // 用户重新点视频播放：退出仅听，恢复画面声道
+        // 用户主动点视频播放：若正处于本片仅听，还原画面声道
         if (audioOnlyHandoffRef.current) {
-          audioOnlyHandoffRef.current = false;
           const st = useMediaStore.getState();
           if (st.currentMedia?.id === mediaId && st.currentMedia.audioOnly) {
-            stopMedia();
+            reverseHandoffToVideo();
+            return;
           }
+          audioOnlyHandoffRef.current = false;
           try {
             player.muted = false;
             if ((player as any).video) (player as any).video.muted = false;
@@ -474,10 +632,17 @@ export default function MediaPlayer({
     return () => {
       active.current = false;
       void unlockOrientation();
+      // 离开详情页：写入进度供退后台 handoff 使用；前台不立刻转仅听
+      const st = useMediaStore.getState();
       if (playerRef.current) {
         const time = playerRef.current.currentTime;
-        if (time > 0 && !audioOnlyHandoffRef.current) {
-          reportProgress(time);
+        if (time > 0) {
+          if (st.backgroundAudioArmed?.id === mediaId) {
+            st.setCurrentTime(time);
+          }
+          if (!audioOnlyHandoffRef.current) {
+            reportProgress(time);
+          }
         }
         playerRef.current.destroy(false);
         playerRef.current = null;
@@ -507,25 +672,26 @@ export default function MediaPlayer({
     }
   }, [isTheaterMode]);
 
-  // 仅听激活时高亮耳机按钮
+  // 耳机武装 / 仅听中高亮耳机按钮
   useEffect(() => {
     const player = playerRef.current;
     if (!player?.controls?.audioOnly) return;
     const btn = player.controls.audioOnly as HTMLElement;
-    const active =
-      storeIsPlaying &&
-      currentMedia?.id === mediaId &&
-      !!currentMedia?.audioOnly;
+    const active = isArmedForThis || isAudioOnlyActive;
     try {
       btn.style.color = active ? "#23ade5" : "";
       btn.setAttribute(
         "data-balloon",
-        active ? "正在仅听音频（点播放可回视频）" : "仅听音频（后台可继续播）",
+        isAudioOnlyActive
+          ? "后台仅听中（回前台自动恢复视频）"
+          : isArmedForThis
+            ? "已开启后台仅听（再点关闭）"
+            : "后台仅听（退后台继续播）",
       );
     } catch {
       /* ignore */
     }
-  }, [storeIsPlaying, currentMedia?.id, currentMedia?.audioOnly, mediaId]);
+  }, [isArmedForThis, isAudioOnlyActive]);
 
   return (
     <>

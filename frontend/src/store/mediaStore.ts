@@ -24,6 +24,33 @@ export function isGlobalPlayerItem(m: MediaPlayItem | null | undefined): boolean
   return m.type === "audio" || (m.type === "video" && !!m.audioOnly);
 }
 
+/**
+ * 预取的播放直链缓存：耳机武装时预热，退后台 handoff 时立刻可用，
+ * 避免 WebView 刚 pause 时再发起网络请求导致起播失败。
+ */
+const playUrlCache = new Map<string, { url: string; at: number }>();
+const PLAY_URL_TTL_MS = 25 * 60 * 1000;
+
+export function cacheMediaPlayUrl(mediaId: string, url: string): void {
+  if (!mediaId || !url) return;
+  playUrlCache.set(mediaId, { url, at: Date.now() });
+}
+
+export function getCachedMediaPlayUrl(mediaId: string): string | null {
+  const hit = playUrlCache.get(mediaId);
+  if (!hit) return null;
+  if (Date.now() - hit.at > PLAY_URL_TTL_MS) {
+    playUrlCache.delete(mediaId);
+    return null;
+  }
+  return hit.url;
+}
+
+export function clearCachedMediaPlayUrl(mediaId?: string): void {
+  if (mediaId) playUrlCache.delete(mediaId);
+  else playUrlCache.clear();
+}
+
 export interface MediaState {
   isPlaying: boolean;
   currentMedia: MediaPlayItem | null;
@@ -35,6 +62,11 @@ export interface MediaState {
   playlist: MediaPlayItem[];
   currentIndex: number;
   playMode: PlayMode;
+  /**
+   * 耳机已「武装」：前台仍播视频画面；退后台再 playAsAudioOnly。
+   * 非 null 时 GlobalMusicPlayer 预取直链并维持 FGS，保证 WebView 不被挂起。
+   */
+  backgroundAudioArmed: MediaPlayItem | null;
 
   // Actions
   playMedia: (media: MediaPlayItem, list?: MediaPlayItem[]) => void;
@@ -46,6 +78,9 @@ export interface MediaState {
     media: MediaPlayItem,
     opts?: { startAt?: number; list?: MediaPlayItem[] },
   ) => void;
+  /** 开启/关闭「退后台转仅听」（前台不立刻切全局音频） */
+  armBackgroundAudio: (media: MediaPlayItem) => void;
+  disarmBackgroundAudio: (mediaId?: string) => void;
   pauseMedia: () => void;
   resumeMedia: () => void;
   stopMedia: () => void;
@@ -87,6 +122,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   playlist: [],
   currentIndex: -1,
   playMode: "sequence",
+  backgroundAudioArmed: null,
 
   playMedia: (media, list = []) => {
     // 普通 play 清掉 audioOnly，避免「点列表播视频」误进全局仅听
@@ -94,6 +130,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
     const rawList = list.length > 0 ? list : [clean];
     const playlist = rawList.map((it) => withAudioOnlyFlag(it, false));
     const index = playlist.findIndex((item) => item.id === clean.id);
+    const armed = get().backgroundAudioArmed;
     set({
       currentMedia: clean,
       playlist,
@@ -102,6 +139,9 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
       currentTime: 0,
       duration: clean.duration || 0,
       seekTime: null,
+      // 切到别的媒体时解除武装
+      backgroundAudioArmed:
+        armed && armed.id === clean.id ? armed : null,
     });
   },
 
@@ -120,6 +160,15 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
         ? opts.list.map((it) => withAudioOnlyFlag(it, true))
         : [item];
     const index = rawList.findIndex((x) => x.id === item.id);
+    // 保留 armed 元数据（无 audioOnly），回前台可还原视频画面
+    const armedKeep = withAudioOnlyFlag(
+      {
+        ...media,
+        type: media.type === "video" ? "video" : media.type,
+        duration: item.duration || media.duration,
+      },
+      false,
+    );
     set({
       currentMedia: item,
       playlist: rawList,
@@ -129,7 +178,26 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
       duration: item.duration || 0,
       // 交给 GlobalMusicPlayer 的 seek effect 落地到 <audio>
       seekTime: startAt > 0 ? startAt : null,
+      backgroundAudioArmed: armedKeep,
     });
+  },
+
+  armBackgroundAudio: (media) => {
+    const item = withAudioOnlyFlag(
+      {
+        ...media,
+        type: media.type === "video" ? "video" : media.type,
+      },
+      false,
+    );
+    set({ backgroundAudioArmed: item });
+  },
+
+  disarmBackgroundAudio: (mediaId) => {
+    const armed = get().backgroundAudioArmed;
+    if (!armed) return;
+    if (mediaId && armed.id !== mediaId) return;
+    set({ backgroundAudioArmed: null });
   },
 
   pauseMedia: () => set({ isPlaying: false }),
@@ -143,6 +211,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
       playlist: [],
       currentIndex: -1,
       seekTime: null,
+      backgroundAudioArmed: null,
     }),
 
   setCurrentTime: (time) => set({ currentTime: time }),
@@ -208,6 +277,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
       currentTime: 0,
       duration: 0,
       seekTime: null,
+      backgroundAudioArmed: null,
     });
   },
 
