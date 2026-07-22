@@ -16,6 +16,7 @@ const MentionList = React.lazy(() => import("@/components/MentionList"));
 const SharedNoteView = React.lazy(() => import("@/components/SharedNoteView"));
 const LoginPage = React.lazy(() => import("@/components/LoginPage"));
 const QuickLoginGate = React.lazy(() => import("@/components/QuickLoginGate"));
+const AppLockOverlay = React.lazy(() => import("@/components/AppLockOverlay"));
 const QuickLoginEnrollDialog = React.lazy(() => import("@/components/QuickLoginEnrollDialog"));
 const WhatsNewModal = React.lazy(() => import("@/components/WhatsNewModal"));
 const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
@@ -2020,6 +2021,11 @@ function AuthGate() {
   //   "skipped" / null：QuickLoginGate 决定不展示（不支持 / 未启用 / 已尝试过）
   //                    或用户取消，UI 应渲染 LoginPage 让用户输密码
   const [quickLoginState, setQuickLoginState] = useState<"pending" | "skipped">("pending");
+  /**
+   * 热恢复锁屏：已登录态下回到前台时叠一层生物识别遮罩，
+   * 不 setIsAuthenticated(false)，避免卸载 GlobalMusicPlayer 导致音频中断。
+   */
+  const [appLocked, setAppLocked] = useState(false);
   /** 应用内启动门：auth 判定完成即可 ready；淡出后再真正卸门 */
   const [splashDismissed, setSplashDismissed] = useState(false);
   const { t } = useTranslation();
@@ -2062,9 +2068,9 @@ function AuthGate() {
               try {
                 const { isQuickLoginEnabled } = await import("@/lib/quickLogin");
                 const enabled = await isQuickLoginEnabled();
+                // 已登录 + 已启用快速登录 → 叠遮罩，不卸载主界面（音频继续播）
                 if (enabled && authRef.current) {
-                  setQuickLoginState("pending");
-                  setIsAuthenticated(false);
+                  setAppLocked(true);
                 }
               } catch (err) {
                 console.error("Failed to check quick login status on resume:", err);
@@ -2517,6 +2523,17 @@ function AuthGate() {
               open={showWhatsNew}
               onClose={markWhatsNewSeen}
               highlightVersion={__APP_VERSION__}
+            />
+          )}
+          {/* 热恢复锁屏：叠在主界面上，不卸载播放器，音频可继续播 */}
+          {appLocked && (
+            <AppLockOverlay
+              onUnlocked={() => setAppLocked(false)}
+              onFallbackToPassword={() => {
+                setAppLocked(false);
+                setQuickLoginState("skipped");
+                setIsAuthenticated(false);
+              }}
             />
           )}
         </Suspense>
