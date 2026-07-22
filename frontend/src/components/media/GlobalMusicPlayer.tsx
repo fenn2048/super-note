@@ -247,10 +247,20 @@ export default function GlobalMusicPlayer() {
       }
     } else if (!audio.paused) {
       audio.pause();
+      // 同步锁屏：暂停瞬间推一次精确进度，避免外推错位后被写成 0
+      void updateNativeMediaPosition({
+        position: audio.currentTime || currentTime || 0,
+        duration:
+          (audio.duration && !Number.isNaN(audio.duration) ? audio.duration : 0) ||
+          duration ||
+          undefined,
+        isPlaying: false,
+      });
     }
-  }, [isPlaying, playUrl, currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly]);
+  }, [isPlaying, playUrl, currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly, currentTime, duration]);
 
   // 前台恢复 / WebView 误暂停：store 仍为 playing 时强制续播（仅真实全局音频）
+  // 用户/锁屏主动 pause 时 isPlaying=false，绝不可在此抢播
   useEffect(() => {
     const tryResume = () => {
       const audio = audioRef.current;
@@ -261,14 +271,26 @@ export default function GlobalMusicPlayer() {
         void audio.play().catch(() => {});
       }
     };
+    const tryPauseIfNeeded = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      const st = useMediaStore.getState();
+      if (st.isPlaying) return;
+      if (!audio.paused) audio.pause();
+    };
     const onVisibility = () => {
       tryResume();
+      tryPauseIfNeeded();
     };
     const onAudioPause = () => {
+      // 仅在仍应播放时续播；用户暂停后 isPlaying=false，不再拉起
       window.setTimeout(tryResume, 120);
       window.setTimeout(tryResume, 400);
     };
-    const onWebViewResume = () => tryResume();
+    const onWebViewResume = () => {
+      tryResume();
+      tryPauseIfNeeded();
+    };
     const audio = audioRef.current;
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", tryResume);
@@ -282,10 +304,12 @@ export default function GlobalMusicPlayer() {
         const p = App.addListener("appStateChange", ({ isActive }) => {
           if (isActive) {
             tryResume();
+            tryPauseIfNeeded();
           } else {
             window.setTimeout(tryResume, 200);
             window.setTimeout(tryResume, 600);
             window.setTimeout(tryResume, 1500);
+            window.setTimeout(tryPauseIfNeeded, 250);
           }
         });
         void p.then((h) => {
@@ -400,8 +424,19 @@ export default function GlobalMusicPlayer() {
       : id3Meta?.artist || currentMedia.artist || id3Meta?.album || currentMedia.album || "";
     const albumLabel = isVideoAudioOnly ? "" : id3Meta?.album || currentMedia.album || "";
 
-    const pos = Math.max(0, currentTime || 0);
-    const dur = Math.max(0, duration || currentMedia.duration || 0);
+    // 优先读 audio 元素真实进度，避免 store 过期把锁屏条打回 0
+    const audioPos = audioRef.current?.currentTime;
+    const pos = Math.max(
+      0,
+      audioPos != null && Number.isFinite(audioPos) ? audioPos : currentTime || 0,
+    );
+    const audioDur = audioRef.current?.duration;
+    const dur = Math.max(
+      0,
+      audioDur != null && Number.isFinite(audioDur) && audioDur > 0
+        ? audioDur
+        : duration || currentMedia.duration || 0,
+    );
     void updateNativeMediaSession({
       title: currentMedia.title || "未知曲目",
       artist: artistLabel,
@@ -410,6 +445,7 @@ export default function GlobalMusicPlayer() {
       duration: dur > 0 ? dur : undefined,
     });
     lastNativePosPush.current = Date.now();
+    lastNativePosValue.current = pos;
 
     if (!("mediaSession" in navigator)) {
       return;
@@ -471,15 +507,40 @@ export default function GlobalMusicPlayer() {
     void stopNativeMediaSession();
   }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly]);
 
-  // 通知栏按钮 → store 动作
+  // 通知栏 / 锁屏按钮 → 立刻控 <audio> + store（视频武装时由 MediaPlayer 另接）
   useEffect(() => {
     return subscribeNativeMediaActions((action) => {
-      if (action === "play") resumeMedia();
-      else if (action === "pause") pauseMedia();
-      else if (action === "next") nextMedia(false);
-      else if (action === "prev") prevMedia();
-      else if (action === "stop") {
+      const st = useMediaStore.getState();
+      // 视频后台仅听：交给 MediaPlayer 处理，避免误控全局 audio
+      if (st.backgroundAudioArmed && !isGlobalPlayerItem(st.currentMedia)) {
+        return;
+      }
+      const audio = audioRef.current;
+      if (action === "play") {
+        resumeMedia();
+        if (audio) {
+          void audio.play().catch(() => {});
+        }
+      } else if (action === "pause") {
         pauseMedia();
+        if (audio && !audio.paused) {
+          audio.pause();
+        }
+        // 立即把暂停态 + 当前进度推给锁屏，避免条乱跳
+        if (audio) {
+          void updateNativeMediaPosition({
+            position: audio.currentTime || st.currentTime || 0,
+            duration: audio.duration > 0 ? audio.duration : st.duration || undefined,
+            isPlaying: false,
+          });
+        }
+      } else if (action === "next") {
+        nextMedia(false);
+      } else if (action === "prev") {
+        prevMedia();
+      } else if (action === "stop") {
+        pauseMedia();
+        if (audio && !audio.paused) audio.pause();
         void stopNativeMediaSession();
       }
     });
@@ -488,11 +549,20 @@ export default function GlobalMusicPlayer() {
   // 锁屏拖动进度
   useEffect(() => {
     return subscribeNativeMediaSeek((positionSec) => {
+      const st = useMediaStore.getState();
+      if (st.backgroundAudioArmed && !isGlobalPlayerItem(st.currentMedia)) {
+        return;
+      }
       const audio = audioRef.current;
       if (!audio || !Number.isFinite(positionSec)) return;
       try {
         audio.currentTime = Math.max(0, positionSec);
         setCurrentTime(positionSec);
+        void updateNativeMediaPosition({
+          position: positionSec,
+          duration: audio.duration > 0 ? audio.duration : st.duration || undefined,
+          isPlaying: st.isPlaying,
+        });
       } catch {
         /* ignore */
       }
@@ -502,8 +572,17 @@ export default function GlobalMusicPlayer() {
   // 同步 Web mediaSession + Android 锁屏进度（约 1s 节流）
   useEffect(() => {
     if (!isGlobalPlayerItem(currentMedia)) return;
-    const pos = Math.min(Math.max(0, currentTime || 0), duration > 0 ? duration : Number.MAX_SAFE_INTEGER);
-    const dur = duration > 0 ? duration : 0;
+    const audio = audioRef.current;
+    const rawPos =
+      audio && Number.isFinite(audio.currentTime) ? audio.currentTime : currentTime || 0;
+    const rawDur =
+      audio && Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : duration > 0
+          ? duration
+          : 0;
+    const pos = Math.min(Math.max(0, rawPos), rawDur > 0 ? rawDur : Number.MAX_SAFE_INTEGER);
+    const dur = rawDur > 0 ? rawDur : 0;
 
     if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession && dur > 0) {
       try {

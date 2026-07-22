@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import {
   stopNativeMediaSession,
+  subscribeNativeMediaActions,
+  subscribeNativeMediaSeek,
   updateNativeMediaPosition,
   updateNativeMediaSession,
 } from "@/lib/nativeMedia";
@@ -102,6 +104,13 @@ export default function MediaPlayer({
   /** 节流推送锁屏进度 */
   const lastNativePosPush = useRef(0);
   const armedRef = useRef(false);
+  /**
+   * 用户意图是否在播：前台点暂停 / 锁屏暂停 → false；
+   * 退后台仅当 true 时才续播，避免「前台已暂停后台还出声」。
+   */
+  const intentPlayingRef = useRef(true);
+  /** 锁屏/通知栏操作中：忽略 video pause 的「系统误停」逻辑 */
+  const remoteActionRef = useRef(false);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -241,29 +250,57 @@ export default function MediaPlayer({
     [getVideoEl],
   );
 
-  /** 退后台：确保同一 video 继续播（不切换全局 <audio>） */
-  const keepVideoAliveInBackground = useCallback(() => {
-    if (!armedRef.current) return;
+  const pauseVideoLocal = useCallback(() => {
     const player = playerRef.current;
     const video = getVideoEl();
-    pushNativeSession({ playing: true });
-    const tryPlay = () => {
-      if (!armedRef.current) return;
+    try {
+      player?.pause();
+    } catch {
+      /* ignore */
+    }
+    try {
+      video?.pause();
+    } catch {
+      /* ignore */
+    }
+  }, [getVideoEl]);
+
+  const playVideoLocal = useCallback(() => {
+    const player = playerRef.current;
+    const video = getVideoEl();
+    try {
+      if (player && typeof (player as any).play === "function") {
+        void (player as any).play();
+      }
+    } catch {
+      /* ignore */
+    }
+    if (video) {
       try {
-        if (player && typeof (player as any).play === "function") {
-          void (player as any).play();
-        }
+        video.muted = false;
+        void video.play().catch(() => {});
       } catch {
         /* ignore */
       }
-      if (video) {
-        try {
-          video.muted = false;
-          void video.play().catch(() => {});
-        } catch {
-          /* ignore */
-        }
-      }
+    }
+  }, [getVideoEl]);
+
+  /**
+   * 退后台：仅当用户意图为「播放中」时续播同一 video；
+   * 前台已暂停则保持暂停并同步锁屏态。
+   */
+  const keepVideoAliveInBackground = useCallback(() => {
+    if (!armedRef.current) return;
+    if (!intentPlayingRef.current) {
+      pauseVideoLocal();
+      pushNativeSession({ playing: false });
+      pushNativePosition(true);
+      return;
+    }
+    pushNativeSession({ playing: true });
+    const tryPlay = () => {
+      if (!armedRef.current || !intentPlayingRef.current) return;
+      playVideoLocal();
       pushNativePosition(true);
     };
     tryPlay();
@@ -271,7 +308,7 @@ export default function MediaPlayer({
     window.setTimeout(tryPlay, 400);
     window.setTimeout(tryPlay, 900);
     window.setTimeout(tryPlay, 1600);
-  }, [getVideoEl, pushNativeSession, pushNativePosition]);
+  }, [playVideoLocal, pauseVideoLocal, pushNativeSession, pushNativePosition]);
 
   /** 耳机按钮：仅切换「本视频允许后台继续播」，前台不暂停、不显示全局播放器 */
   const toggleBackgroundAudioArm = useCallback(() => {
@@ -315,11 +352,21 @@ export default function MediaPlayer({
       cacheMediaPlayUrl(mediaId, playUrlRef.current);
     }
 
-    // 立刻拉起 FGS，保证退后台时 WebView 不被挂起；前台视频不中断
-    // 用 rAF 确保 player.duration 已可读时再推（进度条总长）
-    pushNativeSession({ playing: true, forceMeta: true });
-    window.setTimeout(() => pushNativeSession({ playing: true, forceMeta: true }), 300);
-    toast.success("已开启后台仅听：退到后台将继续播放");
+    // 以当前真实播放态武装：暂停中开启不会在退后台强制起播
+    const video = getVideoEl();
+    const actuallyPlaying = video ? !video.paused && !video.ended : true;
+    intentPlayingRef.current = actuallyPlaying;
+    // 立刻拉起 FGS（带真实 duration/position），保证锁屏进度条有总长
+    pushNativeSession({ playing: actuallyPlaying, forceMeta: true });
+    window.setTimeout(
+      () => pushNativeSession({ playing: intentPlayingRef.current, forceMeta: true }),
+      300,
+    );
+    toast.success(
+      actuallyPlaying
+        ? "已开启后台仅听：退到后台将继续播放"
+        : "已开启后台仅听：播放后可在后台继续",
+    );
   }, [
     mediaId,
     buildArmedMeta,
@@ -327,6 +374,7 @@ export default function MediaPlayer({
     disarmBackgroundAudio,
     stopMedia,
     pushNativeSession,
+    getVideoEl,
   ]);
 
   const toggleArmRef = useRef(toggleBackgroundAudioArm);
@@ -340,8 +388,7 @@ export default function MediaPlayer({
       keepVideoAliveInBackground();
     };
     const onForeground = () => {
-      // 回前台：同步一次通知进度；视频本身未切走，无需还原
-      pushNativeSession();
+      pushNativeSession({ playing: intentPlayingRef.current });
       pushNativePosition(true);
     };
     const onVisibility = () => {
@@ -349,6 +396,7 @@ export default function MediaPlayer({
       else onForeground();
     };
     const onWebViewResume = () => {
+      // 仅续播「意图播放」的视频，不把已暂停的强行打开
       keepVideoAliveInBackground();
     };
 
@@ -368,8 +416,10 @@ export default function MediaPlayer({
       });
     }
 
-    // 武装后先推一次完整 session（带 duration）
-    pushNativeSession({ playing: true, forceMeta: true });
+    pushNativeSession({
+      playing: intentPlayingRef.current,
+      forceMeta: true,
+    });
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
@@ -381,6 +431,65 @@ export default function MediaPlayer({
     keepVideoAliveInBackground,
     pushNativeSession,
     pushNativePosition,
+  ]);
+
+  // 武装期间：锁屏 / 通知栏 play·pause·seek 直接控 video
+  useEffect(() => {
+    if (!isArmedForThis) return;
+
+    const unsubAction = subscribeNativeMediaActions((action) => {
+      if (!armedRef.current) return;
+      if (action === "pause" || action === "stop") {
+        remoteActionRef.current = true;
+        intentPlayingRef.current = false;
+        pauseVideoLocal();
+        pauseMedia();
+        pushNativeSession({ playing: false });
+        pushNativePosition(true);
+        window.setTimeout(() => {
+          remoteActionRef.current = false;
+        }, 500);
+      } else if (action === "play") {
+        remoteActionRef.current = true;
+        intentPlayingRef.current = true;
+        playVideoLocal();
+        resumeMedia();
+        pushNativeSession({ playing: true });
+        pushNativePosition(true);
+        window.setTimeout(() => {
+          remoteActionRef.current = false;
+        }, 500);
+      }
+    });
+
+    const unsubSeek = subscribeNativeMediaSeek((positionSec) => {
+      if (!armedRef.current) return;
+      const player = playerRef.current;
+      const video = getVideoEl();
+      try {
+        if (player) player.currentTime = positionSec;
+        if (video) video.currentTime = positionSec;
+        setCurrentTime(positionSec);
+      } catch {
+        /* ignore */
+      }
+      pushNativePosition(true);
+    });
+
+    return () => {
+      unsubAction();
+      unsubSeek();
+    };
+  }, [
+    isArmedForThis,
+    pauseVideoLocal,
+    playVideoLocal,
+    pauseMedia,
+    resumeMedia,
+    pushNativeSession,
+    pushNativePosition,
+    getVideoEl,
+    setCurrentTime,
   ]);
 
   // 武装期间定时刷新 FGS（防止进度条停住）
@@ -609,22 +718,37 @@ export default function MediaPlayer({
             stopMedia();
           }
         }
+        // 用户/远程意图播放
+        if (!remoteActionRef.current) {
+          intentPlayingRef.current = true;
+        }
         resumeMedia();
         if (armedRef.current) {
           pushNativeSession({ playing: true });
+          pushNativePosition(true);
         }
       });
       player.on("pause", () => {
-        // 武装 + 页面隐藏：多为系统误暂停，不写 store，稍后 keepAlive 会续播
-        if (armedRef.current && document.visibilityState === "hidden") {
+        // 远程已处理
+        if (remoteActionRef.current) return;
+        // 武装 + 页面隐藏 + 仍意图播放：系统误停，不改意图，稍后 keepAlive 续播
+        if (
+          armedRef.current &&
+          intentPlayingRef.current &&
+          document.visibilityState === "hidden"
+        ) {
           return;
         }
+        // 前台用户暂停：记录意图，退后台不得续播
+        intentPlayingRef.current = false;
         pauseMedia();
         if (armedRef.current) {
           pushNativeSession({ playing: false });
+          pushNativePosition(true);
         }
       });
       player.on("video:ended", () => {
+        intentPlayingRef.current = false;
         pauseMedia();
         reportProgress(0);
         if (armedRef.current) {

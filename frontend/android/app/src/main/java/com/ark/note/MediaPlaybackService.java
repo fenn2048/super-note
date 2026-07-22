@@ -19,7 +19,7 @@ import androidx.media.app.NotificationCompat.MediaStyle;
  * 音频播放前台服务（mediaPlayback）。
  * 使用 MediaSession + MediaStyle 通知，使系统锁屏 / 通知栏 / 蓝牙耳机
  * 出现类似 iOS remote control 的媒体控件。
- * Web 侧 HTMLAudio 仍负责实际解码；本服务只负责 FGS 与系统媒体会话。
+ * Web 侧 HTMLMediaElement 负责实际解码；本服务只负责 FGS 与系统媒体会话。
  * 进度：Web 上报 position/duration（毫秒），写入 PlaybackState，锁屏进度条可更新。
  */
 public class MediaPlaybackService extends Service {
@@ -39,8 +39,11 @@ public class MediaPlaybackService extends Service {
     public static final String EXTRA_TITLE = "title";
     public static final String EXTRA_ARTIST = "artist";
     public static final String EXTRA_PLAYING = "playing";
+    public static final String EXTRA_HAS_PLAYING = "hasPlaying";
     public static final String EXTRA_POSITION_MS = "positionMs";
     public static final String EXTRA_DURATION_MS = "durationMs";
+    /** position/duration 使用 -1 表示「未提供，保留旧值」 */
+    public static final long EXTRA_UNSET = -1L;
 
     private static final long MEDIA_ACTIONS =
             PlaybackStateCompat.ACTION_PLAY
@@ -57,6 +60,8 @@ public class MediaPlaybackService extends Service {
     private boolean playing = true;
     private long positionMs = 0L;
     private long durationMs = 0L;
+    /** 最近一次由 Web 写入 position 的墙钟时间，用于系统外推 */
+    private long positionUpdateElapsed = 0L;
 
     /** 供 MainActivity 判断是否应保持 WebView 媒体管线 */
     private static volatile boolean sActive = false;
@@ -72,11 +77,17 @@ public class MediaPlaybackService extends Service {
         return sActive && sPlaying;
     }
 
+    /**
+     * @param positionMs EXTRA_UNSET(-1) 表示不改进度
+     * @param durationMs EXTRA_UNSET(-1) 表示不改时长
+     * @param hasPlaying 是否显式指定播放态
+     */
     public static void startOrUpdate(
             Context ctx,
             String title,
             String artist,
             boolean playing,
+            boolean hasPlaying,
             long positionMs,
             long durationMs
     ) {
@@ -84,9 +95,10 @@ public class MediaPlaybackService extends Service {
         i.setAction(ACTION_START);
         i.putExtra(EXTRA_TITLE, title != null ? title : "未知曲目");
         i.putExtra(EXTRA_ARTIST, artist != null ? artist : "");
+        i.putExtra(EXTRA_HAS_PLAYING, hasPlaying);
         i.putExtra(EXTRA_PLAYING, playing);
-        i.putExtra(EXTRA_POSITION_MS, Math.max(0L, positionMs));
-        i.putExtra(EXTRA_DURATION_MS, Math.max(0L, durationMs));
+        i.putExtra(EXTRA_POSITION_MS, positionMs);
+        i.putExtra(EXTRA_DURATION_MS, durationMs);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ctx.startForegroundService(i);
         } else {
@@ -96,15 +108,22 @@ public class MediaPlaybackService extends Service {
 
     /**
      * 轻量进度刷新：服务已在跑则直接写 MediaSession；否则忽略（等下次 update 启动）。
+     * @param isPlaying null 表示不改变播放态
+     * @param positionMs EXTRA_UNSET 表示不改
+     * @param durationMs EXTRA_UNSET 或 0 表示不改时长
      */
-    public static void updatePosition(Context ctx, long positionMs, long durationMs, boolean playing) {
+    public static void updatePosition(Context ctx, long positionMs, long durationMs, Boolean isPlaying) {
         MediaPlaybackService inst = sInstance;
         if (inst != null) {
-            inst.applyPosition(Math.max(0L, positionMs), Math.max(0L, durationMs), playing);
+            inst.applyPosition(positionMs, durationMs, isPlaying);
             return;
         }
-        // 服务未起时用 START 带进度拉起
-        startOrUpdate(ctx, "蜉蝣 · 正在播放", "", playing, positionMs, durationMs);
+        // 服务未起且没有明确进度时不要拉起空会话
+        if (positionMs < 0 && (isPlaying == null || !isPlaying)) return;
+        boolean play = isPlaying == null || isPlaying;
+        long pos = positionMs >= 0 ? positionMs : 0L;
+        long dur = durationMs > 0 ? durationMs : EXTRA_UNSET;
+        startOrUpdate(ctx, "蜉蝣 · 正在播放", "", play, isPlaying != null, pos, dur);
     }
 
     public static void stop(Context ctx) {
@@ -131,12 +150,16 @@ public class MediaPlaybackService extends Service {
             public void onPlay() {
                 playing = true;
                 sPlaying = true;
+                // 外推基准：从当前 position 继续走
+                positionUpdateElapsed = System.currentTimeMillis();
                 MediaPlaybackPlugin.emitAction("play");
                 refreshSessionAndNotification();
             }
 
             @Override
             public void onPause() {
+                // 先冻结外推位置，再改状态，避免锁屏条跳回
+                freezeExtrapolatedPosition();
                 playing = false;
                 sPlaying = false;
                 MediaPlaybackPlugin.emitAction("pause");
@@ -165,11 +188,25 @@ public class MediaPlaybackService extends Service {
                 if (durationMs > 0 && positionMs > durationMs) {
                     positionMs = durationMs;
                 }
+                positionUpdateElapsed = System.currentTimeMillis();
                 MediaPlaybackPlugin.emitSeek(positionMs / 1000.0);
                 updatePlaybackState();
             }
         });
         mediaSession.setActive(true);
+    }
+
+    /** 播放中根据 speed=1 外推后的真实位置写回 positionMs */
+    private void freezeExtrapolatedPosition() {
+        if (!playing || positionUpdateElapsed <= 0) return;
+        long elapsed = System.currentTimeMillis() - positionUpdateElapsed;
+        if (elapsed > 0 && elapsed < 60_000L) {
+            positionMs = Math.max(0L, positionMs + elapsed);
+            if (durationMs > 0 && positionMs > durationMs) {
+                positionMs = durationMs;
+            }
+        }
+        positionUpdateElapsed = System.currentTimeMillis();
     }
 
     @Override
@@ -189,9 +226,11 @@ public class MediaPlaybackService extends Service {
             case ACTION_PLAY:
                 playing = true;
                 sPlaying = true;
+                positionUpdateElapsed = System.currentTimeMillis();
                 MediaPlaybackPlugin.emitAction("play");
                 break;
             case ACTION_PAUSE:
+                freezeExtrapolatedPosition();
                 playing = false;
                 sPlaying = false;
                 MediaPlaybackPlugin.emitAction("pause");
@@ -203,15 +242,7 @@ public class MediaPlaybackService extends Service {
                 MediaPlaybackPlugin.emitAction("prev");
                 break;
             case ACTION_POSITION:
-                if (intent.hasExtra(EXTRA_POSITION_MS)) {
-                    positionMs = Math.max(0L, intent.getLongExtra(EXTRA_POSITION_MS, 0L));
-                }
-                if (intent.hasExtra(EXTRA_DURATION_MS)) {
-                    durationMs = Math.max(0L, intent.getLongExtra(EXTRA_DURATION_MS, 0L));
-                }
-                if (intent.hasExtra(EXTRA_PLAYING)) {
-                    playing = intent.getBooleanExtra(EXTRA_PLAYING, playing);
-                }
+                applyPositionFromIntent(intent);
                 sActive = true;
                 sPlaying = playing;
                 updateSessionMetadata();
@@ -226,19 +257,18 @@ public class MediaPlaybackService extends Service {
                 if (intent.hasExtra(EXTRA_ARTIST)) {
                     artist = intent.getStringExtra(EXTRA_ARTIST);
                 }
-                if (intent.hasExtra(EXTRA_PLAYING)) {
+                boolean hasPlaying = intent.getBooleanExtra(EXTRA_HAS_PLAYING, true);
+                if (hasPlaying && intent.hasExtra(EXTRA_PLAYING)) {
                     playing = intent.getBooleanExtra(EXTRA_PLAYING, true);
                 }
-                if (intent.hasExtra(EXTRA_POSITION_MS)) {
-                    positionMs = Math.max(0L, intent.getLongExtra(EXTRA_POSITION_MS, 0L));
-                }
-                if (intent.hasExtra(EXTRA_DURATION_MS)) {
-                    durationMs = Math.max(0L, intent.getLongExtra(EXTRA_DURATION_MS, 0L));
-                }
+                applyPositionFromIntent(intent);
                 break;
         }
         sActive = true;
         sPlaying = playing;
+        if (playing) {
+            positionUpdateElapsed = System.currentTimeMillis();
+        }
 
         try {
             if (mediaSession == null) {
@@ -264,11 +294,45 @@ public class MediaPlaybackService extends Service {
         return START_STICKY;
     }
 
-    private void applyPosition(long posMs, long durMs, boolean isPlaying) {
-        positionMs = posMs;
-        if (durMs > 0) durationMs = durMs;
-        playing = isPlaying;
-        sPlaying = isPlaying;
+    private void applyPositionFromIntent(Intent intent) {
+        if (intent.hasExtra(EXTRA_POSITION_MS)) {
+            long p = intent.getLongExtra(EXTRA_POSITION_MS, EXTRA_UNSET);
+            if (p >= 0) {
+                positionMs = p;
+                positionUpdateElapsed = System.currentTimeMillis();
+            }
+        }
+        if (intent.hasExtra(EXTRA_DURATION_MS)) {
+            long d = intent.getLongExtra(EXTRA_DURATION_MS, EXTRA_UNSET);
+            if (d > 0) {
+                durationMs = d;
+            }
+        }
+    }
+
+    /**
+     * @param posMs EXTRA_UNSET 保留旧进度
+     * @param durMs <=0 或 EXTRA_UNSET 保留旧时长
+     * @param isPlaying null 保留旧播放态
+     */
+    private void applyPosition(long posMs, long durMs, Boolean isPlaying) {
+        if (posMs >= 0) {
+            positionMs = posMs;
+            positionUpdateElapsed = System.currentTimeMillis();
+        }
+        if (durMs > 0) {
+            durationMs = durMs;
+        }
+        if (isPlaying != null) {
+            if (playing && !isPlaying) {
+                freezeExtrapolatedPosition();
+            }
+            playing = isPlaying;
+            sPlaying = isPlaying;
+            if (isPlaying) {
+                positionUpdateElapsed = System.currentTimeMillis();
+            }
+        }
         sActive = true;
         updateSessionMetadata();
         updatePlaybackState();
@@ -316,9 +380,12 @@ public class MediaPlaybackService extends Service {
         float speed = playing ? 1.0f : 0f;
         long pos = Math.max(0L, positionMs);
         if (durationMs > 0 && pos > durationMs) pos = durationMs;
+        long updateTime = positionUpdateElapsed > 0
+                ? positionUpdateElapsed
+                : System.currentTimeMillis();
         PlaybackStateCompat.Builder builder = new PlaybackStateCompat.Builder()
                 .setActions(MEDIA_ACTIONS)
-                .setState(state, pos, speed, System.currentTimeMillis());
+                .setState(state, pos, speed, updateTime);
         mediaSession.setPlaybackState(builder.build());
         if (!mediaSession.isActive()) {
             mediaSession.setActive(true);

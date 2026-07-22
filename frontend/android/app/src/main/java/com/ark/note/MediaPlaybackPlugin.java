@@ -44,24 +44,30 @@ public class MediaPlaybackPlugin extends Plugin {
     /**
      * 更新或启动媒体通知。
      * { title, artist, isPlaying, position?, duration? }  // position/duration 单位：秒
+     * position/duration 未传时保留服务内已有值，避免锁屏进度被清零。
      */
     @PluginMethod
     public void update(PluginCall call) {
         String title = call.getString("title", "未知曲目");
         String artist = call.getString("artist", "");
+        boolean hasPlaying = call.getData().has("isPlaying");
         Boolean playing = call.getBoolean("isPlaying", true);
-        boolean isPlaying = playing == null || playing;
+        boolean isPlaying = !hasPlaying || playing == null || playing;
+
         Double positionSec = call.getDouble("position");
         Double durationSec = call.getDouble("duration");
-        long positionMs = positionSec != null && positionSec > 0
-                ? Math.round(positionSec * 1000.0)
-                : 0L;
-        long durationMs = durationSec != null && durationSec > 0
-                ? Math.round(durationSec * 1000.0)
-                : 0L;
+        // -1 表示「未提供，服务端保留旧值」
+        long positionMs = -1L;
+        long durationMs = -1L;
+        if (positionSec != null && !Double.isNaN(positionSec) && positionSec >= 0) {
+            positionMs = Math.round(positionSec * 1000.0);
+        }
+        if (durationSec != null && !Double.isNaN(durationSec) && durationSec > 0) {
+            durationMs = Math.round(durationSec * 1000.0);
+        }
         try {
             MediaPlaybackService.startOrUpdate(
-                    getContext(), title, artist, isPlaying, positionMs, durationMs);
+                    getContext(), title, artist, isPlaying, hasPlaying, positionMs, durationMs);
             JSObject ret = new JSObject();
             ret.put("ok", true);
             call.resolve(ret);
@@ -73,19 +79,24 @@ public class MediaPlaybackPlugin extends Plugin {
     /**
      * 仅刷新进度（高频）。
      * { position, duration?, isPlaying? }  // 秒
+     * isPlaying 未传时保留当前播放态，避免误把暂停改成播放。
      */
     @PluginMethod
     public void updatePosition(PluginCall call) {
         Double positionSec = call.getDouble("position");
         Double durationSec = call.getDouble("duration");
+        boolean hasPlaying = call.getData().has("isPlaying");
         Boolean playing = call.getBoolean("isPlaying", null);
-        long positionMs = positionSec != null && positionSec >= 0
-                ? Math.round(positionSec * 1000.0)
-                : 0L;
-        long durationMs = durationSec != null && durationSec > 0
-                ? Math.round(durationSec * 1000.0)
-                : 0L;
-        boolean isPlaying = playing == null || playing;
+
+        long positionMs = -1L;
+        long durationMs = -1L;
+        if (positionSec != null && !Double.isNaN(positionSec) && positionSec >= 0) {
+            positionMs = Math.round(positionSec * 1000.0);
+        }
+        if (durationSec != null && !Double.isNaN(durationSec) && durationSec > 0) {
+            durationMs = Math.round(durationSec * 1000.0);
+        }
+        Boolean isPlaying = hasPlaying ? (playing == null || playing) : null;
         try {
             MediaPlaybackService.updatePosition(
                     getContext(), positionMs, durationMs, isPlaying);
