@@ -307,6 +307,55 @@ function extractContentChunks(
 
 
 /**
+ * 是否为本后端的「媒体下载」路径（需要登录态才能给 <img> 用）。
+ * 与 index.ts 里挂在 JWT 中间件之前、内部再调 getAuthUserId 的下载路由对齐。
+ */
+function isOurApiMediaPath(pathnameOrUrl: string): boolean {
+  try {
+    const path = pathnameOrUrl.includes("://")
+      ? new URL(pathnameOrUrl).pathname
+      : pathnameOrUrl.split("?")[0] || "";
+    return (
+      /^\/api\/attachments(\/|$)/.test(path) ||
+      /^\/api\/diary\/attachments(\/|$)/.test(path) ||
+      /^\/api\/task-attachments(\/|$)/.test(path)
+    );
+  } catch {
+    return /\/api\/(attachments|diary\/attachments|task-attachments)(\/|$|\?)/.test(
+      pathnameOrUrl,
+    );
+  }
+}
+
+/**
+ * Capacitor / 跨域客户端下，<img> 请求带不了 Authorization；
+ * 跨域 fetch 默认 credentials=same-origin，Set-Cookie 也落不下来。
+ * 后端 getAuthUserId 已支持 `?token=`（与 SSE / EventSource 一致）。
+ * 仅在「配置了远端 server 且与页面不同源」时附加，同源 Web 仍走 cookie。
+ */
+function needsMediaAuthToken(): boolean {
+  const server = getServerUrl();
+  if (!server) return false;
+  try {
+    if (typeof window === "undefined") return true;
+    return new URL(server).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
+/** 给媒体 URL 附加 ?token=（幂等；非本站媒体路径不动） */
+export function attachMediaAuthToken(url: string): string {
+  if (!url || /^(data:|blob:|file:)/i.test(url)) return url;
+  if (!isOurApiMediaPath(url)) return url;
+  if (!needsMediaAuthToken()) return url;
+  if (/[?&]token=/.test(url)) return url;
+  const token = getToken();
+  if (!token) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+}
+
+/**
  * 把一个附件 URL（可能是相对路径，也可能是旧数据里的 /api/attachments/xxx）
  * 规范化成当前运行环境可访问的 URL。
  *
@@ -318,9 +367,10 @@ function extractContentChunks(
  *     请求打不到后端 → 图片一律 404 或返回 index.html 造成显示失败。
  *
  * 规则：
- *   - data: / blob: / http(s): 绝对 URL → 原样返回
- *   - 以 `/api/` 或 `api/` 开头 → 替换成 `${getServerUrl() || window.location.origin}/api/...`
- *   - 其他相对路径（历史的 `attachments/xxx`、或错误写法）→ 走 `${base}/${path}`
+ *   - data: / blob: / file: → 原样返回
+ *   - http(s): 绝对 URL → 若为本站媒体路径则按需附加 ?token=
+ *   - 以 `/api/` 或 `api/` 开头 → 替换成 `${getServerUrl() || origin}/api/...` + token
+ *   - 其他相对路径 → 走 `${base}/${path}`（一般是静态资源，不附加 token）
  *
  * 设计权衡：
  *   - 本函数是"渲染时兜底"，读取 localStorage 里的 serverUrl，因此调用方**不**
@@ -329,18 +379,26 @@ function extractContentChunks(
  *     启动端口都可能变（见 electron/main.js getFreePort），把带 port 的 URL
  *     持久化到 notes.content 会让下次启动时所有图片全挂。相对路径 +
  *     渲染时动态补 origin 才是稳健策略。
+ *   - Android Capacitor 的 origin 是 https://localhost，API 在 http://局域网，
+ *     <img> 无 Cookie/Authorization → 必须 ?token= 才能下图。
  */
 export function resolveAttachmentUrl(src: string | null | undefined): string {
   if (!src) return "";
-  // 已经是绝对 URL 或 data / blob / file 协议，原样返回
-  if (/^(https?:|data:|blob:|file:|capacitor:)/i.test(src)) return src;
+  // data / blob / file 原样
+  if (/^(data:|blob:|file:|capacitor:)/i.test(src)) return src;
+
+  // 已是绝对 http(s)：本站媒体路径仍可能要带 token（跨域客户端）
+  if (/^https?:/i.test(src)) {
+    return attachMediaAuthToken(src);
+  }
 
   const server = getServerUrl() || (typeof window !== "undefined" ? window.location.origin : "");
   const base = server.replace(/\/+$/, "");
 
   // 归一化：确保以 / 开头
   const normalized = src.startsWith("/") ? src : `/${src}`;
-  return `${base}${normalized}`;
+  const absolute = `${base}${normalized}`;
+  return attachMediaAuthToken(absolute);
 }
 
 /**
@@ -1507,11 +1565,10 @@ export const api = {
     },
 
     /**
-     * 拼出一个附件的完整 URL。
-     * 本地部署（前端与后端同源或走 vite 代理）时直接返回 `/api/attachments/<id>`
-     * 即可；客户端模式若配置了外部 serverUrl，则前缀带上 serverUrl。
+     * 拼出一个附件的完整 URL（跨域 / Capacitor 下自动带 ?token= 供 <img> 鉴权）。
      */
-    urlFor: (id: string): string => `${getBaseUrl()}/attachments/${id}`,
+    urlFor: (id: string): string =>
+      resolveAttachmentUrl(`/api/attachments/${id}`),
 
     /** 删除一份附件。一般用于编辑器内显式删除 + 管理页。 */
     remove: (id: string) =>
@@ -1572,7 +1629,8 @@ export const api = {
       request<{ success: boolean }>(`/task-attachments/${id}`, { method: "DELETE" }),
 
     /** 拼出完整 URL（与 attachments 同理）。 */
-    urlFor: (id: string): string => `${getBaseUrl()}/task-attachments/${id}`,
+    urlFor: (id: string): string =>
+      resolveAttachmentUrl(`/api/task-attachments/${id}`),
   },
 
   // Mi Cloud
@@ -1767,8 +1825,9 @@ export const api = {
     /** 删除一张悬空（未发布）的图片。已发布的图片只能通过删除整条说说级联清理。 */
     remove: (id: string) =>
       request<{ success: boolean }>(`/diary/attachments/${id}`, { method: "DELETE" }),
-    /** 拼出图片完整 URL，给 <img src> 用。 */
-    urlFor: (id: string): string => `${getBaseUrl()}/diary/attachments/${id}`,
+    /** 拼出图片完整 URL，给 <img src> 用（跨域 / Capacitor 下自动带 ?token=）。 */
+    urlFor: (id: string): string =>
+      resolveAttachmentUrl(`/api/diary/attachments/${id}`),
   },
 
   // ========== Files（文件管理模块：统一查看/上传/删除附件资源）==========

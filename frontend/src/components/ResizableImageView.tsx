@@ -1,27 +1,33 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NodeViewWrapper, NodeViewProps } from "@tiptap/react";
-import { resolveAttachmentUrl, getServerUrl } from "@/lib/api";
+import { resolveAttachmentUrl, getServerUrl, getToken } from "@/lib/api";
 
 /**
- * 判断是否为本应用的附件路径（/api/attachments/xxx）。
+ * 判断是否为本应用的附件路径（含说说 / 任务附件）。
  * 这些路径在 Capacitor Android 下可能因为混合内容策略（https origin
  * 请求 http 资源）而被 WebView 阻断。
  */
 function isAttachmentPath(src: string): boolean {
   if (!src) return false;
-  return /^\/?api\/attachments\//.test(src) || src.includes("/api/attachments/");
+  return (
+    /\/api\/attachments(\/|$)/.test(src) ||
+    /\/api\/diary\/attachments(\/|$)/.test(src) ||
+    /\/api\/task-attachments(\/|$)/.test(src) ||
+    /^\/?api\/attachments\//.test(src) ||
+    /^\/?api\/diary\/attachments\//.test(src)
+  );
 }
 
 /**
  * 通过 fetch 下载图片并生成 blob URL。
- * 绕过 Android WebView 的混合内容限制：
- *   - `<img src="http://...">` 在 `https://localhost` origin 下会被
- *     部分 WebView 拦截（即使设置了 allowMixedContent）；
- *   - `fetch()` 走 JS 通道，不受浏览器对 `<img>` 的混合内容策略约束；
- *   - 转成 `blob:` URL 后再赋给 `<img src>`，blob 协议同源，永远不受限。
+ * 绕过 Android WebView 混合内容限制，并带上 Authorization（双保险，
+ * resolveAttachmentUrl 也会加 ?token=）。
  */
 async function fetchImageAsBlob(url: string): Promise<string> {
-  const resp = await fetch(url);
+  const token = getToken();
+  const resp = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
   if (!resp.ok) throw new Error(`fetch image failed: ${resp.status}`);
   const blob = await resp.blob();
   return URL.createObjectURL(blob);

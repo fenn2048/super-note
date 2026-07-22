@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { api, getServerUrl } from "@/lib/api";
+import { api, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { DocumentLoader, TOCItem } from "@/lib/bookDocument";
 import { Book, BookConfig, BookNote } from "@/types";
@@ -2024,7 +2024,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       try {
         const meta = JSON.parse(book.metadata);
         if (meta.coverAttachmentId) {
-          coverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+          coverUrl = resolveAttachmentUrl(`/api/attachments/${meta.coverAttachmentId}`);
         }
       } catch {}
     }
@@ -2217,7 +2217,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     try {
       const meta = JSON.parse(book.metadata);
       if (meta.coverAttachmentId) {
-        bookCoverUrl = `${getServerUrl()}/api/attachments/${meta.coverAttachmentId}`;
+        bookCoverUrl = resolveAttachmentUrl(`/api/attachments/${meta.coverAttachmentId}`);
       }
     } catch {}
   }
