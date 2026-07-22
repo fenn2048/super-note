@@ -31,8 +31,6 @@ export default function GlobalMusicPlayer() {
   /** 节流：锁屏进度约 1s 推一次，避免刷爆原生侧 */
   const lastNativePosPush = useRef<number>(0);
   const lastNativePosValue = useRef<number>(0);
-  /** 退后台 handoff 防抖 */
-  const bgHandoffLockRef = useRef(false);
   
   const {
     isPlaying,
@@ -59,8 +57,6 @@ export default function GlobalMusicPlayer() {
     removeFromPlaylist,
     clearPlaylist,
     patchCurrentMedia,
-    backgroundAudioArmed,
-    playAsAudioOnly,
   } = useMediaStore();
 
   const [playUrl, setPlayUrl] = useState<string>("");
@@ -129,54 +125,25 @@ export default function GlobalMusicPlayer() {
     ? ""
     : id3Meta?.album || currentMedia?.album || "";
 
-  // 1. Fetch play URL when currentMedia is global-playable (audio | video audioOnly)
-  //    或耳机已武装（仅预热直链，不展示 UI / 不起播）
+  // 1. Fetch play URL when currentMedia is global-playable（纯音频；视频后台仅听走 MediaPlayer 自身 video）
   useEffect(() => {
-    const targetId =
-      currentMedia && isGlobalPlayerItem(currentMedia)
-        ? currentMedia.id
-        : backgroundAudioArmed?.id || null;
-
-    if (!targetId) {
-      // 无全局可播且未武装：清空 URL（避免脏状态）
-      if (!backgroundAudioArmed) setPlayUrl("");
+    if (!currentMedia || !isGlobalPlayerItem(currentMedia)) {
+      setPlayUrl("");
       return;
     }
 
-    // 武装预热：若当前不是全局可播，只写 cache / 可选预载，不强制 setPlayUrl 起播
-    const isActiveGlobal =
-      !!currentMedia && isGlobalPlayerItem(currentMedia) && currentMedia.id === targetId;
-
-    const mediaId = targetId;
+    const mediaId = currentMedia.id;
     let active = true;
-    if (isActiveGlobal) {
-      setLoading(true);
-      setError("");
-    }
+    setLoading(true);
+    setError("");
 
     async function fetchPlayUrl() {
       try {
         const cached = getCachedMediaPlayUrl(mediaId);
         if (cached) {
           if (!active) return;
-          cacheMediaPlayUrl(mediaId, cached);
-          if (isActiveGlobal) {
-            setPlayUrl(cached);
-            setLoading(false);
-          } else {
-            // 预热：把 src 挂到 hidden audio 上 load，退后台 handoff 时更快
-            const audio = audioRef.current;
-            if (audio && audio.src !== cached) {
-              try {
-                audio.preload = "auto";
-                audio.src = cached;
-                audio.load();
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-          // cache 命中仍可后台刷新直链
+          setPlayUrl(cached);
+          setLoading(false);
         }
 
         const res = await api.request<{ url: string }>(`/media/items/${mediaId}/play-url`);
@@ -184,51 +151,30 @@ export default function GlobalMusicPlayer() {
 
         if (res && res.url) {
           cacheMediaPlayUrl(mediaId, res.url);
-          if (isActiveGlobal) {
-            setPlayUrl(res.url);
-          } else {
-            const audio = audioRef.current;
-            if (audio) {
-              try {
-                audio.preload = "auto";
-                if (audio.src !== res.url) {
-                  audio.src = res.url;
-                  audio.load();
-                }
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-        } else if (isActiveGlobal && !cached) {
+          setPlayUrl(res.url);
+        } else if (!cached) {
           setError("无法获取播放直链");
         }
       } catch (err: any) {
         if (!active) return;
-        if (isActiveGlobal) {
-          const cached = getCachedMediaPlayUrl(mediaId);
-          if (cached) {
-            setPlayUrl(cached);
-          } else {
-            setError(err.message || "获取播放链接失败，请检查 Alist 配置");
-          }
+        const cached = getCachedMediaPlayUrl(mediaId);
+        if (cached) {
+          setPlayUrl(cached);
+        } else {
+          setError(err.message || "获取播放链接失败，请检查 Alist 配置");
         }
       } finally {
-        if (active && isActiveGlobal) setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
     fetchPlayUrl();
-    
-    // Reset reporting tracker when switching active global item
-    if (isActiveGlobal) {
-      lastReportedTime.current = 0;
-    }
+    lastReportedTime.current = 0;
 
     return () => {
       active = false;
     };
-  }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly, backgroundAudioArmed?.id]);
+  }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly]);
 
   // 1b. m3u8：给 <audio> 挂 hls.js（视频仅听 HLS 场景）
   const hlsRef = useRef<{ destroy: () => void } | null>(null);
@@ -288,7 +234,6 @@ export default function GlobalMusicPlayer() {
         if (playPromise !== undefined) {
           playPromise.catch((err) => {
             console.warn("Global audio playback failed:", err);
-            // 元数据未就绪时，等 canplay 再试
             const onReady = () => {
               audio.removeEventListener("canplay", onReady);
               if (useMediaStore.getState().isPlaying) {
@@ -305,100 +250,32 @@ export default function GlobalMusicPlayer() {
     }
   }, [isPlaying, playUrl, currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly]);
 
-  /** 武装视频退后台：切到仅听；已仅听则强制续播 */
-  const handoffArmedVideoIfNeeded = () => {
-    const st = useMediaStore.getState();
-    const armed = st.backgroundAudioArmed;
-    if (!armed) return;
-
-    if (st.currentMedia?.id === armed.id && st.currentMedia.audioOnly) {
-      // 已在仅听：确保 audio 在播
-      const audio = audioRef.current;
-      if (st.isPlaying && audio?.paused) {
-        void audio.play().catch(() => {});
-      }
-      return;
-    }
-
-    if (bgHandoffLockRef.current) return;
-    bgHandoffLockRef.current = true;
-
-    const t = st.currentTime > 0 ? st.currentTime : 0;
-    const item: MediaPlayItem = {
-      ...armed,
-      type: "video",
-      audioOnly: true,
-    };
-
-    // 先维持 FGS，再切 store，降低 WebView 被挂起窗口
-    void updateNativeMediaSession({
-      title: item.title || "视频",
-      artist: "仅音频 · 视频",
-      isPlaying: true,
-      position: t > 0 ? t : undefined,
-      duration: item.duration,
-    });
-
-    // 若已预热 URL，立刻写入 playUrl，缩短起播延迟
-    const cached = getCachedMediaPlayUrl(armed.id);
-    if (cached) {
-      setPlayUrl(cached);
-    }
-
-    playAsAudioOnly(item, { startAt: t > 0 ? t : 0 });
-
-    window.setTimeout(() => {
-      bgHandoffLockRef.current = false;
-    }, 500);
-
-    // 多次尝试 play（WebView onPause/resume 竞态）
-    const tryPlay = () => {
-      const audio = audioRef.current;
-      const s2 = useMediaStore.getState();
-      if (!s2.isPlaying || !isGlobalPlayerItem(s2.currentMedia)) return;
-      if (audio && audio.paused) {
-        void audio.play().catch(() => {});
-      }
-    };
-    window.setTimeout(tryPlay, 80);
-    window.setTimeout(tryPlay, 250);
-    window.setTimeout(tryPlay, 600);
-    window.setTimeout(tryPlay, 1200);
-  };
-
-  // 前台恢复 / WebView 误暂停：store 仍为 playing 时强制续播
-  // 另：武装后退后台 → 视频转仅听
+  // 前台恢复 / WebView 误暂停：store 仍为 playing 时强制续播（仅真实全局音频）
   useEffect(() => {
     const tryResume = () => {
       const audio = audioRef.current;
       if (!audio) return;
       const st = useMediaStore.getState();
       if (!st.isPlaying || !isGlobalPlayerItem(st.currentMedia)) return;
-      // playUrl 可能稍后才到；有 src 也试
       if (audio.paused && (playUrl || audio.src)) {
         void audio.play().catch(() => {});
       }
     };
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        handoffArmedVideoIfNeeded();
-      }
-      // 切后台也可能被 WebView 暂停；始终尝试按 store 意图纠正
       tryResume();
     };
     const onAudioPause = () => {
-      // 用户主动 pause：isPlaying 已 false，不重开
-      // 系统/WebView 强制 pause：isPlaying 仍 true → 延迟续播
       window.setTimeout(tryResume, 120);
       window.setTimeout(tryResume, 400);
     };
+    const onWebViewResume = () => tryResume();
     const audio = audioRef.current;
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", tryResume);
     window.addEventListener("pageshow", tryResume);
+    window.addEventListener("super:webview-media-resume", onWebViewResume);
     audio?.addEventListener("pause", onAudioPause);
     audio?.addEventListener("canplay", tryResume);
-    // Capacitor App 生命周期
     let removeApp: (() => void) | undefined;
     if (isNativePlatform()) {
       void import("@capacitor/app").then(({ App }) => {
@@ -406,8 +283,6 @@ export default function GlobalMusicPlayer() {
           if (isActive) {
             tryResume();
           } else {
-            handoffArmedVideoIfNeeded();
-            // 退后台：WebView 可能刚 pause，延迟再 play 多次
             window.setTimeout(tryResume, 200);
             window.setTimeout(tryResume, 600);
             window.setTimeout(tryResume, 1500);
@@ -422,24 +297,12 @@ export default function GlobalMusicPlayer() {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", tryResume);
       window.removeEventListener("pageshow", tryResume);
+      window.removeEventListener("super:webview-media-resume", onWebViewResume);
       audio?.removeEventListener("pause", onAudioPause);
       audio?.removeEventListener("canplay", tryResume);
       removeApp?.();
     };
-  }, [playUrl, currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly, backgroundAudioArmed?.id, playAsAudioOnly]);
-
-  // 武装期间维持 FGS（即使尚未 audioOnly），保证 MainActivity keepWebView
-  useEffect(() => {
-    if (!backgroundAudioArmed) return;
-    if (currentMedia && isGlobalPlayerItem(currentMedia)) return; // 由 mediaSession effect 接管
-    void updateNativeMediaSession({
-      title: backgroundAudioArmed.title || "视频",
-      artist: "后台仅听已开启",
-      isPlaying: true,
-      position: currentTime > 0 ? currentTime : undefined,
-      duration: backgroundAudioArmed.duration,
-    });
-  }, [backgroundAudioArmed?.id, backgroundAudioArmed?.title, backgroundAudioArmed?.duration, currentMedia?.id, currentMedia?.audioOnly, currentTime]);
+  }, [playUrl, currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly]);
 
   // 3. Sync volume and mute
   useEffect(() => {
@@ -521,10 +384,11 @@ export default function GlobalMusicPlayer() {
   };
 
   // Media Session（Web）+ Android 原生 FGS 通知栏控件
+  // 注意：视频后台仅听由 MediaPlayer 自己推 FGS；此处不要在 armed 时 stop
   useEffect(() => {
     if (!currentMedia || !isGlobalPlayerItem(currentMedia)) {
-      // 耳机已武装时由下方 armed effect 维持 FGS，切勿 stop
-      if (!backgroundAudioArmed) {
+      const armed = useMediaStore.getState().backgroundAudioArmed;
+      if (!armed) {
         void stopNativeMediaSession();
       }
       return;
@@ -597,15 +461,15 @@ export default function GlobalMusicPlayer() {
       setHandler("nexttrack", null);
       setHandler("seekto", null);
     };
-  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, currentMedia?.audioOnly, currentMedia?.duration, isVideoAudioOnly, id3Meta?.artist, id3Meta?.album, coverToUse, isPlaying, duration, resumeMedia, pauseMedia, prevMedia, nextMedia, setCurrentTime, backgroundAudioArmed]);
+  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, currentMedia?.audioOnly, currentMedia?.duration, isVideoAudioOnly, id3Meta?.artist, id3Meta?.album, coverToUse, isPlaying, duration, resumeMedia, pauseMedia, prevMedia, nextMedia, setCurrentTime]);
   // 注意：currentTime 不进 deps，避免每帧 startForeground；进度用下面节流 effect
 
-  // 无全局可播且未武装时停止 FGS
+  // 无全局可播且未武装视频后台仅听时停止 FGS
   useEffect(() => {
-    if (!isGlobalPlayerItem(currentMedia) && !backgroundAudioArmed) {
-      void stopNativeMediaSession();
-    }
-  }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly, backgroundAudioArmed?.id]);
+    if (isGlobalPlayerItem(currentMedia)) return;
+    if (useMediaStore.getState().backgroundAudioArmed) return;
+    void stopNativeMediaSession();
+  }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly]);
 
   // 通知栏按钮 → store 动作
   useEffect(() => {
@@ -741,19 +605,10 @@ export default function GlobalMusicPlayer() {
     };
   }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly, isExpanded, isMiniMode]);
 
-  // 武装预热：即使尚未 audioOnly，也挂载 hidden <audio> 以便预载直链
-  const keepAudioNode = globalPlayable || !!backgroundAudioArmed;
+  // 非全局可播项（含普通视频、仅武装未 handoff 的视频）不渲染播放器 UI
+  if (!currentMedia || !globalPlayable) return null;
 
-  // 非全局可播且未武装：不渲染
-  if (!keepAudioNode || (!currentMedia && !backgroundAudioArmed)) {
-    return null;
-  }
-
-  const isOnCurrentAudioDetailsPage =
-    !!currentMedia && currentHash === `#/media/items/${currentMedia.id}`;
-
-  // 仅武装、尚未仅听：只保留 audio 节点，不展示迷你条
-  const showPlayerUi = !!currentMedia && globalPlayable;
+  const isOnCurrentAudioDetailsPage = currentHash === `#/media/items/${currentMedia.id}`;
 
   return (
     <>
@@ -772,7 +627,7 @@ export default function GlobalMusicPlayer() {
       />
 
       {/* Hide UI if we are viewing the details page of the currently playing audio */}
-      {showPlayerUi && !isOnCurrentAudioDetailsPage && currentMedia && (
+      {!isOnCurrentAudioDetailsPage && (
         <>
           {/* ----------------------------------------------------------------------- */}
           {/* MINI MODE DRAGGABLE CD PLAYER */}

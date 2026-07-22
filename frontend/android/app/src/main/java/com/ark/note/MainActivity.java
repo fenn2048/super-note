@@ -70,21 +70,19 @@ public class MainActivity extends BridgeActivity {
 
     /**
      * Capacitor Bridge 在 onPause 里会 WebView.onPause()，连带暂停 HTMLMediaElement。
-     * 全局音乐 / 视频仅听依赖 WebView 内 &lt;audio&gt; 解码，退后台会静音。
-     * 媒体前台服务活跃时立刻 resume WebView，并多次补唤醒以对抗 ROM 二次挂起。
+     * 全局音乐 / 视频后台仅听依赖 WebView 内 media 解码，退后台会静音。
+     * 媒体前台服务活跃时立刻 resume WebView，并多次补唤醒 + 通知 JS 续播。
      */
     @Override
     public void onPause() {
         super.onPause();
         keepWebViewMediaAliveIfNeeded();
-        // 与 Bridge.onPause 竞态：延迟再 resume 几次
         scheduleWebViewMediaKeepAlive();
     }
 
     @Override
     public void onStop() {
         super.onStop();
-        // 部分 ROM 在 onStop 再次挂起 WebView，再补一次
         keepWebViewMediaAliveIfNeeded();
         scheduleWebViewMediaKeepAlive();
     }
@@ -95,8 +93,8 @@ public class MainActivity extends BridgeActivity {
             if (this.bridge == null) return;
             WebView wv = this.bridge.getWebView();
             if (wv == null) return;
-            // 150/400/1000ms：覆盖多数机型 onPause→onStop→doze 挂起窗口
-            long[] delays = new long[] { 150L, 400L, 1000L };
+            // 覆盖 onPause→onStop→部分 ROM 二次挂起窗口
+            long[] delays = new long[] { 50L, 150L, 400L, 1000L, 2000L };
             for (long d : delays) {
                 wv.postDelayed(this::keepWebViewMediaAliveIfNeeded, d);
             }
@@ -115,6 +113,11 @@ public class MainActivity extends BridgeActivity {
                 try {
                     wv.resumeTimers();
                     wv.onResume();
+                    // 通知前端强制续播 video / audio（与 FGS 对齐）
+                    wv.evaluateJavascript(
+                            "try{window.dispatchEvent(new Event('super:webview-media-resume'));}catch(e){}",
+                            null
+                    );
                 } catch (Exception e) {
                     Log.w(TAG, "keepWebViewMediaAlive resume failed", e);
                 }
