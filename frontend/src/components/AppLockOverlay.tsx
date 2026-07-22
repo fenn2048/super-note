@@ -77,21 +77,30 @@ export default function AppLockOverlay({
         return;
       }
 
+      // 用户取消 / 暂时失败：留在遮罩层可重试，**不要**直接踢到密码登录页
+      // （旧逻辑 user_cancel → onFallback 会 setIsAuthenticated(false)，会话被清感觉像"掉登录"）
+      if (result.reason === "user_cancel") {
+        setErrorMsg("已取消，请重试指纹解锁");
+        setPhase("fallback");
+        return;
+      }
+
       if (
-        result.reason === "user_cancel" ||
         result.reason === "not_enabled" ||
         result.reason === "unsupported"
       ) {
-        onFallbackRef.current();
+        // 未启用快速登录：无需锁屏，直接放行
+        onUnlockedRef.current();
         return;
       }
 
       if (result.reason === "biometry_unavailable") {
-        onFallbackRef.current();
+        setErrorMsg(result.message || "生物识别暂不可用，请重试或使用密码");
+        setPhase("fallback");
         return;
       }
 
-      setErrorMsg(result.message || "解锁失败，请使用密码登录");
+      setErrorMsg(result.message || "解锁失败，请重试或使用密码登录");
       setPhase("fallback");
     })();
 
@@ -113,16 +122,16 @@ export default function AppLockOverlay({
         onUnlockedRef.current();
         return;
       }
-      if (
-        result.reason === "user_cancel" ||
-        result.reason === "not_enabled" ||
-        result.reason === "unsupported" ||
-        result.reason === "biometry_unavailable"
-      ) {
-        onFallbackRef.current();
+      if (result.reason === "not_enabled" || result.reason === "unsupported") {
+        onUnlockedRef.current();
         return;
       }
-      setErrorMsg(result.message || "解锁失败，请使用密码登录");
+      if (result.reason === "user_cancel") {
+        setErrorMsg("已取消，请重试指纹解锁");
+        setPhase("fallback");
+        return;
+      }
+      setErrorMsg(result.message || "解锁失败，请重试或使用密码登录");
       setPhase("fallback");
     })();
   };

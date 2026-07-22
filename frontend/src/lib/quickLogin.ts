@@ -294,6 +294,25 @@ export async function disableQuickLogin(): Promise<void> {
 }
 
 /**
+ * 快速登录已开启时，静默把最新 token 写回 Keystore（无需再弹生物识别）。
+ * 用于：密码登录成功 / 会话刷新后，避免 Keystore 里还是旧 token。
+ */
+export async function syncQuickLoginToken(token: string): Promise<void> {
+  if (!token || !isCapacitorNative()) return;
+  const ss = await loadSecureStorage();
+  if (!ss) return;
+  try {
+    const flag = await ss.SecureStorage.get(SS_ENABLED_KEY);
+    const enabled =
+      flag === true || flag === "true" || flag === 1 || flag === "1";
+    if (!enabled) return;
+    await ss.SecureStorage.set(SS_TOKEN_KEY, token);
+  } catch (e) {
+    console.warn("[quickLogin] sync token failed:", e);
+  }
+}
+
+/**
  * 启动时尝试快速登录：
  *   1) 校验开关已开 + 生物识别可用；
  *   2) 弹生物识别认证；
@@ -382,12 +401,22 @@ export async function attemptQuickLogin(): Promise<QuickLoginAttemptResult> {
   }
 
   // 认证通过 → 取出凭据
+  // 优先 localStorage 当前会话 token（可能比 Keystore 镜像更新）；
+  // Keystore 作兜底（WebView 被系统清掉 LS 时仍能恢复）。
   let token: string | null = null;
   let serverUrl = "";
   let username = "";
   try {
-    const t = await ss.SecureStorage.get(SS_TOKEN_KEY);
-    if (typeof t === "string" && t) token = t;
+    const lsToken = localStorage.getItem("super-token");
+    if (lsToken && lsToken.trim()) token = lsToken.trim();
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (!token) {
+      const t = await ss.SecureStorage.get(SS_TOKEN_KEY);
+      if (typeof t === "string" && t) token = t;
+    }
     const s = await ss.SecureStorage.get(SS_SERVER_URL_KEY);
     if (typeof s === "string") serverUrl = s.trim().replace(/\/+$/, "");
     const u = await ss.SecureStorage.get(SS_USERNAME_KEY);
@@ -400,6 +429,13 @@ export async function attemptQuickLogin(): Promise<QuickLoginAttemptResult> {
     // 数据丢失（卸载部分残留？）→ 关闭开关并降级
     await disableQuickLogin();
     return { ok: false, reason: "not_enabled" };
+  }
+
+  // 若用的是 LS token，顺手回写 Keystore，保持镜像新鲜
+  try {
+    await ss.SecureStorage.set(SS_TOKEN_KEY, token);
+  } catch {
+    /* ignore */
   }
 
   // 历史版本可能写入空 serverUrl，冷启动 verify 会打到 localhost 报"网络异常"。

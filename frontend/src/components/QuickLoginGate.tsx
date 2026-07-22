@@ -112,14 +112,14 @@ export default function QuickLoginGate({ isClientMode, onSettled }: Props) {
       const result = await attemptQuickLogin();
       // 指纹已出结果：即使组件即将卸载也尽量完成登录，避免 silent drop
       if (!result.ok) {
+        // 取消 / 硬件暂时不可用 / 未启用：回密码页，但 **不要** disableQuickLogin
+        // （旧逻辑在 biometry_unavailable 时清掉指纹配置，导致过一会儿只能输密码）
         if (
           result.reason === "user_cancel" ||
           result.reason === "biometry_unavailable" ||
-          result.reason === "not_enabled"
+          result.reason === "not_enabled" ||
+          result.reason === "unsupported"
         ) {
-          if (result.reason === "biometry_unavailable") {
-            await disableQuickLogin();
-          }
           settle(false);
           return;
         }

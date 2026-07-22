@@ -448,20 +448,45 @@ export function getToken(): string | null {
  *   - 只清 token，不动主题、服务器地址、草稿等用户偏好；
  *   - 调用方可选地传 reason，便于埋点/调试。
  */
+/**
+ * 仅「用户主动登出 / 切服务器 / 改密 / 被服务端强制下线」时清 Keystore 快速登录。
+ * 会话 401、冷启动 verify 失败等 **不要** 清指纹镜像——否则过一会儿进 App 只能输密码，
+ * 且再也唤不起生物识别（需重新启用）。
+ */
+function shouldClearQuickLoginOnLogout(reason?: string): boolean {
+  if (!reason) return false;
+  return (
+    reason === "user_logout" ||
+    reason === "disconnect_server" ||
+    reason === "password_changed" ||
+    reason === "switch_to_local" ||
+    reason === "force-logout" ||
+    reason === "factory_reset"
+  );
+}
+
 export function broadcastLogout(reason?: string) {
   // Phase 6: 登出时顺便告诉后端吊销当前 session（不等待结果，失败忽略）。
   //   注意必须在 removeItem 前拿到 token；使用 keepalive 以让浏览器关闭时也尽量发出去。
-  try {
-    const token = localStorage.getItem("super-token");
-    if (token) {
-      fetch(`${getBaseUrl()}/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        keepalive: true,
-      }).catch(() => {});
+  // 用户主动类登出才通知后端；session_revoked / verify_failed 时后端已认为无效，不必再 POST。
+  const notifyServer =
+    reason === "user_logout" ||
+    reason === "disconnect_server" ||
+    reason === "password_changed" ||
+    reason === "switch_to_local";
+  if (notifyServer) {
+    try {
+      const token = localStorage.getItem("super-token");
+      if (token) {
+        fetch(`${getBaseUrl()}/auth/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
   try {
     localStorage.removeItem("super-token");
@@ -472,14 +497,13 @@ export function broadcastLogout(reason?: string) {
   } catch {
     /* 隐私模式下 localStorage 可能不可用，忽略 */
   }
-  // Phase 7: 同步清掉 Keystore 中的快速登录镜像。原因：
-  //   1) 用户主动登出 → 不希望"快速登录"再用旧 token 一键回到登录态；
-  //   2) verify 失败 / 被踢下线 → 旧 token 已无意义，留着只会让下次启动多走
-  //      一遭"生物识别 → verify 失败 → 回密码页"。
-  // 失败忽略：secure storage 不可用时本来就没东西要清。
-  void import("./quickLogin")
-    .then((m) => m.disableQuickLogin())
-    .catch(() => {});
+  // 仅主动登出等场景清 Keystore；session_revoked / verify_failed 保留指纹，
+  // 下次冷启动仍可走 QuickLoginGate（token 若真失效，verify 后再 disable）。
+  if (shouldClearQuickLoginOnLogout(reason)) {
+    void import("./quickLogin")
+      .then((m) => m.disableQuickLogin())
+      .catch(() => {});
+  }
 }
 
 /**

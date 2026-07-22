@@ -2167,7 +2167,11 @@ function AuthGate() {
         const verifiedUser = data.user as User;
         saveCachedAuthUser(authScope, token, verifiedUser);
         setUser(verifiedUser);
+        setActiveToken(token);
         setIsAuthenticated(true);
+        void import("@/lib/quickLogin")
+          .then((m) => m.syncQuickLoginToken(token))
+          .catch(() => {});
       })
       .catch((err) => {
         if ((err as any)?.authInvalid) {
@@ -2268,6 +2272,10 @@ function AuthGate() {
           const { isQuickLoginEnabled } = await import("@/lib/quickLogin");
           const enabled = await isQuickLoginEnabled();
           if (enabled) {
+            // 已启用指纹：走 QuickLoginGate（生物识别 → 恢复会话）。
+            // 不在这里 checkAuth 自动进主界面，否则会绕过指纹门。
+            // 同时把 quickLoginState 复位为 pending，避免上次「skipped」残留。
+            setQuickLoginState("pending");
             setIsAuthenticated(false);
             return;
           }
@@ -2385,9 +2393,18 @@ function AuthGate() {
 
   const handleLogin = (token: string, userData: User) => {
     saveCachedAuthUser(getAuthCacheScope(getServerUrl()), token, userData);
+    try {
+      localStorage.setItem("super-token", token);
+    } catch {
+      /* ignore */
+    }
     setUser(userData);
     setActiveToken(token);
     setIsAuthenticated(true);
+    // 指纹已开启时静默刷新 Keystore 镜像，避免过期后只能输密码
+    void import("@/lib/quickLogin")
+      .then((m) => m.syncQuickLoginToken(token))
+      .catch(() => {});
 
     // 登录引导回跳：支持来自分享页（edit_auth 权限）的 `/login?redirect=/share/<token>`。
     //
@@ -2530,9 +2547,18 @@ function AuthGate() {
             <AppLockOverlay
               onUnlocked={() => setAppLocked(false)}
               onFallbackToPassword={() => {
+                // 用户主动选「使用密码」：清本地会话进登录页，但保留 Keystore 指纹配置
+                // （broadcastLogout verify 类不会清指纹；这里只清 LS token）
                 setAppLocked(false);
-                setQuickLoginState("skipped");
+                try {
+                  localStorage.removeItem("super-token");
+                } catch {
+                  /* ignore */
+                }
+                // 允许登录页路径再走一次 QuickLoginGate（用户可改主意点指纹）
+                setQuickLoginState("pending");
                 setIsAuthenticated(false);
+                setUser(null);
               }}
             />
           )}

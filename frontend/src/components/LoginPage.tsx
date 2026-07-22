@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Lock, User, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, ChevronDown, ChevronUp, QrCode } from "lucide-react";
+import { Loader2, Lock, User, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, ChevronDown, ChevronUp, QrCode, Fingerprint } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getServerUrl, setServerUrl, clearServerUrl, testServerConnection, fetchRegisterConfig, registerAccount } from "@/lib/api";
 import { buildServerUrl, parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/rememberLogin";
 import QrLoginPanel from "@/components/QrLoginPanel";
 import { normalizeServerOrigin } from "@/lib/qrLogin";
+import { verifyAuthToken } from "@/lib/authVerify";
 
 interface LoginPageProps {
   onLogin: (token: string, user: any) => void;
@@ -32,6 +33,10 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
   /** 扫码登录仅桌面 Web / Electron；原生 App 已登录走扫一扫授权 */
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
   const showQrOption = !isNativePlatform();
+  /** 原生端已启用指纹时，登录页提供「指纹解锁」入口（避免只能输密码） */
+  const [quickLoginReady, setQuickLoginReady] = useState(false);
+  const [quickLoginBusy, setQuickLoginBusy] = useState(false);
+  const [quickLoginHint, setQuickLoginHint] = useState("");
   // 登录页外层滚动容器 ref（软键盘适配用，见下方 useEffect）
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   // 登录页键盘适配 —— 直接复用全站既有的原生键盘事件链，**不要再自己用
@@ -553,6 +558,72 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
     !!serverParts.host.trim() &&
     serverStatus !== "fail";
 
+  // 原生端：若已启用指纹快速登录，登录页提供一键解锁（避免只能输密码）
+  useEffect(() => {
+    if (!isNativePlatform() || !isClientMode) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ql = await import("@/lib/quickLogin");
+        if (!ql.isQuickLoginPlatformSupported()) return;
+        const enabled = await ql.isQuickLoginEnabled();
+        if (!cancelled && enabled) setQuickLoginReady(true);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isClientMode]);
+
+  const handleFingerprintUnlock = async () => {
+    if (quickLoginBusy) return;
+    setQuickLoginBusy(true);
+    setQuickLoginHint("");
+    setError("");
+    try {
+      const ql = await import("@/lib/quickLogin");
+      const result = await ql.attemptQuickLogin();
+      if (!result.ok) {
+        if (result.reason === "user_cancel") {
+          setQuickLoginHint("已取消");
+        } else {
+          setQuickLoginHint(result.message || "指纹解锁失败，请使用密码登录");
+        }
+        return;
+      }
+      const ssServer = (result.serverUrl || "").trim().replace(/\/+$/, "");
+      if (ssServer) setServerUrl(ssServer);
+      try {
+        localStorage.setItem("super-token", result.token);
+      } catch {
+        /* ignore */
+      }
+      const verified = await verifyAuthToken(result.token, {
+        attempts: 3,
+        retryDelayMs: 500,
+        timeoutMs: 10000,
+        allowCacheFallback: true,
+      });
+      if (verified.ok) {
+        onLogin(result.token, verified.user);
+        return;
+      }
+      if (verified.reason === "auth_invalid") {
+        await ql.disableQuickLogin();
+        setQuickLoginReady(false);
+        setQuickLoginHint("登录态已失效，请使用密码重新登录");
+        return;
+      }
+      setQuickLoginHint(verified.message || "网络异常，请使用密码登录");
+    } catch (e: any) {
+      setQuickLoginHint(e?.message || "解锁失败");
+    } finally {
+      setQuickLoginBusy(false);
+    }
+  };
+
   return (
     <div
       ref={scrollContainerRef}
@@ -607,6 +678,33 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
 
         {/* —— 表单卡片 —— */}
         <div className="bg-app-elevated border border-app-border rounded-2xl shadow-lg shadow-black/[0.04] dark:shadow-black/30 p-5 sm:p-7">
+          {/* 指纹快速解锁（已启用时） */}
+          {quickLoginReady && !twoFactor && mode === "login" && loginMethod === "password" && (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={() => void handleFingerprintUnlock()}
+                disabled={quickLoginBusy}
+                className="w-full min-h-[48px] rounded-xl border border-accent-primary/30 bg-accent-primary/10 hover:bg-accent-primary/15 text-accent-primary font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+              >
+                {quickLoginBusy ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Fingerprint size={20} />
+                )}
+                {quickLoginBusy ? "正在解锁…" : "指纹 / 面容解锁"}
+              </button>
+              {quickLoginHint && (
+                <p className="mt-2 text-xs text-center text-tx-tertiary">{quickLoginHint}</p>
+              )}
+              <div className="mt-4 flex items-center gap-3 text-[11px] text-tx-tertiary">
+                <div className="flex-1 h-px bg-app-border" />
+                <span>或使用密码登录</span>
+                <div className="flex-1 h-px bg-app-border" />
+              </div>
+            </div>
+          )}
+
           {/* 登录/注册 Tab */}
           {!twoFactor && (
             <div className="flex items-center gap-1 p-1 mb-5 rounded-xl bg-app-surface border border-app-border/70">
