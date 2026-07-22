@@ -661,6 +661,7 @@ export default function MediaCenter() {
               createPortal(
                 <button
                   type="button"
+                  data-media-chrome
                   onClick={async () => {
                     if (window.confirm("确认要删除这个单品吗？")) {
                       await api.request(`/media/items/${selectedItem.id}`, { method: "DELETE" });
@@ -953,6 +954,7 @@ export default function MediaCenter() {
                   createPortal(
                     <button
                       type="button"
+                      data-media-chrome
                       onClick={() => void openAlistSettings()}
                       className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center"
                       style={{
@@ -1007,15 +1009,15 @@ export default function MediaCenter() {
                   createPortal(
                     <button
                       type="button"
+                      data-media-chrome
                       onClick={handleOpenAddCollection}
-                      className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-accent-primary hover:bg-accent-primary/10 active:scale-95 flex items-center justify-center data-[global-player-expanded]:hidden"
+                      className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-accent-primary hover:bg-accent-primary/10 active:scale-95 flex items-center justify-center"
                       style={{
                         top: "calc(var(--safe-area-top, 0px) + 12px)",
                         right: "10px",
                       }}
                       title="新建合集"
                       aria-label="新建合集"
-                      data-media-chrome-action="add-collection"
                     >
                       <Plus size={22} strokeWidth={2.25} />
                     </button>,
@@ -1092,6 +1094,7 @@ export default function MediaCenter() {
                 {typeof document !== "undefined" &&
                   createPortal(
                     <div
+                      data-media-chrome
                       className="md:hidden fixed z-[45] flex items-center gap-0.5"
                       style={{
                         top: "calc(var(--safe-area-top, 0px) + 12px)",
@@ -2034,15 +2037,26 @@ export default function MediaCenter() {
       {/* Modal: Alist directory browser */}
       <AnimatePresence>
         {showAlistBrowser && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-4xl h-[80vh]"
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4"
+            style={{
+              paddingTop: "var(--safe-area-top, 0px)",
+              paddingBottom: "var(--safe-area-bottom, 0px)",
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.98, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.98, opacity: 0, y: 16 }}
+              className={cn(
+                "w-full max-w-4xl min-h-0 overflow-hidden",
+                // 移动端几乎全屏（更高）；桌面保持大弹窗
+                "h-[min(94dvh,100%)] md:h-[min(88vh,900px)]",
+                "rounded-t-2xl md:rounded-2xl",
+              )}
             >
-              <AlistBrowser 
-                workspaceId={workspaceId} 
+              <AlistBrowser
+                workspaceId={workspaceId}
                 collections={collections}
                 onImportSuccess={(msg) => {
                   setShowAlistBrowser(false);

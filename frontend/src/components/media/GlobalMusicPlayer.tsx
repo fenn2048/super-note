@@ -733,6 +733,14 @@ export default function GlobalMusicPlayer() {
     };
   }, [currentMedia?.id, currentMedia?.type, currentMedia?.audioOnly, isExpanded, isMiniMode]);
 
+  // 全屏态标记：媒体页 titlebar portal chrome 据此隐藏
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isExpanded) root.setAttribute("data-global-player-expanded", "true");
+    else root.removeAttribute("data-global-player-expanded");
+    return () => root.removeAttribute("data-global-player-expanded");
+  }, [isExpanded]);
+
   // 非全局可播项（含普通视频、仅武装未 handoff 的视频）不渲染播放器 UI
   if (!currentMedia || !globalPlayable) return null;
 
@@ -768,6 +776,7 @@ export default function GlobalMusicPlayer() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
+            data-global-music-ui
             className="fixed z-[100] top-24 right-6 w-16 h-16 rounded-full border border-app-border/40 shadow-2xl overflow-hidden cursor-move group bg-black/40 backdrop-blur-sm"
           >
             <AudioCover
@@ -814,7 +823,8 @@ export default function GlobalMusicPlayer() {
       {!isMiniMode &&
         typeof document !== "undefined" &&
         createPortal(
-        <div 
+        <div
+        data-global-music-ui
         className={cn(
           "z-40 bg-app-elevated dark:bg-[#181824] border border-app-border/60 shadow-xl select-none transition-all duration-300 overflow-hidden",
           // 移动：贴左右；桌面：约 1/3 宽并水平居中
@@ -1064,20 +1074,23 @@ export default function GlobalMusicPlayer() {
             {showQueue && (
               <>
                 <div
+                  data-global-music-ui
                   className={cn(
                     "fixed inset-0",
-                    isExpanded ? "z-[125] bg-black/50" : "z-40",
+                    isExpanded ? "z-[165] bg-black/50" : "z-40",
                   )}
                   onClick={() => setShowQueue(false)}
                 />
                 <motion.div
+                  data-global-music-ui
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 20 }}
                   className={cn(
                     "fixed flex flex-col overflow-hidden shadow-2xl",
                     isExpanded
-                      ? "z-[130] left-0 right-0 bottom-0 max-h-[70vh] rounded-t-3xl bg-[#12121a] border-t border-white/10 p-4 text-white"
+                      ? // 与全屏播放器同宽：移动全宽贴底，桌面 1/3 宽水平居中
+                        "z-[170] left-0 right-0 bottom-0 max-h-[70vh] mx-auto w-full md:w-1/3 md:min-w-[340px] md:max-w-[440px] rounded-t-3xl bg-[#12121a] border-t border-white/10 p-4 text-white"
                       : "z-[60] bottom-24 right-6 w-80 max-h-[350px] rounded-2xl bg-app-elevated dark:bg-[#181824] border border-app-border/80 p-4",
                   )}
                 >
@@ -1194,18 +1207,41 @@ export default function GlobalMusicPlayer() {
         )}
 
       {/* ----------------------------------------------------------------------- */}
-      {/* IMMERSIVE FULL-SCREEN PLAYER DRAWER — Portal 到 body，z 高于媒体页 + 号 */}
+      {/* IMMERSIVE FULL-SCREEN PLAYER DRAWER — Portal 到 body，z 高于媒体页 + 号
+          移动端：全屏；桌面 Web：宽度约 1/3 视口并水平居中（两侧半透明遮罩） */}
       {/* ----------------------------------------------------------------------- */}
       {typeof document !== "undefined" &&
         createPortal(
       <AnimatePresence>
         {isExpanded && (
+          <>
+          {/* 桌面两侧遮罩：点击可收起；移动端不需要（播放器本身全屏） */}
           <motion.div
+            key="global-player-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            data-global-music-ui
+            className="fixed inset-0 z-[159] hidden md:block bg-black/55"
+            onClick={() => setIsExpanded(false)}
+            aria-hidden
+          />
+          <motion.div
+            key="global-player-panel"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 220 }}
-            className="fixed inset-0 z-[120] bg-[#0f0f15] text-white flex flex-col overflow-hidden select-none"
+            data-global-music-ui
+            className={cn(
+              "fixed z-[160] bg-[#0f0f15] text-white flex flex-col overflow-hidden select-none",
+              // 移动：全屏
+              "inset-0",
+              // 桌面：宽度 1/3 视口、水平居中（left+right+mx-auto，避免与 framer y transform 冲突）
+              "md:inset-y-0 md:left-0 md:right-0 md:mx-auto",
+              "md:w-1/3 md:min-w-[340px] md:max-w-[440px]",
+              "md:shadow-2xl md:border-x md:border-white/10",
+            )}
           >
             {/* Blurry Colorful Cover Art Background */}
             <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
@@ -1244,16 +1280,16 @@ export default function GlobalMusicPlayer() {
               </button>
             </div>
 
-            {/* Main Immersive Core：移动端标题+歌词占中部；桌面左碟右信息 */}
-            <div className="relative z-10 flex-1 flex flex-col lg:flex-row items-stretch lg:items-center justify-center px-4 pt-3 pb-2 sm:p-6 gap-3 lg:gap-8 max-w-5xl mx-auto w-full min-h-0 overflow-hidden">
+            {/* Main Immersive Core：窄栏统一纵向布局（桌面 1/3 宽不再左右分栏） */}
+            <div className="relative z-10 flex-1 flex flex-col items-stretch justify-center px-4 pt-3 pb-2 sm:p-6 gap-3 w-full min-h-0 overflow-hidden">
               
-              {/* Left / Top: Rotating Disc — 移动端缩小，给歌词留空间 */}
-              <div className="flex flex-col items-center justify-center shrink-0 lg:flex-1 max-w-md w-full">
-                <div className="relative w-28 h-28 sm:w-40 sm:h-40 md:w-52 md:h-52 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-full bg-black border-4 border-zinc-900 shadow-2xl flex items-center justify-center select-none">
+              {/* Top: Rotating Disc */}
+              <div className="flex flex-col items-center justify-center shrink-0 w-full max-w-md mx-auto">
+                <div className="relative w-28 h-28 sm:w-40 sm:h-40 md:w-44 md:h-44 rounded-full bg-black border-4 border-zinc-900 shadow-2xl flex items-center justify-center select-none">
                   {/* Vinyl grooves styling */}
                   <div className="absolute inset-2 rounded-full border border-white/5 opacity-40 pointer-events-none" />
                   <div className="absolute inset-6 rounded-full border border-white/5 opacity-30 pointer-events-none hidden sm:block" />
-                  <div className="absolute inset-12 rounded-full border border-white/5 opacity-35 pointer-events-none hidden md:block" />
+                  <div className="absolute inset-10 rounded-full border border-white/5 opacity-35 pointer-events-none hidden md:block" />
 
                   {/* Album Cover Circle */}
                   <div className="relative w-[62%] h-[62%] rounded-full overflow-hidden border-2 border-zinc-800 shadow-lg">
@@ -1268,14 +1304,14 @@ export default function GlobalMusicPlayer() {
                   </div>
                   
                   {/* Center pin hole */}
-                  <div className="absolute w-5 h-5 lg:w-8 lg:h-8 bg-zinc-950 rounded-full border-2 border-zinc-800 flex items-center justify-center shadow-inner">
-                    <div className="w-1.5 h-1.5 lg:w-2.5 lg:h-2.5 bg-zinc-800 rounded-full" />
+                  <div className="absolute w-5 h-5 bg-zinc-950 rounded-full border-2 border-zinc-800 flex items-center justify-center shadow-inner">
+                    <div className="w-1.5 h-1.5 bg-zinc-800 rounded-full" />
                   </div>
                 </div>
 
-                {/* 移动端标题贴封面下 */}
-                <div className="mt-3 text-center lg:hidden w-full px-2">
-                  <h2 className="text-base font-extrabold text-white tracking-tight line-clamp-1">
+                {/* 标题贴封面下 */}
+                <div className="mt-3 text-center w-full px-2">
+                  <h2 className="text-base sm:text-lg font-extrabold text-white tracking-tight line-clamp-2">
                     {currentMedia.title}
                   </h2>
                   <p className="text-xs font-semibold text-white/55 mt-0.5 truncate">
@@ -1284,8 +1320,8 @@ export default function GlobalMusicPlayer() {
                 </div>
               </div>
 
-              {/* 歌词区：移动端 flex-1；桌面在右栏标题下 */}
-              <div className="flex-1 min-h-0 flex flex-col w-full max-w-md mx-auto lg:hidden">
+              {/* 歌词区 */}
+              <div className="flex-1 min-h-0 flex flex-col w-full max-w-md mx-auto">
                 <MediaLyrics
                   lines={currentMedia.type === "audio" ? id3Meta?.lyrics : undefined}
                   plain={currentMedia.type === "audio" ? id3Meta?.lyricsPlain : undefined}
@@ -1298,32 +1334,8 @@ export default function GlobalMusicPlayer() {
                 />
               </div>
 
-              {/* Right Column: Song Info & Big Controls */}
-              <div className="flex flex-col justify-end lg:justify-center w-full max-w-md gap-3 lg:gap-6 shrink-0 lg:flex-1 lg:min-h-0">
-                
-                {/* Details — 桌面显示完整标题 */}
-                <div className="text-center lg:text-left hidden lg:block">
-                  <h2 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight line-clamp-2">
-                    {currentMedia.title}
-                  </h2>
-                  <p className="text-sm font-semibold text-white/60 mt-1 lg:mt-2">
-                    {[displayArtist || "未知歌手", displayAlbum].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-
-                {/* 桌面歌词 */}
-                <div className="hidden lg:block min-h-0 flex-1 max-h-[280px]">
-                  <MediaLyrics
-                    lines={currentMedia.type === "audio" ? id3Meta?.lyrics : undefined}
-                    plain={currentMedia.type === "audio" ? id3Meta?.lyricsPlain : undefined}
-                    currentTime={progressValue}
-                    className="h-full max-h-[280px]"
-                    onSeek={(t) => {
-                      triggerSeek(t);
-                      resumeMedia();
-                    }}
-                  />
-                </div>
+              {/* Controls */}
+              <div className="flex flex-col justify-end w-full max-w-md mx-auto gap-3 shrink-0">
 
                 {/* Progress bar */}
                 <div className="flex flex-col gap-2">
@@ -1418,6 +1430,7 @@ export default function GlobalMusicPlayer() {
 
             </div>
           </motion.div>
+          </>
         )}
       </AnimatePresence>,
           document.body,
