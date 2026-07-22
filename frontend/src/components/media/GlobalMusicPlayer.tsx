@@ -8,7 +8,7 @@ import {
   getCachedMediaPlayUrl,
   cacheMediaPlayUrl,
 } from "@/store/mediaStore";
-import { api } from "@/lib/api";
+import { api, resolveAttachmentUrl } from "@/lib/api";
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, 
   Volume2, VolumeX, ListMusic, ChevronDown, Music, Loader2, X, Minimize2 
@@ -32,6 +32,7 @@ export default function GlobalMusicPlayer() {
   /** 节流：锁屏进度约 1s 推一次，避免刷爆原生侧 */
   const lastNativePosPush = useRef<number>(0);
   const lastNativePosValue = useRef<number>(0);
+  const lastNativeMediaId = useRef<string | null>(null);
   
   const {
     isPlaying,
@@ -131,6 +132,11 @@ export default function GlobalMusicPlayer() {
   useEffect(() => {
     if (!currentMedia || !isGlobalPlayerItem(currentMedia)) {
       setPlayUrl("");
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
+      }
       return;
     }
 
@@ -139,12 +145,19 @@ export default function GlobalMusicPlayer() {
     setLoading(true);
     setError("");
 
+    // 切歌瞬间：立刻将 playUrl 设为缓存直链（若有）或空，同时停止并卸载旧曲目 <audio>，防止在新直链请求期间重复起播旧曲 A
+    const cached = getCachedMediaPlayUrl(mediaId);
+    setPlayUrl(cached || "");
+    if (!cached && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute("src");
+      audioRef.current.load();
+    }
+
     async function fetchPlayUrl() {
       try {
-        const cached = getCachedMediaPlayUrl(mediaId);
         if (cached) {
           if (!active) return;
-          setPlayUrl(cached);
           setLoading(false);
         }
 
@@ -159,9 +172,9 @@ export default function GlobalMusicPlayer() {
         }
       } catch (err: any) {
         if (!active) return;
-        const cached = getCachedMediaPlayUrl(mediaId);
-        if (cached) {
-          setPlayUrl(cached);
+        const hit = getCachedMediaPlayUrl(mediaId);
+        if (hit) {
+          setPlayUrl(hit);
         } else {
           setError(err.message || "获取播放链接失败，请检查 Alist 配置");
         }
@@ -439,15 +452,37 @@ export default function GlobalMusicPlayer() {
         ? audioDur
         : duration || currentMedia.duration || 0,
     );
+    // 切歌时重置原生位置缓存
+    if (currentMedia.id !== lastNativeMediaId.current) {
+      lastNativeMediaId.current = currentMedia.id;
+      lastNativePosValue.current = 0;
+    }
+
+    // 若算出的 pos 为 0，但上一次已有进度 (>3s)，说明音频刚起播/续播尚未加载出 currentTime，避免传 0 冲掉原生已有进度
+    const pushPos =
+      pos > 0 ? pos : lastNativePosValue.current > 3 ? undefined : pos;
+
+    // 尝试解析封面（支持 ID3 解析封面与 DB 封面）
+    const rawCover = id3Cover || id3Meta?.coverUrl || currentMedia.cover_url;
+    const resolvedCover = rawCover
+      ? (rawCover.startsWith("/") && !rawCover.startsWith("/api")
+          ? `${window.location.origin}${rawCover}`
+          : resolveAttachmentUrl(rawCover))
+      : undefined;
+
     void updateNativeMediaSession({
       title: currentMedia.title || "未知曲目",
       artist: artistLabel,
       isPlaying,
-      position: pos,
+      position: pushPos,
       duration: dur > 0 ? dur : undefined,
+      playMode,
+      coverUrl: resolvedCover,
     });
     lastNativePosPush.current = Date.now();
-    lastNativePosValue.current = pos;
+    if (pos > 0) {
+      lastNativePosValue.current = pos;
+    }
 
     if (!("mediaSession" in navigator)) {
       return;
@@ -499,7 +534,7 @@ export default function GlobalMusicPlayer() {
       setHandler("nexttrack", null);
       setHandler("seekto", null);
     };
-  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, currentMedia?.audioOnly, currentMedia?.duration, isVideoAudioOnly, id3Meta?.artist, id3Meta?.album, coverToUse, isPlaying, duration, resumeMedia, pauseMedia, prevMedia, nextMedia, setCurrentTime]);
+  }, [currentMedia?.id, currentMedia?.title, currentMedia?.artist, currentMedia?.album, currentMedia?.audioOnly, currentMedia?.duration, isVideoAudioOnly, id3Meta?.artist, id3Meta?.album, coverToUse, isPlaying, duration, playMode, resumeMedia, pauseMedia, prevMedia, nextMedia, setCurrentTime]);
   // 注意：currentTime 不进 deps，避免每帧 startForeground；进度用下面节流 effect
 
   // 无全局可播且未武装视频后台仅听时停止 FGS
@@ -540,13 +575,21 @@ export default function GlobalMusicPlayer() {
         nextMedia(false);
       } else if (action === "prev") {
         prevMedia();
+      } else if (action === "mode") {
+        const nextModeMap: Record<PlayMode, PlayMode> = {
+          sequence: "random",
+          random: "loop",
+          loop: "sequence",
+        };
+        const currentMode = useMediaStore.getState().playMode;
+        setPlayMode(nextModeMap[currentMode] || "sequence");
       } else if (action === "stop") {
         pauseMedia();
         if (audio && !audio.paused) audio.pause();
         void stopNativeMediaSession();
       }
     });
-  }, [resumeMedia, pauseMedia, nextMedia, prevMedia]);
+  }, [resumeMedia, pauseMedia, nextMedia, prevMedia, setPlayMode]);
 
   // 锁屏拖动进度
   useEffect(() => {
@@ -602,9 +645,13 @@ export default function GlobalMusicPlayer() {
     const minInterval = isPlaying && !jumped ? 900 : 0;
     if (now - lastNativePosPush.current < minInterval) return;
     lastNativePosPush.current = now;
-    lastNativePosValue.current = pos;
+    if (pos > 0) {
+      lastNativePosValue.current = pos;
+    }
+    const pushPos =
+      pos > 0 ? pos : lastNativePosValue.current > 3 ? undefined : pos;
     void updateNativeMediaPosition({
-      position: pos,
+      position: pushPos,
       duration: dur > 0 ? dur : undefined,
       isPlaying,
     });

@@ -1,8 +1,8 @@
 /**
- * 全屏播放器歌词面板：同步歌词高亮 + 自动居中滚动；纯文本可滚动只读。
+ * 全屏播放器歌词面板：同步歌词高亮 + 正在唱的这行平滑置顶在第一行。
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { findActiveLyricIndex, type LyricLine } from "@/lib/id3";
+import { findActiveLyricIndex, parseLrcText, type LyricLine } from "@/lib/id3";
 import { cn } from "@/lib/utils";
 
 export interface MediaLyricsProps {
@@ -26,7 +26,16 @@ export default function MediaLyrics({
   const userScrollUntil = useRef(0);
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  const synced = !!(lines && lines.length > 0);
+  // 尝试从纯文本解析 LRC 时间轴（当没传结构化 lines 时）
+  const parsedFromPlain = useMemo(() => {
+    if (lines && lines.length > 0) return null;
+    if (!plain) return null;
+    return parseLrcText(plain);
+  }, [lines, plain]);
+
+  const effectiveLines = lines && lines.length > 0 ? lines : parsedFromPlain;
+  const synced = !!(effectiveLines && effectiveLines.length > 0);
+
   const plainLines = useMemo(() => {
     if (synced) return [];
     if (!plain) return [];
@@ -38,29 +47,35 @@ export default function MediaLyrics({
 
   // 跟拍当前句
   useEffect(() => {
-    if (!synced || !lines) {
+    if (!synced || !effectiveLines) {
       setActiveIndex(-1);
       return;
     }
-    const idx = findActiveLyricIndex(lines, currentTime);
+    const idx = findActiveLyricIndex(effectiveLines, currentTime);
     setActiveIndex(idx);
-  }, [synced, lines, currentTime]);
+  }, [synced, effectiveLines, currentTime]);
 
-  // 自动滚到当前句（用户手动滑动后短暂停跟滚）
+  // 自动置顶滚动：当前正在唱的一句始终平滑滑动到第一行（容器顶部）
   useEffect(() => {
     if (!synced || activeIndex < 0) return;
     if (Date.now() < userScrollUntil.current) return;
+    const container = scrollRef.current;
     const el = lineRefs.current[activeIndex];
-    if (!el) return;
+    if (!container || !el) return;
+
     try {
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      const targetTop = el.offsetTop - container.offsetTop;
+      container.scrollTo({
+        top: Math.max(0, targetTop - 12),
+        behavior: "smooth",
+      });
     } catch {
-      /* ignore */
+      /* ignore fallback */
     }
   }, [activeIndex, synced]);
 
   const markUserScroll = () => {
-    userScrollUntil.current = Date.now() + 3000;
+    userScrollUntil.current = Date.now() + 3500;
   };
 
   if (!synced && plainLines.length === 0) {
@@ -87,9 +102,9 @@ export default function MediaLyrics({
       onWheel={markUserScroll}
       onPointerDown={markUserScroll}
     >
-      <div className="flex flex-col items-center gap-3 py-8">
-        {synced && lines
-          ? lines.map((line, i) => {
+      <div className="flex flex-col items-center gap-3.5 py-6">
+        {synced && effectiveLines
+          ? effectiveLines.map((line, i) => {
               const active = i === activeIndex;
               const near = Math.abs(i - activeIndex) <= 1;
               return (
@@ -103,13 +118,13 @@ export default function MediaLyrics({
                     if (onSeek && line.time >= 0) onSeek(line.time);
                   }}
                   className={cn(
-                    "w-full max-w-md text-center px-3 py-1.5 rounded-lg transition-all duration-200",
+                    "w-full max-w-md text-center px-4 py-2 rounded-xl transition-all duration-300",
                     active
-                      ? "text-white text-[17px] font-semibold scale-[1.02]"
+                      ? "text-amber-300 text-[18px] font-extrabold scale-[1.03] bg-amber-400/10 shadow-sm border border-amber-400/20"
                       : near
-                        ? "text-white/55 text-[14px] font-medium"
-                        : "text-white/30 text-[13px]",
-                    onSeek && "active:bg-white/5 cursor-pointer",
+                        ? "text-white/75 text-[15px] font-medium"
+                        : "text-white/40 text-[13.5px]",
+                    onSeek && "active:bg-white/10 cursor-pointer",
                     !onSeek && "cursor-default",
                   )}
                 >
