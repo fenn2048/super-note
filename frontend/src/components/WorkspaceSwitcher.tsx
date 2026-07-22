@@ -60,17 +60,49 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
   } | null>(null);
   const { menu, menuRef, openMenu, closeMenu } = useContextMenu();
 
-  const loadWorkspaces = async () => {
+  const loadWorkspaces = async (opts?: { autoSelect?: boolean }) => {
+    const autoSelect = opts?.autoSelect !== false;
     try {
       const list = await api.getWorkspaces();
       setWorkspaces(list);
+      // 有工作区但未选中 / 选中 id 已失效 → 自动选第一个
+      if (autoSelect && list.length > 0) {
+        const stored = getCurrentWorkspace();
+        const valid = stored && list.some((w) => w.id === stored);
+        if (!valid) {
+          const nextId = list[0].id;
+          setCurrent(nextId);
+          setCurrentWorkspace(nextId);
+          onWorkspaceChange?.(nextId);
+          window.dispatchEvent(
+            new CustomEvent("super:workspace-changed", {
+              detail: { workspaceId: nextId },
+            }),
+          );
+        } else {
+          setCurrent(stored);
+        }
+      }
     } catch (e: any) {
       console.error("[WorkspaceSwitcher] load failed", e);
     }
   };
 
   useEffect(() => {
-    loadWorkspaces();
+    void loadWorkspaces({ autoSelect: true });
+    // 外部切换（App 自动选中、FirstRunWizard 等）时同步按钮展示；不再次 autoSelect 避免环
+    const onExternal = (e: Event) => {
+      const id = (e as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId;
+      if (typeof id === "string") {
+        setCurrent(id || getCurrentWorkspace());
+      } else {
+        setCurrent(getCurrentWorkspace());
+      }
+      void loadWorkspaces({ autoSelect: false });
+    };
+    window.addEventListener("super:workspace-changed", onExternal);
+    return () => window.removeEventListener("super:workspace-changed", onExternal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap
   }, []);
 
   // 系统管理员（users.role='admin'）：可对任意工作区右键编辑/删除——后端中间件已对其旁路。

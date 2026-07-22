@@ -392,9 +392,13 @@ export default function Dashboard() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [creating, setCreating] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  /** 当前工作区 id（state 化，监听切换事件，避免仅读 localStorage 时 UI 不刷新） */
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState(() => getCurrentWorkspace());
 
-  const currentWorkspaceId = getCurrentWorkspace();
-  const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId) || (workspaces.length > 0 ? workspaces[0] : null);
+  const currentWorkspace =
+    (currentWorkspaceId
+      ? workspaces.find((w) => w.id === currentWorkspaceId)
+      : null) || null;
 
   const hasWorkspaces = workspaces.length > 0;
   const hasFamilyGroup = workspaces.some(w => w.name === "我的家庭" || w.icon === "🏠" || w.name.includes("家庭"));
@@ -446,6 +450,7 @@ export default function Dashboard() {
 
       // 切换到新工作区
       setCurrentWorkspace(ws.id);
+      setCurrentWorkspaceId(ws.id);
       window.dispatchEvent(new CustomEvent("super:workspace-changed", { detail: { workspaceId: ws.id } }));
 
       toast.success("家庭空间创建成功！邀请家人加入吧");
@@ -495,7 +500,11 @@ export default function Dashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
-    const handleWorkspaceChanged = () => {
+    const handleWorkspaceChanged = (e: Event) => {
+      const id = (e as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId;
+      setCurrentWorkspaceId(
+        typeof id === "string" ? id : getCurrentWorkspace(),
+      );
       api.getWorkspaces().then(setWorkspaces).catch(() => {});
       loadDashboard();
     };
@@ -677,7 +686,11 @@ export default function Dashboard() {
                   {greeting} {currentUser?.displayName || currentUser?.username || ""} 👋
                 </h1>
                 <p className="text-xs sm:text-sm text-tx-tertiary mt-1">
-                  {hasWorkspaces ? "选择一个空间开始协作" : "目前只有你一个人，创建家庭空间邀请家人吧"}
+                  {currentWorkspace
+                    ? `当前空间：${[currentWorkspace.icon, currentWorkspace.name].filter(Boolean).join(" ")}`
+                    : hasWorkspaces
+                      ? "选择一个空间开始协作"
+                      : "目前只有你一个人，创建家庭空间邀请家人吧"}
                 </p>
               </div>
             </div>

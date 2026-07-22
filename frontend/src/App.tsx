@@ -41,7 +41,7 @@ import { ConfirmProvider, prompt as appPrompt } from "@/components/ui/confirm";
 import { toast } from "@/lib/toast";
 import Toaster from "@/components/Toaster";
 import { User, ViewMode } from "@/types";
-import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
+import { api, getServerUrl, clearServerUrl, broadcastLogout, getCurrentWorkspace, setCurrentWorkspace } from "@/lib/api";
 import {
   getAuthCacheScope,
   saveCachedAuthUser,
@@ -1057,7 +1057,7 @@ function AppLayout() {
     };
   }, [quickCreateNote]);
 
-  // ── 工作区切换：清空当前会话态，回到空态页 ──────────────────────────
+  // ── 工作区切换：清空笔记会话态，按需回到笔记列表 ───────────────────
   //
   // WorkspaceSwitcher 切换后会广播 "super:workspace-changed"。之前只有 Sidebar /
   // FileManager / DiaryCenter / MindMap 自己监听并各自重拉，但
@@ -1068,27 +1068,21 @@ function AppLayout() {
   //   2) 上一次选中的 notebookId / tagId 仍在 state 中，下一次"快速新建"会
   //      把新笔记塞到不属于当前空间的笔记本里（后端已拒，但 UX 很糟）。
   //
-  // 切换工作区是一次强隔离事件，正确的交互是：**回到"选择一条笔记开始编辑
-  // / Alt+N 快速新建"空态页**。因此这里统一做：
-  //   - activeNote = null      → EditorPane 渲染空态
-  //   - notes = []             → 避免旧空间的列表残留（后续 refresh 会填）
-  //   - selectedNotebookId/Tag = null
-  //   - viewMode = "all"       → 回到"所有笔记"默认视图
-  //   - mobileView = "list"    → 移动端从编辑页退回列表页
-  //   - searchQuery = ""       → 搜索词也一并清掉，避免跨空间的语义错位
-  //   - refreshNotes/Notebooks → 触发重拉，让 Sidebar/NoteList 拿到新空间数据
-  //
-  // 注：notebooks/tags 本身由 Sidebar 监听同一事件重拉，这里不重复；但我们
-  //     显式调用 refreshNotebooks 以统一触发一次订阅刷新，保持一致性。
+  // 切换工作区是一次强隔离事件：清理笔记选择/筛选并 refresh。
+  // 仅当当前已在笔记相关 view 时才强制回到「所有笔记」列表空态；
+  // 在首页 / 说说 / 项目等页面切换工作区应留在原地，只刷新数据。
   useEffect(() => {
+    const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
     const onWorkspaceChanged = () => {
       actions.setActiveNote(null);
       actions.setNotes([]);
       actions.setSelectedNotebook(null);
       actions.setSelectedTag(null);
-      actions.setViewMode("all");
-      actions.setMobileView("list");
       actions.setSearchQuery("");
+      if (notesViewModes.includes(viewModeRef.current)) {
+        actions.setViewMode("all");
+        actions.setMobileView("list");
+      }
       actions.refreshNotes();
       actions.refreshNotebooks();
     };
@@ -1238,6 +1232,18 @@ function AppLayout() {
       setHasFamilySpace(has);
       if (!has) {
         localStorage.removeItem("super-current-workspace");
+        return;
+      }
+      // 有工作区但未选中 / 选中 id 已失效 → 自动选第一个（首次登录、登出后重登）
+      const current = getCurrentWorkspace();
+      const valid = current && list.some((w) => w.id === current);
+      if (!valid) {
+        setCurrentWorkspace(list[0].id);
+        window.dispatchEvent(
+          new CustomEvent("super:workspace-changed", {
+            detail: { workspaceId: list[0].id },
+          }),
+        );
       }
     }).catch(() => {
       if (cancelled) return;
