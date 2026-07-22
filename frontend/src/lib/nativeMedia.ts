@@ -2,7 +2,7 @@
  * Android 音频前台服务（MediaPlayback 插件）
  * 与 GlobalMusicPlayer 的 HTMLAudio + mediaSession 互补：
  *   - Web mediaSession：部分机型锁屏可用
- *   - 本插件：FGS mediaPlayback + 通知栏按钮，后台不易被杀
+ *   - 本插件：FGS mediaPlayback + 通知栏按钮 + MediaSession 进度
  */
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { isNativePlatform } from "@/hooks/useCapacitor";
@@ -14,11 +14,25 @@ interface MediaPlaybackPlugin {
     title: string;
     artist?: string;
     isPlaying: boolean;
+    /** 当前进度（秒） */
+    position?: number;
+    /** 总时长（秒） */
+    duration?: number;
+  }): Promise<{ ok: boolean }>;
+  /** 高频进度刷新（秒） */
+  updatePosition(opts: {
+    position: number;
+    duration?: number;
+    isPlaying?: boolean;
   }): Promise<{ ok: boolean }>;
   stop(): Promise<{ ok: boolean }>;
   addListener(
     eventName: "mediaAction",
     listener: (ev: { action: MediaAction }) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "mediaSeek",
+    listener: (ev: { position: number }) => void,
   ): Promise<PluginListenerHandle>;
 }
 
@@ -36,6 +50,8 @@ export async function updateNativeMediaSession(opts: {
   title: string;
   artist?: string;
   isPlaying: boolean;
+  position?: number;
+  duration?: number;
 }): Promise<void> {
   const p = getPlugin();
   if (!p) return;
@@ -44,9 +60,30 @@ export async function updateNativeMediaSession(opts: {
       title: opts.title || "未知曲目",
       artist: opts.artist || "",
       isPlaying: opts.isPlaying,
+      position: opts.position,
+      duration: opts.duration,
     });
   } catch (e) {
     console.warn("[nativeMedia] update failed", e);
+  }
+}
+
+/** 锁屏进度条：节流调用，仅推送 position/duration */
+export async function updateNativeMediaPosition(opts: {
+  position: number;
+  duration?: number;
+  isPlaying?: boolean;
+}): Promise<void> {
+  const p = getPlugin();
+  if (!p) return;
+  try {
+    await p.updatePosition({
+      position: Math.max(0, opts.position || 0),
+      duration: opts.duration,
+      isPlaying: opts.isPlaying,
+    });
+  } catch (e) {
+    console.warn("[nativeMedia] updatePosition failed", e);
   }
 }
 
@@ -69,6 +106,28 @@ export function subscribeNativeMediaActions(
   void p
     .addListener("mediaAction", (ev) => {
       if (ev?.action) onAction(ev.action);
+    })
+    .then((h) => {
+      handle = h;
+    })
+    .catch(() => {});
+  return () => {
+    void handle?.remove();
+  };
+}
+
+/** 锁屏拖动进度（秒） */
+export function subscribeNativeMediaSeek(
+  onSeek: (positionSec: number) => void,
+): () => void {
+  const p = getPlugin();
+  if (!p) return () => {};
+  let handle: PluginListenerHandle | null = null;
+  void p
+    .addListener("mediaSeek", (ev) => {
+      if (ev && typeof ev.position === "number" && Number.isFinite(ev.position)) {
+        onSeek(ev.position);
+      }
     })
     .then((h) => {
       handle = h;

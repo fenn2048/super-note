@@ -31,8 +31,23 @@ public final class NotificationChannels {
                 NotificationManager.IMPORTANCE_HIGH, true, true);
         create(nm, TASKS, "任务提醒", "任务截止与提醒时间到点通知",
                 NotificationManager.IMPORTANCE_HIGH, true, true);
-        create(nm, MEDIA, "媒体播放", "音频播放与媒体控件",
-                NotificationManager.IMPORTANCE_LOW, false, false);
+        // 媒体通道：锁屏可见 + 默认优先级，便于系统 MediaStyle 控件展示。
+        // 若旧版以 IMPORTANCE_LOW 建过同 id，系统不会更新属性 → 先删再建。
+        try {
+            nm.deleteNotificationChannel(MEDIA);
+        } catch (Exception ignored) {
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel media = new NotificationChannel(
+                    MEDIA, "媒体播放", NotificationManager.IMPORTANCE_DEFAULT);
+            media.setDescription("音频播放与锁屏/通知栏媒体控件");
+            media.enableLights(false);
+            media.enableVibration(false);
+            media.setShowBadge(false);
+            media.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
+            media.setSound(null, null);
+            nm.createNotificationChannel(media);
+        }
 
         // 删除旧版粗粒度渠道（若存在），避免设置页里两套名字
         try {

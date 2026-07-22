@@ -13,6 +13,7 @@ import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -65,6 +66,43 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleIncomingIntent(intent);
+    }
+
+    /**
+     * Capacitor Bridge 在 onPause 里会 WebView.onPause()，连带暂停 HTMLMediaElement。
+     * 全局音乐 / 视频仅听依赖 WebView 内 &lt;audio&gt; 解码，退后台会静音。
+     * 媒体前台服务活跃时立刻 resume WebView，保持音频管线。
+     */
+    @Override
+    public void onPause() {
+        super.onPause();
+        keepWebViewMediaAliveIfNeeded();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // 部分 ROM 在 onStop 再次挂起 WebView，再补一次
+        keepWebViewMediaAliveIfNeeded();
+    }
+
+    private void keepWebViewMediaAliveIfNeeded() {
+        if (!MediaPlaybackService.isActive()) return;
+        try {
+            if (this.bridge == null) return;
+            WebView wv = this.bridge.getWebView();
+            if (wv == null) return;
+            wv.post(() -> {
+                try {
+                    wv.resumeTimers();
+                    wv.onResume();
+                } catch (Exception e) {
+                    Log.w(TAG, "keepWebViewMediaAlive resume failed", e);
+                }
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "keepWebViewMediaAlive", e);
+        }
     }
 
     private void handleIncomingIntent(Intent intent) {
