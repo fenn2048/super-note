@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover, useID3Cover } from "@/lib/id3";
+import MediaLyrics from "@/components/media/MediaLyrics";
 import {
   stopNativeMediaSession,
   subscribeNativeMediaActions,
@@ -53,6 +54,7 @@ export default function GlobalMusicPlayer() {
     setPlayMode,
     seekTime,
     resetSeek,
+    triggerSeek,
     playMedia,
     removeFromPlaylist,
     clearPlaylist,
@@ -1195,50 +1197,85 @@ export default function GlobalMusicPlayer() {
               </button>
             </div>
 
-            {/* Main Immersive Core */}
-            <div className="relative z-10 flex-1 flex flex-col lg:flex-row items-center justify-center p-6 gap-8 max-w-5xl mx-auto w-full min-h-0 overflow-y-auto">
+            {/* Main Immersive Core：移动端标题+歌词占中部；桌面左碟右信息 */}
+            <div className="relative z-10 flex-1 flex flex-col lg:flex-row items-stretch lg:items-center justify-center px-4 pt-3 pb-2 sm:p-6 gap-3 lg:gap-8 max-w-5xl mx-auto w-full min-h-0 overflow-hidden">
               
-              {/* Left Column: Big Rotating Disc */}
-              <div className="flex-1 flex flex-col items-center justify-center max-w-md w-full">
-                <div className="relative w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 rounded-full bg-black border-4 border-zinc-900 shadow-2xl flex items-center justify-center select-none">
+              {/* Left / Top: Rotating Disc — 移动端缩小，给歌词留空间 */}
+              <div className="flex flex-col items-center justify-center shrink-0 lg:flex-1 max-w-md w-full">
+                <div className="relative w-28 h-28 sm:w-40 sm:h-40 md:w-52 md:h-52 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-full bg-black border-4 border-zinc-900 shadow-2xl flex items-center justify-center select-none">
                   {/* Vinyl grooves styling */}
                   <div className="absolute inset-2 rounded-full border border-white/5 opacity-40 pointer-events-none" />
-                  <div className="absolute inset-6 rounded-full border border-white/5 opacity-30 pointer-events-none" />
-                  <div className="absolute inset-12 rounded-full border border-white/5 opacity-35 pointer-events-none" />
-                  <div className="absolute inset-20 rounded-full border border-white/5 opacity-25 pointer-events-none" />
-                  <div className="absolute inset-28 rounded-full border border-white/5 opacity-20 pointer-events-none" />
-                  <div className="absolute inset-36 rounded-full border border-white/5 opacity-15 pointer-events-none" />
+                  <div className="absolute inset-6 rounded-full border border-white/5 opacity-30 pointer-events-none hidden sm:block" />
+                  <div className="absolute inset-12 rounded-full border border-white/5 opacity-35 pointer-events-none hidden md:block" />
 
                   {/* Album Cover Circle */}
-                  <div className="relative w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 rounded-full overflow-hidden border-2 border-zinc-800 shadow-lg">
+                  <div className="relative w-[62%] h-[62%] rounded-full overflow-hidden border-2 border-zinc-800 shadow-lg">
                     <AudioCover 
                       item={currentMedia} 
                       className={cn(
                         "w-full h-full object-cover select-none media-disc-spin",
                         !isPlaying && "media-disc-spin-paused",
                       )}
-                      fallbackIconSize={64}
+                      fallbackIconSize={40}
                     />
                   </div>
                   
                   {/* Center pin hole */}
-                  <div className="absolute w-8 h-8 bg-zinc-950 rounded-full border-2 border-zinc-800 flex items-center justify-center shadow-inner">
-                    <div className="w-2.5 h-2.5 bg-zinc-800 rounded-full" />
+                  <div className="absolute w-5 h-5 lg:w-8 lg:h-8 bg-zinc-950 rounded-full border-2 border-zinc-800 flex items-center justify-center shadow-inner">
+                    <div className="w-1.5 h-1.5 lg:w-2.5 lg:h-2.5 bg-zinc-800 rounded-full" />
                   </div>
+                </div>
+
+                {/* 移动端标题贴封面下 */}
+                <div className="mt-3 text-center lg:hidden w-full px-2">
+                  <h2 className="text-base font-extrabold text-white tracking-tight line-clamp-1">
+                    {currentMedia.title}
+                  </h2>
+                  <p className="text-xs font-semibold text-white/55 mt-0.5 truncate">
+                    {[displayArtist || "未知歌手", displayAlbum].filter(Boolean).join(" · ")}
+                  </p>
                 </div>
               </div>
 
+              {/* 歌词区：移动端 flex-1；桌面在右栏标题下 */}
+              <div className="flex-1 min-h-0 flex flex-col w-full max-w-md mx-auto lg:hidden">
+                <MediaLyrics
+                  lines={currentMedia.type === "audio" ? id3Meta?.lyrics : undefined}
+                  plain={currentMedia.type === "audio" ? id3Meta?.lyricsPlain : undefined}
+                  currentTime={progressValue}
+                  className="flex-1"
+                  onSeek={(t) => {
+                    triggerSeek(t);
+                    resumeMedia();
+                  }}
+                />
+              </div>
+
               {/* Right Column: Song Info & Big Controls */}
-              <div className="flex-1 flex flex-col justify-center w-full max-w-md gap-6 lg:gap-8">
+              <div className="flex flex-col justify-end lg:justify-center w-full max-w-md gap-3 lg:gap-6 shrink-0 lg:flex-1 lg:min-h-0">
                 
-                {/* Details */}
-                <div className="text-center lg:text-left">
+                {/* Details — 桌面显示完整标题 */}
+                <div className="text-center lg:text-left hidden lg:block">
                   <h2 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight line-clamp-2">
                     {currentMedia.title}
                   </h2>
                   <p className="text-sm font-semibold text-white/60 mt-1 lg:mt-2">
                     {[displayArtist || "未知歌手", displayAlbum].filter(Boolean).join(" · ")}
                   </p>
+                </div>
+
+                {/* 桌面歌词 */}
+                <div className="hidden lg:block min-h-0 flex-1 max-h-[280px]">
+                  <MediaLyrics
+                    lines={currentMedia.type === "audio" ? id3Meta?.lyrics : undefined}
+                    plain={currentMedia.type === "audio" ? id3Meta?.lyricsPlain : undefined}
+                    currentTime={progressValue}
+                    className="h-full max-h-[280px]"
+                    onSeek={(t) => {
+                      triggerSeek(t);
+                      resumeMedia();
+                    }}
+                  />
                 </div>
 
                 {/* Progress bar */}
@@ -1262,7 +1299,7 @@ export default function GlobalMusicPlayer() {
                 </div>
 
                 {/* Core Control Buttons */}
-                <div className="flex items-center justify-between px-6">
+                <div className="flex items-center justify-between px-4 sm:px-6">
                   {/* Shuffle/Play mode */}
                   <button 
                     onClick={cyclePlayMode}
@@ -1287,7 +1324,7 @@ export default function GlobalMusicPlayer() {
                       e.stopPropagation();
                       isPlaying ? pauseMedia() : resumeMedia();
                     }}
-                    className="w-18 h-18 rounded-full bg-accent-primary hover:bg-accent-primary-hover text-white flex items-center justify-center shadow-lg shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all"
+                    className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-accent-primary hover:bg-accent-primary-hover text-white flex items-center justify-center shadow-lg shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all"
                   >
                     {loading ? (
                       <Loader2 size={24} className="animate-spin" />
@@ -1316,7 +1353,7 @@ export default function GlobalMusicPlayer() {
                 </div>
 
                 {/* Sub-controls: Immersive Volume Slider */}
-                <div className="flex items-center gap-3 px-4">
+                <div className="hidden sm:flex items-center gap-3 px-4 pb-[max(8px,env(safe-area-inset-bottom))]">
                   <VolumeX size={14} className="text-white/40" />
                   <input
                     type="range"
@@ -1329,6 +1366,7 @@ export default function GlobalMusicPlayer() {
                   />
                   <Volume2 size={14} className="text-white/40" />
                 </div>
+                <div className="sm:hidden h-[max(8px,env(safe-area-inset-bottom))]" />
               </div>
 
             </div>

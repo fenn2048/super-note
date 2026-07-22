@@ -34,12 +34,192 @@ function setId3MetaCache(itemId: string, meta: ID3Metadata) {
   notifyId3CacheUpdate();
 }
 
+/** 同步歌词行（秒） */
+export interface LyricLine {
+  time: number;
+  text: string;
+}
+
 export interface ID3Metadata {
   artist?: string;
   album?: string;
   title?: string;
   coverUrl?: string;
   coverBlob?: Blob;
+  /** 同步歌词（SYLT 或 USLT 内嵌 LRC）；有则 UI 跟拍高亮 */
+  lyrics?: LyricLine[];
+  /** 无时间轴的纯文本歌词 */
+  lyricsPlain?: string;
+}
+
+/**
+ * 解析 LRC 文本为同步歌词行。无有效时间戳返回 null。
+ * 支持 [mm:ss.xx] / [mm:ss.xxx] / [mm:ss]
+ */
+export function parseLrcText(raw: string): LyricLine[] | null {
+  if (!raw || !raw.trim()) return null;
+  const lines: LyricLine[] = [];
+  // 同一行可有多个时间戳：[00:01.00][00:02.00]text
+  const lineRe = /((?:\[\d{1,3}:\d{2}(?:\.\d{1,3})?\])+)\s*(.*)$/gm;
+  let m: RegExpExecArray | null;
+  const timeRe = /\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+  while ((m = lineRe.exec(raw)) !== null) {
+    const stampBlock = m[1];
+    const text = (m[2] || "").trim();
+    if (!text) continue;
+    timeRe.lastIndex = 0;
+    let tm: RegExpExecArray | null;
+    while ((tm = timeRe.exec(stampBlock)) !== null) {
+      const min = parseInt(tm[1], 10) || 0;
+      const sec = parseInt(tm[2], 10) || 0;
+      let frac = 0;
+      if (tm[3] != null) {
+        // .1 → 0.1, .12 → 0.12, .123 → 0.123
+        const f = tm[3].padEnd(3, "0").slice(0, 3);
+        frac = parseInt(f, 10) / 1000;
+      }
+      lines.push({ time: min * 60 + sec + frac, text });
+    }
+  }
+  if (lines.length === 0) return null;
+  lines.sort((a, b) => a.time - b.time);
+  return lines;
+}
+
+/** 当前播放时间对应的歌词行下标（最后一条 time <= t）；无匹配返回 -1 */
+export function findActiveLyricIndex(lines: LyricLine[], currentTime: number): number {
+  if (!lines.length) return -1;
+  const t = Number.isFinite(currentTime) ? currentTime : 0;
+  // 给一点提前量，避免字幕总感觉慢半拍
+  const look = t + 0.05;
+  let lo = 0;
+  let hi = lines.length - 1;
+  let ans = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (lines[mid].time <= look) {
+      ans = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return ans;
+}
+
+/** 读以 encoding 终止的描述串，返回描述结束之后的偏移 */
+function skipId3TerminatedString(
+  buffer: Uint8Array,
+  start: number,
+  end: number,
+  encoding: number,
+): number {
+  let p = start;
+  if (encoding === 0 || encoding === 3) {
+    // ISO-8859-1 / UTF-8：单 0 终止
+    while (p < end && buffer[p] !== 0) p++;
+    return Math.min(p + 1, end);
+  }
+  // UTF-16：双 0 终止
+  while (p + 1 < end && !(buffer[p] === 0 && buffer[p + 1] === 0)) {
+    p += 2;
+  }
+  return Math.min(p + 2, end);
+}
+
+/**
+ * USLT / ULT：encoding(1) + language(3) + content descriptor + lyrics text
+ */
+export function readUsLTFrame(
+  buffer: Uint8Array,
+  frameDataOffset: number,
+  frameSize: number,
+): { plain: string; lines: LyricLine[] | null } | null {
+  if (frameSize < 5) return null;
+  const encoding = buffer[frameDataOffset];
+  const end = frameDataOffset + frameSize;
+  // skip language 3 bytes
+  let p = frameDataOffset + 1 + 3;
+  if (p >= end) return null;
+  p = skipId3TerminatedString(buffer, p, end, encoding);
+  if (p >= end) return null;
+  const text = decodeId3Text(encoding, buffer.subarray(p, end));
+  if (!text) return null;
+  const lines = parseLrcText(text);
+  return { plain: text, lines };
+}
+
+/**
+ * SYLT / SLT：encoding + language(3) + timestampFormat + contentType + descriptor + entries
+ * timestampFormat: 1=MPEG frames（无采样率时降级 plain）, 2=milliseconds
+ */
+export function readSYLTFrame(
+  buffer: Uint8Array,
+  frameDataOffset: number,
+  frameSize: number,
+): { plain: string; lines: LyricLine[] | null } | null {
+  if (frameSize < 6) return null;
+  const encoding = buffer[frameDataOffset];
+  const end = frameDataOffset + frameSize;
+  let p = frameDataOffset + 1 + 3; // skip language
+  if (p + 2 > end) return null;
+  const timestampFormat = buffer[p];
+  p += 1;
+  // content type
+  p += 1;
+  p = skipId3TerminatedString(buffer, p, end, encoding);
+  if (p >= end) return null;
+
+  const lines: LyricLine[] = [];
+  const plainParts: string[] = [];
+
+  while (p < end) {
+    // sync text until terminator
+    const textStart = p;
+    if (encoding === 0 || encoding === 3) {
+      while (p < end && buffer[p] !== 0) p++;
+      const slice = buffer.subarray(textStart, p);
+      const text = decodeId3Text(encoding, slice);
+      p = Math.min(p + 1, end);
+      // 4-byte timestamp
+      if (p + 4 > end) break;
+      const ts =
+        ((buffer[p] << 24) | (buffer[p + 1] << 16) | (buffer[p + 2] << 8) | buffer[p + 3]) >>> 0;
+      p += 4;
+      if (text) {
+        plainParts.push(text);
+        if (timestampFormat === 2) {
+          lines.push({ time: ts / 1000, text });
+        }
+      }
+    } else {
+      while (p + 1 < end && !(buffer[p] === 0 && buffer[p + 1] === 0)) {
+        p += 2;
+      }
+      const slice = buffer.subarray(textStart, p);
+      const text = decodeId3Text(encoding, slice);
+      p = Math.min(p + 2, end);
+      if (p + 4 > end) break;
+      const ts =
+        ((buffer[p] << 24) | (buffer[p + 1] << 16) | (buffer[p + 2] << 8) | buffer[p + 3]) >>> 0;
+      p += 4;
+      if (text) {
+        plainParts.push(text);
+        if (timestampFormat === 2) {
+          lines.push({ time: ts / 1000, text });
+        }
+      }
+    }
+  }
+
+  if (lines.length > 0) {
+    lines.sort((a, b) => a.time - b.time);
+    return { plain: plainParts.join("\n"), lines };
+  }
+  if (plainParts.length > 0) {
+    return { plain: plainParts.join("\n"), lines: null };
+  }
+  return null;
 }
 
 export interface UseID3CoverOptions {
@@ -250,10 +430,43 @@ export async function getID3Metadata(url: string): Promise<ID3Metadata | null> {
         }
       }
 
+      // 歌词：SYLT 优先；无同步时用 USLT（可能内嵌 LRC）
+      const isSylt =
+        (isV2 && frameId === "SLT") || ((isV3 || isV4) && frameId === "SYLT");
+      const isUslt =
+        (isV2 && frameId === "ULT") || ((isV3 || isV4) && frameId === "USLT");
+
+      if (isSylt && !meta.lyrics) {
+        const sylt = readSYLTFrame(buffer, frameDataOffset, frameSize);
+        if (sylt?.lines && sylt.lines.length > 0) {
+          meta.lyrics = sylt.lines;
+          if (sylt.plain) meta.lyricsPlain = sylt.plain;
+        } else if (sylt?.plain && !meta.lyricsPlain) {
+          meta.lyricsPlain = sylt.plain;
+        }
+      }
+
+      if (isUslt && !meta.lyrics) {
+        const uslt = readUsLTFrame(buffer, frameDataOffset, frameSize);
+        if (uslt?.lines && uslt.lines.length > 0) {
+          meta.lyrics = uslt.lines;
+          if (uslt.plain) meta.lyricsPlain = uslt.plain;
+        } else if (uslt?.plain && !meta.lyricsPlain) {
+          meta.lyricsPlain = uslt.plain;
+        }
+      }
+
       offset += headerSize + frameSize;
     }
 
-    if (!meta.artist && !meta.album && !meta.coverUrl && !meta.title) {
+    if (
+      !meta.artist &&
+      !meta.album &&
+      !meta.coverUrl &&
+      !meta.title &&
+      !meta.lyrics &&
+      !meta.lyricsPlain
+    ) {
       return null;
     }
     return meta;
