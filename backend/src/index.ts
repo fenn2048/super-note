@@ -220,6 +220,25 @@ app.use("/api/auth/register", async (c, next) => {
   await next();
 });
 
+// 扫码登录 create：防止刷二维码
+app.use("/api/auth/qr/create", async (c, next) => {
+  const ip = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown";
+  const now = Date.now();
+  const windowMs = 60000;
+  const maxAttempts = 30;
+  const key = `qr:${ip}`;
+  const entry = authRateLimitMap.get(key);
+  if (entry && entry.resetAt > now) {
+    if (entry.count >= maxAttempts) {
+      return c.json({ error: "创建二维码过于频繁，请稍后再试" }, 429);
+    }
+    entry.count++;
+  } else {
+    authRateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+  }
+  await next();
+});
+
 // 认证路由（无需 JWT）
 app.route("/api/auth", authRouter);
 

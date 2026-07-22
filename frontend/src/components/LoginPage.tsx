@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Lock, User, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Lock, User, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, ChevronDown, ChevronUp, QrCode } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getServerUrl, setServerUrl, clearServerUrl, testServerConnection, fetchRegisterConfig, registerAccount } from "@/lib/api";
 import { buildServerUrl, parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
 import ServerAddressInput from "@/components/ServerAddressInput";
-import { useKeyboardLayout } from "@/hooks/useCapacitor";
+import { useKeyboardLayout, isNativePlatform } from "@/hooks/useCapacitor";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import BrandMark from "@/components/BrandMark";
 import {
@@ -14,6 +14,8 @@ import {
   clearRememberedCredentials,
   canPersistPassword,
 } from "@/lib/rememberLogin";
+import QrLoginPanel from "@/components/QrLoginPanel";
+import { normalizeServerOrigin } from "@/lib/qrLogin";
 
 interface LoginPageProps {
   onLogin: (token: string, user: any) => void;
@@ -23,11 +25,13 @@ interface LoginPageProps {
 }
 
 type Mode = "login" | "register";
-
-
+type LoginMethod = "password" | "qr";
 
 export default function LoginPage({ onLogin, isClientMode = false, onDisconnect }: LoginPageProps) {
   const [mode, setMode] = useState<Mode>("login");
+  /** 扫码登录仅桌面 Web / Electron；原生 App 已登录走扫一扫授权 */
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
+  const showQrOption = !isNativePlatform();
   // 登录页外层滚动容器 ref（软键盘适配用，见下方 useEffect）
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   // 登录页键盘适配 —— 直接复用全站既有的原生键盘事件链，**不要再自己用
@@ -608,7 +612,10 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             <div className="flex items-center gap-1 p-1 mb-5 rounded-xl bg-app-surface border border-app-border/70">
               <button
                 type="button"
-                onClick={() => switchMode("login")}
+                onClick={() => {
+                  switchMode("login");
+                  setLoginMethod("password");
+                }}
                 className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-all ${
                   mode === "login"
                     ? "bg-app-elevated text-accent-primary shadow-sm"
@@ -633,7 +640,62 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             </div>
           )}
 
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-3.5">
+          {/* 密码 / 扫码 子 Tab（仅登录 + 非原生） */}
+          {!twoFactor && !isRegister && showQrOption && (
+            <div className="flex items-center gap-1 p-0.5 mb-4 rounded-lg bg-app-hover/50 border border-app-border/50">
+              <button
+                type="button"
+                onClick={() => setLoginMethod("password")}
+                className={`flex-1 min-h-[36px] py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  loginMethod === "password"
+                    ? "bg-app-elevated text-tx-primary shadow-sm"
+                    : "text-tx-tertiary hover:text-tx-primary"
+                }`}
+              >
+                密码登录
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMethod("qr")}
+                className={`flex-1 min-h-[36px] py-1.5 rounded-md text-xs font-semibold transition-all inline-flex items-center justify-center gap-1 ${
+                  loginMethod === "qr"
+                    ? "bg-app-elevated text-tx-primary shadow-sm"
+                    : "text-tx-tertiary hover:text-tx-primary"
+                }`}
+              >
+                <QrCode size={14} />
+                扫码登录
+              </button>
+            </div>
+          )}
+
+          {/* 扫码登录面板 */}
+          {!twoFactor && !isRegister && showQrOption && loginMethod === "qr" && (
+            <>
+              {isClientMode && !buildServerUrl(serverParts) && !getServerUrl() ? (
+                <div className="py-8 text-center text-xs text-tx-tertiary leading-relaxed px-2">
+                  请先在上方填写并连接服务器地址，再使用扫码登录
+                </div>
+              ) : (
+                <QrLoginPanel
+                  serverUrl={normalizeServerOrigin(
+                    buildServerUrl(serverParts) ||
+                      getServerUrl() ||
+                      (typeof window !== "undefined" ? window.location.origin : ""),
+                  )}
+                  onLogin={onLogin}
+                />
+              )}
+            </>
+          )}
+
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className={`space-y-3.5 ${
+              !twoFactor && !isRegister && showQrOption && loginMethod === "qr" ? "hidden" : ""
+            }`}
+          >
             {twoFactor ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-accent-primary/8 border border-accent-primary/20">

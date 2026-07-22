@@ -29,6 +29,7 @@ import { logAudit } from "../services/audit";
 import jwt from "jsonwebtoken";
 import { disconnectUser } from "../services/realtime";
 import { generateCaptcha, verifyCaptcha } from "../lib/captcha";
+import { redis } from "../services/redis";
 
 const auth = new Hono();
 
@@ -1115,6 +1116,255 @@ auth.get("/verify", (c) => {
       mustChangePassword: mustChangePassword ? true : undefined,
     },
   });
+});
+
+// ========== 扫码登录（桌面出码 / 移动端确认） ==========
+//
+// Ticket 存 Redis 抽象（memory / ioredis），TTL 90s。
+// create/status/cancel 公开；scan/confirm 需移动端已登录 JWT。
+// 桌面轮询 status，confirmed 时一次性下发新 session 的 login token。
+
+const QR_TTL_SEC = 90;
+const QR_KEY = (id: string) => `auth:qr:${id}`;
+
+type QrTicketStatus =
+  | "pending"
+  | "scanned"
+  | "confirmed"
+  | "consumed"
+  | "expired"
+  | "cancelled";
+
+interface QrTicket {
+  status: QrTicketStatus;
+  createdAt: number;
+  expiresAt: number;
+  createdIp: string;
+  userId?: string;
+  username?: string;
+  token?: string;
+  user?: Record<string, unknown>;
+  scannedAt?: number;
+}
+
+async function loadQrTicket(id: string): Promise<QrTicket | null> {
+  try {
+    const raw = await redis.get(QR_KEY(id));
+    if (!raw) return null;
+    return JSON.parse(raw) as QrTicket;
+  } catch {
+    return null;
+  }
+}
+
+async function saveQrTicket(id: string, ticket: QrTicket, ttlSec?: number): Promise<void> {
+  const remainMs = ticket.expiresAt - Date.now();
+  const sec =
+    ttlSec ??
+    Math.max(1, Math.ceil((remainMs > 0 ? remainMs : QR_TTL_SEC * 1000) / 1000));
+  await redis.setex(QR_KEY(id), sec, JSON.stringify(ticket));
+}
+
+function maskUsername(name: string): string {
+  if (!name) return "";
+  if (name.length <= 2) return name[0] + "*";
+  return name[0] + "*".repeat(Math.min(name.length - 2, 4)) + name[name.length - 1];
+}
+
+/** 桌面：创建二维码 ticket */
+auth.post("/qr/create", async (c) => {
+  const ip = extractClientIp(c);
+  const limited = checkAndIncrementIpRate(ip);
+  if (limited) {
+    return c.json(
+      { error: "请求过于频繁，请稍后再试", code: "RATE_LIMITED", retryAfterSec: limited.retryAfterSec },
+      429,
+    );
+  }
+
+  const id = uuid();
+  const now = Date.now();
+  const ticket: QrTicket = {
+    status: "pending",
+    createdAt: now,
+    expiresAt: now + QR_TTL_SEC * 1000,
+    createdIp: ip,
+  };
+  await saveQrTicket(id, ticket, QR_TTL_SEC);
+  return c.json({
+    id,
+    expiresIn: QR_TTL_SEC,
+    expiresAt: ticket.expiresAt,
+  });
+});
+
+/** 桌面：轮询状态；confirmed 时一次性返回 token */
+auth.get("/qr/status", async (c) => {
+  const id = (c.req.query("id") || "").trim();
+  if (!id) return c.json({ error: "缺少 id", code: "BAD_REQUEST" }, 400);
+
+  const ticket = await loadQrTicket(id);
+  if (!ticket) {
+    return c.json({ status: "expired", error: "二维码不存在或已过期" }, 404);
+  }
+
+  if (Date.now() > ticket.expiresAt && ticket.status !== "consumed") {
+    ticket.status = "expired";
+    await saveQrTicket(id, ticket, 5);
+    return c.json({ status: "expired" });
+  }
+
+  if (ticket.status === "confirmed" && ticket.token && ticket.user) {
+    const token = ticket.token;
+    const user = ticket.user;
+    ticket.status = "consumed";
+    delete ticket.token;
+    delete ticket.user;
+    await saveQrTicket(id, ticket, 30);
+    return c.json({ status: "confirmed", token, user });
+  }
+
+  if (ticket.status === "scanned") {
+    return c.json({
+      status: "scanned",
+      usernameMasked: ticket.username ? maskUsername(ticket.username) : undefined,
+    });
+  }
+
+  return c.json({ status: ticket.status });
+});
+
+/** 移动端：扫到码后标记 scanned（可选） */
+auth.post("/qr/scan", async (c) => {
+  const userId = extractUserId(c);
+  if (!userId) return c.json({ error: "未授权", code: "UNAUTHENTICATED" }, 401);
+
+  const body = await c.req.json().catch(() => ({}));
+  const id = String((body as any)?.id || "").trim();
+  if (!id) return c.json({ error: "缺少 id" }, 400);
+
+  const ticket = await loadQrTicket(id);
+  if (!ticket) return c.json({ error: "二维码不存在或已过期", code: "NOT_FOUND" }, 404);
+  if (Date.now() > ticket.expiresAt) {
+    ticket.status = "expired";
+    await saveQrTicket(id, ticket, 5);
+    return c.json({ error: "二维码已过期", code: "EXPIRED" }, 410);
+  }
+  if (ticket.status !== "pending" && ticket.status !== "scanned") {
+    return c.json({ error: "二维码状态不可扫码", code: "INVALID_STATE", status: ticket.status }, 409);
+  }
+
+  const db = getDb();
+  const user = db
+    .prepare("SELECT username, isDisabled FROM users WHERE id = ?")
+    .get(userId) as { username: string; isDisabled: number } | undefined;
+  if (!user || user.isDisabled) {
+    return c.json({ error: "账号不可用", code: "ACCOUNT_DISABLED" }, 403);
+  }
+
+  ticket.status = "scanned";
+  ticket.scannedAt = Date.now();
+  ticket.username = user.username;
+  ticket.userId = userId;
+  await saveQrTicket(id, ticket);
+  return c.json({ ok: true, status: "scanned" });
+});
+
+/** 移动端：确认授权桌面登录 */
+auth.post("/qr/confirm", async (c) => {
+  const userId = extractUserId(c);
+  if (!userId) return c.json({ error: "未授权", code: "UNAUTHENTICATED" }, 401);
+
+  const body = await c.req.json().catch(() => ({}));
+  const id = String((body as any)?.id || "").trim();
+  if (!id) return c.json({ error: "缺少 id" }, 400);
+
+  const ticket = await loadQrTicket(id);
+  if (!ticket) return c.json({ error: "二维码不存在或已过期", code: "NOT_FOUND" }, 404);
+  if (Date.now() > ticket.expiresAt) {
+    ticket.status = "expired";
+    await saveQrTicket(id, ticket, 5);
+    return c.json({ error: "二维码已过期，请刷新桌面二维码", code: "EXPIRED" }, 410);
+  }
+  if (ticket.status !== "pending" && ticket.status !== "scanned") {
+    return c.json(
+      { error: "二维码已使用或已失效", code: "INVALID_STATE", status: ticket.status },
+      409,
+    );
+  }
+
+  const db = getDb();
+  const user = db
+    .prepare(
+      `SELECT id, username, email, avatarUrl, displayName, role, isDisabled, isDemo, mustChangePassword, tokenVersion, createdAt
+       FROM users WHERE id = ?`,
+    )
+    .get(userId) as any;
+  if (!user) return c.json({ error: "用户不存在", code: "USER_NOT_FOUND" }, 401);
+  if (user.isDisabled) return c.json({ error: "该账号已被禁用", code: "ACCOUNT_DISABLED" }, 403);
+
+  // 为桌面新建独立 session（不复用手机 JWT）
+  const ip = ticket.createdIp || extractClientIp(c);
+  const sessionId = createSession({
+    userId: user.id,
+    ip,
+    userAgent: "qr-web",
+  });
+  const token = signLoginToken({
+    userId: user.id,
+    username: user.username,
+    tokenVersion: user.tokenVersion ?? 0,
+    jti: sessionId,
+  });
+
+  const publicUser = {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    displayName: user.displayName,
+    role: user.role || "user",
+    isDemo: user.isDemo === 1,
+    createdAt: user.createdAt,
+    mustChangePassword: user.mustChangePassword ? true : undefined,
+  };
+
+  ticket.status = "confirmed";
+  ticket.userId = user.id;
+  ticket.username = user.username;
+  ticket.token = token;
+  ticket.user = publicUser;
+  await saveQrTicket(id, ticket);
+
+  try {
+    logAudit(user.id, "auth", "qr_login_confirm", { ticketId: id }, {
+      ip: extractClientIp(c),
+      userAgent: c.req.header("user-agent") || "",
+      targetType: "session",
+      targetId: sessionId,
+    });
+  } catch {
+    /* 审计失败不阻断登录 */
+  }
+
+  return c.json({ ok: true });
+});
+
+/** 桌面：取消 / 刷新前作废 */
+auth.post("/qr/cancel", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const id = String((body as any)?.id || "").trim();
+  if (!id) return c.json({ error: "缺少 id" }, 400);
+  const ticket = await loadQrTicket(id);
+  if (!ticket) return c.json({ ok: true, status: "expired" });
+  if (ticket.status === "confirmed" || ticket.status === "consumed") {
+    return c.json({ ok: true, status: ticket.status });
+  }
+  ticket.status = "cancelled";
+  delete ticket.token;
+  delete ticket.user;
+  await saveQrTicket(id, ticket, 10);
+  return c.json({ ok: true, status: "cancelled" });
 });
 
 export { JWT_SECRET, JWT_EXPIRES_IN };

@@ -211,6 +211,14 @@ class MemoryRedisClient {
     return memorySetex(key, seconds, value);
   }
 
+  async del(...keys: string[]): Promise<number> {
+    let n = 0;
+    for (const k of keys) {
+      if (memoryCache.delete(k)) n++;
+    }
+    return n;
+  }
+
   async publish(channel: string, message: string): Promise<number> {
     return memoryPublish(channel, message);
   }

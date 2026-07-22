@@ -2,13 +2,15 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import {
-  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search,
+  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 import { getMobileMoreModules, setLibraryTab, type NavModule } from "@/lib/navigation.config";
 import type { WorkspaceFeatures } from "@/types";
+import { isNativePlatform } from "@/hooks/useCapacitor";
+import QrScanPage from "@/components/QrScanPage";
 
 const MORE_ICONS: Record<string, React.ReactNode> = {
   notes: <BookOpen className="w-6 h-6 text-indigo-500" />,
@@ -28,6 +30,7 @@ export default function MobileMorePage() {
   const actions = useAppActions();
   const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
   const [packTick, setPackTick] = useState(0);
+  const [showQrScan, setShowQrScan] = useState(false);
 
   useEffect(() => {
     const load = () => {
@@ -82,6 +85,17 @@ export default function MobileMorePage() {
         window.dispatchEvent(new CustomEvent("super:open-command-palette"));
       },
     },
+    ...(isNativePlatform()
+      ? [
+          {
+            id: "qr-scan",
+            label: "扫一扫",
+            icon: <ScanLine className="w-6 h-6 text-indigo-500" />,
+            desc: "扫描桌面登录二维码，授权网页端登录",
+            onClick: () => setShowQrScan(true),
+          },
+        ]
+      : []),
     {
       id: "settings",
       label: t("sidebar.settings", { defaultValue: "设置" }),
@@ -105,12 +119,8 @@ export default function MobileMorePage() {
         title="我的"
         subtitle="资料库、AI、消息与设置"
       />
-      <div className="px-6 pt-3 pb-2 md:pt-6">
-        <h1 className="text-xl font-bold text-tx-primary leading-tight tracking-tight md:text-2xl">更多功能</h1>
-        <p className="text-sm text-tx-tertiary mt-1">资料库、收藏、AI 与设置</p>
-      </div>
 
-      <div className="px-4 py-2 grid grid-cols-2 gap-3 flex-1 pb-6">
+      <div className="px-4 pt-2 pb-2 grid grid-cols-2 gap-3 flex-1 pb-6">
         {menuItems.map((item, idx) => (
           <motion.button
             key={item.id}
@@ -151,6 +161,8 @@ export default function MobileMorePage() {
           </div>
         </motion.button>
       </div>
+
+      <QrScanPage open={showQrScan} onClose={() => setShowQrScan(false)} />
     </div>
   );
 }
