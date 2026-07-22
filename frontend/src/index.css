@@ -557,6 +557,44 @@ body::before {
 .mobile-music-mini {
   bottom: var(--mobile-music-bottom);
 }
+
+/* 移动端迷你播放器顶部 seek：透明 range 铺满触控高度，系统拇指可拖 */
+.mobile-music-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  touch-action: none;
+}
+.mobile-music-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+  /* 扩大可点区域，视觉由上层进度条 + 圆点负责 */
+  box-shadow: none;
+}
+.mobile-music-seek::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+}
+.mobile-music-seek::-webkit-slider-runnable-track {
+  height: 12px;
+  background: transparent;
+  border: none;
+}
+.mobile-music-seek::-moz-range-track {
+  height: 12px;
+  background: transparent;
+  border: none;
+}
 .mobile-content-pad {
   padding-bottom: var(--mobile-content-pb);
 }
