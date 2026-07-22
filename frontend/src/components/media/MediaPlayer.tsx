@@ -1,12 +1,25 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type ArtplayerType from "artplayer";
-import { useMediaStore } from "@/store/mediaStore";
+import { useMediaStore, isGlobalPlayerItem, type MediaPlayItem } from "@/store/mediaStore";
 import { api } from "@/lib/api";
 import { Loader2, AlertTriangle, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
+
+export interface MediaPlayerMediaMeta {
+  title: string;
+  type: "video" | "audio";
+  alist_path?: string;
+  cover_url?: string;
+  duration?: number;
+  artist?: string;
+  album?: string;
+}
 
 interface MediaPlayerProps {
   mediaId: string;
+  /** 用于耳机模式交给全局播放器的元数据 */
+  media?: MediaPlayerMediaMeta;
   onDuration?: (duration: number) => void;
   onProgress?: (progress: number) => void;
   /** 全屏左上角返回：退出全屏并回到媒体列表 */
@@ -51,23 +64,44 @@ async function unlockOrientation() {
   }
 }
 
-export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFullscreen }: MediaPlayerProps) {
+/** 耳机图标 SVG（与其它控件视觉一致：细线） */
+const HEADPHONE_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>';
+
+const LIGHTS_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>';
+
+export default function MediaPlayer({
+  mediaId,
+  media,
+  onDuration,
+  onProgress,
+  onExitFullscreen,
+}: MediaPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<ArtplayerType | null>(null);
   const isFullscreenRef = useRef(false);
+  /** 已交给全局仅听：忽略本播放器 pause→store，避免误停全局 */
+  const audioOnlyHandoffRef = useRef(false);
+  const mediaMetaRef = useRef(media);
+  mediaMetaRef.current = media;
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  const { 
-    seekTime, 
+  const {
+    seekTime,
     resetSeek,
     pauseMedia,
     resumeMedia,
     setCurrentTime,
     setDuration,
+    playAsAudioOnly,
+    stopMedia,
+    currentMedia,
+    isPlaying: storeIsPlaying,
   } = useMediaStore();
 
   const lastReportedTime = useRef<number>(0);
@@ -76,7 +110,7 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
     try {
       await api.request(`/media/items/${mediaId}/play`, {
         method: "POST",
-        body: JSON.stringify({ progress: Math.floor(progressSeconds) })
+        body: JSON.stringify({ progress: Math.floor(progressSeconds) }),
       });
     } catch (err) {
       console.warn("Failed to report play progress:", err);
@@ -91,18 +125,110 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
         player.pause();
         if (player.fullscreen) player.fullscreen = false;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     try {
       if (document.fullscreenElement) {
         void document.exitFullscreen();
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     void unlockOrientation();
     setIsFullscreen(false);
     isFullscreenRef.current = false;
-    // 可选回调：仅通知 UI 层更新，不应卸载详情
     onExitFullscreen?.();
   };
+
+  /** 耳机：暂停视频画面，进度交给全局播放器后台听 */
+  const handoffToAudioOnly = useCallback(() => {
+    const player = playerRef.current;
+    const meta = mediaMetaRef.current;
+    const t = player?.currentTime ?? 0;
+    const dur =
+      (player?.duration && !Number.isNaN(player.duration) ? player.duration : 0) ||
+      meta?.duration ||
+      0;
+
+    // 退出全屏，方便看全局迷你条
+    try {
+      if (player?.fullscreen) player.fullscreen = false;
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen();
+    } catch {
+      /* ignore */
+    }
+    void unlockOrientation();
+    setIsFullscreen(false);
+    isFullscreenRef.current = false;
+
+    audioOnlyHandoffRef.current = true;
+
+    try {
+      if (player) {
+        player.pause();
+        // 避免与全局 <audio> 双开声音
+        if ((player as any).video) {
+          try {
+            (player as any).video.muted = true;
+          } catch {
+            /* ignore */
+          }
+        }
+        try {
+          player.muted = true;
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const item: MediaPlayItem = {
+      id: mediaId,
+      title: meta?.title || "视频",
+      type: "video",
+      alist_path: meta?.alist_path || "",
+      cover_url: meta?.cover_url,
+      duration: dur > 0 ? Math.floor(dur) : meta?.duration,
+      artist: meta?.artist,
+      album: meta?.album,
+      audioOnly: true,
+    };
+
+    playAsAudioOnly(item, { startAt: t > 0 ? t : 0 });
+    toast.success("已切换为仅听音频，可退到后台继续播放");
+  }, [mediaId, playAsAudioOnly]);
+
+  // 全局仍在播本片仅听时：强制视频保持暂停/静音
+  useEffect(() => {
+    if (
+      storeIsPlaying &&
+      currentMedia?.id === mediaId &&
+      isGlobalPlayerItem(currentMedia) &&
+      currentMedia.audioOnly
+    ) {
+      audioOnlyHandoffRef.current = true;
+      const player = playerRef.current;
+      if (player) {
+        try {
+          player.pause();
+        } catch {
+          /* ignore */
+        }
+        try {
+          player.muted = true;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }, [storeIsPlaying, currentMedia?.id, currentMedia?.audioOnly, mediaId]);
 
   const fetchAndInitPlayer = async (active: { current: boolean }) => {
     try {
@@ -110,11 +236,11 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
       setError("");
 
       const res = await api.request<any>(`/media/items/${mediaId}/play-url`, {
-        method: "GET"
+        method: "GET",
       });
-      
+
       if (!active.current) return;
-      
+
       let rawUrl = "";
       let initialProgress = 0;
       if (res && res.url) {
@@ -157,9 +283,18 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
         type: rawUrl.includes(".m3u8") ? "m3u8" : "auto",
         controls: [
           {
+            name: "audioOnly",
+            position: "right",
+            html: HEADPHONE_SVG,
+            tooltip: "仅听音频（后台可继续播）",
+            click: function () {
+              handoffToAudioOnly();
+            },
+          },
+          {
             name: "lightsOut",
             position: "right",
-            html: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>',
+            html: LIGHTS_SVG,
             tooltip: "关灯模式",
             click: function () {
               setIsTheaterMode((prev) => !prev);
@@ -172,7 +307,7 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
               const hls = new Hls();
               hls.loadSource(url);
               hls.attachMedia(video);
-              
+
               player.on("destroy", () => {
                 hls.destroy();
               });
@@ -188,13 +323,15 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
       const applyFullscreenUi = (fs: boolean) => {
         isFullscreenRef.current = fs;
         setIsFullscreen(fs);
-        // 全屏时隐藏关灯按钮
+        // 全屏时隐藏关灯 / 耳机按钮（仍可通过迷你条控制仅听）
         try {
-          const btn = player.controls?.lightsOut as HTMLElement | undefined;
-          if (btn) {
-            btn.style.display = fs ? "none" : "";
+          for (const name of ["lightsOut", "audioOnly"] as const) {
+            const btn = player.controls?.[name] as HTMLElement | undefined;
+            if (btn) btn.style.display = fs ? "none" : "";
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         // 全屏时显示左上角返回
         try {
           const layer = (player as any).layers?.fsBack as HTMLElement | undefined;
@@ -202,7 +339,9 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
           if (backBtn) {
             backBtn.style.display = fs ? "inline-flex" : "none";
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         if (fs) {
           void lockLandscape();
         } else {
@@ -249,6 +388,8 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
       }
 
       player.on("video:timeupdate", () => {
+        // 仅听交给全局后，不再用视频进度刷 store
+        if (audioOnlyHandoffRef.current) return;
         const currentTime = player.currentTime;
         setCurrentTime(currentTime);
         if (onProgress) onProgress(currentTime);
@@ -264,22 +405,53 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
         setDuration(duration);
         if (onDuration) onDuration(duration);
         if (duration && duration > 0) {
-          api.request(`/media/items/${mediaId}/metadata`, {
-            method: "PATCH",
-            body: JSON.stringify({ duration: Math.floor(duration) }),
-          }).catch(() => {});
+          api
+            .request(`/media/items/${mediaId}/metadata`, {
+              method: "PATCH",
+              body: JSON.stringify({ duration: Math.floor(duration) }),
+            })
+            .catch(() => {});
         }
       });
 
-      player.on("play", () => resumeMedia());
-      player.on("pause", () => pauseMedia());
+      player.on("play", () => {
+        // 用户重新点视频播放：退出仅听，恢复画面声道
+        if (audioOnlyHandoffRef.current) {
+          audioOnlyHandoffRef.current = false;
+          const st = useMediaStore.getState();
+          if (st.currentMedia?.id === mediaId && st.currentMedia.audioOnly) {
+            stopMedia();
+          }
+          try {
+            player.muted = false;
+            if ((player as any).video) (player as any).video.muted = false;
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+        // 避免与全局音乐双开：先停掉全局其它条目
+        const st = useMediaStore.getState();
+        if (st.currentMedia && isGlobalPlayerItem(st.currentMedia) && st.isPlaying) {
+          if (st.currentMedia.id !== mediaId || st.currentMedia.audioOnly) {
+            stopMedia();
+          }
+        }
+        resumeMedia();
+      });
+      player.on("pause", () => {
+        // 耳机交接导致的 pause 不写 store
+        if (audioOnlyHandoffRef.current) return;
+        pauseMedia();
+      });
       player.on("video:ended", () => {
+        if (audioOnlyHandoffRef.current) return;
         pauseMedia();
         reportProgress(0);
       });
       player.on("error", (err: any) => {
-         console.error("Artplayer error:", err);
-         if (active.current) setError("视频流载入失败，请检查跨域限制或防盗链设置。");
+        console.error("Artplayer error:", err);
+        if (active.current) setError("视频流载入失败，请检查跨域限制或防盗链设置。");
       });
 
       player.on("fullscreen", (state: boolean) => {
@@ -288,7 +460,6 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
       player.on("fullscreenWeb", (state: boolean) => {
         applyFullscreenUi(!!state);
       });
-
     } catch (err: any) {
       if (!active.current) return;
       setError(err.message || "获取播放链接失败，请检查 /fs/get 接口是否正常。");
@@ -305,18 +476,20 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
       void unlockOrientation();
       if (playerRef.current) {
         const time = playerRef.current.currentTime;
-        if (time > 0) {
+        if (time > 0 && !audioOnlyHandoffRef.current) {
           reportProgress(time);
         }
         playerRef.current.destroy(false);
         playerRef.current = null;
       }
     };
+    // mediaId 变化时重建；handoff 用 ref，不必进 deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaId]);
 
-  // Handle seek commands from Store
+  // Handle seek commands from Store（仅听时由全局 <audio> 处理，视频忽略）
   useEffect(() => {
-    if (seekTime !== null && playerRef.current) {
+    if (seekTime !== null && playerRef.current && !audioOnlyHandoffRef.current) {
       playerRef.current.currentTime = seekTime;
       resetSeek();
     }
@@ -334,72 +507,93 @@ export default function MediaPlayer({ mediaId, onDuration, onProgress, onExitFul
     }
   }, [isTheaterMode]);
 
+  // 仅听激活时高亮耳机按钮
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player?.controls?.audioOnly) return;
+    const btn = player.controls.audioOnly as HTMLElement;
+    const active =
+      storeIsPlaying &&
+      currentMedia?.id === mediaId &&
+      !!currentMedia?.audioOnly;
+    try {
+      btn.style.color = active ? "#23ade5" : "";
+      btn.setAttribute(
+        "data-balloon",
+        active ? "正在仅听音频（点播放可回视频）" : "仅听音频（后台可继续播）",
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [storeIsPlaying, currentMedia?.id, currentMedia?.audioOnly, mediaId]);
+
   return (
     <>
       {isTheaterMode && !isFullscreen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/95 transition-opacity" 
+        <div
+          className="fixed inset-0 z-40 bg-black/95 transition-opacity"
           onClick={() => setIsTheaterMode(false)}
         />
       )}
-      <div className={cn(
-        "relative overflow-hidden bg-black select-none transition-all duration-300 w-full aspect-video md:rounded-xl md:border md:border-app-border",
-        isTheaterMode && !isFullscreen ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10"
-      )}>
-
-      {/* 全屏时左上角返回 → 退出全屏并暂停，留在视频详情 */}
-      {isFullscreen && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            exitFullscreenAndPause();
-          }}
-          onPointerUp={(e) => {
-            e.preventDefault();
-          }}
-          className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-[10000] w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
-          title="退出全屏"
-          aria-label="退出全屏"
-        >
-          <ChevronLeft size={22} />
-        </button>
-      )}
-
-      {loading && !error && (
-        <div className="absolute inset-0 z-10 bg-black/95 flex flex-col items-center justify-center">
-          <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
-          <span className="text-sm text-tx-secondary">解析网盘直链与视频流...</span>
-        </div>
-      )}
-      
-      {error && (
-        <div className="absolute inset-0 z-10 bg-black/95 flex flex-col items-center justify-center p-6 text-center">
-          <AlertTriangle className="w-12 h-12 text-accent-warning mb-3 animate-pulse" />
-          <h4 className="text-md font-bold text-tx-primary mb-1">播放器出错</h4>
-          <p className="text-xs text-tx-tertiary max-w-md mb-4">{error}</p>
-          <button 
-            onClick={() => {
-              if (playerRef.current) {
-                playerRef.current.destroy(false);
-                playerRef.current = null;
-              }
-              fetchAndInitPlayer({ current: true });
+      <div
+        className={cn(
+          "relative overflow-hidden bg-black select-none transition-all duration-300 w-full aspect-video md:rounded-xl md:border md:border-app-border",
+          isTheaterMode && !isFullscreen ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10",
+        )}
+      >
+        {/* 全屏时左上角返回 → 退出全屏并暂停，留在视频详情 */}
+        {isFullscreen && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              exitFullscreenAndPause();
             }}
-            className="px-3 py-1.5 bg-accent-primary/20 text-accent-primary text-xs font-semibold rounded-lg hover:bg-accent-primary/30 transition-colors cursor-pointer"
+            onPointerUp={(e) => {
+              e.preventDefault();
+            }}
+            className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-[10000] w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
+            title="退出全屏"
+            aria-label="退出全屏"
           >
-            重试连接
+            <ChevronLeft size={22} />
           </button>
-        </div>
-      )}
-      
-      <div 
-        ref={containerRef} 
-        className="w-full h-full"
-        style={{ opacity: loading || error ? 0 : 1, transition: "opacity 0.3s" }}
-      />
-    </div>
+        )}
+
+        {loading && !error && (
+          <div className="absolute inset-0 z-10 bg-black/95 flex flex-col items-center justify-center">
+            <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
+            <span className="text-sm text-tx-secondary">解析网盘直链与视频流...</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="absolute inset-0 z-10 bg-black/95 flex flex-col items-center justify-center p-6 text-center">
+            <AlertTriangle className="w-12 h-12 text-accent-warning mb-3 animate-pulse" />
+            <h4 className="text-md font-bold text-tx-primary mb-1">播放器出错</h4>
+            <p className="text-xs text-tx-tertiary max-w-md mb-4">{error}</p>
+            <button
+              onClick={() => {
+                if (playerRef.current) {
+                  playerRef.current.destroy(false);
+                  playerRef.current = null;
+                }
+                fetchAndInitPlayer({ current: true });
+              }}
+              className="px-3 py-1.5 bg-accent-primary/20 text-accent-primary text-xs font-semibold rounded-lg hover:bg-accent-primary/30 transition-colors cursor-pointer"
+            >
+              重试连接
+            </button>
+          </div>
+        )}
+
+        <div
+          ref={containerRef}
+          className="w-full h-full"
+          style={{ opacity: loading || error ? 0 : 1, transition: "opacity 0.3s" }}
+        />
+      </div>
     </>
   );
 }

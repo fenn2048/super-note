@@ -9,9 +9,20 @@ export interface MediaPlayItem {
   album?: string;
   cover_url?: string;
   duration?: number;
+  /**
+   * 视频以「仅音频」模式走全局播放器（耳机模式）。
+   * type 仍为 video，便于 UI 区分；GlobalMusicPlayer 据此放行。
+   */
+  audioOnly?: boolean;
 }
 
 export type PlayMode = "sequence" | "random" | "loop";
+
+/** 是否应由全局底部播放器接管（纯音频，或视频仅听） */
+export function isGlobalPlayerItem(m: MediaPlayItem | null | undefined): boolean {
+  if (!m) return false;
+  return m.type === "audio" || (m.type === "video" && !!m.audioOnly);
+}
 
 export interface MediaState {
   isPlaying: boolean;
@@ -27,6 +38,14 @@ export interface MediaState {
 
   // Actions
   playMedia: (media: MediaPlayItem, list?: MediaPlayItem[]) => void;
+  /**
+   * 视频耳机模式：以 audioOnly 写入 store，并可选从 startAt 秒起播。
+   * 默认播放列表仅含当前条目（不自动连播其它视频）。
+   */
+  playAsAudioOnly: (
+    media: MediaPlayItem,
+    opts?: { startAt?: number; list?: MediaPlayItem[] },
+  ) => void;
   pauseMedia: () => void;
   resumeMedia: () => void;
   stopMedia: () => void;
@@ -48,6 +67,15 @@ export interface MediaState {
   patchCurrentMedia: (patch: Partial<MediaPlayItem>) => void;
 }
 
+function withAudioOnlyFlag(item: MediaPlayItem, audioOnly: boolean): MediaPlayItem {
+  if (!audioOnly) {
+    if (!item.audioOnly) return item;
+    const { audioOnly: _drop, ...rest } = item;
+    return rest as MediaPlayItem;
+  }
+  return { ...item, audioOnly: true };
+}
+
 export const useMediaStore = create<MediaState>()((set, get) => ({
   isPlaying: false,
   currentMedia: null,
@@ -61,22 +89,61 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   playMode: "sequence",
 
   playMedia: (media, list = []) => {
-    const playlist = list.length > 0 ? list : [media];
-    const index = playlist.findIndex((item) => item.id === media.id);
+    // 普通 play 清掉 audioOnly，避免「点列表播视频」误进全局仅听
+    const clean = withAudioOnlyFlag(media, false);
+    const rawList = list.length > 0 ? list : [clean];
+    const playlist = rawList.map((it) => withAudioOnlyFlag(it, false));
+    const index = playlist.findIndex((item) => item.id === clean.id);
     set({
-      currentMedia: media,
+      currentMedia: clean,
       playlist,
       currentIndex: index >= 0 ? index : 0,
       isPlaying: true,
       currentTime: 0,
-      duration: media.duration || 0,
+      duration: clean.duration || 0,
       seekTime: null,
+    });
+  },
+
+  playAsAudioOnly: (media, opts) => {
+    const startAt = opts?.startAt != null && opts.startAt > 0 ? opts.startAt : 0;
+    const item = withAudioOnlyFlag(
+      {
+        ...media,
+        type: media.type === "video" ? "video" : media.type,
+      },
+      true,
+    );
+    // MVP：仅听模式默认单曲列表，避免 next 切到未标记 audioOnly 的视频
+    const rawList =
+      opts?.list && opts.list.length > 0
+        ? opts.list.map((it) => withAudioOnlyFlag(it, true))
+        : [item];
+    const index = rawList.findIndex((x) => x.id === item.id);
+    set({
+      currentMedia: item,
+      playlist: rawList,
+      currentIndex: index >= 0 ? index : 0,
+      isPlaying: true,
+      currentTime: startAt,
+      duration: item.duration || 0,
+      // 交给 GlobalMusicPlayer 的 seek effect 落地到 <audio>
+      seekTime: startAt > 0 ? startAt : null,
     });
   },
 
   pauseMedia: () => set({ isPlaying: false }),
   resumeMedia: () => set({ isPlaying: true }),
-  stopMedia: () => set({ isPlaying: false, currentMedia: null, currentTime: 0, duration: 0, playlist: [], currentIndex: -1 }),
+  stopMedia: () =>
+    set({
+      isPlaying: false,
+      currentMedia: null,
+      currentTime: 0,
+      duration: 0,
+      playlist: [],
+      currentIndex: -1,
+      seekTime: null,
+    }),
 
   setCurrentTime: (time) => set({ currentTime: time }),
   setDuration: (duration) => set({ duration }),
@@ -125,9 +192,10 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
     set({
       playlist: nextList,
       currentIndex: newCurrentIndex,
-      currentMedia: currentMedia && nextList.some((p) => p.id === currentMedia.id)
-        ? currentMedia
-        : nextList[newCurrentIndex] || null,
+      currentMedia:
+        currentMedia && nextList.some((p) => p.id === currentMedia.id)
+          ? currentMedia
+          : nextList[newCurrentIndex] || null,
     });
   },
 
@@ -148,7 +216,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
     if (!currentMedia) return;
     const updated = { ...currentMedia, ...patch };
     const nextPlaylist = playlist.map((item, i) =>
-      i === currentIndex || item.id === currentMedia.id ? { ...item, ...patch } : item
+      i === currentIndex || item.id === currentMedia.id ? { ...item, ...patch } : item,
     );
     set({
       currentMedia: updated,
@@ -158,7 +226,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   },
 
   nextMedia: (auto = false) => {
-    const { playlist, currentIndex, playMode, currentMedia } = get();
+    const { playlist, currentIndex, playMode } = get();
     if (playlist.length === 0 || currentIndex === -1) return;
 
     let nextIndex = currentIndex;
@@ -187,18 +255,23 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
     }
 
     const nextMediaItem = playlist[nextIndex];
+    // 若当前队列是仅听视频，保持 audioOnly 标记
+    const cur = get().currentMedia;
+    const keepAudioOnly = !!(cur?.audioOnly && nextMediaItem.type === "video");
+    const item = withAudioOnlyFlag(nextMediaItem, keepAudioOnly || !!nextMediaItem.audioOnly);
+
     set({
-      currentMedia: nextMediaItem,
+      currentMedia: item,
       currentIndex: nextIndex,
       isPlaying: true,
       currentTime: 0,
-      duration: nextMediaItem.duration || 0,
+      duration: item.duration || 0,
       seekTime: null,
     });
   },
 
   prevMedia: () => {
-    const { playlist, currentIndex, playMode } = get();
+    const { playlist, currentIndex, playMode, currentMedia } = get();
     if (playlist.length === 0 || currentIndex === -1) return;
 
     let prevIndex = currentIndex;
@@ -216,12 +289,15 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
     }
 
     const prevMediaItem = playlist[prevIndex];
+    const keepAudioOnly = !!(currentMedia?.audioOnly && prevMediaItem.type === "video");
+    const item = withAudioOnlyFlag(prevMediaItem, keepAudioOnly || !!prevMediaItem.audioOnly);
+
     set({
-      currentMedia: prevMediaItem,
+      currentMedia: item,
       currentIndex: prevIndex,
       isPlaying: true,
       currentTime: 0,
-      duration: prevMediaItem.duration || 0,
+      duration: item.duration || 0,
       seekTime: null,
     });
   },
