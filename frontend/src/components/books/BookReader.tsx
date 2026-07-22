@@ -21,6 +21,10 @@ import {
   getBookConfig
 } from "@/lib/localStore";
 import {
+  applyNativeStatusBar,
+  syncStatusBarToAppTheme,
+} from "@/hooks/useCapacitor";
+import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
@@ -130,6 +134,16 @@ const THEMES = {
   dark: { bg: "#151b26", fg: "#abb2bf", name: "深邃暗夜", isDark: true }
 };
 
+/** App 明暗模式 → 阅读器默认主题：深色→深邃暗夜，浅色→水墨文楷 */
+function readerThemeFromAppMode(): "classic" | "dark" {
+  if (typeof document === "undefined") return "classic";
+  return document.documentElement.classList.contains("dark") ? "dark" : "classic";
+}
+
+function buildDefaultSettings() {
+  return { ...DEFAULT_SETTINGS, theme: readerThemeFromAppMode() };
+}
+
 const renderExcerpt = (excerpt: any, query: string): string => {
   if (!excerpt) return "";
   if (typeof excerpt === "string") {
@@ -155,7 +169,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
   const [toc, setToc] = useState<TOCItem[]>([]);
   const [notes, setNotes] = useState<BookNote[]>([]);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  // 首帧即按 App 明暗模式选阅读主题，加载页不会先闪成固定浅灰
+  const [settings, setSettings] = useState(buildDefaultSettings);
 
   // Active sidebars
   const [activeSidebar, setActiveSidebar] = useState<"toc" | "search" | "notes" | "settings" | null>(null);
@@ -407,6 +422,24 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     };
   }, [bookHash]);
 
+  // 阅读期间状态栏跟随阅读主题（白字/黑字 + 背景色）
+  useEffect(() => {
+    const themeDef = THEMES[settings.theme as keyof typeof THEMES] || THEMES.classic;
+    applyNativeStatusBar({
+      isDarkSurface: themeDef.isDark,
+      backgroundColor: themeDef.bg,
+    });
+  }, [settings.theme]);
+
+  // 占用全局状态栏控制权；卸载时交还给 App 主题
+  useEffect(() => {
+    document.documentElement.setAttribute("data-reader-status-bar", "1");
+    return () => {
+      document.documentElement.removeAttribute("data-reader-status-bar");
+      syncStatusBarToAppTheme();
+    };
+  }, []);
+
   // Listen to custom go-to book note event
   useEffect(() => {
     const onGotoBookNote = (e: Event) => {
@@ -452,12 +485,21 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         await putBookConfig(configData);
         return configData;
       });
+      // 进入阅读器时按 App 明暗自动套用主题：深色→深邃暗夜，浅色→水墨文楷
+      // 其它排版偏好（字号、行距等）仍从书籍配置恢复
+      const appReaderTheme = readerThemeFromAppMode();
+      let nextSettings = buildDefaultSettings();
       if (userConfig && userConfig.viewSettings) {
         try {
           const parsed = JSON.parse(userConfig.viewSettings);
-          setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-        } catch {}
+          nextSettings = { ...DEFAULT_SETTINGS, ...parsed, theme: appReaderTheme };
+        } catch {
+          /* keep buildDefaultSettings */
+        }
       }
+      // 同步写 ref，避免后续 await 期间 applyReaderStyles 读到旧主题
+      settingsRef.current = nextSettings;
+      setSettings(nextSettings);
 
       setLoadingProgress("正在下载书籍文件...");
       const fileBlob = await readBookFile(bookHash, async () => {
@@ -1316,11 +1358,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   };
 
   const handleResetSettings = () => {
-    setSettings(DEFAULT_SETTINGS);
+    const next = buildDefaultSettings();
+    setSettings(next);
     api.books.saveConfig(bookHash, {
-      viewSettings: JSON.stringify(DEFAULT_SETTINGS)
+      viewSettings: JSON.stringify(next)
     }).catch(err => console.warn("重置设置失败:", err));
-    applyReaderStyles(DEFAULT_SETTINGS);
+    applyReaderStyles(next);
     viewRef.current?.renderer?.relayout?.();
 
     // Cache settings locally
@@ -1330,7 +1373,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         bookHash,
         location: existing?.location || null,
         progress: existing?.progress || "0%",
-        viewSettings: JSON.stringify(DEFAULT_SETTINGS),
+        viewSettings: JSON.stringify(next),
         xpointer: existing?.xpointer || null,
         createdAt: existing?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -2638,24 +2681,41 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         <div className="flex-1 h-full flex flex-col relative overflow-hidden">
           {/* Loading status screens */}
           {loadingState === "loading" && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-app-bg" style={{ backgroundColor: theme.bg }}>
+            <div
+              className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4"
+              style={{ backgroundColor: theme.bg, color: theme.fg }}
+            >
               <Loader2 size={32} className="animate-spin text-accent-primary" />
-              <div className="text-xs font-semibold">{loadingProgress}</div>
+              <div className="text-xs font-semibold" style={{ color: theme.fg }}>
+                {loadingProgress}
+              </div>
             </div>
           )}
 
           {loadingState === "rendering" && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-app-bg" style={{ backgroundColor: theme.bg }}>
+            <div
+              className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4"
+              style={{ backgroundColor: theme.bg, color: theme.fg }}
+            >
               <Loader2 size={32} className="animate-spin text-accent-primary" />
-              <div className="text-xs font-semibold">{loadingProgress}</div>
+              <div className="text-xs font-semibold" style={{ color: theme.fg }}>
+                {loadingProgress}
+              </div>
             </div>
           )}
 
           {loadingState === "error" && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-app-bg text-center p-6" style={{ backgroundColor: theme.bg }}>
+            <div
+              className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 text-center p-6"
+              style={{ backgroundColor: theme.bg, color: theme.fg }}
+            >
               <VolumeX size={48} className="text-red-500" />
-              <h3 className="text-sm font-bold">阅读器加载失败</h3>
-              <p className="text-xs text-tx-tertiary max-w-sm">{errorMessage}</p>
+              <h3 className="text-sm font-bold" style={{ color: theme.fg }}>
+                阅读器加载失败
+              </h3>
+              <p className="text-xs max-w-sm opacity-70" style={{ color: theme.fg }}>
+                {errorMessage}
+              </p>
               <button
                 onClick={loadBookAndReader}
                 className="mt-2 px-4 py-1.5 bg-accent-primary text-white rounded-lg text-xs font-semibold hover:bg-accent-primary/95"

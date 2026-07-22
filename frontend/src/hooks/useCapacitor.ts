@@ -155,6 +155,38 @@ export function hideSplashScreen() {
 }
 
 /**
+ * 同步原生状态栏图标/背景色。
+ * - isDarkSurface=true（深色背景）→ 白色时间/信号/电量（Style.Dark）
+ * - isDarkSurface=false（浅色背景）→ 黑色时间/信号/电量（Style.Light）
+ * 阅读器等全屏场景可临时覆盖；离开时用 syncStatusBarToAppTheme 恢复。
+ */
+export function applyNativeStatusBar(opts: {
+  isDarkSurface: boolean;
+  backgroundColor?: string;
+}) {
+  if (!isNativePlatform()) return;
+  const { isDarkSurface, backgroundColor } = opts;
+  StatusBar.setStyle({
+    style: isDarkSurface ? Style.Dark : Style.Light,
+  }).catch(() => {});
+  StatusBar.setBackgroundColor({
+    color:
+      backgroundColor ||
+      (isDarkSurface ? "#0d1117" : "#ffffff"),
+  }).catch(() => {});
+}
+
+/** 按当前 App 明暗主题恢复状态栏（与 useStatusBarSync 一致） */
+export function syncStatusBarToAppTheme() {
+  if (typeof document === "undefined") return;
+  const isDark = document.documentElement.classList.contains("dark");
+  applyNativeStatusBar({
+    isDarkSurface: isDark,
+    backgroundColor: isDark ? "#0d1117" : "#ffffff",
+  });
+}
+
+/**
  * P2: 状态栏与主题同步
  * 监听 HTML class 变化，自动切换状态栏样式
  * 确保状态栏不覆盖 WebView 内容
@@ -229,24 +261,17 @@ export function useStatusBarSync() {
       window.addEventListener("orientationchange", applyStatusBarHeight);
     }
 
-    const updateStatusBar = () => {
-      const isDark = document.documentElement.classList.contains("dark");
-      StatusBar.setStyle({
-        style: isDark ? Style.Dark : Style.Light,
-      }).catch(() => {});
-      StatusBar.setBackgroundColor({
-        color: isDark ? "#0d1117" : "#ffffff",
-      }).catch(() => {});
-    };
-
     // 初始化时立即执行一次
-    updateStatusBar();
+    syncStatusBarToAppTheme();
 
     // 监听 <html> 的 class 变化（next-themes 通过修改 class 切换主题）
+    // 阅读器占用期间 html[data-reader-status-bar] 存在则跳过，避免覆盖阅读主题
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          updateStatusBar();
+          if (!document.documentElement.hasAttribute("data-reader-status-bar")) {
+            syncStatusBarToAppTheme();
+          }
         }
       }
     });
