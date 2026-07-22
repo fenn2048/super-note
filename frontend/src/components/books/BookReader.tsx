@@ -2233,17 +2233,18 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       
       {/* Main Body Layout */}
       <div className="w-full h-full flex relative overflow-hidden">
-        {/* Sidebar Container */}
+        {/* Sidebar Container：移动端全屏 fixed，桌面可拖宽度侧栏 */}
         {activeSidebar && activeSidebar !== "notes" && (
           <div 
             style={{
               width: window.innerWidth < 768 ? "100%" : `${sidebarWidth}px`,
-              // 移动全屏侧栏从顶安全区起；跟随阅读主题色，避免字看不清
+              // 移动全屏侧栏含安全区；跟随阅读主题色
               paddingTop: "var(--safe-area-top, 0px)",
+              paddingBottom: "var(--safe-area-bottom, 0px)",
               backgroundColor: theme.bg,
               color: theme.fg,
             }}
-            className="absolute inset-y-0 left-0 w-full md:relative md:h-full border-r border-black/10 flex flex-col shrink-0 z-40 md:z-20 animate-slide-in"
+            className="max-md:fixed max-md:inset-0 w-full md:relative md:h-full border-r border-black/10 flex flex-col shrink-0 z-[60] md:z-20 animate-slide-in"
           >
             {/* Drag Resize Handle (hidden on mobile) */}
             {window.innerWidth >= 768 && (
@@ -2280,8 +2281,13 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
               </button>
             </div>
 
-            {/* Sidebar content panels */}
-            <div className="flex-1 overflow-y-auto p-4">
+            {/* Sidebar content panels（搜索自管滚动，其余整体滚动） */}
+            <div
+              className={cn(
+                "flex-1 min-h-0 p-4 flex flex-col",
+                activeSidebar === "search" ? "overflow-hidden" : "overflow-y-auto",
+              )}
+            >
               {/* 1. Outline TOC */}
               {activeSidebar === "toc" && (
                 <div className="space-y-1">
@@ -2296,60 +2302,93 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
               {/* 2. Full-Text Search inside Book */}
               {activeSidebar === "search" && (
-                <div className="space-y-4">
-                  <form onSubmit={handleSearch} className="flex gap-2">
+                <div className="flex flex-col flex-1 min-h-0 gap-4">
+                  <form onSubmit={handleSearch} className="flex gap-2 items-stretch shrink-0 w-full min-w-0">
                     <input
-                      type="text"
+                      type="search"
+                      enterKeyHint="search"
                       placeholder="搜索书内关键词..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="flex-1 p-2 border border-app-border bg-app-bg rounded-lg text-xs focus:outline-none focus:border-accent-primary text-tx-primary"
+                      className="flex-1 min-w-0 min-h-[44px] px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-accent-primary"
+                      style={{
+                        borderColor: `${theme.fg}28`,
+                        backgroundColor: `${theme.fg}0a`,
+                        color: theme.fg,
+                      }}
                     />
                     <button
                       type="submit"
-                      disabled={isSearching}
-                      className="px-4 py-2 bg-accent-primary text-white text-xs font-semibold rounded-lg hover:bg-accent-primary/95 disabled:opacity-50 transition-all shrink-0 flex items-center justify-center gap-1.5"
+                      disabled={isSearching || !searchQuery.trim()}
+                      className="min-h-[44px] min-w-[44px] px-3 sm:px-4 bg-accent-primary text-white text-sm font-semibold rounded-xl hover:bg-accent-primary/95 disabled:opacity-50 transition-all shrink-0 inline-flex items-center justify-center gap-1.5"
+                      aria-label="搜索"
                     >
-                      {isSearching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
-                      <span>搜索</span>
+                      {isSearching ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Search size={16} />
+                      )}
+                      <span className="hidden sm:inline">搜索</span>
                     </button>
                   </form>
 
                   {/* Results */}
-                  <div className="space-y-2">
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-tx-tertiary">
+                  <div className="flex flex-col flex-1 min-h-0 gap-2">
+                    <span
+                      className="text-[10px] uppercase font-bold tracking-wider shrink-0 opacity-60"
+                      style={{ color: theme.fg }}
+                    >
                       搜索结果 ({searchResults.length})
                     </span>
                     {searchResults.length === 0 && !isSearching && (
-                      <div className="text-xs text-tx-tertiary italic text-center py-8">
+                      <div className="text-sm opacity-50 italic text-center py-12" style={{ color: theme.fg }}>
                         {searchQuery.trim() ? "未找到匹配结果" : "输入关键词开始搜索"}
                       </div>
                     )}
-                    <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                    {isSearching && (
+                      <div className="flex items-center justify-center gap-2 py-12 opacity-60" style={{ color: theme.fg }}>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span className="text-sm">搜索中…</span>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-0.5 pb-2">
                       {searchResults.map((item, idx) => {
                         const excerptHtml = renderExcerpt(item.excerpt, searchQuery);
                         return (
                           <div
                             key={idx}
+                            role="button"
+                            tabIndex={0}
                             onClick={async () => {
                               try {
                                 if (viewRef.current) {
                                   await viewRef.current.goTo(item.cfi);
                                   // Auto close sidebar on mobile
-                                  if (window.innerWidth < 640) setActiveSidebar(null);
+                                  if (window.innerWidth < 768) setActiveSidebar(null);
                                 }
                               } catch (err) {
                                 console.warn("跳转到搜索结果失败:", err);
                               }
                             }}
-                            className="p-3 border border-app-border/40 hover:border-accent-primary bg-black/5 dark:bg-white/5 hover:bg-accent-primary/5 rounded-xl cursor-pointer transition-all text-left flex flex-col gap-1.5"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                (e.currentTarget as HTMLElement).click();
+                              }
+                            }}
+                            className="p-3.5 border rounded-xl cursor-pointer transition-all text-left flex flex-col gap-1.5 active:scale-[0.99]"
+                            style={{
+                              borderColor: `${theme.fg}18`,
+                              backgroundColor: `${theme.fg}08`,
+                              color: theme.fg,
+                            }}
                           >
                             <div
-                              className="text-xs leading-relaxed text-tx-secondary break-words"
+                              className="text-sm leading-relaxed break-words opacity-90"
                               dangerouslySetInnerHTML={{ __html: excerptHtml }}
                             />
                             {item.sectionName && (
-                              <span className="text-[9px] text-tx-tertiary font-bold tracking-tight truncate self-start opacity-75">
+                              <span className="text-[11px] font-medium tracking-tight truncate self-start opacity-55">
                                 📍 {item.sectionName}
                               </span>
                             )}
@@ -3462,34 +3501,59 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         </div>
       )}
 
-      {/* 5. Custom Notes List Dialog */}
+      {/* 5. Custom Notes List Dialog — 移动全屏 / 桌面居中卡片 */}
       {activeSidebar === "notes" && (
-        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div
+          className="fixed inset-0 z-[9998] flex items-stretch justify-center md:items-center bg-black/60 backdrop-blur-sm md:p-4 animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && window.innerWidth >= 768) {
+              setActiveSidebar(null);
+            }
+          }}
+        >
           <div
-            className="w-full max-w-3xl h-[80vh] border rounded-2xl shadow-xl overflow-hidden flex flex-col animate-scale-in"
+            className="w-full h-full md:h-[min(80vh,720px)] md:max-w-3xl md:border md:rounded-2xl shadow-xl overflow-hidden flex flex-col md:animate-scale-in"
             style={{
               backgroundColor: theme.bg,
               color: theme.fg,
-              borderColor: `${theme.fg}20`
+              borderColor: `${theme.fg}20`,
+              paddingTop: "var(--safe-area-top, 0px)",
+              paddingBottom: "var(--safe-area-bottom, 0px)",
             }}
           >
-            {/* Header */}
+            {/* Header：移动端分两行，避免标题竖排 + 控件挤爆 */}
             <div
-              className="px-5 py-4 border-b flex justify-between items-center bg-black/5 dark:bg-white/5"
+              className="px-4 py-3 md:px-5 md:py-4 border-b flex flex-col gap-3 shrink-0 bg-black/5 dark:bg-white/5"
               style={{ borderColor: `${theme.fg}15` }}
             >
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <MessageSquare size={16} className="text-accent-primary" />
-                <span>全书划线/读书笔记 ({notes.length})</span>
-              </h3>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3 min-w-0">
+                <h3 className="text-sm font-bold flex items-center gap-2 min-w-0">
+                  <MessageSquare size={16} className="text-accent-primary shrink-0" />
+                  <span className="truncate">全书划线/读书笔记 ({notes.length})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveSidebar(null)}
+                  className="inline-flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-2.5 rounded-xl font-semibold text-xs shrink-0 active:scale-95 transition-all"
+                  style={{
+                    color: theme.fg,
+                    backgroundColor: `${theme.fg}14`,
+                    border: `1px solid ${theme.fg}33`,
+                  }}
+                  aria-label="关闭"
+                >
+                  <X size={18} strokeWidth={2.25} />
+                  <span className="md:hidden">关闭</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 <select
                   value={noteFilter}
                   onChange={(e) => {
-                    setNoteFilter(e.target.value as 'all' | 'mine');
+                    setNoteFilter(e.target.value as "all" | "mine");
                     setNotesPage(1);
                   }}
-                  className="px-2 py-1 bg-transparent border rounded-lg text-xs focus:outline-none"
+                  className="flex-1 min-w-0 min-h-[40px] px-2.5 py-1.5 bg-transparent border rounded-xl text-xs focus:outline-none"
                   style={{ borderColor: `${theme.fg}30`, color: theme.fg }}
                 >
                   <option value="all">全部人员</option>
@@ -3497,35 +3561,29 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                 </select>
                 {notes.length > 0 && (
                   <button
+                    type="button"
                     onClick={handleExportNotes}
-                    className="px-3 py-1.5 text-xs font-bold border rounded-xl transition-all flex items-center gap-1.5 shrink-0 hover:bg-black/5 dark:hover:bg-white/5"
+                    className="min-h-[40px] px-3 py-1.5 text-xs font-bold border rounded-xl transition-all inline-flex items-center justify-center gap-1.5 shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
                     style={{
                       borderColor: `${theme.fg}30`,
-                      color: theme.fg
+                      color: theme.fg,
                     }}
                   >
                     <Download size={12} />
-                    <span>导出 Markdown</span>
+                    <span>导出</span>
                   </button>
                 )}
-                <button
-                  onClick={() => setActiveSidebar(null)}
-                  className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-tx-tertiary transition-colors"
-                  style={{ color: theme.fg }}
-                >
-                  <X size={18} />
-                </button>
               </div>
             </div>
-            
+
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-6">
               {notes.length === 0 && (
-                <div className="text-xs italic text-center py-20 opacity-60">
+                <div className="text-sm italic text-center py-20 opacity-60">
                   本书暂无划线或笔记，选中文字可添加划线
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-3 md:gap-4">
                 {displayedNotes.map((n) => (
                   <div
                     key={n.id}
@@ -3540,16 +3598,21 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                       }
                     }}
                     className={cn(
-                      "p-4 border rounded-xl cursor-pointer transition-all text-left flex flex-col justify-between gap-3",
-                      theme.isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-black/5 hover:bg-black/10"
+                      "p-3.5 md:p-4 border rounded-xl cursor-pointer transition-all text-left flex flex-col justify-between gap-3 active:scale-[0.99]",
+                      theme.isDark
+                        ? "border-white/10 bg-white/5 hover:bg-white/10"
+                        : "border-black/10 bg-black/5 hover:bg-black/10",
                     )}
                     style={{
-                      borderColor: `${theme.fg}15`
+                      borderColor: `${theme.fg}15`,
                     }}
                   >
-                    <div className="space-y-2">
-                      <p className="text-xs italic font-serif leading-relaxed opacity-95 border-l-2 pl-2" style={{ borderColor: n.color }}>
-                        "{n.text}"
+                    <div className="space-y-2 min-w-0">
+                      <p
+                        className="text-sm md:text-xs italic font-serif leading-relaxed opacity-95 border-l-2 pl-2.5 break-words"
+                        style={{ borderColor: n.color }}
+                      >
+                        &ldquo;{n.text}&rdquo;
                       </p>
                       {editingNoteId === n.id ? (
                         <div className="space-y-2 mt-2" onClick={(e) => e.stopPropagation()}>
@@ -3557,23 +3620,25 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                             autoFocus
                             value={editingNoteText}
                             onChange={(e) => setEditingNoteText(e.target.value)}
-                            className="w-full h-20 p-2 text-xs bg-transparent border rounded-lg focus:outline-none focus:border-accent-primary resize-none"
+                            className="w-full h-24 md:h-20 p-2.5 text-sm md:text-xs bg-transparent border rounded-lg focus:outline-none focus:border-accent-primary resize-none"
                             style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
                           />
-                          <div className="flex justify-end gap-1.5">
+                          <div className="flex justify-end gap-2">
                             <button
+                              type="button"
                               onClick={() => {
                                 setEditingNoteId(null);
                                 setEditingNoteText("");
                               }}
-                              className="px-2.5 py-1 text-[10px] rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-medium"
+                              className="min-h-[36px] px-3 py-1.5 text-xs rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-medium"
                               style={{ color: theme.fg }}
                             >
                               取消
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleUpdateNoteInline(n.id)}
-                              className="px-2.5 py-1 bg-accent-primary text-white text-[10px] rounded-lg font-bold"
+                              className="min-h-[36px] px-3 py-1.5 bg-accent-primary text-white text-xs rounded-lg font-bold"
                             >
                               保存
                             </button>
@@ -3582,10 +3647,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                       ) : (
                         n.note && (
                           <div
-                            className="text-xs font-medium leading-relaxed p-3 rounded-lg break-words"
+                            className="text-sm md:text-xs font-medium leading-relaxed p-3 rounded-lg break-words"
                             style={{
                               backgroundColor: `${theme.fg}08`,
-                              color: theme.fg
+                              color: theme.fg,
                             }}
                           >
                             💡 {n.note}
@@ -3593,62 +3658,77 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         )
                       )}
                     </div>
+                    {/* 元信息：窄屏换行，操作与日期分列 */}
                     <div
-                      className="flex justify-between items-center text-[10px] opacity-60 font-medium border-t pt-2"
+                      className="flex flex-col gap-2 text-[11px] md:text-[10px] opacity-70 font-medium border-t pt-2.5"
                       style={{ borderColor: `${theme.fg}10` }}
                     >
-                      <div className="flex items-center gap-2">
-                        <span>👤 {n.displayName || n.username || "我的笔记"}</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                        <span className="shrink-0">
+                          👤 {n.displayName || n.username || "我的笔记"}
+                        </span>
                         {n.chapterTitle && (
-                          <span className="ml-2 opacity-70" title="章节">
+                          <span className="min-w-0 truncate max-w-full" title="章节">
                             📖 {n.chapterTitle}
                           </span>
                         )}
                         {n.progress && (
-                          <span className="ml-1 opacity-70" title="进度/页数">
+                          <span className="shrink-0 opacity-80" title="进度/页数">
                             📍 {n.progress}
                           </span>
                         )}
-                        {(n.userId === localStorage.getItem("super-self-userid") || !n.userId) && (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingNoteId(n.id);
-                                setEditingNoteText(n.note || "");
-                              }}
-                              className="p-1 hover:text-accent-primary rounded transition-colors text-[9px] font-bold flex items-center gap-1 shrink-0"
-                              title="编辑想法"
-                            >
-                              <PenTool size={10} />
-                              <span>编辑</span>
-                            </button>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await handleDeleteHighlight(n.id);
-                              }}
-                              className="p-1 hover:text-red-500 rounded transition-colors text-[9px] font-bold flex items-center gap-1 shrink-0"
-                              title="删除"
-                            >
-                              <Trash2 size={10} />
-                              <span>删除</span>
-                            </button>
-                          </>
-                        )}
                       </div>
-                      <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          {(n.userId === localStorage.getItem("super-self-userid") || !n.userId) && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingNoteId(n.id);
+                                  setEditingNoteText(n.note || "");
+                                }}
+                                className="min-h-[32px] px-2 py-1 hover:text-accent-primary rounded-lg transition-colors text-[11px] font-bold inline-flex items-center gap-1 shrink-0"
+                                title="编辑想法"
+                              >
+                                <PenTool size={12} />
+                                <span>编辑</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await handleDeleteHighlight(n.id);
+                                }}
+                                className="min-h-[32px] px-2 py-1 hover:text-red-500 rounded-lg transition-colors text-[11px] font-bold inline-flex items-center gap-1 shrink-0"
+                                title="删除"
+                              >
+                                <Trash2 size={12} />
+                                <span>删除</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        <span className="shrink-0 tabular-nums opacity-80">
+                          {new Date(n.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
 
               {totalNotesPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-6 border-t border-app-border/40 mt-6 select-none">
+                <div
+                  className="flex flex-wrap items-center justify-center gap-2 pt-6 border-t mt-6 select-none"
+                  style={{ borderColor: `${theme.fg}15` }}
+                >
                   <button
+                    type="button"
                     disabled={notesPage === 1}
-                    onClick={() => setNotesPage(prev => Math.max(1, prev - 1))}
-                    className="p-1.5 px-3 rounded-xl border text-[11px] font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    onClick={() => setNotesPage((prev) => Math.max(1, prev - 1))}
+                    className="min-h-[40px] px-3 rounded-xl border text-xs font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
                     style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
                   >
                     上一页
@@ -3657,22 +3737,32 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     const p = idx + 1;
                     return (
                       <button
+                        type="button"
                         key={p}
                         onClick={() => setNotesPage(p)}
                         className={cn(
-                          "w-7 h-7 rounded-xl border text-xs font-bold transition-all flex items-center justify-center active:scale-95",
-                          notesPage === p ? "bg-accent-primary text-white border-transparent" : "hover:bg-black/5 dark:hover:bg-white/5"
+                          "min-w-[36px] min-h-[36px] rounded-xl border text-xs font-bold transition-all inline-flex items-center justify-center active:scale-95",
+                          notesPage === p
+                            ? "bg-accent-primary text-white border-transparent"
+                            : "hover:bg-black/5 dark:hover:bg-white/5",
                         )}
-                        style={notesPage === p ? undefined : { borderColor: `${theme.fg}15`, color: theme.fg }}
+                        style={
+                          notesPage === p
+                            ? undefined
+                            : { borderColor: `${theme.fg}15`, color: theme.fg }
+                        }
                       >
                         {p}
                       </button>
                     );
                   })}
                   <button
+                    type="button"
                     disabled={notesPage === totalNotesPages}
-                    onClick={() => setNotesPage(prev => Math.min(totalNotesPages, prev + 1))}
-                    className="p-1.5 px-3 rounded-xl border text-[11px] font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    onClick={() =>
+                      setNotesPage((prev) => Math.min(totalNotesPages, prev + 1))
+                    }
+                    className="min-h-[40px] px-3 rounded-xl border text-xs font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
                     style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
                   >
                     下一页
