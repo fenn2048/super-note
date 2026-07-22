@@ -43,13 +43,15 @@ public class MediaPlaybackPlugin extends Plugin {
 
     /**
      * 更新或启动媒体通知。
-     * { title, artist, isPlaying, position?, duration? }  // position/duration 单位：秒
+     * { title, artist, isPlaying, position?, duration?, playMode? }  // position/duration 单位：秒
      * position/duration 未传时保留服务内已有值，避免锁屏进度被清零。
      */
     @PluginMethod
     public void update(PluginCall call) {
         String title = call.getString("title", "未知曲目");
         String artist = call.getString("artist", "");
+        String playMode = call.getString("playMode", "sequence");
+        String coverUrl = call.getString("coverUrl", null);
         boolean hasPlaying = call.getData().has("isPlaying");
         Boolean playing = call.getBoolean("isPlaying", true);
         boolean isPlaying = !hasPlaying || playing == null || playing;
@@ -67,7 +69,7 @@ public class MediaPlaybackPlugin extends Plugin {
         }
         try {
             MediaPlaybackService.startOrUpdate(
-                    getContext(), title, artist, isPlaying, hasPlaying, positionMs, durationMs);
+                    getContext(), title, artist, isPlaying, hasPlaying, positionMs, durationMs, playMode, coverUrl);
             JSObject ret = new JSObject();
             ret.put("ok", true);
             call.resolve(ret);

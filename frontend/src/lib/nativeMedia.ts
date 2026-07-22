@@ -7,7 +7,7 @@
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { isNativePlatform } from "@/hooks/useCapacitor";
 
-export type MediaAction = "play" | "pause" | "next" | "prev" | "stop";
+export type MediaAction = "play" | "pause" | "next" | "prev" | "stop" | "mode";
 
 interface MediaPlaybackPlugin {
   update(opts: {
@@ -18,10 +18,14 @@ interface MediaPlaybackPlugin {
     position?: number;
     /** 总时长（秒） */
     duration?: number;
+    /** 播放模式: sequence | random | loop */
+    playMode?: string;
+    /** 音频封面图片地址 */
+    coverUrl?: string;
   }): Promise<{ ok: boolean }>;
   /** 高频进度刷新（秒） */
   updatePosition(opts: {
-    position: number;
+    position?: number;
     duration?: number;
     isPlaying?: boolean;
   }): Promise<{ ok: boolean }>;
@@ -52,6 +56,8 @@ export async function updateNativeMediaSession(opts: {
   isPlaying: boolean;
   position?: number;
   duration?: number;
+  playMode?: string;
+  coverUrl?: string;
 }): Promise<void> {
   const p = getPlugin();
   if (!p) return;
@@ -62,6 +68,8 @@ export async function updateNativeMediaSession(opts: {
       isPlaying: opts.isPlaying,
       position: opts.position,
       duration: opts.duration,
+      playMode: opts.playMode || "sequence",
+      coverUrl: opts.coverUrl,
     });
   } catch (e) {
     console.warn("[nativeMedia] update failed", e);
@@ -70,7 +78,7 @@ export async function updateNativeMediaSession(opts: {
 
 /** 锁屏进度条：节流调用，仅推送 position/duration */
 export async function updateNativeMediaPosition(opts: {
-  position: number;
+  position?: number;
   duration?: number;
   isPlaying?: boolean;
 }): Promise<void> {
@@ -78,7 +86,7 @@ export async function updateNativeMediaPosition(opts: {
   if (!p) return;
   try {
     await p.updatePosition({
-      position: Math.max(0, opts.position || 0),
+      position: opts.position != null && opts.position >= 0 ? opts.position : undefined,
       duration: opts.duration,
       isPlaying: opts.isPlaying,
     });
