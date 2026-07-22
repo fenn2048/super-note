@@ -48,10 +48,10 @@ export default function ManualPanel() {
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2 mb-2 text-zinc-950 dark:text-zinc-50">
                 <Sparkles className="w-5 h-5 text-indigo-500" />
-                欢迎使用 星空笔记
+                欢迎使用 蜉蝣
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                星空笔记（原 super-note）是一款专为个人记录与家庭/团队协作设计的现代笔记应用。支持富文本、说说 timeline、共享待办等模块，提供全方位的云同步与极致离线支持。
+                蜉蝣 是一款专为个人记录与家庭/团队协作设计的现代笔记应用。支持富文本、说说 timeline、共享待办等模块，提供全方位的云同步与极致离线支持。
               </p>
             </div>
 
@@ -97,7 +97,7 @@ export default function ManualPanel() {
                 家庭空间与多用户协作
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                星空笔记 设计了直观的“工作区”（Workspace）概念，支持个人空间与协作空间双轨运行，方便您与家人、伙伴进行实时协作。
+                蜉蝣 设计了直观的“工作区”（Workspace）概念，支持个人空间与协作空间双轨运行，方便您与家人、伙伴进行实时协作。
               </p>
             </div>
 
@@ -201,7 +201,7 @@ export default function ManualPanel() {
                 排版密度与快捷操作
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                星空笔记 配备了功能强大的富文本编辑器，同时支持调整界面的排版密度以适应不同的屏幕和浏览习惯。
+                蜉蝣 配备了功能强大的富文本编辑器，同时支持调整界面的排版密度以适应不同的屏幕和浏览习惯。
               </p>
             </div>
 
@@ -259,7 +259,7 @@ export default function ManualPanel() {
                 浏览器剪藏插件安装与使用
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                通过浏览器剪藏插件，您可以在浏览任意网页时一键将正文智能解析并永久保存至您的星空笔记中。剪藏扩展已全新升级至极简 Stitch 设计：优化了配置连接步骤，折叠了高级标签、备注与 AI 任务选项，整体界面更加聚焦、清爽和易用。
+                通过浏览器剪藏插件，您可以在浏览任意网页时一键将正文智能解析并永久保存至您的蜉蝣中。剪藏扩展已全新升级至极简 Stitch 设计：优化了配置连接步骤，折叠了高级标签、备注与 AI 任务选项，整体界面更加聚焦、清爽和易用。
               </p>
             </div>
 
@@ -268,7 +268,7 @@ export default function ManualPanel() {
               <div className="space-y-3 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
                 <div>
                   <strong className="text-zinc-800 dark:text-zinc-200">第一步：获取插件包</strong>
-                  <p className="mt-0.5">前往星空笔记的“设置 &rarr; 关于星空笔记”界面，在底部的“下载扩展与客户端”区域中，根据您使用的浏览器点击下载对应的 ZIP 插件压缩包，并解压到本地文件夹中。</p>
+                  <p className="mt-0.5">前往蜉蝣的“设置 &rarr; 关于蜉蝣”界面，在底部的“下载扩展与客户端”区域中，根据您使用的浏览器点击下载对应的 ZIP 插件压缩包，并解压到本地文件夹中。</p>
                 </div>
                 <div>
                   <strong className="text-zinc-800 dark:text-zinc-200">第二步：开启浏览器开发者模式</strong>
@@ -280,7 +280,7 @@ export default function ManualPanel() {
                 </div>
                 <div>
                   <strong className="text-zinc-800 dark:text-zinc-200">第三步：载入已解压的扩展程序</strong>
-                  <p className="mt-0.5">在 Chrome 或 Edge 的扩展管理页面，点击左上角的“<strong className="text-zinc-700 dark:text-zinc-300">加载已解压的扩展程序</strong>” (Load unpacked) 按钮，选择您刚刚解压的插件文件夹。载入成功后，建议点击浏览器工具栏的拼图图标将“星空笔记网页剪藏”插件固定在工具栏。</p>
+                  <p className="mt-0.5">在 Chrome 或 Edge 的扩展管理页面，点击左上角的“<strong className="text-zinc-700 dark:text-zinc-300">加载已解压的扩展程序</strong>” (Load unpacked) 按钮，选择您刚刚解压的插件文件夹。载入成功后，建议点击浏览器工具栏的拼图图标将“蜉蝣网页剪藏”插件固定在工具栏。</p>
                 </div>
               </div>
             </div>
@@ -290,12 +290,12 @@ export default function ManualPanel() {
               <div className="space-y-3 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
                 <div>
                   <strong className="text-zinc-800 dark:text-zinc-200">第一步：填写服务器地址</strong>
-                  <p className="mt-0.5">点击浏览器工具栏的星空笔记剪藏插件图标。在配置弹窗中，输入您部署的星空笔记服务器的完整 URL（例如：<code>http://192.168.1.100:3001</code>）。</p>
+                  <p className="mt-0.5">点击浏览器工具栏的蜉蝣剪藏插件图标。在配置弹窗中，输入您部署的蜉蝣服务器的完整 URL（例如：<code>http://192.168.1.100:3001</code>）。</p>
                 </div>
                 <div>
                   <strong className="text-zinc-800 dark:text-zinc-200">第二步：创建并填写访问令牌 (Token)</strong>
                   <p className="mt-0.5">
-                    为了保障数据安全，插件需要使用个人访问令牌连接。请前往星空笔记网页端或客户端，打开“设置 → 访问令牌”界面，点击“创建令牌”，输入名称并勾选权限后创建。复制生成的令牌密钥，粘贴到剪藏插件的“Access Token”输入框中，点击保存连接。
+                    为了保障数据安全，插件需要使用个人访问令牌连接。请前往蜉蝣网页端或客户端，打开“设置 → 访问令牌”界面，点击“创建令牌”，输入名称并勾选权限后创建。复制生成的令牌密钥，粘贴到剪藏插件的“Access Token”输入框中，点击保存连接。
                   </p>
                 </div>
               </div>
@@ -304,7 +304,7 @@ export default function ManualPanel() {
             <div>
               <h3 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">🚀 3. 开始一键剪藏网页</h3>
               <ol className="list-decimal pl-4 space-y-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
-                <li>浏览任意网页时，点击浏览器右上角的星空笔记剪藏插件图标，或者在页面空白处点击右键，选择“剪藏到星空笔记”。</li>
+                <li>浏览任意网页时，点击浏览器右上角的蜉蝣剪藏插件图标，或者在页面空白处点击右键，选择“剪藏到蜉蝣”。</li>
                 <li>插件会智能过滤广告，自动解析网页的文章正文并将其转为干净排版的 Markdown 格式。</li>
                 <li>您可以在弹窗中预览或手动编辑解析后的正文与标题，选择要保存的目标笔记本、添加标签属性。</li>
                 <li>点击“保存笔记”按钮，插件即会在后台将文章连同内嵌的图片和格式附件自动拉取保存到您的私有服务器中。</li>

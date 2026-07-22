@@ -426,7 +426,7 @@ function guessImageFormat(bytes: Uint8Array): { ext: string; contentType: string
 export interface CreateDocxOptions {
   /** docProps/core.xml 的 title。默认从 IR.meta.title 读，否则 "未命名文档"。 */
   title?: string;
-  /** docProps/core.xml 的 author。默认从 IR.meta.author，否则 "星空笔记"。 */
+  /** docProps/core.xml 的 author。默认从 IR.meta.author，否则 "蜉蝣"。 */
   author?: string;
 }
 
@@ -436,7 +436,7 @@ export async function createDocx(
 ): Promise<Blob> {
   const ctx = new SerializerCtx();
   const title = opts.title ?? ir.meta?.title ?? "未命名文档";
-  const author = opts.author ?? ir.meta?.author ?? "星空笔记";
+  const author = opts.author ?? ir.meta?.author ?? "蜉蝣";
   const created = nowIso();
 
   // ---------- 1. body ----------
@@ -561,7 +561,7 @@ ${documentRels.join("\n")}
 
   const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
-  <Application>星空笔记</Application>
+  <Application>蜉蝣</Application>
 </Properties>`;
 
   // ---------- 8. 打包 ----------

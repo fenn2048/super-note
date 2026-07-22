@@ -3251,7 +3251,7 @@ function DiaryEditor({
       transition={{ duration: 0.18 }}
       className={cn(
         "bg-app-surface/95 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm flex flex-col overflow-hidden",
-        dockToKeyboard
+        dockMobile
           ? "fixed left-2 right-2 z-[56] md:static md:left-auto md:right-auto md:z-auto"
           : "max-h-[min(70vh,560px)]",
       )}

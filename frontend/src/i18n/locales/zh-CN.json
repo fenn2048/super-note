@@ -1538,7 +1538,7 @@
   },
   "server": {
     "title": "连接服务器",
-    "subtitle": "输入 星空笔记服务器地址以开始使用",
+    "subtitle": "输入 蜉蝣服务器地址以开始使用",
     "addressLabel": "服务器地址",
     "addressPlaceholder": "例如: 192.168.1.100:3001 或 note.example.com",
     "addressHint": "选择协议、填写主机和端口（端口可留空走默认值）",
@@ -1750,7 +1750,7 @@
       "title": "创建访问令牌",
       "subtitle": "明文令牌只会显示这一次，请在窗口关闭前完成复制。",
       "nameLabel": "名称",
-      "namePlaceholder": "例如：星空笔记 书签同步",
+      "namePlaceholder": "例如：蜉蝣 书签同步",
       "nameHint": "用于您日后识别此令牌的用途，不会泄漏给第三方。",
       "scopesLabel": "权限范围",
       "selectAll": "全选",
