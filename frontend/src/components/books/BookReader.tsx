@@ -22,8 +22,10 @@ import {
 } from "@/lib/localStore";
 import {
   applyNativeStatusBar,
+  isAppDarkMode,
   syncStatusBarToAppTheme,
 } from "@/hooks/useCapacitor";
+import { useTheme } from "next-themes";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -134,14 +136,23 @@ const THEMES = {
   dark: { bg: "#151b26", fg: "#abb2bf", name: "深邃暗夜", isDark: true }
 };
 
-/** App 明暗模式 → 阅读器默认主题：深色→深邃暗夜，浅色→水墨文楷 */
-function readerThemeFromAppMode(): "classic" | "dark" {
-  if (typeof document === "undefined") return "classic";
-  return document.documentElement.classList.contains("dark") ? "dark" : "classic";
+/**
+ * App 明暗 → 阅读器主题 key。
+ * 深色 → 深邃暗夜 (dark)；浅色 → 水墨文楷 (classic)。
+ * resolvedFromHook 优先（next-themes hydration 后），否则走 isAppDarkMode 多源判断。
+ */
+function readerThemeFromAppMode(resolvedFromHook?: string | null): "classic" | "dark" {
+  if (resolvedFromHook === "dark") return "dark";
+  if (resolvedFromHook === "light") return "classic";
+  return isAppDarkMode() ? "dark" : "classic";
 }
 
-function buildDefaultSettings() {
-  return { ...DEFAULT_SETTINGS, theme: readerThemeFromAppMode() };
+function buildDefaultSettings(resolvedFromHook?: string | null) {
+  return { ...DEFAULT_SETTINGS, theme: readerThemeFromAppMode(resolvedFromHook) };
+}
+
+function themeDefOf(themeKey: string) {
+  return THEMES[themeKey as keyof typeof THEMES] || THEMES.classic;
 }
 
 const renderExcerpt = (excerpt: any, query: string): string => {
@@ -162,6 +173,7 @@ const renderExcerpt = (excerpt: any, query: string): string => {
 };
 
 export default function BookReader({ bookHash, onBack, workspaceId }: BookReaderProps) {
+  const { resolvedTheme } = useTheme();
   const [book, setBook] = useState<Book | null>(null);
   const [loadingState, setLoadingState] = useState<"loading" | "rendering" | "ready" | "error">("loading");
   const [loadingProgress, setLoadingProgress] = useState("");
@@ -170,7 +182,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const [toc, setToc] = useState<TOCItem[]>([]);
   const [notes, setNotes] = useState<BookNote[]>([]);
   // 首帧即按 App 明暗模式选阅读主题，加载页不会先闪成固定浅灰
-  const [settings, setSettings] = useState(buildDefaultSettings);
+  const [settings, setSettings] = useState(() => buildDefaultSettings());
 
   // Active sidebars
   const [activeSidebar, setActiveSidebar] = useState<"toc" | "search" | "notes" | "settings" | null>(null);
@@ -412,6 +424,82 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<any>(null);
 
+  const applyReaderStylesRef = useRef<(s?: any) => void>(() => {});
+
+  /** 将 App 明暗同步到阅读主题 + 原生状态栏（加载页立刻生效） */
+  const applyAppModeToReader = useCallback(
+    (opts?: { persist?: boolean; forceStyles?: boolean }) => {
+      const themeKey = readerThemeFromAppMode(resolvedTheme);
+      const themeDef = themeDefOf(themeKey);
+      const prevTheme = settingsRef.current.theme;
+      const next = { ...settingsRef.current, theme: themeKey };
+      settingsRef.current = next;
+      if (prevTheme !== themeKey) {
+        setSettings(next);
+      } else {
+        // 同 theme 也刷一次状态栏（Android 首帧可能被覆盖）
+        setSettings((s) => (s.theme === themeKey ? s : next));
+      }
+      // 状态栏：深色表面 → 白图标；浅色 → 黑图标
+      document.documentElement.setAttribute("data-reader-status-bar", "1");
+      applyNativeStatusBar({
+        isDarkSurface: themeDef.isDark,
+        backgroundColor: themeDef.bg,
+      });
+      if (opts?.forceStyles) {
+        applyReaderStylesRef.current(next);
+      }
+      if (opts?.persist) {
+        api.books
+          .saveConfig(bookHash, { viewSettings: JSON.stringify(next) })
+          .catch(() => {});
+        getBookConfig(bookHash)
+          .then((existing) => {
+            putBookConfig({
+              userId: localStorage.getItem("super-self-userid") || "",
+              bookHash,
+              location: existing?.location || null,
+              progress: existing?.progress || "0%",
+              viewSettings: JSON.stringify(next),
+              xpointer: existing?.xpointer || null,
+              createdAt: existing?.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          })
+          .catch(() => {});
+      }
+    },
+    [resolvedTheme, bookHash],
+  );
+
+  // 挂载立刻按 App 主题套用（含状态栏），避免加载页仍是水墨灰底
+  useEffect(() => {
+    document.documentElement.setAttribute("data-reader-status-bar", "1");
+    applyAppModeToReader();
+    return () => {
+      document.documentElement.removeAttribute("data-reader-status-bar");
+      syncStatusBarToAppTheme();
+    };
+    // 仅挂载/卸载；主题变化由下方 effect 处理
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // App 明暗切换（设置里改主题 / system）时，阅读中同步主题与状态栏
+  useEffect(() => {
+    if (resolvedTheme !== "dark" && resolvedTheme !== "light") return;
+    applyAppModeToReader({ forceStyles: loadingState === "ready" });
+  }, [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // html.class 变化兜底（部分路径不经过 next-themes resolvedTheme）
+  useEffect(() => {
+    const root = document.documentElement;
+    const obs = new MutationObserver(() => {
+      applyAppModeToReader({ forceStyles: loadingState === "ready" });
+    });
+    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, [applyAppModeToReader, loadingState]);
+
   useEffect(() => {
     loadBookAndReader();
     return () => {
@@ -421,24 +509,6 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       }
     };
   }, [bookHash]);
-
-  // 阅读期间状态栏跟随阅读主题（白字/黑字 + 背景色）
-  useEffect(() => {
-    const themeDef = THEMES[settings.theme as keyof typeof THEMES] || THEMES.classic;
-    applyNativeStatusBar({
-      isDarkSurface: themeDef.isDark,
-      backgroundColor: themeDef.bg,
-    });
-  }, [settings.theme]);
-
-  // 占用全局状态栏控制权；卸载时交还给 App 主题
-  useEffect(() => {
-    document.documentElement.setAttribute("data-reader-status-bar", "1");
-    return () => {
-      document.documentElement.removeAttribute("data-reader-status-bar");
-      syncStatusBarToAppTheme();
-    };
-  }, []);
 
   // Listen to custom go-to book note event
   useEffect(() => {
@@ -463,6 +533,20 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const loadBookAndReader = async () => {
     try {
       setLoadingState("loading");
+      // 任何 await 之前先按 App 主题刷加载页 + 状态栏（深邃暗夜 / 水墨文楷）
+      const bootTheme = readerThemeFromAppMode(resolvedTheme);
+      const bootSettings = {
+        ...settingsRef.current,
+        theme: bootTheme,
+      };
+      settingsRef.current = bootSettings;
+      setSettings(bootSettings);
+      document.documentElement.setAttribute("data-reader-status-bar", "1");
+      applyNativeStatusBar({
+        isDarkSurface: themeDefOf(bootTheme).isDark,
+        backgroundColor: themeDefOf(bootTheme).bg,
+      });
+
       setLoadingProgress("正在获取书籍详情...");
       const bookData = await readBookDetail(bookHash, async () => {
         const data = await api.books.get(bookHash);
@@ -485,10 +569,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         await putBookConfig(configData);
         return configData;
       });
-      // 进入阅读器时按 App 明暗自动套用主题：深色→深邃暗夜，浅色→水墨文楷
-      // 其它排版偏好（字号、行距等）仍从书籍配置恢复
-      const appReaderTheme = readerThemeFromAppMode();
-      let nextSettings = buildDefaultSettings();
+      // 进入阅读器时强制按 App 明暗套用主题：深色→深邃暗夜，浅色→水墨文楷
+      // 其它排版偏好（字号、行距等）仍从书籍配置恢复；theme 字段始终被覆盖
+      const appReaderTheme = readerThemeFromAppMode(resolvedTheme);
+      let nextSettings = buildDefaultSettings(resolvedTheme);
       if (userConfig && userConfig.viewSettings) {
         try {
           const parsed = JSON.parse(userConfig.viewSettings);
@@ -500,6 +584,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       // 同步写 ref，避免后续 await 期间 applyReaderStyles 读到旧主题
       settingsRef.current = nextSettings;
       setSettings(nextSettings);
+      applyNativeStatusBar({
+        isDarkSurface: themeDefOf(appReaderTheme).isDark,
+        backgroundColor: themeDefOf(appReaderTheme).bg,
+      });
 
       setLoadingProgress("正在下载书籍文件...");
       const fileBlob = await readBookFile(bookHash, async () => {
@@ -603,6 +691,13 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         }
       }
 
+      // 打开后强制把 App 主题样式注入 foliate（不依赖 section load 时序）
+      applyReaderStyles(settingsRef.current);
+      applyNativeStatusBar({
+        isDarkSurface: themeDefOf(settingsRef.current.theme).isDark,
+        backgroundColor: themeDefOf(settingsRef.current.theme).bg,
+      });
+
       setLoadingState("ready");
     } catch (err) {
       console.error("阅读器加载失败:", err);
@@ -643,61 +738,93 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     return { left: 0, top: 0, width: 0, height: 0 };
   };
 
-  const handleMouseUpListener = useCallback((e: MouseEvent) => {
-    // Use event target's ownerDocument to get the correct doc (the iframe where mouseup occurred)
-    // This avoids the stale getActiveIframe() bug where it always returns the first iframe
-    const doc = (e.target as Element)?.ownerDocument;
-    if (!doc) return;
+  /**
+   * 从 iframe 文档当前 Selection 打开划线菜单（桌面 mouseup / 移动端长按 selectionchange·touchend 共用）
+   * 菜单项与桌面一致：复制 / 马克笔 / 波浪线 / 直线 / 写想法 / 删除划线
+   */
+  const tryOpenSelectionMenuFromDoc = useCallback((doc: Document | null | undefined) => {
+    if (!doc) return false;
     try {
       const sel = doc.getSelection();
-      // Determine the section index from the document, not stale currentSectionIndexRef
-      // (which can be overwritten by adjacent section load events)
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) return false;
+
       const renderer = viewRef.current?.renderer;
-      const contents = renderer?.getContents();
+      const contents = renderer?.getContents?.();
       const content = contents?.find((c: any) => c.doc === doc);
       const index = content?.index ?? currentSectionIndexRef.current;
-      console.log("[BookReader debug] mouseup event fired. Selection text:", sel?.toString(), "isCollapsed:", sel?.isCollapsed, "section index:", index);
-      if (sel && !sel.isCollapsed && sel.toString().trim()) {
-        const text = sel.toString();
-        const range = sel.getRangeAt(0);
-        const cfi = viewRef.current?.getCFI(index, range);
-        console.log("[BookReader debug] Generated cfi:", cfi);
-        
-        if (cfi) {
-          const rect = range.getBoundingClientRect();
-          // Find the exact iframe for this doc to get the correct bounding rect
-          let iframeRect = { left: 0, top: 0, width: 0, height: 0, bottom: 0, right: 0 };
-          if (renderer?.shadowRoot) {
-            const iframes = renderer.shadowRoot.querySelectorAll("iframe") as NodeListOf<HTMLIFrameElement>;
-            for (const iframe of iframes) {
-              if (iframe.contentDocument === doc) {
-                iframeRect = iframe.getBoundingClientRect();
-                break;
-              }
-            }
+      const text = sel.toString();
+      const range = sel.getRangeAt(0);
+      const cfi = viewRef.current?.getCFI(index, range);
+      if (!cfi) return false;
+
+      const rect = range.getBoundingClientRect();
+      let iframeRect = { left: 0, top: 0, width: 0, height: 0, bottom: 0, right: 0 };
+      if (renderer?.shadowRoot) {
+        const iframes = renderer.shadowRoot.querySelectorAll("iframe") as NodeListOf<HTMLIFrameElement>;
+        for (const iframe of iframes) {
+          if (iframe.contentDocument === doc) {
+            iframeRect = iframe.getBoundingClientRect();
+            break;
           }
-          if (!iframeRect.width) iframeRect = getIframeRect() as any;
-          const isNearTop = iframeRect.top + rect.top < 220;
-          setSelectionRange({ cfi, text });
-          const coords = {
-            x: iframeRect.left + rect.left + rect.width / 2,
-            y: isNearTop ? (iframeRect.top + rect.bottom + 8) : (iframeRect.top + rect.top - 8),
-            position: isNearTop ? "bottom" : "top" as "bottom" | "top"
-          };
-          setSelectionCoords(coords);
-          setShowSelectionPopup(true);
-          setShowMarkerColors(false);
-          setAnnotationNote("");
         }
-      } else {
-        setShowSelectionPopup(false);
       }
+      if (!iframeRect.width) iframeRect = getIframeRect() as any;
+
+      const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+      // 移动端用底部菜单，坐标仅作兼容；桌面夹紧到视口避免贴边溢出
+      let x = iframeRect.left + rect.left + rect.width / 2;
+      let y = iframeRect.top + rect.top - 8;
+      let position: "top" | "bottom" = "top";
+      const isNearTop = iframeRect.top + rect.top < 220;
+      if (isNearTop) {
+        y = iframeRect.top + rect.bottom + 8;
+        position = "bottom";
+      }
+      if (!isMobile) {
+        const pad = 12;
+        x = Math.min(Math.max(x, pad + 80), window.innerWidth - pad - 80);
+        y = Math.min(Math.max(y, pad + 48), window.innerHeight - pad);
+      }
+
+      setSelectionRange({ cfi, text });
+      setSelectionCoords({ x, y, position });
+      setShowSelectionPopup(true);
+      setShowMarkerColors(false);
+      setAnnotationNote("");
+      // 取消待翻页单击，避免选区松手后被当成点翻页
+      if (lastTapTimerRef.current) {
+        clearTimeout(lastTapTimerRef.current);
+        lastTapTimerRef.current = null;
+      }
+      return true;
     } catch (err) {
-      console.error("[BookReader debug] Error inside mouseup selection listener:", err);
+      console.error("[BookReader] open selection menu failed:", err);
+      return false;
     }
   }, []);
 
-  const handleMouseDownListener = useCallback(() => {
+  const handleMouseUpListener = useCallback((e: MouseEvent) => {
+    // Use event target's ownerDocument to get the correct doc (the iframe where mouseup occurred)
+    const doc = (e.target as Element)?.ownerDocument;
+    if (!doc) return;
+    if (!tryOpenSelectionMenuFromDoc(doc)) {
+      // 仅当确实没有选区时关闭（避免移动端选区过程中的冒泡 mouseup 误关）
+      const sel = doc.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        setShowSelectionPopup(false);
+      }
+    }
+  }, [tryOpenSelectionMenuFromDoc]);
+
+  const handleMouseDownListener = useCallback((e: MouseEvent) => {
+    // 移动端：选区存在时用户拖动手柄会触发 mousedown，不要关掉菜单
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      const doc = (e.target as Element)?.ownerDocument;
+      const sel = doc?.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString().trim()) {
+        return;
+      }
+    }
     setShowSelectionPopup(false);
     setInspectingNote(null);
   }, []);
@@ -813,6 +940,34 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   }, []);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
+    // 长按选字后松手：延迟检测 Selection（系统选区有时在 touchend 后才稳定）
+    const touchDoc = (e.target as Element)?.ownerDocument;
+    let hasTextSelection = false;
+    try {
+      const sel = touchDoc?.getSelection();
+      hasTextSelection = !!(sel && !sel.isCollapsed && sel.toString().trim());
+    } catch {
+      /* ignore */
+    }
+
+    window.setTimeout(() => {
+      if (tryOpenSelectionMenuFromDoc(touchDoc)) return;
+      const iframe = getActiveIframe();
+      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+      tryOpenSelectionMenuFromDoc(doc);
+    }, 80);
+
+    // 有文字选区时不做翻页手势，避免长按松手误翻页并冲掉菜单
+    if (hasTextSelection) {
+      touchStartY.current = null;
+      touchStartX.current = null;
+      if (lastTapTimerRef.current) {
+        clearTimeout(lastTapTimerRef.current);
+        lastTapTimerRef.current = null;
+      }
+      return;
+    }
+
     if (touchStartY.current !== null && touchStartX.current !== null && e.changedTouches.length > 0) {
       const startX = touchStartX.current;
       const endY = e.changedTouches[0].clientY;
@@ -848,7 +1003,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     }
     touchStartY.current = null;
     touchStartX.current = null;
-  }, []);
+  }, [tryOpenSelectionMenuFromDoc]);
 
   // Refs to hold the latest version of listeners to avoid stale closures
   const handleMouseUpListenerRef = useRef(handleMouseUpListener);
@@ -887,8 +1042,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     handleMouseUpListenerRef.current(e);
   }, []);
 
-  const mouseDownWrapper = useCallback(() => {
-    handleMouseDownListenerRef.current();
+  const mouseDownWrapper = useCallback((e: MouseEvent) => {
+    handleMouseDownListenerRef.current(e);
   }, []);
 
   const mouseMoveWrapper = useCallback((e: MouseEvent) => {
@@ -907,6 +1062,25 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     handleTouchEndRef.current(e);
   }, []);
 
+  // 移动端：选区变化时弹出与桌面一致的划线菜单（长按后 selectionchange 比 mouseup 更可靠）
+  const selectionChangeWrapper = useCallback(() => {
+    if (typeof window === "undefined" || window.innerWidth >= 768) return;
+    const iframe = getActiveIframe();
+    const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+    if (!doc) return;
+    const sel = doc.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    // 略延迟，等选区手柄与 CFI 稳定
+    window.setTimeout(() => tryOpenSelectionMenuFromDoc(doc), 120);
+  }, [tryOpenSelectionMenuFromDoc]);
+
+  const contextMenuWrapper = useCallback((e: Event) => {
+    // 屏蔽系统「复制/共享」菜单，统一用应用内菜单（与桌面一致）
+    e.preventDefault();
+    const doc = (e.target as Element)?.ownerDocument || getActiveIframe()?.contentDocument;
+    window.setTimeout(() => tryOpenSelectionMenuFromDoc(doc), 0);
+  }, [tryOpenSelectionMenuFromDoc]);
+
   // 把点击/滑动监听绑到当前 iframe 文档。
   // 必须在 loadingState→ready、章节 load、侧栏开关后重绑，否则首次进入无法翻页。
   const attachDocListeners = useCallback(() => {
@@ -919,6 +1093,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     doc.removeEventListener("click", clickWrapper);
     doc.removeEventListener("touchstart", touchStartWrapper);
     doc.removeEventListener("touchend", touchEndWrapper);
+    doc.removeEventListener("selectionchange", selectionChangeWrapper);
+    doc.removeEventListener("contextmenu", contextMenuWrapper);
 
     doc.addEventListener("mouseup", mouseUpWrapper);
     doc.addEventListener("mousedown", mouseDownWrapper);
@@ -926,8 +1102,20 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     doc.addEventListener("click", clickWrapper);
     doc.addEventListener("touchstart", touchStartWrapper, { passive: true });
     doc.addEventListener("touchend", touchEndWrapper, { passive: true });
+    // selectionchange 在 Document 上；部分 WebView 只在 document 冒泡
+    doc.addEventListener("selectionchange", selectionChangeWrapper);
+    doc.addEventListener("contextmenu", contextMenuWrapper);
     return true;
-  }, [mouseUpWrapper, mouseDownWrapper, mouseMoveWrapper, clickWrapper, touchStartWrapper, touchEndWrapper]);
+  }, [
+    mouseUpWrapper,
+    mouseDownWrapper,
+    mouseMoveWrapper,
+    clickWrapper,
+    touchStartWrapper,
+    touchEndWrapper,
+    selectionChangeWrapper,
+    contextMenuWrapper,
+  ]);
 
   useEffect(() => {
     if (loadingState !== "ready") return;
@@ -1048,20 +1236,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       }
     });
 
-    // 章节切换后重绑（含 touch 上下滑）；attachDocListeners 内部先 remove 再 add
-    doc.removeEventListener("mouseup", mouseUpWrapper);
-    doc.removeEventListener("mousedown", mouseDownWrapper);
-    doc.removeEventListener("mousemove", mouseMoveWrapper);
-    doc.removeEventListener("click", clickWrapper);
-    doc.addEventListener("mouseup", mouseUpWrapper);
-    doc.addEventListener("mousedown", mouseDownWrapper);
-    doc.addEventListener("mousemove", mouseMoveWrapper);
-    doc.addEventListener("click", clickWrapper);
-    // touch 走统一入口，避免与上方横向滑动逻辑重复绑两套 vertical handler
-    doc.removeEventListener("touchstart", touchStartWrapper);
-    doc.removeEventListener("touchend", touchEndWrapper);
-    doc.addEventListener("touchstart", touchStartWrapper, { passive: true });
-    doc.addEventListener("touchend", touchEndWrapper, { passive: true });
+    // 章节切换后重绑（含 touch / 选区菜单）
+    attachDocListeners();
   };
 
   const handleCreateOverlay = (e: any) => {
@@ -1160,7 +1336,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     if (!viewRef.current || !viewRef.current.renderer) return;
 
     const currentSettings = customSettings || settingsRef.current;
-    const theme = THEMES[currentSettings.theme as keyof typeof THEMES] || THEMES.sepia;
+    const theme = themeDefOf(currentSettings.theme);
     
     const paragraphMargin = currentSettings.usePublisherStyles ? "" : `margin-bottom: ${currentSettings.paragraphSpacing ?? 1.0}em !important;`;
     const textIndent = currentSettings.usePublisherStyles ? "" : `text-indent: ${currentSettings.firstLineIndent ?? 2.0}em !important;`;
@@ -1243,10 +1419,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     renderer.setAttribute("max-inline-size", `${currentSettings.maxColumnWidth ?? 1200}px`);
     renderer.setAttribute("max-block-size", `${currentSettings.maxColumnHeight ?? 1200}px`);
   };
+  applyReaderStylesRef.current = applyReaderStyles;
 
   const updateSetting = (key: string, value: any) => {
     const nextSettings = { ...settings, [key]: value };
     setSettings(nextSettings);
+    settingsRef.current = nextSettings;
     
     // Save to backend
     api.books.saveConfig(bookHash, {
@@ -1256,6 +1434,13 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     // Force re-apply styles immediately using the updated settings
     applyReaderStyles(nextSettings);
     viewRef.current?.renderer?.relayout?.();
+    if (key === "theme") {
+      const td = themeDefOf(String(value));
+      applyNativeStatusBar({
+        isDarkSurface: td.isDark,
+        backgroundColor: td.bg,
+      });
+    }
 
     // Cache settings locally
     getBookConfig(bookHash).then(existing => {
@@ -2252,8 +2437,8 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     );
   };
 
-  // Layout Themes Palette Colors
-  const theme = THEMES[settings.theme as keyof typeof THEMES] || THEMES.sepia;
+  // Layout Themes Palette Colors（与 App 明暗绑定后的阅读主题）
+  const theme = themeDefOf(settings.theme);
 
   let bookCoverUrl: string | null = null;
   if (book?.metadata) {
@@ -2272,7 +2457,12 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   const displayedNotes = filteredNotesForDisplay.slice((notesPage - 1) * notesPerPage, notesPage * notesPerPage);
 
   return (
-    <div className="fixed inset-0 z-50 bg-app-bg text-tx-primary select-none overflow-hidden" style={{ backgroundColor: theme.bg, color: theme.fg }}>
+    <div
+      className="fixed inset-0 z-50 select-none overflow-hidden"
+      style={{ backgroundColor: theme.bg, color: theme.fg }}
+      data-reader-theme={settings.theme}
+      data-reader-dark={theme.isDark ? "1" : "0"}
+    >
       
       {/* Main Body Layout */}
       <div className="w-full h-full flex relative overflow-hidden">
@@ -2955,123 +3145,144 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         </div>
       )}
 
-      {/* 1. Selection Popover (Floating Action Menu) */}
+      {/* 1. Selection Popover — 桌面悬浮条；移动端底部条，动作与桌面完全一致 */}
       {showSelectionPopup && selectionRange && (() => {
         const existingAnnotation = notes.find(n => n.cfi === selectionRange.cfi);
+        const isMobileMenu = typeof window !== "undefined" && window.innerWidth < 768;
+        const btnClass = cn(
+          "px-2.5 py-1.5 rounded transition-all flex items-center gap-1 shrink-0",
+          theme.isDark ? "hover:bg-white/10 active:bg-white/15" : "hover:bg-black/5 active:bg-black/10",
+        );
+
+        const menuBody = showMarkerColors ? (
+          <div className="flex items-center gap-2 px-1 py-0.5">
+            <button
+              type="button"
+              onClick={() => setShowMarkerColors(false)}
+              className={cn(
+                "p-1 rounded transition-colors text-inherit",
+                theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5",
+              )}
+            >
+              <ArrowLeft size={13} />
+            </button>
+            {["#ffeb3b", "#ff4081", "#00e676", "#29b6f6", "#e0e0e0"].map((color) => (
+              <button
+                type="button"
+                key={color}
+                onClick={() => {
+                  setLastColor(color);
+                  setLastColorStyle("solid");
+                  void handleAddHighlight(color, "solid");
+                  setShowMarkerColors(false);
+                }}
+                className="w-7 h-7 rounded-full border border-white/20 shadow hover:scale-110 active:scale-95 transition-transform"
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-inherit overflow-x-auto no-scrollbar">
+            <button type="button" onClick={handleCopyTextFromSelection} className={btnClass}>
+              <Copy size={13} />
+              <span>复制</span>
+            </button>
+            <button type="button" onClick={() => setShowMarkerColors(true)} className={btnClass}>
+              <Highlighter size={13} />
+              <span>马克笔</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLastColorStyle("squiggly");
+                setLastColor("#ff4081");
+                void handleAddHighlight("#ff4081", "squiggly");
+              }}
+              className={btnClass}
+            >
+              <Sparkles size={13} />
+              <span>波浪线</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLastColorStyle("underline");
+                setLastColor("#29b6f6");
+                void handleAddHighlight("#29b6f6", "underline");
+              }}
+              className={btnClass}
+            >
+              <Type size={13} className="underline" />
+              <span>直线</span>
+            </button>
+            <button type="button" onClick={handleOpenWriteThoughts} className={btnClass}>
+              <PenTool size={13} />
+              <span>写想法</span>
+            </button>
+            {existingAnnotation && (
+              <button
+                type="button"
+                onClick={() => void handleDeleteHighlightFromSelection(existingAnnotation.id)}
+                className={cn(
+                  btnClass,
+                  "text-red-500",
+                  theme.isDark ? "hover:bg-red-500/20" : "hover:bg-red-500/10",
+                )}
+              >
+                <Trash2 size={13} />
+                <span>删除划线</span>
+              </button>
+            )}
+          </div>
+        );
 
         return createPortal(
-          <div
-            className="fixed z-[9999] animate-fade-in flex flex-col shadow-xl rounded-xl border p-1.5"
-            style={{
-              left: `${selectionCoords.x}px`,
-              top: `${selectionCoords.y}px`,
-              transform: selectionCoords.position === "bottom" ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-              backgroundColor: theme.bg,
-              color: theme.fg,
-              borderColor: `${theme.fg}20`
-            }}
-          >
-            {showMarkerColors ? (
-              <div className="flex items-center gap-2 px-1 py-0.5">
-                <button
-                  onClick={() => setShowMarkerColors(false)}
-                  className={cn(
-                    "p-1 rounded transition-colors text-inherit",
-                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
-                  )}
-                >
-                  <ArrowLeft size={13} />
-                </button>
-                {["#ffeb3b", "#ff4081", "#00e676", "#29b6f6", "#e0e0e0"].map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      setLastColor(color);
-                      setLastColorStyle("solid");
-                      handleAddHighlight(color, "solid");
-                      setShowMarkerColors(false);
-                    }}
-                    className="w-6 h-6 rounded-full border border-white/20 shadow hover:scale-110 active:scale-95 transition-transform"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+          isMobileMenu ? (
+            // 移动端：贴底菜单栏（动作与桌面一致），避免被系统选区菜单抢走 / 坐标跑出屏
+            <div className="fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
+              <div
+                className="pointer-events-auto absolute inset-0 bg-black/25"
+                onClick={() => {
+                  setShowSelectionPopup(false);
+                  setShowMarkerColors(false);
+                }}
+              />
+              <div
+                className="pointer-events-auto relative w-full shadow-2xl border-t p-2 pb-[max(10px,var(--safe-area-bottom))] animate-in slide-in-from-bottom-2 duration-200"
+                style={{
+                  backgroundColor: theme.bg,
+                  color: theme.fg,
+                  borderColor: `${theme.fg}20`,
+                }}
+              >
+                <div className="flex justify-center pb-1.5">
+                  <div className="w-9 h-1 rounded-full opacity-30" style={{ backgroundColor: theme.fg }} />
+                </div>
+                <p className="px-2 pb-2 text-[10px] opacity-50 line-clamp-1">
+                  {selectionRange.text}
+                </p>
+                {menuBody}
               </div>
-            ) : (
-              <div className="flex items-center gap-1 text-[11px] font-semibold text-inherit">
-                <button
-                  onClick={handleCopyTextFromSelection}
-                  className={cn(
-                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
-                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
-                  )}
-                >
-                  <Copy size={13} />
-                  <span>复制</span>
-                </button>
-                <button
-                  onClick={() => setShowMarkerColors(true)}
-                  className={cn(
-                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
-                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
-                  )}
-                >
-                  <Highlighter size={13} />
-                  <span>马克笔</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setLastColorStyle("squiggly");
-                    setLastColor("#ff4081");
-                    handleAddHighlight("#ff4081", "squiggly");
-                  }}
-                  className={cn(
-                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
-                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
-                  )}
-                >
-                  <Sparkles size={13} />
-                  <span>波浪线</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setLastColorStyle("underline");
-                    setLastColor("#29b6f6");
-                    handleAddHighlight("#29b6f6", "underline");
-                  }}
-                  className={cn(
-                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
-                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
-                  )}
-                >
-                  <Type size={13} className="underline" />
-                  <span>直线</span>
-                </button>
-                <button
-                  onClick={handleOpenWriteThoughts}
-                  className={cn(
-                    "px-2.5 py-1.5 rounded transition-all flex items-center gap-1",
-                    theme.isDark ? "hover:bg-white/10" : "hover:bg-black/5"
-                  )}
-                >
-                  <PenTool size={13} />
-                  <span>写想法</span>
-                </button>
-                {existingAnnotation && (
-                  <button
-                    onClick={() => handleDeleteHighlightFromSelection(existingAnnotation.id)}
-                    className={cn(
-                      "px-2.5 py-1.5 rounded transition-all flex items-center gap-1 text-red-500",
-                      theme.isDark ? "hover:bg-red-500/20" : "hover:bg-red-500/10"
-                    )}
-                  >
-                    <Trash2 size={13} />
-                    <span>删除划线</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>,
-          document.body
+            </div>
+          ) : (
+            <div
+              className="fixed z-[9999] animate-fade-in flex flex-col shadow-xl rounded-xl border p-1.5"
+              style={{
+                left: `${selectionCoords.x}px`,
+                top: `${selectionCoords.y}px`,
+                transform:
+                  selectionCoords.position === "bottom"
+                    ? "translate(-50%, 0)"
+                    : "translate(-50%, -100%)",
+                backgroundColor: theme.bg,
+                color: theme.fg,
+                borderColor: `${theme.fg}20`,
+              }}
+            >
+              {menuBody}
+            </div>
+          ),
+          document.body,
         );
       })()}
 

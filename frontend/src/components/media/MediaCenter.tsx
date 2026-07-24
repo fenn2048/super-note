@@ -2034,41 +2034,28 @@ export default function MediaCenter() {
       {/* 3. MODALS AND FORMS */}
       {/* =========================================================================== */}
 
-      {/* Modal: Alist directory browser */}
-      <AnimatePresence>
-        {showAlistBrowser && (
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4"
-            style={{
-              paddingTop: "var(--safe-area-top, 0px)",
-              paddingBottom: "var(--safe-area-bottom, 0px)",
-            }}
+      {/* Modal: Alist directory browser
+          注意：不用 framer transform 包滚动层——Android WebView 在 transform 祖先下 overflow 滚动常失效。
+          portal 到 body + 固定 vh 高度 + 子组件 absolute 滚动区。 */}
+      {showAlistBrowser &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <AlistImportModalShell
+            onBackdropClick={() => setShowAlistBrowser(false)}
           >
-            <motion.div
-              initial={{ scale: 0.98, opacity: 0, y: 16 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.98, opacity: 0, y: 16 }}
-              className={cn(
-                "w-full max-w-4xl min-h-0 overflow-hidden",
-                // 移动端几乎全屏（更高）；桌面保持大弹窗
-                "h-[min(94dvh,100%)] md:h-[min(88vh,900px)]",
-                "rounded-t-2xl md:rounded-2xl",
-              )}
-            >
-              <AlistBrowser
-                workspaceId={workspaceId}
-                collections={collections}
-                onImportSuccess={(msg) => {
-                  setShowAlistBrowser(false);
-                  setTimeout(() => alert(msg), 10);
-                  fetchData();
-                }}
-                onClose={() => setShowAlistBrowser(false)}
-              />
-            </motion.div>
-          </div>
+            <AlistBrowser
+              workspaceId={workspaceId}
+              collections={collections}
+              onImportSuccess={(msg) => {
+                setShowAlistBrowser(false);
+                setTimeout(() => alert(msg), 10);
+                fetchData();
+              }}
+              onClose={() => setShowAlistBrowser(false)}
+            />
+          </AlistImportModalShell>,
+          document.body,
         )}
-      </AnimatePresence>
 
       {/* Modal: Alist settings */}
       <AnimatePresence>
@@ -2378,6 +2365,51 @@ export default function MediaCenter() {
           document.body,
         )}
 
+    </div>
+  );
+}
+
+/** 网盘导入弹窗外壳：固定 vh、无 transform，打开时锁 body 滚动 */
+function AlistImportModalShell({
+  children,
+  onBackdropClick,
+}: {
+  children: React.ReactNode;
+  onBackdropClick: () => void;
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
+      style={{
+        paddingTop: "var(--safe-area-top, 0px)",
+        paddingBottom: "var(--safe-area-bottom, 0px)",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onBackdropClick();
+      }}
+    >
+      <div
+        className={cn(
+          "w-full max-w-4xl flex flex-col overflow-hidden",
+          "rounded-t-2xl md:rounded-2xl",
+        )}
+        style={{
+          // vh 兼容旧 Android WebView；dvh 在支持时更准
+          height: "min(94dvh, 94vh)",
+          maxHeight: "min(94dvh, 94vh)",
+          transform: "none",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

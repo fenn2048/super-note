@@ -827,11 +827,12 @@ export default function GlobalMusicPlayer() {
         data-global-music-ui
         className={cn(
           "z-40 bg-app-elevated dark:bg-[#181824] border border-app-border/60 shadow-xl select-none transition-all duration-300 overflow-hidden",
-          // 移动：贴左右；桌面：约 1/3 宽并水平居中
+          // 移动：贴左右；桌面：约半宽居中（过窄时封面会与进度/上一曲重叠）
           "fixed left-3 right-3 mobile-music-mini rounded-2xl",
-          "md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-6 md:w-[min(36vw,420px)] md:min-w-[300px] md:max-w-[440px]",
-          // 移动：列布局（顶进度 + 内容）；桌面：横向内容区
-          "flex flex-col md:block",
+          "md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-6",
+          "md:w-[min(52vw,560px)] md:min-w-[440px] md:max-w-[560px]",
+          // 移动：列布局（顶进度 + 内容）；桌面：横向 flex
+          "flex flex-col",
           isExpanded && "max-md:opacity-0 max-md:pointer-events-none"
         )}
       >
@@ -879,9 +880,9 @@ export default function GlobalMusicPlayer() {
           />
         </div>
 
-        <div className="flex items-center justify-between px-3 py-2.5 md:py-3.5 md:px-4 gap-2">
-          {/* Left: Album cover & Song Details */}
-          <div className="flex items-center gap-3 min-w-0 max-w-[40%] md:max-w-[25%]">
+        <div className="flex items-center justify-between px-3 py-2.5 md:py-3.5 md:px-4 gap-2 md:gap-3 min-w-0">
+          {/* Left: Album cover & Song Details — shrink-0 防被进度条挤叠 */}
+          <div className="flex items-center gap-2.5 min-w-0 shrink-0 md:max-w-[38%]">
             <div 
               onClick={() => setIsExpanded(true)}
               className="relative shrink-0 w-12 h-12 rounded-full border border-app-border/40 bg-black/40 flex items-center justify-center overflow-hidden cursor-pointer shadow-md group"
@@ -911,8 +912,8 @@ export default function GlobalMusicPlayer() {
           </div>
 
           {/* Center: Playback Controls & Seek bar (Desktop) */}
-          <div className="flex-1 hidden md:flex flex-col items-center max-w-[50%] px-4">
-            <div className="flex items-center gap-5 mb-1.5">
+          <div className="hidden md:flex flex-1 min-w-0 flex-col items-center px-1 lg:px-3">
+            <div className="flex items-center gap-3 lg:gap-5 mb-1.5 shrink-0">
               {/* Play Mode toggle */}
               <button 
                 onClick={cyclePlayMode}
@@ -970,8 +971,8 @@ export default function GlobalMusicPlayer() {
             </div>
 
             {/* Progress Slider */}
-            <div className="w-full flex items-center gap-2.5 text-[10px] text-tx-tertiary">
-              <span className="w-8 text-right font-medium select-none">{formatDuration(progressValue)}</span>
+            <div className="w-full min-w-0 flex items-center gap-2 text-[10px] text-tx-tertiary">
+              <span className="w-8 shrink-0 text-right font-medium select-none tabular-nums">{formatDuration(progressValue)}</span>
               <input
                 type="range"
                 min="0"
@@ -982,14 +983,14 @@ export default function GlobalMusicPlayer() {
                 onMouseUp={handleProgressCommit}
                 onTouchEnd={handleProgressCommit}
                 onPointerUp={handleProgressCommit}
-                className="flex-1 h-1 bg-app-border dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent-primary hover:h-1.5 transition-all outline-none"
+                className="flex-1 min-w-0 h-1 bg-app-border dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent-primary hover:h-1.5 transition-all outline-none"
               />
-              <span className="w-8 text-left font-medium select-none">{formatDuration(duration)}</span>
+              <span className="w-8 shrink-0 text-left font-medium select-none tabular-nums">{formatDuration(duration)}</span>
             </div>
           </div>
 
           {/* Right: Volume Controls (Desktop) / Quick control buttons (Mobile) */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Mobile playback buttons */}
             <div className="flex md:hidden items-center gap-2">
               <button
@@ -1016,7 +1017,7 @@ export default function GlobalMusicPlayer() {
             </div>
 
             {/* Desktop volume slider */}
-            <div className="hidden md:flex items-center gap-2 select-none">
+            <div className="hidden md:flex items-center gap-1.5 select-none">
               <button
                 onClick={() => setMuted(!isMuted)}
                 className="text-tx-secondary hover:text-tx-primary transition-colors"
@@ -1030,12 +1031,12 @@ export default function GlobalMusicPlayer() {
                 step="0.05"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-16 h-1 bg-app-border dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent-primary outline-none"
+                className="w-14 lg:w-16 h-1 bg-app-border dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent-primary outline-none"
               />
             </div>
 
             {/* Controls */}
-            <div className="flex items-center ml-2">
+            <div className="flex items-center">
               {/* Minimize Button */}
               <button
                 onClick={(e) => {
@@ -1055,7 +1056,7 @@ export default function GlobalMusicPlayer() {
                   e.stopPropagation();
                   useMediaStore.getState().stopMedia();
                 }}
-                className="p-1.5 rounded-full text-tx-secondary hover:text-accent-danger hover:bg-accent-danger/10 transition-colors shrink-0 ml-1"
+                className="p-1.5 rounded-full text-tx-secondary hover:text-accent-danger hover:bg-accent-danger/10 transition-colors shrink-0"
                 title="关闭播放器"
               >
                 <X size={16} />
@@ -1089,8 +1090,8 @@ export default function GlobalMusicPlayer() {
                   className={cn(
                     "fixed flex flex-col overflow-hidden shadow-2xl",
                     isExpanded
-                      ? // 与全屏播放器同宽：移动全宽贴底，桌面 1/3 宽水平居中
-                        "z-[170] left-0 right-0 bottom-0 max-h-[70vh] mx-auto w-full md:w-1/3 md:min-w-[340px] md:max-w-[440px] rounded-t-3xl bg-[#12121a] border-t border-white/10 p-4 text-white"
+                      ? // 与展开播放器同宽：移动全宽贴底，桌面约 42% 宽水平居中
+                        "z-[170] left-0 right-0 bottom-0 max-h-[70vh] mx-auto w-full md:w-[min(42vw,520px)] md:min-w-[400px] md:max-w-[520px] rounded-t-3xl bg-[#12121a] border-t border-white/10 p-4 text-white"
                       : "z-[60] bottom-24 right-6 w-80 max-h-[350px] rounded-2xl bg-app-elevated dark:bg-[#181824] border border-app-border/80 p-4",
                   )}
                 >
@@ -1237,9 +1238,9 @@ export default function GlobalMusicPlayer() {
               "fixed z-[160] bg-[#0f0f15] text-white flex flex-col overflow-hidden select-none",
               // 移动：全屏
               "inset-0",
-              // 桌面：宽度 1/3 视口、水平居中（left+right+mx-auto，避免与 framer y transform 冲突）
+              // 桌面：约 42% 视口宽、水平居中（略宽于 1/3，避免控件挤叠；left+right+mx-auto 避免与 framer y 冲突）
               "md:inset-y-0 md:left-0 md:right-0 md:mx-auto",
-              "md:w-1/3 md:min-w-[340px] md:max-w-[440px]",
+              "md:w-[min(42vw,520px)] md:min-w-[400px] md:max-w-[520px]",
               "md:shadow-2xl md:border-x md:border-white/10",
             )}
           >

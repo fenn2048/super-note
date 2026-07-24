@@ -55,9 +55,20 @@ const TABS: { id: LibraryTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 function Fallback() {
+  // 与 App 明暗对齐的占位，避免懒加载 BookReader 时闪成浅色条
+  const isDark =
+    typeof document !== "undefined" &&
+    (document.documentElement.classList.contains("dark") ||
+      localStorage.getItem("super-note-theme") === "dark");
   return (
-    <div className="flex-1 flex items-center justify-center">
-      <LoadingBlock label="加载资料库…" />
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3"
+      style={{
+        backgroundColor: isDark ? "#151b26" : "#d6d6d6",
+        color: isDark ? "#abb2bf" : "#111111",
+      }}
+    >
+      <LoadingBlock label="正在打开阅读器…" />
     </div>
   );
 }

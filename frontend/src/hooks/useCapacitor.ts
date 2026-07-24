@@ -155,10 +155,35 @@ export function hideSplashScreen() {
 }
 
 /**
+ * 判断 App 当前是否为深色模式（多源，避免 next-themes 未 hydration 时 class 未就绪）。
+ * 优先级：html class → localStorage 偏好 → 系统 prefers-color-scheme
+ */
+export function isAppDarkMode(): boolean {
+  if (typeof document === "undefined") return false;
+  const root = document.documentElement;
+  if (root.classList.contains("dark")) return true;
+  if (root.classList.contains("light")) return false;
+  try {
+    const stored = localStorage.getItem("super-note-theme");
+    if (stored === "dark") return true;
+    if (stored === "light") return false;
+    // "system" 或未设置：跟系统
+    if (typeof window !== "undefined" && window.matchMedia) {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+/**
  * 同步原生状态栏图标/背景色。
  * - isDarkSurface=true（深色背景）→ 白色时间/信号/电量（Style.Dark）
  * - isDarkSurface=false（浅色背景）→ 黑色时间/信号/电量（Style.Light）
  * 阅读器等全屏场景可临时覆盖；离开时用 syncStatusBarToAppTheme 恢复。
+ *
+ * Android 上 setAppearanceLightStatusBars(!DARK)：DARK → 白图标，LIGHT → 黑图标。
  */
 export function applyNativeStatusBar(opts: {
   isDarkSurface: boolean;
@@ -166,20 +191,24 @@ export function applyNativeStatusBar(opts: {
 }) {
   if (!isNativePlatform()) return;
   const { isDarkSurface, backgroundColor } = opts;
-  StatusBar.setStyle({
-    style: isDarkSurface ? Style.Dark : Style.Light,
-  }).catch(() => {});
-  StatusBar.setBackgroundColor({
-    color:
-      backgroundColor ||
-      (isDarkSurface ? "#0d1117" : "#ffffff"),
-  }).catch(() => {});
+  const bg =
+    backgroundColor || (isDarkSurface ? "#151b26" : "#d6d6d6");
+  // Style.Dark = 浅色内容（白字）；Style.Light = 深色内容（黑字）
+  const style = isDarkSurface ? Style.Dark : Style.Light;
+  const apply = () => {
+    StatusBar.setStyle({ style }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: bg }).catch(() => {});
+  };
+  apply();
+  // Android 偶发首帧被系统/其它 effect 覆盖，短延迟再刷一次
+  window.setTimeout(apply, 50);
+  window.setTimeout(apply, 200);
 }
 
 /** 按当前 App 明暗主题恢复状态栏（与 useStatusBarSync 一致） */
 export function syncStatusBarToAppTheme() {
   if (typeof document === "undefined") return;
-  const isDark = document.documentElement.classList.contains("dark");
+  const isDark = isAppDarkMode();
   applyNativeStatusBar({
     isDarkSurface: isDark,
     backgroundColor: isDark ? "#0d1117" : "#ffffff",

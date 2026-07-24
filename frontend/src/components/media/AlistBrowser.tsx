@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Folder, File, ChevronRight, ArrowLeft, Loader2, CheckSquare, Square, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -175,10 +175,23 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  const listScrollRef = useRef<HTMLDivElement>(null);
+
+  // 切目录后滚回顶部
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (el) el.scrollTop = 0;
+  }, [currentPath]);
+
   return (
     <div
       className="flex flex-col h-full min-h-0 rounded-2xl overflow-hidden border border-app-border"
-      style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
+      style={{
+        backgroundColor: "var(--color-elevated-solid, #181824)",
+        // 明确高度继承父级 94dvh，防止子项按内容撑开
+        height: "100%",
+        maxHeight: "100%",
+      }}
     >
       {/* Header */}
       <div className="px-4 sm:px-6 py-3 sm:py-4 bg-app-sidebar border-b border-app-border flex items-center justify-between shrink-0">
@@ -195,10 +208,10 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
         </button>
       </div>
 
-      {/* Main：移动端列布局时，文件列表 flex-1 可滚，导入配置贴底 shrink-0 */}
+      {/* Main：列布局；列表区用 relative + absolute 强制可滚（Android WebView 可靠） */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
         {/* Left Side: Browser */}
-        <div className="flex-1 min-h-0 min-w-0 flex flex-col border-b md:border-b-0 md:border-r border-app-border/60 bg-app-sidebar/10">
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col border-b md:border-b-0 md:border-r border-app-border/60 bg-app-sidebar/10 overflow-hidden">
           {/* Path Navigation & Breadcrumb */}
           <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-app-border/40 flex items-center gap-2 shrink-0 overflow-x-auto no-scrollbar">
             {currentPath !== "/" && (
@@ -235,67 +248,74 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
             </div>
           </div>
 
-          {/*
-            文件列表滚动区：
-            - min-h-0 + flex-1：在列 flex 中真正拿到剩余高度
-            - overflow-y-auto + overscroll-contain：Android WebView 可滑动且不把滚动传给底层
-            - touch-pan-y：明确纵向手势
-          */}
+          {/* 列表头（不随内容滚，固定在滚动区上方） */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-1 sm:px-2 touch-pan-y"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="shrink-0 flex items-center gap-1 px-2 sm:px-3 py-2 border-b border-app-border/30 text-xs text-tx-tertiary select-none"
+            style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
           >
-            {loading ? (
-              <div className="h-48 flex flex-col items-center justify-center">
-                <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
-                <span className="text-xs text-tx-secondary">载入目录内容中...</span>
-              </div>
-            ) : error ? (
-              <div className="p-8 text-center">
-                <p className="text-sm text-accent-danger font-semibold mb-2">{error}</p>
-                <p className="text-xs text-tx-tertiary">请确保 Alist 后台服务运行正常，并在系统设置中连接无误。</p>
-              </div>
-            ) : files.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-xs text-tx-tertiary">
-                当前目录下没有文件或子目录
-              </div>
-            ) : (
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 z-[1]" style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}>
-                  <tr className="border-b border-app-border/30 text-tx-tertiary select-none">
-                    <th className="py-2 px-3 w-10 text-center">
-                      <button
-                        type="button"
-                        onClick={handleSelectAllInDir}
-                        className="p-1 rounded hover:bg-app-hover"
-                      >
-                        全选
-                      </button>
-                    </th>
-                    <th className="py-2 px-2">名称</th>
-                    <th className="py-2 px-2 w-20 sm:w-24">大小</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <button
+              type="button"
+              onClick={handleSelectAllInDir}
+              className="w-10 shrink-0 p-1 rounded hover:bg-app-hover text-center"
+            >
+              全选
+            </button>
+            <span className="flex-1 min-w-0 px-1">名称</span>
+            <span className="w-16 sm:w-20 shrink-0 text-right pr-1">大小</span>
+          </div>
+
+          {/*
+            关键滚动层：
+            - 外层 relative flex-1 min-h-0
+            - 内层 absolute inset-0 + overflow-y: scroll（不用 auto）
+            - 列表用 div 不用 table，避免部分 WebView 表格滚动手势失效
+          */}
+          <div className="relative flex-1 min-h-0">
+            <div
+              ref={listScrollRef}
+              className="absolute inset-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain px-1 sm:px-2"
+              style={{
+                WebkitOverflowScrolling: "touch",
+                touchAction: "pan-y",
+                overscrollBehavior: "contain",
+              }}
+            >
+              {loading ? (
+                <div className="h-48 flex flex-col items-center justify-center">
+                  <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-2" />
+                  <span className="text-xs text-tx-secondary">载入目录内容中...</span>
+                </div>
+              ) : error ? (
+                <div className="p-8 text-center">
+                  <p className="text-sm text-accent-danger font-semibold mb-2">{error}</p>
+                  <p className="text-xs text-tx-tertiary">请确保 Alist 后台服务运行正常，并在系统设置中连接无误。</p>
+                </div>
+              ) : files.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-xs text-tx-tertiary">
+                  当前目录下没有文件或子目录
+                </div>
+              ) : (
+                <ul className="list-none m-0 p-0 pb-4">
                   {files.map((file, idx) => {
                     const fullPath = currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
                     const isSelected = selectedPaths.has(fullPath);
                     return (
-                      <tr
-                        key={idx}
+                      <li
+                        key={`${fullPath}-${idx}`}
                         className={cn(
-                          "border-b border-app-border/10 hover:bg-app-hover/40 group transition-colors",
-                          isSelected ? "bg-accent-primary/5 hover:bg-accent-primary/10" : ""
+                          "flex items-center gap-1 border-b border-app-border/10 text-xs",
+                          isSelected ? "bg-accent-primary/5" : "active:bg-app-hover/40",
                         )}
                       >
-                        <td className="py-2.5 px-3 text-center">
+                        <div className="w-10 shrink-0 flex items-center justify-center py-2">
                           {file.is_dir ? (
-                            <div className="w-4 h-4 mx-auto" />
+                            <div className="w-4 h-4" />
                           ) : (
                             <button
                               type="button"
                               onClick={() => toggleSelectFile(file)}
-                              className="p-1.5 rounded text-tx-tertiary hover:text-accent-primary transition-colors"
+                              className="p-2 rounded text-tx-tertiary active:text-accent-primary"
+                              aria-label={isSelected ? "取消选择" : "选择"}
                             >
                               {isSelected ? (
                                 <CheckSquare size={16} className="text-accent-primary" />
@@ -304,41 +324,42 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
                               )}
                             </button>
                           )}
-                        </td>
-                        <td className="py-2.5 px-2 font-medium">
+                        </div>
+                        <div className="flex-1 min-w-0 py-2 pr-1">
                           {file.is_dir ? (
                             <button
                               type="button"
                               onClick={() => handleFolderClick(file.name)}
-                              className="flex items-center gap-2 text-tx-primary hover:text-accent-primary text-left truncate w-full min-h-[36px]"
+                              className="flex items-center gap-2 text-tx-primary text-left truncate w-full min-h-[40px]"
                             >
                               <Folder size={16} className="text-amber-500 fill-amber-500/20 shrink-0" />
-                              <span className="truncate">{file.name}</span>
+                              <span className="truncate font-medium">{file.name}</span>
                             </button>
                           ) : (
-                            <div
+                            <button
+                              type="button"
                               onClick={() => toggleSelectFile(file)}
-                              className="flex items-center gap-2 text-tx-secondary group-hover:text-tx-primary cursor-pointer truncate w-full min-h-[36px]"
+                              className="flex items-center gap-2 text-tx-secondary text-left truncate w-full min-h-[40px]"
                             >
                               <File size={16} className="text-tx-tertiary shrink-0" />
-                              <span className="truncate">{file.name}</span>
-                            </div>
+                              <span className="truncate font-medium">{file.name}</span>
+                            </button>
                           )}
-                        </td>
-                        <td className="py-2.5 px-2 text-tx-tertiary whitespace-nowrap">
+                        </div>
+                        <div className="w-16 sm:w-20 shrink-0 text-right text-tx-tertiary py-2 pr-2 whitespace-nowrap">
                           {file.is_dir ? "目录" : formatBytes(file.size)}
-                        </td>
-                      </tr>
+                        </div>
+                      </li>
                     );
                   })}
-                </tbody>
-              </table>
-            )}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right / Bottom: Setup & Action Panel — 移动端固定高度不抢列表滚动区 */}
-        <div className="w-full md:w-64 md:max-h-none shrink-0 bg-app-sidebar/30 p-3 sm:p-4 flex flex-col gap-3 border-t md:border-t-0 border-app-border/40">
+        {/* Right / Bottom: Setup & Action Panel — 移动端 shrink-0，不参与列表高度计算 */}
+        <div className="w-full md:w-64 shrink-0 bg-app-sidebar/30 p-3 sm:p-4 flex flex-col gap-3 border-t md:border-t-0 border-app-border/40 max-h-[42%] md:max-h-none overflow-y-auto">
           <div className="flex flex-col gap-3">
             <h4 className="text-xs font-bold text-tx-tertiary tracking-wider uppercase">导入配置</h4>
 

@@ -4164,7 +4164,14 @@ export default function DiaryCenter() {
 
         <PullToRefresh onRefresh={async () => { await Promise.all([loadTimeline(true), loadStats()]); }}>
           <ScrollContainer className="flex-1" ref={scrollRef}>
-            <div className={cn("max-w-[640px] mx-auto px-4 space-y-6", window.innerWidth < 768 ? "pt-2 pb-6" : "py-6")}>
+            <div
+              className={cn(
+                "max-w-[640px] mx-auto px-4 space-y-6",
+                // 移动端列表底边距只留少量呼吸；主避让由 mobile-content-pad / --mobile-tab-h 负责，
+                // 隐栏后 tab-h=0，列表可铺满原底栏区域
+                window.innerWidth < 768 ? "pt-2 pb-4" : "py-6",
+              )}
+            >
               {/* 顶部标题 + 统计 (仅在桌面端展示) */}
               {window.innerWidth >= 768 && (
                 <div className="flex items-center justify-between mb-4">

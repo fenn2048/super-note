@@ -1,6 +1,6 @@
 /**
  * PR5：统一滚动隐栏
- * 向下滚 → super:scroll-hide-bars（藏 Tab / FAB / TopBar）
+ * 向下滚 → super:scroll-hide-bars（藏 Tab / FAB / TopBar，并收起内容底避让）
  * 向上滚或到顶 → super:scroll-show-bars
  *
  * 兼容原生 overflow 容器与 Radix ScrollArea viewport。
@@ -8,8 +8,8 @@
  * 防闪烁：
  *  - 方向阈值 + 冷却，避免微抖 / 布局回流来回切换
  *  - 同一状态不重复派发事件
- *  - 隐栏只应「视觉隐藏」，内容 bottom padding 勿随 barsVisible 变化
- *    （见 App.tsx syncMobileShellCssVars 与 showMobileTabBar 解耦）
+ *  - 内容区 --mobile-tab-h 随隐栏联动（App.tsx），隐栏后列表可占满原 Tab 区；
+ *    冷却期内忽略反向滚动，减轻 padding 变化引发的误触发
  */
 import { useEffect, type RefObject } from "react";
 

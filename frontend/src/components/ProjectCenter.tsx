@@ -22,6 +22,7 @@ import { toast } from "@/lib/toast";
 import { format, isToday, isPast, isTomorrow, isThisWeek, parseISO, parse } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
+import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
 import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
@@ -486,6 +487,9 @@ export default function ProjectCenter() {
   const [showMobileMyTasksSearch, setShowMobileMyTasksSearch] = useState(false);
   const [showMobileRoleSelector, setShowMobileRoleSelector] = useState(false);
   const [showProjectFilterSheet, setShowProjectFilterSheet] = useState(false);
+  /** 我的任务 / 项目列表滚动区：下滚隐栏，内容可占满原 Tab 区 */
+  const myTasksScrollRef = useRef<HTMLDivElement>(null);
+  const projectsScrollRef = useRef<HTMLDivElement>(null);
 
   // Make workspaceId a reactive state
   const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
@@ -532,6 +536,21 @@ export default function ProjectCenter() {
       setMyTasksProjectFilter("all");
     }
   }, [activeFilter]);
+
+  // 移动端：任务列表 / 项目网格下滚隐藏底栏与 FAB（内容区随 --mobile-tab-h 收放）
+  useScrollHideBars(
+    myTasksScrollRef,
+    activeFilter.type === "my-tasks",
+    [activeFilter.type, myTasks.length],
+  );
+  useScrollHideBars(
+    projectsScrollRef,
+    activeFilter.type !== "my-tasks" &&
+      activeFilter.type !== "detail" &&
+      activeFilter.type !== "plans" &&
+      activeFilter.type !== "calendar",
+    [activeFilter.type, projects.length],
+  );
 
   // 监听来自全局的任务打开事件
   useEffect(() => {
@@ -1747,7 +1766,7 @@ export default function ProjectCenter() {
 
               {/* Scrollable Container */}
               <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0 bg-app-bg dark:bg-[#121214]">
-                <ScrollContainer className="h-full">
+                <ScrollContainer className="h-full" ref={myTasksScrollRef}>
                   <div className="flex-1 p-4 pt-0 md:p-6 space-y-6">
                     {/* 顶部标题 (仅在桌面端展示) */}
                     {window.innerWidth >= 768 && (
@@ -1936,8 +1955,8 @@ export default function ProjectCenter() {
                       </form>
                     )}
 
-                    {/* Tasks Lists Sections */}
-                    <div className="space-y-4 max-w-[640px] mx-auto pb-12 md:pt-4">
+                    {/* Tasks Lists Sections：底边距交给 mobile-content-pad，隐栏后可铺满 Tab 区 */}
+                    <div className="space-y-4 max-w-[640px] mx-auto pb-6 md:pb-12 md:pt-4">
                       {/* Filter indicator & Project Select Dropdown */}
                       <div className="flex items-center justify-between gap-4 mb-2 select-none min-h-[32px]">
                         {/* Filter Status Indicator (Left side) */}
@@ -2636,7 +2655,7 @@ export default function ProjectCenter() {
           </div>
 
           {/* Project Cards Grid Scroll */}
-          <ScrollContainer className="flex-1 min-h-0 p-4 md:p-6">
+          <ScrollContainer className="flex-1 min-h-0 p-4 md:p-6" ref={projectsScrollRef}>
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={24} className="animate-spin text-accent-primary" />
