@@ -66,10 +66,19 @@ import {
   findDuplicate,
   loadRecentTxIndex,
 } from "../services/finance/dedup.js";
+import {
+  countActionableResidual,
+  isTerminalBatchStatus,
+  nextBatchStatusAfterCommit,
+  nextBatchStatusAfterIgnore,
+  parsePriorStats,
+  recomputeImportStats,
+} from "../services/finance/importBatch.js";
 import { listBudgets } from "../services/finance/budget.js";
 import { nextRunAfter, processDueRecurring, type RecurringRuleType } from "../services/finance/recurring.js";
 import { processBudgetAlerts } from "../services/finance/alerts.js";
 import { getUserWorkspaceRole, hasRole } from "../middleware/acl.js";
+import type { ImportCommitMode } from "../services/finance/types.js";
 
 const finance = new Hono();
 
@@ -1321,21 +1330,27 @@ finance.get("/ledgers/:id/import/batches/:batchId", (c) => {
     rows = rows.filter((r) => r.status === statusFilter);
   }
 
-  const mapped = rows.map((r) => {
-    const draft = JSON.parse(r.draftJson || "{}");
-    const parsed = JSON.parse(r.parsedJson || "{}");
-    if (onlySelected && draft.selected === false) return null;
-    return {
-      id: r.id,
-      rowIndex: r.rowIndex,
-      status: r.status,
-      confidence: r.confidence,
-      matchRuleId: r.matchRuleId,
-      duplicateTxId: r.duplicateTxId,
-      parsed,
-      draft,
-    };
-  }).filter(Boolean);
+  const readOnly = isTerminalBatchStatus(batch.status);
+  const mapped = rows
+    .map((r) => {
+      const draft = JSON.parse(r.draftJson || "{}");
+      const parsed = JSON.parse(r.parsedJson || "{}");
+      if (onlySelected && draft.selected === false) return null;
+      return {
+        id: r.id,
+        rowIndex: r.rowIndex,
+        status: r.status,
+        confidence: r.confidence,
+        matchRuleId: r.matchRuleId,
+        duplicateTxId: r.duplicateTxId,
+        parsed,
+        draft,
+      };
+    })
+    .filter(Boolean);
+
+  const prior = parsePriorStats(batch.statsJson);
+  const stats = recomputeImportStats(db, batch.id, prior);
 
   return c.json({
     batch: {
@@ -1343,14 +1358,16 @@ finance.get("/ledgers/:id/import/batches/:batchId", (c) => {
       channel: batch.channel,
       fileName: batch.fileName,
       status: batch.status,
-      stats: JSON.parse(batch.statsJson || "{}"),
+      stats,
       createdAt: batch.createdAt,
+      readOnly,
     },
     rows: mapped,
+    readOnly,
   });
 });
 
-/** 批量改导入行（分类账户 / 资产账户 / selected） */
+/** 批量改导入行（分类账户 / 资产账户 / selected / force / markIgnored） */
 finance.post("/ledgers/:id/import/batches/:batchId/bulk", async (c) => {
   const uid = userId(c);
   const ledger = getLedgerOwned(c.req.param("id"), uid);
@@ -1365,6 +1382,8 @@ finance.post("/ledgers/:id/import/batches/:batchId/bulk", async (c) => {
     selected?: boolean;
     /** 将 duplicate 行强制改为可选导入 */
     forceImportDuplicates?: boolean;
+    /** 将 duplicate 行标记为 ignored（假阳性出口，K18） */
+    markIgnored?: boolean;
   };
 
   const db = getDb();
@@ -1372,6 +1391,9 @@ finance.post("/ledgers/:id/import/batches/:batchId/bulk", async (c) => {
     .prepare(`SELECT * FROM finance_import_batches WHERE id = ? AND ledgerId = ?`)
     .get(c.req.param("batchId"), ledger.id) as any;
   if (!batch) return c.json({ error: "批次不存在" }, 404);
+  if (isTerminalBatchStatus(batch.status)) {
+    return c.json({ error: "批次已结束，不可修改" }, 400);
+  }
 
   let rows = db
     .prepare(`SELECT * FROM finance_import_rows WHERE batchId = ?`)
@@ -1385,13 +1407,29 @@ finance.post("/ledgers/:id/import/batches/:batchId/bulk", async (c) => {
     `UPDATE finance_import_rows SET draftJson = ?, status = ? WHERE id = ?`,
   );
   let updated = 0;
+  let skippedCommitted = 0;
   const run = db.transaction(() => {
     for (const r of rows) {
+      if (r.status === "committed") {
+        skippedCommitted++;
+        continue;
+      }
       const draft = JSON.parse(r.draftJson || "{}");
+      let status = r.status as string;
+
+      if (body.markIgnored) {
+        // P0: 仅 duplicate → ignored
+        if (status !== "duplicate") continue;
+        status = "ignored";
+        draft.selected = false;
+        upd.run(JSON.stringify(draft), status, r.id);
+        updated++;
+        continue;
+      }
+
       if (body.targetAccountId !== undefined) draft.targetAccountId = body.targetAccountId;
       if (body.methodAccountId !== undefined) draft.methodAccountId = body.methodAccountId;
       if (body.selected !== undefined) draft.selected = body.selected;
-      let status = r.status;
       if (body.forceImportDuplicates && status === "duplicate") {
         status = "needs_review";
         draft.selected = true;
@@ -1409,7 +1447,28 @@ finance.post("/ledgers/:id/import/batches/:batchId/bulk", async (c) => {
     }
   });
   run();
-  return c.json({ updated });
+
+  const prior = parsePriorStats(batch.statsJson);
+  const stats = recomputeImportStats(db, batch.id, prior);
+  const residual = countActionableResidual(db, batch.id);
+  let batchStatus = batch.status as string;
+
+  if (body.markIgnored) {
+    batchStatus = nextBatchStatusAfterIgnore(batch.status, residual, stats.committed);
+    db.prepare(`UPDATE finance_import_batches SET status = ?, statsJson = ? WHERE id = ?`).run(
+      batchStatus,
+      JSON.stringify(stats),
+      batch.id,
+    );
+  }
+
+  return c.json({
+    updated,
+    skippedCommitted,
+    batchStatus,
+    stats,
+    remaining: residual,
+  });
 });
 
 finance.patch("/ledgers/:id/import/batches/:batchId/rows/:rowId", async (c) => {
@@ -1421,20 +1480,35 @@ finance.patch("/ledgers/:id/import/batches/:batchId/rows/:rowId", async (c) => {
 
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const db = getDb();
+  const batch = db
+    .prepare(`SELECT * FROM finance_import_batches WHERE id = ? AND ledgerId = ?`)
+    .get(c.req.param("batchId"), ledger.id) as any;
+  if (!batch) return c.json({ error: "批次不存在" }, 404);
+  if (isTerminalBatchStatus(batch.status)) {
+    return c.json({ error: "批次已结束，不可修改" }, 400);
+  }
+
   const row = db
     .prepare(
       `SELECT r.* FROM finance_import_rows r
-       JOIN finance_import_batches b ON b.id = r.batchId
-       WHERE r.id = ? AND b.id = ? AND b.ledgerId = ?`,
+       WHERE r.id = ? AND r.batchId = ?`,
     )
-    .get(c.req.param("rowId"), c.req.param("batchId"), ledger.id) as any;
+    .get(c.req.param("rowId"), c.req.param("batchId")) as any;
   if (!row) return c.json({ error: "行不存在" }, 404);
+  if (row.status === "committed") {
+    return c.json({ error: "行已导入，不可修改" }, 400);
+  }
 
-  const draft = { ...JSON.parse(row.draftJson || "{}"), ...body };
-  let status = row.status;
-  if (body.status && typeof body.status === "string") status = body.status;
-  else if (draft.selected === false) {
-    /* keep */
+  // 禁止客户端把行直接标为 committed
+  const draftBody = { ...body };
+  delete draftBody.status;
+
+  const draft = { ...JSON.parse(row.draftJson || "{}"), ...draftBody };
+  let status = row.status as string;
+  if (body.status === "ignored" && status !== "committed") {
+    status = "ignored";
+  } else if (draft.selected === false) {
+    /* keep status */
   } else if (draft.targetAccountId && draft.methodAccountId && status === "needs_review") {
     status = "ready";
   }
@@ -1454,35 +1528,85 @@ finance.post("/ledgers/:id/import/batches/:batchId/commit", async (c) => {
   const locked = requireUnlock(c, ledger);
   if (locked) return locked;
 
-  const body = (await c.req.json().catch(() => ({}))) as { rowIds?: string[] };
+  const body = (await c.req.json().catch(() => ({}))) as {
+    mode?: string;
+    rowIds?: string[];
+  };
+  const mode = (body.mode ?? "ready_only") as ImportCommitMode | string;
+  if (mode !== "ready_only" && mode !== "include_review") {
+    return c.json({ error: "invalid mode" }, 400);
+  }
+
   const db = getDb();
   const batch = db
     .prepare(`SELECT * FROM finance_import_batches WHERE id = ? AND ledgerId = ?`)
     .get(c.req.param("batchId"), ledger.id) as any;
   if (!batch) return c.json({ error: "批次不存在" }, 404);
-  if (batch.status === "committed") return c.json({ error: "批次已提交" }, 400);
+  if (isTerminalBatchStatus(batch.status)) {
+    return c.json({ error: "批次不可提交" }, 400);
+  }
 
-  let rows = db
+  let candidates = db
     .prepare(`SELECT * FROM finance_import_rows WHERE batchId = ?`)
     .all(batch.id) as any[];
 
+  // 永不直接提交 duplicate / ignored / error / committed
+  candidates = candidates.filter((r) => {
+    if (
+      r.status === "committed" ||
+      r.status === "ignored" ||
+      r.status === "error" ||
+      r.status === "duplicate"
+    ) {
+      return false;
+    }
+    if (mode === "ready_only") return r.status === "ready";
+    return r.status === "ready" || r.status === "needs_review";
+  });
+
+  candidates = candidates.filter((r) => {
+    const draft = JSON.parse(r.draftJson || "{}");
+    return (
+      draft.selected !== false &&
+      draft.targetAccountId &&
+      draft.methodAccountId
+    );
+  });
+
   if (body.rowIds?.length) {
     const set = new Set(body.rowIds);
-    rows = rows.filter((r) => set.has(r.id));
-  } else {
-    rows = rows.filter((r) => {
-      if (r.status === "duplicate" || r.status === "ignored" || r.status === "error") return false;
-      const draft = JSON.parse(r.draftJson || "{}");
-      return draft.selected !== false;
+    candidates = candidates.filter((r) => set.has(r.id));
+  }
+
+  const prior = parsePriorStats(batch.statsJson);
+
+  // Zero candidates: no-op, do not change batch status
+  if (candidates.length === 0) {
+    const stats = recomputeImportStats(db, batch.id, prior);
+    const remaining = countActionableResidual(db, batch.id);
+    return c.json({
+      committed: 0,
+      skipped: 0,
+      errors: [],
+      batchStatus: batch.status,
+      stats,
+      remaining,
     });
   }
 
   let committed = 0;
   let skipped = 0;
   const errors: string[] = [];
+  let batchStatus = batch.status as string;
+  let stats = recomputeImportStats(db, batch.id, prior);
+  let remaining = 0;
+
+  const markRowCommitted = db.prepare(
+    `UPDATE finance_import_rows SET status = 'committed' WHERE id = ?`,
+  );
 
   const run = db.transaction(() => {
-    for (const r of rows) {
+    for (const r of candidates) {
       const draft = JSON.parse(r.draftJson || "{}");
       const parsed = JSON.parse(r.parsedJson || "{}") as ImportEntry;
       if (!draft.targetAccountId || !draft.methodAccountId) {
@@ -1493,6 +1617,7 @@ finance.post("/ledgers/:id/import/batches/:batchId/commit", async (c) => {
       const amountMinor = Math.abs(Number(draft.amountMinor || parsed.amountMinor || 0));
       if (!amountMinor) {
         skipped++;
+        errors.push(`行 ${r.rowIndex + 1}: 金额无效`);
         continue;
       }
       const direction = draft.direction || parsed.direction;
@@ -1524,22 +1649,23 @@ finance.post("/ledgers/:id/import/batches/:batchId/commit", async (c) => {
           meta: { rawItems: parsed.rawItems },
           postings,
         });
+        markRowCommitted.run(r.id);
         committed++;
       } catch (e: any) {
         skipped++;
         errors.push(`行 ${r.rowIndex + 1}: ${e?.message || e}`);
       }
     }
+
+    stats = recomputeImportStats(db, batch.id, prior);
+    remaining = countActionableResidual(db, batch.id);
+    batchStatus = nextBatchStatusAfterCommit(batch.status, committed, remaining);
+    stats.lastCommitted = committed;
+    stats.lastSkipped = skipped;
+
     db.prepare(
-      `UPDATE finance_import_batches SET status = 'committed', statsJson = ? WHERE id = ?`,
-    ).run(
-      JSON.stringify({
-        ...JSON.parse(batch.statsJson || "{}"),
-        committed,
-        skipped,
-      }),
-      batch.id,
-    );
+      `UPDATE finance_import_batches SET status = ?, statsJson = ? WHERE id = ?`,
+    ).run(batchStatus, JSON.stringify(stats), batch.id);
   });
 
   try {
@@ -1548,7 +1674,14 @@ finance.post("/ledgers/:id/import/batches/:batchId/commit", async (c) => {
     return c.json({ error: e?.message || "提交失败" }, 400);
   }
 
-  return c.json({ committed, skipped, errors: errors.slice(0, 20) });
+  return c.json({
+    committed,
+    skipped,
+    errors: errors.slice(0, 20),
+    batchStatus,
+    stats,
+    remaining,
+  });
 });
 
 finance.post("/ledgers/:id/import/batches/:batchId/discard", (c) => {

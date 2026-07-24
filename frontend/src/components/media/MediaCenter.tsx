@@ -616,6 +616,36 @@ export default function MediaCenter() {
     }
   };
 
+  // 列表/浏览态有左侧媒体侧栏（md:w-56）；详情页无侧栏。供全局播放器 left 避让。
+  useEffect(() => {
+    const hasSidebar = !selectedItem;
+    const apply = () => {
+      const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+      document.documentElement.style.setProperty(
+        "--media-sidebar-width",
+        desktop && hasSidebar ? "14rem" : "0px",
+      );
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      document.documentElement.style.setProperty("--media-sidebar-width", "0px");
+    };
+  }, [selectedItem]);
+
+  // 通知资料库壳：详情打开时隐藏「文件|书库|媒体」StackChrome，改由详情顶栏接管
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("super:media-detail-chrome", { detail: { open: !!selectedItem } }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("super:media-detail-chrome", { detail: { open: false } }),
+      );
+    };
+  }, [selectedItem]);
+
   return (
     <div className="flex flex-col h-full bg-app-bg text-tx-primary select-none">
       {/* 列表态不再叠一层 MobileChromeHeader：资料库 Tab 已提供入口上下文，省垂直空间 */}
@@ -628,20 +658,28 @@ export default function MediaCenter() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full flex flex-col md:gap-6 pb-[calc(1.5rem+var(--safe-area-bottom))] md:pb-6"
+            className="flex-1 overflow-y-auto w-full flex flex-col md:gap-0 pb-[calc(1.5rem+var(--safe-area-bottom))] md:pb-6"
           >
-            {/* 桌面端保留「返回列表」；移动端 StackChrome 已有返回，去掉冗余条。
-                删除单品改为顶栏右侧 icon（portal fixed）。 */}
-            <div className="hidden md:flex items-center justify-between shrink-0 px-6 pt-6 mb-0">
+            {/* 桌面详情顶栏：替换资料库 StackChrome（文件|书库|媒体）；返回左、删除右上
+                移动端仍走 StackChrome 返回 + 右上删除 icon */}
+            <div
+              className={cn(
+                "hidden md:flex items-center justify-between shrink-0 sticky top-0 z-30",
+                "px-4 lg:px-6 py-2.5 border-b border-app-border",
+                "bg-app-surface/95 backdrop-blur-md",
+              )}
+            >
               <button
+                type="button"
                 onClick={() => setSelectedItem(null)}
                 className="flex items-center gap-1.5 text-xs font-semibold text-tx-secondary hover:text-tx-primary bg-app-sidebar/40 border border-app-border/40 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <ChevronLeft size={16} />
                 返回媒体列表
               </button>
-              {isAdmin && (
+              {isAdmin ? (
                 <button
+                  type="button"
                   onClick={async () => {
                     if (window.confirm("确认要删除这个单品吗？")) {
                       await api.request(`/media/items/${selectedItem.id}`, { method: "DELETE" });
@@ -653,10 +691,12 @@ export default function MediaCenter() {
                 >
                   删除单品
                 </button>
+              ) : (
+                <div className="w-10" aria-hidden />
               )}
             </div>
 
-            {/* 移动端：删除 icon 放到顶栏右上角（StackChrome 右侧空位，见蓝框） */}
+            {/* 移动端：删除 icon 放到顶栏右上角（StackChrome 右侧空位） */}
             {isAdmin &&
               createPortal(
                 <button
@@ -682,6 +722,8 @@ export default function MediaCenter() {
                 document.body,
               )}
 
+            {/* 详情正文限宽居中 */}
+            <div className="w-full max-w-5xl mx-auto flex flex-col md:gap-6 flex-1 min-h-0">
             {/* Media Player wrapper：上滑评论时吸顶；移动端去掉冗余导航条后顶到 StackChrome 下方 */}
             <div className="relative w-full md:px-6 sticky top-0 z-20 bg-app-bg md:static md:z-auto">
               {selectedItem.type === "video" ? (
@@ -705,7 +747,7 @@ export default function MediaCenter() {
             </div>
 
             {/* Details block */}
-            <div className="flex flex-col gap-6 px-4 md:px-6 mt-4 md:mt-0 max-w-5xl mx-auto w-full mb-10">
+            <div className="flex flex-col gap-6 px-4 md:px-6 mt-4 md:mt-0 w-full mb-10">
               
               {/* Metadata & Reviews Container */}
               <div className="flex flex-col bg-app-sidebar/10 border border-app-border/40 rounded-2xl p-5 md:p-6">
@@ -936,6 +978,7 @@ export default function MediaCenter() {
               </div>
 
             </div>
+            </div>{/* end max-w content shell */}
           </motion.div>
         ) : isMobile ? (
           /* 2a. Mobile: 类型 → 合集 → 文件列表 */
@@ -1469,11 +1512,24 @@ export default function MediaCenter() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col min-h-0 md:flex-row overflow-hidden"
+            className="flex-1 flex flex-col min-h-0 md:flex-row overflow-hidden relative"
           >
             
-            {/* Sidebar */}
-            <div className="w-full md:w-56 bg-app-sidebar border-b md:border-b-0 md:border-r border-app-border shrink-0 px-2 py-1.5 md:p-4 flex flex-row md:flex-col gap-1.5 md:gap-4 overflow-x-auto md:overflow-y-auto items-center md:items-stretch">
+            {/* Sidebar — 桌面 fixed：顶边避让资料库 StackChrome（--library-chrome-height），
+                底贴视口；勿 top:0 以免盖住「文件|书库|媒体」分段控件 */}
+            <div
+              className={cn(
+                "w-full md:w-56 border-b md:border-b-0 md:border-r border-app-border shrink-0",
+                "px-2 py-1.5 md:p-4 flex flex-row md:flex-col gap-1.5 md:gap-4",
+                "overflow-x-auto md:overflow-y-auto items-center md:items-stretch bg-app-sidebar",
+                "md:fixed md:bottom-0 md:z-[25]",
+              )}
+              style={{
+                backgroundColor: "var(--color-sidebar-solid, var(--color-sidebar))",
+                left: "var(--nav-rail-width, 0px)",
+                top: "var(--library-chrome-height, 0px)",
+              }}
+            >
               
               {/* Type Switcher */}
               <div className="flex md:flex-col gap-1.5 shrink-0">
@@ -1574,8 +1630,8 @@ export default function MediaCenter() {
 
             </div>
 
-            {/* Grid browser view */}
-            <div className="flex-1 flex flex-col min-w-0 bg-app-bg">
+            {/* Grid browser view — 桌面为 fixed 侧栏留出等宽占位 */}
+            <div className="flex-1 flex flex-col min-w-0 bg-app-bg md:ml-56">
               
               {/* Header filter actions */}
               <div className="p-4 border-b border-app-border flex flex-row items-center gap-3 select-none">

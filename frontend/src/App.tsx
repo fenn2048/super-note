@@ -1315,10 +1315,11 @@ function AppLayout() {
       )}
       {(isNotesView || isProjectsView || isPlansView) && <SidebarResizeHandle />}
 
-      {/* ===== 主内容区 ===== */}
+      {/* ===== 主内容区 =====
+          桌面：为全局音乐贴底栏留出高度（--global-music-bar-height，不盖 NavRail） */}
       <div className={cn(
         "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
-        showMobileTabBar ? "mobile-content-pad md:pb-0" : "pb-0"
+        showMobileTabBar ? "mobile-content-pad md:pb-[var(--global-music-bar-height,0px)]" : "pb-0 md:pb-[var(--global-music-bar-height,0px)]"
       )}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -1386,7 +1387,7 @@ function AppLayout() {
               </div>
             ) : isFinanceView ? (
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <MobileTopBar />
+                {/* 记账列表顶栏由 FinanceCenter 自管（返回/居中标题/+），不再叠 MobileTopBar */}
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
                   <FinanceCenter />
                 </Suspense>

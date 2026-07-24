@@ -1,9 +1,10 @@
 /**
  * 可搜索账户选择器（导入 / 记一笔共用）
  * - 按类型分组 + 关键词过滤
- * - 支持叶子中文名与完整路径匹配
+ * - variant=dropdown（默认）| sheet（portal 底部抽屉，触控友好）
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Search, X } from "lucide-react";
 import type { FinanceAccount } from "@/types";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,8 @@ export default function AccountPicker({
   emptyLabel = "不指定",
   className,
   disabled,
+  variant = "dropdown",
+  sheetTitle,
 }: {
   accounts: FinanceAccount[];
   value: string;
@@ -45,11 +48,15 @@ export default function AccountPicker({
   emptyLabel?: string;
   className?: string;
   disabled?: boolean;
+  /** dropdown = absolute panel; sheet = portal bottom sheet */
+  variant?: "dropdown" | "sheet";
+  sheetTitle?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isSheet = variant === "sheet";
 
   const selected = useMemo(
     () => accounts.find((a) => a.id === value) || null,
@@ -79,13 +86,13 @@ export default function AccountPicker({
   }, [filtered]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isSheet) return;
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  }, [open, isSheet]);
 
   useEffect(() => {
     if (open) {
@@ -94,6 +101,125 @@ export default function AccountPicker({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !isSheet) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, isSheet]);
+
+  const pick = (id: string) => {
+    onChange(id);
+    setOpen(false);
+  };
+
+  const listBody = (
+    <>
+      <div className="p-2 border-b border-app-border flex items-center gap-1.5 shrink-0">
+        <Search size={14} className="text-tx-tertiary shrink-0" />
+        <input
+          ref={inputRef}
+          className="flex-1 bg-transparent text-sm outline-none"
+          placeholder="搜索账户名…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+          }}
+        />
+      </div>
+      <div className="overflow-y-auto flex-1 py-1 min-h-0">
+        {allowEmpty && (
+          <button
+            type="button"
+            className={cn(
+              "w-full text-left px-3 text-sm hover:bg-app-hover",
+              isSheet ? "py-3 min-h-[44px]" : "py-1.5",
+              !value && "text-accent-primary",
+            )}
+            onClick={() => pick("")}
+          >
+            {emptyLabel}
+          </button>
+        )}
+        {groups.length === 0 && (
+          <p className="px-3 py-4 text-xs text-tx-tertiary text-center">无匹配账户</p>
+        )}
+        {groups.map(([g, list]) => (
+          <div key={g}>
+            <div className="px-3 py-1 text-[10px] font-medium text-tx-tertiary sticky top-0 bg-app-elevated">
+              {g}
+            </div>
+            {list.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className={cn(
+                  "w-full text-left px-3 text-sm hover:bg-app-hover",
+                  isSheet ? "py-3 min-h-[44px]" : "py-1.5",
+                  a.id === value && "bg-accent-primary/10 text-accent-primary",
+                )}
+                onClick={() => pick(a.id)}
+                title={a.name}
+              >
+                <div className="truncate font-medium">{shortName(a.name)}</div>
+                <div className="truncate text-[10px] text-tx-tertiary">{a.name}</div>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  const sheet =
+    open &&
+    isSheet &&
+    typeof document !== "undefined" &&
+    createPortal(
+      <div
+        className="fixed inset-0 z-[10000] flex flex-col justify-end"
+        role="dialog"
+        aria-modal="true"
+        aria-label={sheetTitle || placeholder}
+      >
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+          aria-label="关闭"
+          onClick={() => setOpen(false)}
+        />
+        <div
+          className="relative z-[10001] w-full max-h-[70vh] flex flex-col rounded-t-2xl border border-app-border shadow-xl text-tx-primary"
+          style={{
+            paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+            backgroundColor: "var(--color-elevated-solid, var(--color-elevated))",
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-app-border shrink-0">
+            <span className="text-sm font-medium">{sheetTitle || placeholder}</span>
+            <button
+              type="button"
+              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-tx-tertiary"
+              onClick={() => setOpen(false)}
+              aria-label="关闭"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {listBody}
+        </div>
+      </div>,
+      document.body,
+    );
+
   return (
     <div ref={rootRef} className={cn("relative min-w-0", className)}>
       <button
@@ -101,14 +227,15 @@ export default function AccountPicker({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "w-full flex items-center gap-1 px-2 py-1.5 rounded-lg border border-app-border bg-app-bg text-left text-sm",
+          "w-full flex items-center gap-1 px-2 rounded-lg border border-app-border bg-app-bg text-left text-sm",
+          isSheet ? "py-2.5 min-h-[44px]" : "py-1.5",
           disabled && "opacity-50 cursor-not-allowed",
         )}
       >
         <span className={cn("flex-1 min-w-0 truncate", !selected && "text-tx-tertiary")}>
           {selected ? shortName(selected.name) : placeholder}
         </span>
-        {value && allowEmpty && (
+        {value && allowEmpty && !disabled && (
           <span
             role="button"
             tabIndex={-1}
@@ -129,68 +256,15 @@ export default function AccountPicker({
         </p>
       )}
 
-      {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-app-border bg-app-card shadow-xl max-h-72 flex flex-col min-w-[220px]">
-          <div className="p-2 border-b border-app-border flex items-center gap-1.5">
-            <Search size={14} className="text-tx-tertiary shrink-0" />
-            <input
-              ref={inputRef}
-              className="flex-1 bg-transparent text-sm outline-none"
-              placeholder="搜索账户名…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setOpen(false);
-              }}
-            />
-          </div>
-          <div className="overflow-y-auto flex-1 py-1">
-            {allowEmpty && (
-              <button
-                type="button"
-                className={cn(
-                  "w-full text-left px-3 py-1.5 text-sm hover:bg-app-hover",
-                  !value && "text-emerald-600",
-                )}
-                onClick={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-              >
-                {emptyLabel}
-              </button>
-            )}
-            {groups.length === 0 && (
-              <p className="px-3 py-4 text-xs text-tx-tertiary text-center">无匹配账户</p>
-            )}
-            {groups.map(([g, list]) => (
-              <div key={g}>
-                <div className="px-3 py-1 text-[10px] font-medium text-tx-tertiary sticky top-0 bg-app-card">
-                  {g}
-                </div>
-                {list.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className={cn(
-                      "w-full text-left px-3 py-1.5 text-sm hover:bg-app-hover",
-                      a.id === value && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                    )}
-                    onClick={() => {
-                      onChange(a.id);
-                      setOpen(false);
-                    }}
-                    title={a.name}
-                  >
-                    <div className="truncate font-medium">{shortName(a.name)}</div>
-                    <div className="truncate text-[10px] text-tx-tertiary">{a.name}</div>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
+      {open && !isSheet && (
+        <div
+          className="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-app-border shadow-xl max-h-72 flex flex-col min-w-[220px] text-tx-primary"
+          style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
+        >
+          {listBody}
         </div>
       )}
+      {sheet}
     </div>
   );
 }

@@ -4,7 +4,7 @@
  * 桌面：分段 Tab（文件 | 书库 | 媒体）+ 内容
  * 移动：先进入 Hub 三行列表 → 再进对应子界面；顶栏左返回
  */
-import React, { Suspense, useCallback, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FolderOpen, Book, Film, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLibraryTab, setLibraryTab, type LibraryTab } from "@/lib/navigation.config";
@@ -54,21 +54,21 @@ const TABS: { id: LibraryTab; label: string; icon: React.ReactNode }[] = [
   { id: "media", label: "媒体", icon: <Film size={15} /> },
 ];
 
-function Fallback() {
-  // 与 App 明暗对齐的占位，避免懒加载 BookReader 时闪成浅色条
+function Fallback({ label = "加载中…" }: { label?: string }) {
+  // 与 App 明暗对齐的占位，避免懒加载时闪成浅色条
   const isDark =
     typeof document !== "undefined" &&
     (document.documentElement.classList.contains("dark") ||
       localStorage.getItem("super-note-theme") === "dark");
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3"
+      className="flex-1 min-h-[12rem] flex flex-col items-center justify-center gap-3"
       style={{
-        backgroundColor: isDark ? "#151b26" : "#d6d6d6",
-        color: isDark ? "#abb2bf" : "#111111",
+        backgroundColor: isDark ? "#151b26" : "transparent",
+        color: isDark ? "#abb2bf" : undefined,
       }}
     >
-      <LoadingBlock label="正在打开阅读器…" />
+      <LoadingBlock label={label} />
     </div>
   );
 }
@@ -107,6 +107,9 @@ export default function LibraryCenter() {
   const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
   /** 媒体内页动态标题，如「雍正王朝（108）」；null 时用默认 Tab 名 */
   const [mediaChromeTitle, setMediaChromeTitle] = useState<string | null>(null);
+  /** 桌面媒体详情打开时隐藏分段 StackChrome，改由详情顶栏接管 */
+  const [mediaDetailOpen, setMediaDetailOpen] = useState(false);
+  const stackChromeRef = useRef<HTMLDivElement>(null);
   const workspaceId = getCurrentWorkspace();
 
   /** 退出资料库：回「我的」或笔记 */
@@ -169,6 +172,35 @@ export default function LibraryCenter() {
     return () => window.removeEventListener("super:media-chrome-title", onMediaTitle);
   }, []);
 
+  // 媒体详情打开：隐藏资料库分段顶栏（桌面）
+  useEffect(() => {
+    const onDetail = (e: Event) => {
+      const open = !!(e as CustomEvent<{ open?: boolean }>).detail?.open;
+      setMediaDetailOpen(open);
+    };
+    window.addEventListener("super:media-detail-chrome", onDetail);
+    return () => window.removeEventListener("super:media-detail-chrome", onDetail);
+  }, []);
+
+  // 供媒体侧栏 fixed top 避让：写入资料库顶栏实际高度
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const apply = () => {
+      if (mediaDetailOpen || !stackChromeRef.current) {
+        root.style.setProperty("--library-chrome-height", "0px");
+        return;
+      }
+      const h = stackChromeRef.current.getBoundingClientRect().height;
+      root.style.setProperty("--library-chrome-height", `${Math.ceil(h)}px`);
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      root.style.setProperty("--library-chrome-height", "0px");
+    };
+  }, [mediaDetailOpen, isMobile, tab, mediaChromeTitle]);
+
   // 从笔记链接 / 全局事件打开某本书
   useEffect(() => {
     try {
@@ -207,7 +239,7 @@ export default function LibraryCenter() {
   if (activeBookHash) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <Suspense fallback={<Fallback />}>
+        <Suspense fallback={<Fallback label="正在打开阅读器…" />}>
           <BookReader
             bookHash={activeBookHash}
             onBack={() => {
@@ -278,37 +310,53 @@ export default function LibraryCenter() {
         ? tabLabel
         : undefined;
 
+  /** 桌面媒体详情：隐藏分段顶栏，避免与「返回媒体列表」叠两层 */
+  const showLibraryChrome = !(mediaDetailOpen && activeTab === "media" && !isMobile);
+
+  const loadingLabel =
+    activeTab === "files"
+      ? "正在加载文件…"
+      : activeTab === "books"
+        ? "正在加载书库…"
+        : activeTab === "media"
+          ? "正在加载媒体…"
+          : "加载中…";
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-      <StackChrome
-        title={mobileTitle}
-        onClose={goBack}
-        closeLabel={isMobile && tab !== null ? "返回资料库" : "关闭资料库"}
-        leadingAction="back"
-      >
-        {/* 桌面三分段控件 */}
-        <div className="hidden md:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-app-bg border border-app-border/70 shrink-0">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => selectTab(t.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-all min-h-[36px]",
-                activeTab === t.id
-                  ? "bg-app-elevated text-accent-primary shadow-sm"
-                  : "text-tx-tertiary hover:text-tx-primary",
-              )}
-            >
-              {t.icon}
-              <span>{t.label}</span>
-            </button>
-          ))}
+      {showLibraryChrome && (
+        <div ref={stackChromeRef}>
+          <StackChrome
+            title={mobileTitle}
+            onClose={goBack}
+            closeLabel={isMobile && tab !== null ? "返回资料库" : "关闭资料库"}
+            leadingAction="back"
+          >
+            {/* 桌面三分段控件 */}
+            <div className="hidden md:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-app-bg border border-app-border/70 shrink-0">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => selectTab(t.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-all min-h-[36px]",
+                    activeTab === t.id
+                      ? "bg-app-elevated text-accent-primary shadow-sm"
+                      : "text-tx-tertiary hover:text-tx-primary",
+                  )}
+                >
+                  {t.icon}
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </StackChrome>
         </div>
-      </StackChrome>
+      )}
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <Suspense fallback={<Fallback />}>
+        <Suspense fallback={<Fallback label={loadingLabel} />}>
           {activeTab === "files" && <FileManager />}
           {activeTab === "books" && (
             <BookCenter

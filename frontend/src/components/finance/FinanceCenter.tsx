@@ -2,6 +2,7 @@
  * 记账中心：账本列表 / 解锁 / 概览 / 明细 / 记一笔 / 导入 / 账户 / 规则 / 统计 / 建议
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft, BookOpen, Plus, Lock, Unlock, Trash2, Upload, Wallet,
   List, PieChart, Settings2, Lightbulb, Loader2, X, Check, Download, Fingerprint, Sparkles,
@@ -21,6 +22,8 @@ import RulesPanel from "@/components/finance/RulesPanel";
 import TagPicker from "@/components/finance/TagPicker";
 import AccountPicker from "@/components/finance/AccountPicker";
 import ImportPanel from "@/components/finance/ImportPanel";
+import { useAppActions } from "@/store/AppContext";
+import { haptic } from "@/hooks/useCapacitor";
 import type {
   FinanceAccount,
   FinanceInsight,
@@ -41,6 +44,7 @@ function yuan(minor: number | undefined | null) {
 }
 
 export default function FinanceCenter() {
+  const appActions = useAppActions();
   const [ledgers, setLedgers] = useState<FinanceLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +54,12 @@ export default function FinanceCenter() {
 
   // create form
   const [showCreate, setShowCreate] = useState(false);
+
+  const goBackFromFinance = useCallback(() => {
+    // 移动端从「我的」进入记账，返回「更多」列表
+    appActions.setViewMode("more");
+    appActions.setMobileView("list");
+  }, [appActions]);
   const [createTitle, setCreateTitle] = useState("");
   const [createPassword, setCreatePassword] = useState("");
   const [createWorkspaceId, setCreateWorkspaceId] = useState("");
@@ -255,15 +265,52 @@ export default function FinanceCenter() {
   if (!active) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-        <header className="shrink-0 px-4 py-3 border-b border-app-border flex items-center justify-between gap-3">
+        {/* 移动端顶栏：左返回 · 标题绝对居中 · 右上角 + 新建（去掉 App 汉堡栏） */}
+        <header
+          className={cn(
+            "md:hidden shrink-0 select-none z-40 relative",
+            "flex items-center justify-between px-2",
+            "bg-app-elevated/70 backdrop-blur-md border-b border-app-border/60",
+            "min-h-[52px]",
+          )}
+          style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              haptic.light();
+              goBackFromFinance();
+            }}
+            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-button text-accent-primary hover:bg-app-hover active:bg-app-active transition-colors z-10"
+            title="返回"
+            aria-label="返回"
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <h1 className="absolute left-0 right-0 text-center text-[15px] font-bold text-tx-primary tracking-tight pointer-events-none">
+            记账
+          </h1>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-button text-accent-primary hover:bg-app-hover transition-colors z-10"
+            title="新建账本"
+            aria-label="新建账本"
+          >
+            <Plus size={22} />
+          </button>
+        </header>
+
+        {/* 桌面端顶栏 */}
+        <header className="hidden md:flex shrink-0 px-4 py-3 border-b border-app-border items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-emerald-500" />
+            <Wallet className="w-5 h-5 text-accent-primary" />
             <h1 className="text-lg font-semibold text-tx-primary">记账</h1>
           </div>
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-500"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-primary text-white text-sm hover:opacity-90"
           >
             <Plus size={16} /> 新建账本
           </button>
@@ -286,7 +333,7 @@ export default function FinanceCenter() {
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="mt-4 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm"
+                className="mt-4 px-4 py-2 rounded-lg bg-accent-primary text-white text-sm"
               >
                 创建账本
               </button>
@@ -298,7 +345,7 @@ export default function FinanceCenter() {
                   key={l.id}
                   type="button"
                   onClick={() => openLedger(l)}
-                  className="text-left rounded-xl border border-app-border bg-app-card p-4 hover:border-emerald-500/50 transition-colors"
+                  className="text-left rounded-xl border border-app-border bg-app-card p-4 hover:border-accent-primary/50 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-2xl">{l.icon || "📒"}</div>
@@ -385,7 +432,7 @@ export default function FinanceCenter() {
                 type="button"
                 disabled={creating || !createTitle.trim()}
                 onClick={handleCreate}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-sm disabled:opacity-50"
+                className="px-4 py-1.5 rounded-lg bg-accent-primary text-white text-sm disabled:opacity-50"
               >
                 {creating ? "创建中…" : "创建"}
               </button>
@@ -427,7 +474,7 @@ export default function FinanceCenter() {
               type="button"
               disabled={unlocking || !unlockPw}
               onClick={handleUnlock}
-              className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm disabled:opacity-50"
+              className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm disabled:opacity-50"
             >
               {unlocking ? "解锁中…" : "解锁"}
             </button>
@@ -483,7 +530,7 @@ export default function FinanceCenter() {
           <button
             type="button"
             title={bioLocal ? "关闭生物识别" : "启用生物识别"}
-            className={cn("p-1.5 rounded-lg hover:bg-app-hover", bioLocal ? "text-emerald-500" : "text-tx-tertiary")}
+            className={cn("p-1.5 rounded-lg hover:bg-app-hover", bioLocal ? "text-accent-primary" : "text-tx-tertiary")}
             disabled={bioBusy}
             onClick={() => (bioLocal ? handleDisableBio() : handleEnableBio())}
           >
@@ -528,7 +575,7 @@ export default function FinanceCenter() {
             onClick={() => setTab(id)}
             className={cn(
               "shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm",
-              tab === id ? "bg-emerald-600/15 text-emerald-600 dark:text-emerald-400" : "text-tx-secondary hover:bg-app-hover",
+              tab === id ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
             )}
           >
             <Icon size={14} />
@@ -544,7 +591,13 @@ export default function FinanceCenter() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* import tab: overflow-hidden + flex so ImportPanel owns scroller (K19 sticky bar) */}
+      <div
+        className={cn(
+          "flex-1 min-h-0",
+          tab === "import" ? "flex flex-col overflow-hidden" : "overflow-y-auto",
+        )}
+      >
         {tab === "home" && (
           <LedgerHome ledgerId={active.id} unlockToken={unlockToken} onGo={setTab} />
         )}
@@ -597,19 +650,30 @@ export default function FinanceCenter() {
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div
-        className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-app-card border border-app-border p-4 shadow-xl"
+        className="relative z-10 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-app-border p-4 shadow-xl text-tx-primary"
+        style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">{title}</h3>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-app-hover"><X size={16} /></button>
+          <h3 className="font-semibold text-tx-primary">{title}</h3>
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-app-hover text-tx-secondary">
+            <X size={16} />
+          </button>
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -683,7 +747,7 @@ function LedgerHome({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => setShowTx(true)} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm inline-flex items-center gap-1">
+        <button type="button" onClick={() => setShowTx(true)} className="px-3 py-2 rounded-lg bg-accent-primary text-white text-sm inline-flex items-center gap-1">
           <Plus size={14} /> 记一笔
         </button>
         <button type="button" onClick={() => onGo("import")} className="px-3 py-2 rounded-lg border border-app-border text-sm inline-flex items-center gap-1">
@@ -749,7 +813,7 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: "goo
       <div
         className={cn(
           "text-lg font-semibold mt-1 tabular-nums",
-          tone === "good" && "text-emerald-600",
+          tone === "good" && "text-accent-primary",
           tone === "bad" && "text-rose-500",
         )}
       >
@@ -787,7 +851,7 @@ function TxRow({
               <button
                 key={t}
                 type="button"
-                className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline"
+                className="text-[11px] text-accent-primary hover:underline"
                 onClick={(e) => {
                   e.stopPropagation();
                   onTagClick?.(t);
@@ -799,7 +863,7 @@ function TxRow({
           </div>
         )}
       </div>
-      <div className={cn("text-sm font-medium tabular-nums", amount < 0 ? "text-rose-500" : "text-emerald-600")}>
+      <div className={cn("text-sm font-medium tabular-nums", amount < 0 ? "text-rose-500" : "text-accent-primary")}>
         {amount < 0 ? "-" : "+"}¥{yuan(Math.abs(amount))}
       </div>
     </li>
@@ -977,7 +1041,7 @@ function ManualTxModal({
               key={t.id}
               type="button"
               onClick={() => applyTemplate(t.payload)}
-              className="px-2 py-1 rounded-full text-xs border border-app-border hover:border-emerald-500/50"
+              className="px-2 py-1 rounded-full text-xs border border-app-border hover:border-accent-primary/50"
             >
               {t.name}
             </button>
@@ -992,7 +1056,7 @@ function ManualTxModal({
             onClick={() => setKind(k)}
             className={cn(
               "flex-1 py-1.5 rounded-lg text-sm",
-              kind === k ? "bg-emerald-600 text-white" : "bg-app-bg border border-app-border",
+              kind === k ? "bg-accent-primary text-white" : "bg-app-bg border border-app-border",
             )}
           >
             {k === "expense" ? "支出" : k === "income" ? "收入" : "转账"}
@@ -1054,7 +1118,7 @@ function ManualTxModal({
             <Bookmark size={14} />
           </button>
         )}
-        <button type="button" disabled={saving || !amount} onClick={save} className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-sm disabled:opacity-50">
+        <button type="button" disabled={saving || !amount} onClick={save} className="flex-1 py-2 rounded-lg bg-accent-primary text-white text-sm disabled:opacity-50">
           {saving ? "保存中…" : isEdit ? "更新" : "保存"}
         </button>
       </div>
@@ -1160,7 +1224,7 @@ function TxPanel({
             setEditTx(null);
             setShowTx(true);
           }}
-          className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm"
+          className="px-3 py-2 rounded-lg bg-accent-primary text-white text-sm"
         >
           <Plus size={16} />
         </button>
@@ -1173,12 +1237,12 @@ function TxPanel({
             </span>
           )}
           {accountPrefix && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 truncate max-w-[200px]">
+            <span className="px-2 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary truncate max-w-[200px]">
               账户 {accountPrefix}
             </span>
           )}
           {accountId && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">指定账户</span>
+            <span className="px-2 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary">指定账户</span>
           )}
           {payeeFilter && (
             <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">对方 {payeeFilter}</span>
@@ -1205,7 +1269,7 @@ function TxPanel({
           className={cn(
             "px-2 py-0.5 rounded-full text-[11px] border",
             !tagFilter
-              ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
+              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
               : "border-app-border text-tx-tertiary",
           )}
         >
@@ -1219,8 +1283,8 @@ function TxPanel({
             className={cn(
               "px-2 py-0.5 rounded-full text-[11px] border",
               tagFilter === t
-                ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
-                : "border-app-border text-tx-tertiary hover:border-emerald-500/40",
+                ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                : "border-app-border text-tx-tertiary hover:border-accent-primary/40",
             )}
           >
             #{t}
@@ -1238,7 +1302,7 @@ function TxPanel({
             </div>
             <button
               type="button"
-              className="p-2 text-tx-tertiary hover:text-emerald-600 shrink-0"
+              className="p-2 text-tx-tertiary hover:text-accent-primary shrink-0"
               title="编辑"
               onClick={() => {
                 setEditTx(t);
@@ -1316,7 +1380,7 @@ function AccountsPanel({
 
   return (
     <div className="p-4 space-y-4">
-      <button type="button" onClick={() => setShow(true)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm">
+      <button type="button" onClick={() => setShow(true)} className="px-3 py-1.5 rounded-lg bg-accent-primary text-white text-sm">
         新建账户
       </button>
       {Object.entries(groups).map(([t, list]) => (
@@ -1342,7 +1406,7 @@ function AccountsPanel({
           <input className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={name} onChange={(e) => setName(e.target.value)} placeholder="Assets:Bank:ICBC" />
           <button
             type="button"
-            className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm"
+            className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm"
             onClick={async () => {
               try {
                 await api.finance.createAccount(ledgerId, { name, type }, unlockToken);
@@ -1422,7 +1486,7 @@ function BudgetPanel({
         <button
           type="button"
           onClick={() => setShow(true)}
-          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm"
+          className="px-3 py-1.5 rounded-lg bg-accent-primary text-white text-sm"
         >
           添加预算
         </button>
@@ -1462,7 +1526,7 @@ function BudgetPanel({
                 </div>
                 <div className="h-2 rounded-full bg-app-hover overflow-hidden mt-2">
                   <div
-                    className={cn("h-full rounded-full", over ? "bg-rose-500" : "bg-emerald-500")}
+                    className={cn("h-full rounded-full", over ? "bg-rose-500" : "bg-accent-primary")}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -1489,7 +1553,7 @@ function BudgetPanel({
           <input className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={note} onChange={(e) => setNote(e.target.value)} />
           <button
             type="button"
-            className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm"
+            className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm"
             onClick={async () => {
               try {
                 await api.finance.saveBudget(
@@ -1579,7 +1643,7 @@ function RecurringPanel({
         <button
           type="button"
           onClick={() => setShow(true)}
-          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm"
+          className="px-3 py-1.5 rounded-lg bg-accent-primary text-white text-sm"
         >
           新建定期
         </button>
@@ -1614,7 +1678,7 @@ function RecurringPanel({
           <button
             key={p.name}
             type="button"
-            className="px-2 py-1 rounded-full text-xs border border-app-border hover:border-emerald-500/50"
+            className="px-2 py-1 rounded-full text-xs border border-app-border hover:border-accent-primary/50"
             onClick={async () => {
               const incomeAcc =
                 accounts.find((a) => a.name.includes("Salary:Hubby:Base")) ||
@@ -1784,7 +1848,7 @@ function RecurringPanel({
                 }}
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-xs",
-                  kind === k ? "bg-emerald-600 text-white" : "border border-app-border",
+                  kind === k ? "bg-accent-primary text-white" : "border border-app-border",
                 )}
               >
                 {k === "expense" ? "定期支出" : "定期收入"}
@@ -1799,7 +1863,7 @@ function RecurringPanel({
                 onClick={() => setRuleType(t)}
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-xs",
-                  ruleType === t ? "bg-emerald-600 text-white" : "border border-app-border",
+                  ruleType === t ? "bg-accent-primary text-white" : "border border-app-border",
                 )}
               >
                 {t === "monthly" ? "每月" : t === "weekly" ? "每周" : "间隔天"}
@@ -1856,7 +1920,7 @@ function RecurringPanel({
           </label>
           <button
             type="button"
-            className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm"
+            className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm"
             onClick={async () => {
               try {
                 const n = Number(day) || 1;
@@ -1918,7 +1982,7 @@ function AdvicePanel({ ledgerId, unlockToken }: { ledgerId: string; unlockToken:
           className={cn(
             "rounded-xl border p-3",
             ins.level === "warn" && "border-amber-500/40 bg-amber-500/5",
-            ins.level === "good" && "border-emerald-500/40 bg-emerald-500/5",
+            ins.level === "good" && "border-accent-primary/40 bg-accent-primary/5",
             ins.level === "info" && "border-app-border bg-app-card",
           )}
         >

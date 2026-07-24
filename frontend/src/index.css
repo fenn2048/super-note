@@ -83,6 +83,12 @@
   --color-text-quaternary: #a89b88;
   --color-text-inverse: #fffaf2;
 
+  /* 布局避让：NavRail / 媒体侧栏 / 资料库顶栏 / 全局音乐底栏（由组件运行时写入） */
+  --nav-rail-width: 0px;
+  --media-sidebar-width: 0px;
+  --library-chrome-height: 0px;
+  --global-music-bar-height: 0px;
+
   /* 浓彩强调：更饱和、更有辨识度 */
   --color-accent-primary: #6d4aff;
   --color-accent-primary-hover: #5a38ef;
@@ -387,6 +393,10 @@ body::before {
 .bg-app-elevated, .bg-card, .bg-popover {
   background-color: var(--color-elevated);
 }
+/* 记账等模块弹窗/卡片：不透明实体面，防止 bg-app-card 半透明或未定义 */
+.bg-app-card {
+  background-color: var(--color-elevated-solid, var(--color-elevated));
+}
 
 /* ===== 设计系统工具类：卡片 / 浮层 / 触控 ===== */
 .surface-card {
@@ -568,6 +578,77 @@ html[data-app-locked] [data-global-music-ui] {
 /* 全屏播放器展开时隐藏媒体页 portal 到 titlebar 的搜索/更多等 chrome */
 html[data-global-player-expanded] [data-media-chrome] {
   display: none !important;
+}
+
+/* 展开全屏：资料库 StackChrome / 统一顶栏变透明，让封面 blur 透到状态栏区域 */
+html[data-global-player-expanded] [data-stack-chrome],
+html[data-global-player-expanded] [data-mobile-chrome-header] {
+  background: transparent !important;
+  border-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  /* 顶栏内容由全屏播放器自管，底层 title 不抢视觉 */
+  color: transparent !important;
+}
+html[data-global-player-expanded] [data-stack-chrome] *,
+html[data-global-player-expanded] [data-mobile-chrome-header] * {
+  color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 展开全屏时强制藏起迷你条/底栏（双保险，防条件渲染漏网） */
+html[data-global-player-expanded] .mobile-music-mini {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html[data-global-player-expanded] .mobile-tab-bar {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 全屏播放器：进度 / 音量 range 拇指跟封面主色（--player-accent） */
+.player-accent-range {
+  -webkit-appearance: none;
+  appearance: none;
+  accent-color: var(--player-accent, #6d4aff);
+  background: transparent;
+}
+.player-accent-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.player-accent-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+}
+.player-accent-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px;
+  border-radius: 9999px;
+  background: var(--player-accent, #6d4aff);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 6px var(--player-accent-shadow, rgba(109, 74, 255, 0.35));
+  cursor: pointer;
+}
+.player-accent-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--player-accent, #6d4aff);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 6px var(--player-accent-shadow, rgba(109, 74, 255, 0.35));
+  cursor: pointer;
 }
 
 /* 移动端迷你播放器顶部 seek：透明 range 铺满触控高度，系统拇指可拖 */

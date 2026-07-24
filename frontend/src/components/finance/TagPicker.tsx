@@ -54,12 +54,12 @@ export default function TagPicker({
         {selected.map((t) => (
           <span
             key={t}
-            className="inline-flex items-center gap-0.5 pl-2 pr-1 py-0.5 rounded-full text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+            className="inline-flex items-center gap-0.5 pl-2 pr-1 py-0.5 rounded-full text-xs bg-accent-primary/15 text-accent-primary"
           >
             #{t}
             <button
               type="button"
-              className="p-0.5 rounded-full hover:bg-emerald-500/20"
+              className="p-0.5 rounded-full hover:bg-accent-primary/20"
               onClick={() => remove(t)}
               aria-label={`移除 ${t}`}
             >
@@ -92,7 +92,7 @@ export default function TagPicker({
               key={t}
               type="button"
               onClick={() => add(t)}
-              className="px-2 py-0.5 rounded-full text-[11px] border border-app-border text-tx-tertiary hover:border-emerald-500/50 hover:text-emerald-600"
+              className="px-2 py-0.5 rounded-full text-[11px] border border-app-border text-tx-tertiary hover:border-accent-primary/50 hover:text-accent-primary"
             >
               + {t}
             </button>
