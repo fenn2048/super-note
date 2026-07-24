@@ -256,6 +256,16 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameSuccess, setNameSuccess] = useState(false);
+  const [nameError, setNameError] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.displayName || "");
+    }
+  }, [user?.id, user?.displayName]);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -307,10 +317,46 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
     }
   };
 
+  const handleSaveDisplayName = async () => {
+    const trimmed = displayName.trim();
+    if (trimmed.length > 32) {
+      setNameError(
+        t("securitySettings.displayNameTooLong", { defaultValue: "昵称不能超过 32 个字符" }),
+      );
+      return;
+    }
+    const current = (user?.displayName || "").trim();
+    if (trimmed === current) {
+      setNameError(
+        t("securitySettings.displayNameUnchanged", { defaultValue: "昵称未修改" }),
+      );
+      return;
+    }
+
+    setNameError("");
+    setNameSuccess(false);
+    setNameSaving(true);
+    try {
+      await api.updateMe({ displayName: trimmed.length === 0 ? null : trimmed });
+      setNameSuccess(true);
+      onUpdate();
+      window.dispatchEvent(new CustomEvent("super:profile-updated"));
+      window.setTimeout(() => setNameSuccess(false), 2500);
+    } catch (err: any) {
+      setNameError(
+        err?.message ||
+          t("securitySettings.displayNameSaveFailed", { defaultValue: "保存昵称失败" }),
+      );
+    } finally {
+      setNameSaving(false);
+    }
+  };
+
   if (!user) return null;
 
   const firstChar = user.displayName ? user.displayName[0] : (user.username ? user.username[0] : "");
   const avatarUrl = user.avatarUrl ? (user.avatarUrl.startsWith("http") ? user.avatarUrl : (getServerUrl() + user.avatarUrl)) : null;
+  const nameDirty = displayName.trim() !== (user.displayName || "").trim();
 
   return (
     <section className="border-b border-app-border pb-8">
@@ -386,6 +432,90 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
           }}
         />
       )}
+
+      {/* 昵称 */}
+      <div className="mt-8 space-y-4 max-w-md">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-tx-secondary">
+            {t("securitySettings.usernameLabel", { defaultValue: "用户名" })}
+          </label>
+          <input
+            type="text"
+            value={user.username || ""}
+            readOnly
+            disabled
+            className="w-full px-3 py-2.5 rounded-xl border border-app-border bg-app-sidebar/40 text-sm text-tx-tertiary cursor-not-allowed"
+          />
+          <p className="text-[11px] text-tx-tertiary">
+            {t("securitySettings.usernameHint", {
+              defaultValue: "登录用的账号名，如需修改请在下方「账号与安全」中操作。",
+            })}
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-tx-secondary" htmlFor="profile-display-name">
+            {t("securitySettings.displayNameLabel", { defaultValue: "昵称" })}
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              id="profile-display-name"
+              type="text"
+              value={displayName}
+              maxLength={32}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                setNameError("");
+                setNameSuccess(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleSaveDisplayName();
+                }
+              }}
+              placeholder={t("securitySettings.displayNamePlaceholder", {
+                defaultValue: "显示在首页问候、协作评论等处",
+              })}
+              className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveDisplayName()}
+              disabled={nameSaving || !nameDirty}
+              className="shrink-0 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 min-h-[42px]"
+            >
+              {nameSaving ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  {t("common.saving", { defaultValue: "保存中…" })}
+                </>
+              ) : (
+                t("common.save", { defaultValue: "保存" })
+              )}
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-tx-tertiary">
+              {t("securitySettings.displayNameHint", {
+                defaultValue: "留空则对外显示用户名。最多 32 字。",
+              })}
+            </p>
+            <span className="text-[10px] text-tx-tertiary tabular-nums shrink-0">
+              {displayName.trim().length}/32
+            </span>
+          </div>
+          {nameError && (
+            <p className="text-xs text-red-500 flex items-center gap-1">{nameError}</p>
+          )}
+          {nameSuccess && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 size={12} />
+              {t("securitySettings.displayNameSaved", { defaultValue: "昵称已保存" })}
+            </p>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
