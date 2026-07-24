@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import {
-  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine,
+  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine, Wallet,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
@@ -22,6 +22,7 @@ const MORE_ICONS: Record<string, React.ReactNode> = {
   mentions: <Bell className="w-6 h-6 text-amber-500" />,
   files: <FolderOpen className="w-6 h-6 text-emerald-500" />,
   books: <Book className="w-6 h-6 text-orange-500" />,
+  finance: <Wallet className="w-6 h-6 text-emerald-500" />,
 };
 
 export default function MobileMorePage() {

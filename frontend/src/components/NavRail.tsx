@@ -31,7 +31,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
-  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Plus,
+  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Plus, Wallet,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -67,6 +67,7 @@ const RAIL_ICONS: Record<string, React.ReactNode> = {
   files: <FolderOpen size={RAIL_ICON_SIZE} />,
   books: <Book size={RAIL_ICON_SIZE} />,
   media: <Film size={RAIL_ICON_SIZE} />,
+  finance: <Wallet size={RAIL_ICON_SIZE} />,
 };
 
 /**

@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Link,
+  Wallet,
 } from "lucide-react";
 import { api, setCurrentWorkspace, getServerUrl, getCurrentWorkspace } from "@/lib/api";
 import { useApp, useAppActions } from "@/store/AppContext";
@@ -28,6 +29,7 @@ import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import { renderDiaryContent } from "./DiaryCenter";
 import DashboardQuickActions from "@/components/dashboard/DashboardQuickActions";
+import { isModuleAllowedByPack } from "@/lib/modulePack";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -388,6 +390,20 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [notes, setNotes] = useState<NoteListItem[]>([]);
   const [stats, setStats] = useState({ diaryCount: 0, taskPending: 0, noteCount: 0 });
+  const [financeOverview, setFinanceOverview] = useState<{
+    year: string;
+    month: number;
+    ledgers: Array<{
+      id: string;
+      title: string;
+      icon: string | null;
+      hasPassword: boolean;
+      locked: boolean;
+      monthIncomeMinor?: number;
+      monthExpenseMinor?: number;
+      monthNetMinor?: number;
+    }>;
+  } | null>(null);
   const [greeting, setGreeting] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [creating, setCreating] = useState(false);
@@ -422,11 +438,16 @@ export default function Dashboard() {
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  // 加载用户信息
+  // 加载用户信息（昵称修改后通过 super:profile-updated 刷新）
   useEffect(() => {
-    api.getMe()
-      .then((user) => setCurrentUser(user))
-      .catch(() => {});
+    const loadMe = () => {
+      api.getMe()
+        .then((user) => setCurrentUser(user))
+        .catch(() => {});
+    };
+    loadMe();
+    window.addEventListener("super:profile-updated", loadMe);
+    return () => window.removeEventListener("super:profile-updated", loadMe);
   }, []);
 
   // 一键创建家庭空间
@@ -465,16 +486,20 @@ export default function Dashboard() {
     setLoading(true);
     try {
       // P1 收尾：/api/tasks 已代理到 project_tasks，统一用 getTasks 即可，避免双重计数
-      const [diaryData, tasksData, notesData] = await Promise.all([
+      const [diaryData, tasksData, notesData, fin] = await Promise.all([
         api.getDiaryTimeline(undefined, 5).catch(() => ({ items: [] as Diary[], hasMore: false, nextCursor: null })),
         api.getTasks("all").catch(() => [] as Task[]),
         api.getNotes({ sortBy: "updatedAt", sortOrder: "desc", limit: "5", isTrashed: "0" }).catch(() => [] as NoteListItem[]),
+        isModuleAllowedByPack("finance")
+          ? api.finance.financeOverview().catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       const diaryItems = diaryData.items || [];
       setDiaries(diaryItems);
       setTasks(tasksData || []);
       setNotes(notesData || []);
+      setFinanceOverview(fin);
 
       const pendingSoon = (tasksData || []).filter(
         (t: Task) =>
@@ -709,6 +734,74 @@ export default function Dashboard() {
                 onWriteSays={handleQuickWriteSays}
                 onAddTask={handleQuickAddTask}
               />
+            </motion.div>
+          )}
+
+          {/* ===== 本月记账摘要 ===== */}
+          {isModuleAllowedByPack("finance") && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.08 }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setViewMode("finance");
+                  actions.setMobileView("list");
+                }}
+                className="w-full text-left rounded-window border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 p-4 sm:p-5 hover:border-emerald-500/40 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                      <Wallet size={18} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-tx-primary">本月记账</div>
+                      <div className="text-[11px] text-tx-tertiary">
+                        {financeOverview
+                          ? `${financeOverview.year}年${financeOverview.month}月 · ${financeOverview.ledgers.length} 个账本`
+                          : "进入记账"}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-tx-tertiary shrink-0" />
+                </div>
+                {(() => {
+                  const open = (financeOverview?.ledgers || []).filter((l) => !l.locked);
+                  if (!open.length) {
+                    return (
+                      <p className="text-xs text-tx-tertiary">
+                        {(financeOverview?.ledgers?.length || 0) > 0
+                          ? "账本已锁定，点击进入解锁查看收支"
+                          : "创建账本后可在此查看本月收支"}
+                      </p>
+                    );
+                  }
+                  const income = open.reduce((s, l) => s + (l.monthIncomeMinor || 0), 0);
+                  const expense = open.reduce((s, l) => s + (l.monthExpenseMinor || 0), 0);
+                  const fmt = (m: number) => (m / 100).toFixed(2);
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-app-bg/50 px-2 py-2">
+                        <div className="text-[10px] text-tx-tertiary">收入</div>
+                        <div className="text-sm font-semibold text-emerald-600 tabular-nums">¥{fmt(income)}</div>
+                      </div>
+                      <div className="rounded-lg bg-app-bg/50 px-2 py-2">
+                        <div className="text-[10px] text-tx-tertiary">支出</div>
+                        <div className="text-sm font-semibold text-rose-500 tabular-nums">¥{fmt(expense)}</div>
+                      </div>
+                      <div className="rounded-lg bg-app-bg/50 px-2 py-2">
+                        <div className="text-[10px] text-tx-tertiary">结余</div>
+                        <div className="text-sm font-semibold text-tx-primary tabular-nums">
+                          ¥{fmt(income - expense)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </button>
             </motion.div>
           )}
 

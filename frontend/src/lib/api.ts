@@ -886,6 +886,9 @@ export const api = {
 
   // User
   getMe: () => request<User>("/me"),
+  /** 更新当前用户公开资料（昵称等），无需密码 */
+  updateMe: (data: { displayName?: string | null }) =>
+    request<User>("/me", { method: "PATCH", body: JSON.stringify(data) }),
 
   // 用户搜索（所有已登录用户可用）
   searchUsers: (q?: string) => {
@@ -3465,7 +3468,572 @@ export const api = {
     create: (data: { targetUserId: string; type: string; sourceType?: string; sourceId?: string; sourceTitle?: string; actorId?: string; actorName?: string }) =>
       request<{ success: boolean; id: string }>("/notifications", { method: "POST", body: JSON.stringify(data) }),
   },
+
+  // ======================================================================
+  // 记账（Finance）
+  // ======================================================================
+  finance: {
+    listLedgers: () => request<import("@/types").FinanceLedger[]>("/finance/ledgers"),
+    createLedger: (data: {
+      title: string;
+      password?: string;
+      operatingCurrency?: string;
+      startDate?: string;
+      icon?: string;
+      workspaceId?: string | null;
+    }) =>
+      request<import("@/types").FinanceLedger>("/finance/ledgers", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getLedger: (id: string, unlockToken?: string | null) =>
+      request<import("@/types").FinanceLedger>(`/finance/ledgers/${id}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    updateLedger: (id: string, data: { title?: string; icon?: string; startDate?: string }, unlockToken?: string | null) =>
+      request<import("@/types").FinanceLedger>(`/finance/ledgers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    deleteLedger: (id: string, password?: string) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ password }),
+      }),
+    unlockLedger: (id: string, password: string) =>
+      request<{ unlockToken: string | null; expiresAt: string | null; bioEnabled?: boolean }>(
+        `/finance/ledgers/${id}/unlock`,
+        {
+          method: "POST",
+          body: JSON.stringify({ password }),
+        },
+      ),
+    unlockLedgerBio: (id: string, bioToken: string) =>
+      request<{ unlockToken: string | null; expiresAt: string | null }>(
+        `/finance/ledgers/${id}/unlock-bio`,
+        {
+          method: "POST",
+          body: JSON.stringify({ bioToken }),
+        },
+      ),
+    enableBio: (id: string, unlockToken?: string | null, password?: string) =>
+      request<{ bioToken: string; enabled: boolean }>(`/finance/ledgers/${id}/bio-enable`, {
+        method: "POST",
+        body: JSON.stringify({ password }),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    disableBio: (id: string) =>
+      request<{ ok: boolean; enabled: boolean }>(`/finance/ledgers/${id}/bio-enable`, {
+        method: "DELETE",
+      }),
+    bioStatus: (id: string) =>
+      request<{ enabled: boolean; hasPassword: boolean }>(`/finance/ledgers/${id}/bio-status`),
+    lockLedger: (id: string) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${id}/lock`, { method: "POST" }),
+    exportLedger: async (id: string, format: "csv" | "beancount", unlockToken?: string | null) => {
+      const token = getToken();
+      const res = await fetch(
+        `${getBaseUrl()}/finance/ledgers/${id}/export?format=${encodeURIComponent(format)}`,
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(unlockToken ? { "X-Finance-Unlock": unlockToken } : {}),
+          },
+        },
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `导出失败: ${res.status}`);
+      }
+      return res.blob();
+    },
+    setLedgerPassword: (
+      id: string,
+      data: { oldPassword?: string; newPassword?: string | null },
+    ) =>
+      request<{ ok: boolean; hasPassword: boolean }>(`/finance/ledgers/${id}/password`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    listAccounts: (ledgerId: string, unlockToken?: string | null) =>
+      request<import("@/types").FinanceAccount[]>(`/finance/ledgers/${ledgerId}/accounts`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    createAccount: (
+      ledgerId: string,
+      data: { name: string; type: string; icon?: string; notes?: string },
+      unlockToken?: string | null,
+    ) =>
+      request<import("@/types").FinanceAccount>(`/finance/ledgers/${ledgerId}/accounts`, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    listTransactions: (
+      ledgerId: string,
+      params: {
+        from?: string;
+        to?: string;
+        q?: string;
+        tag?: string;
+        accountId?: string;
+        accountPrefix?: string;
+        payee?: string;
+        limit?: number;
+        offset?: number;
+      } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams();
+      if (params.from) q.set("from", params.from);
+      if (params.to) q.set("to", params.to);
+      if (params.q) q.set("q", params.q);
+      if (params.tag) q.set("tag", params.tag);
+      if (params.accountId) q.set("accountId", params.accountId);
+      if (params.accountPrefix) q.set("accountPrefix", params.accountPrefix);
+      if (params.payee) q.set("payee", params.payee);
+      if (params.limit) q.set("limit", String(params.limit));
+      if (params.offset) q.set("offset", String(params.offset));
+      const qs = q.toString();
+      return request<{ items: import("@/types").FinanceTransaction[]; total: number }>(
+        `/finance/ledgers/${ledgerId}/transactions${qs ? `?${qs}` : ""}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    listFinanceTags: (ledgerId: string, unlockToken?: string | null) =>
+      request<{ tags: string[]; presets: string[]; used: string[] }>(
+        `/finance/ledgers/${ledgerId}/tags`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      ),
+    createTransaction: (
+      ledgerId: string,
+      data: Record<string, unknown>,
+      unlockToken?: string | null,
+    ) =>
+      request<import("@/types").FinanceTransaction>(`/finance/ledgers/${ledgerId}/transactions`, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    updateTransaction: (
+      ledgerId: string,
+      txId: string,
+      data: Record<string, unknown>,
+      unlockToken?: string | null,
+    ) =>
+      request<import("@/types").FinanceTransaction>(
+        `/finance/ledgers/${ledgerId}/transactions/${txId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(data),
+          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+        },
+      ),
+    deleteTransaction: (ledgerId: string, txId: string, unlockToken?: string | null) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${ledgerId}/transactions/${txId}`, {
+        method: "DELETE",
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    listTemplates: (ledgerId: string, unlockToken?: string | null) =>
+      request<Array<{ id: string; name: string; payload: Record<string, unknown>; createdAt: string }>>(
+        `/finance/ledgers/${ledgerId}/templates`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      ),
+    saveTemplate: (
+      ledgerId: string,
+      data: { name: string; payload: Record<string, unknown> },
+      unlockToken?: string | null,
+    ) =>
+      request<{ id: string; name: string; payload: Record<string, unknown> }>(
+        `/finance/ledgers/${ledgerId}/templates`,
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+        },
+      ),
+    deleteTemplate: (ledgerId: string, templateId: string, unlockToken?: string | null) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${ledgerId}/templates/${templateId}`, {
+        method: "DELETE",
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    copyBudgets: (
+      ledgerId: string,
+      data: { fromYearMonth?: string; toYearMonth?: string; overwrite?: boolean },
+      unlockToken?: string | null,
+    ) =>
+      request<{
+        fromYearMonth: string;
+        toYearMonth: string;
+        copied: number;
+        skipped: number;
+        budgets: any[];
+      }>(`/finance/ledgers/${ledgerId}/budgets/copy`, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    financeOverview: () =>
+      request<{
+        year: string;
+        month: number;
+        ledgers: Array<{
+          id: string;
+          title: string;
+          icon: string | null;
+          hasPassword: boolean;
+          locked: boolean;
+          monthIncomeMinor?: number;
+          monthExpenseMinor?: number;
+          monthNetMinor?: number;
+        }>;
+      }>("/finance/overview"),
+    listRecurring: (ledgerId: string, unlockToken?: string | null) =>
+      request<
+        Array<{
+          id: string;
+          name: string;
+          enabled: boolean;
+          ruleType: string;
+          rule: { day?: number; days?: number; weekday?: number };
+          payload: Record<string, unknown>;
+          nextRunDate: string;
+          lastRunAt?: string | null;
+          endDate?: string | null;
+          autoPost: boolean;
+        }>
+      >(`/finance/ledgers/${ledgerId}/recurring`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    saveRecurring: (
+      ledgerId: string,
+      data: Record<string, unknown>,
+      unlockToken?: string | null,
+    ) =>
+      request<any>(`/finance/ledgers/${ledgerId}/recurring`, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    deleteRecurring: (ledgerId: string, recurringId: string, unlockToken?: string | null) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${ledgerId}/recurring/${recurringId}`, {
+        method: "DELETE",
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    runRecurringDue: () =>
+      request<{ posted: number; notified: number; errors: string[] }>(
+        "/finance/recurring/run-due",
+        { method: "POST" },
+      ),
+    listImportRules: (ledgerId: string, unlockToken?: string | null) =>
+      request<any[]>(`/finance/ledgers/${ledgerId}/import/rules`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    saveImportRule: (ledgerId: string, data: Record<string, unknown>, unlockToken?: string | null) =>
+      request<any>(`/finance/ledgers/${ledgerId}/import/rules`, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    deleteImportRule: (ledgerId: string, ruleId: string, unlockToken?: string | null) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${ledgerId}/import/rules/${ruleId}`, {
+        method: "DELETE",
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    importDetectParse: async (
+      ledgerId: string,
+      file: File,
+      unlockToken?: string | null,
+      channel?: string,
+      ruleIds?: string[],
+    ) => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", file);
+      if (channel) form.append("channel", channel);
+      if (ruleIds?.length) {
+        for (const id of ruleIds) form.append("ruleIds", id);
+      } else {
+        form.append("ruleIds", "ALL");
+      }
+      const res = await fetch(`${getBaseUrl()}/finance/ledgers/${ledgerId}/import/detect-parse`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(unlockToken ? { "X-Finance-Unlock": unlockToken } : {}),
+        },
+        body: form,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `导入解析失败: ${res.status}`);
+      return json as {
+        batchId: string;
+        channel: string;
+        detectConfidence: number;
+        fileName: string;
+        stats: Record<string, number>;
+      };
+    },
+    reorderImportRules: (
+      ledgerId: string,
+      ids: string[],
+      unlockToken?: string | null,
+    ) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${ledgerId}/import/rules/reorder`, {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    getImportBatch: (ledgerId: string, batchId: string, unlockToken?: string | null) =>
+      request<{ batch: any; rows: any[] }>(
+        `/finance/ledgers/${ledgerId}/import/batches/${batchId}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      ),
+    updateImportRow: (
+      ledgerId: string,
+      batchId: string,
+      rowId: string,
+      draft: Record<string, unknown>,
+      unlockToken?: string | null,
+    ) =>
+      request<any>(`/finance/ledgers/${ledgerId}/import/batches/${batchId}/rows/${rowId}`, {
+        method: "PATCH",
+        body: JSON.stringify(draft),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    commitImportBatch: (
+      ledgerId: string,
+      batchId: string,
+      body: { rowIds?: string[] } = {},
+      unlockToken?: string | null,
+    ) =>
+      request<{ committed: number; skipped: number; errors: string[] }>(
+        `/finance/ledgers/${ledgerId}/import/batches/${batchId}/commit`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+        },
+      ),
+    statsSummary: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<any>(`/finance/ledgers/${ledgerId}/stats/summary?${q}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      });
+    },
+    statsBreakdown: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<any[]>(`/finance/ledgers/${ledgerId}/stats/breakdown?${q}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      });
+    },
+    statsTrend: (
+      ledgerId: string,
+      params: { from?: string; to?: string; bucket?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<any[]>(`/finance/ledgers/${ledgerId}/stats/trend?${q}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      });
+    },
+    statsPayees: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<
+        Array<{ payee: string; count: number; expenseMinor: number; avgMinor: number }>
+      >(`/finance/ledgers/${ledgerId}/stats/payees?${q}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      });
+    },
+    statsMonths: (ledgerId: string, months = 18, unlockToken?: string | null) =>
+      request<Array<{ month: string; incomeMinor: number; expensesMinor: number }>>(
+        `/finance/ledgers/${ledgerId}/stats/months?months=${months}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      ),
+    statsBalanceSeries: (
+      ledgerId: string,
+      params: { year?: string; month?: string; type?: string; from?: string; to?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<Array<{ date: string; balanceMinor: number; deltaMinor: number }>>(
+        `/finance/ledgers/${ledgerId}/stats/balance-series?${q}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    statsIncomeBreakdown: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<Array<{ accountId: string; accountName: string; amountMinor: number }>>(
+        `/finance/ledgers/${ledgerId}/stats/income-breakdown?${q}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    statsTags: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<Array<{ tag: string; amountMinor: number; count: number }>>(
+        `/finance/ledgers/${ledgerId}/stats/tags?${q}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    statsStructure: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<Array<{ bucket: string; label: string; amountMinor: number }>>(
+        `/finance/ledgers/${ledgerId}/stats/structure?${q}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    getAdvice: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<{ summary: any; insights: any[]; budgets: any[] }>(
+        `/finance/ledgers/${ledgerId}/advice?${q}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    listImportBatches: (ledgerId: string, unlockToken?: string | null, limit = 10) =>
+      request<
+        Array<{
+          id: string;
+          channel: string;
+          fileName: string;
+          status: string;
+          stats: Record<string, number>;
+          createdAt: string;
+          expiresAt?: string;
+        }>
+      >(`/finance/ledgers/${ledgerId}/import/batches?limit=${limit}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    bulkImportRows: (
+      ledgerId: string,
+      batchId: string,
+      body: {
+        rowIds?: string[];
+        targetAccountId?: string;
+        methodAccountId?: string;
+        selected?: boolean;
+        forceImportDuplicates?: boolean;
+      },
+      unlockToken?: string | null,
+    ) =>
+      request<{ updated: number }>(
+        `/finance/ledgers/${ledgerId}/import/batches/${batchId}/bulk`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+        },
+      ),
+    listBudgets: (ledgerId: string, yearMonth: string, unlockToken?: string | null) =>
+      request<
+        Array<{
+          id: string;
+          yearMonth: string;
+          accountId: string | null;
+          accountName: string | null;
+          amountMinor: number;
+          spentMinor: number;
+          remainingMinor: number;
+          ratio: number;
+          note: string | null;
+        }>
+      >(`/finance/ledgers/${ledgerId}/budgets?yearMonth=${encodeURIComponent(yearMonth)}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    saveBudget: (
+      ledgerId: string,
+      data: {
+        yearMonth: string;
+        accountId?: string | null;
+        amountYuan?: number | string;
+        note?: string;
+        id?: string;
+      },
+      unlockToken?: string | null,
+    ) =>
+      request<any>(`/finance/ledgers/${ledgerId}/budgets`, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    deleteBudget: (ledgerId: string, budgetId: string, unlockToken?: string | null) =>
+      request<{ ok: boolean }>(`/finance/ledgers/${ledgerId}/budgets/${budgetId}`, {
+        method: "DELETE",
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
+    getAdvice: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<{ summary: any; insights: import("@/types").FinanceInsight[] }>(
+        `/finance/ledgers/${ledgerId}/advice?${q}`,
+        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
+      );
+    },
+    getAdviceAi: (
+      ledgerId: string,
+      params: { year?: string; month?: string } = {},
+      unlockToken?: string | null,
+    ) => {
+      const q = new URLSearchParams(params as Record<string, string>);
+      return request<{ insights: import("@/types").FinanceInsight[]; aiText: string | null; message?: string }>(
+        `/finance/ledgers/${ledgerId}/advice/ai?${q}`,
+        {
+          method: "POST",
+          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+        },
+      );
+    },
+  },
 };
+
+/** sessionStorage 中账本解锁 token */
+export function getFinanceUnlockToken(ledgerId: string): string | null {
+  try {
+    return sessionStorage.getItem(`financeUnlock.${ledgerId}`);
+  } catch {
+    return null;
+  }
+}
+
+export function setFinanceUnlockToken(ledgerId: string, token: string | null) {
+  try {
+    if (!token) sessionStorage.removeItem(`financeUnlock.${ledgerId}`);
+    else sessionStorage.setItem(`financeUnlock.${ledgerId}`, token);
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * H2: 通用的「先走 sudo，再跑敏感操作」包装器。

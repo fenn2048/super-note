@@ -609,6 +609,8 @@ html[data-global-player-expanded] [data-media-chrome] {
 }
 .mobile-content-pad {
   padding-bottom: var(--mobile-content-pb);
+  /* 隐栏收起底栏高度时平滑过渡，列表视觉上「长出来」占满 Tab 区 */
+  transition: padding-bottom 0.3s var(--ease-soft, cubic-bezier(0.4, 0, 0.2, 1));
 }
 
 /* 媒体唱片旋转：全局统一角速度（约 3rpm，避免 Tailwind 任意动画不一致） */

@@ -103,6 +103,7 @@ export interface WorkspaceFeatures {
   favorites: boolean;
   projects: boolean;
   media: boolean;
+  finance: boolean;
 }
 
 /** 功能开关的稳定排序 + 展示元信息，UI 渲染列表用。 */
@@ -118,7 +119,72 @@ export const WORKSPACE_FEATURE_META: Array<{
   { key: "favorites", label: "收藏", description: "快速收藏的笔记集合" },
   { key: "projects", label: "项目", description: "项目管理、任务看板与协作" },
   { key: "media", label: "媒体库", description: "音视频媒体管理与在线播放" },
+  { key: "finance", label: "记账", description: "个人账本、账单导入与收支统计" },
 ];
+
+/** 记账模块类型 */
+export interface FinanceLedger {
+  id: string;
+  title: string;
+  operatingCurrency: string;
+  startDate: string;
+  icon: string | null;
+  sortOrder: number;
+  hasPassword: boolean;
+  locked: boolean;
+  workspaceId?: string | null;
+  ownerUserId?: string;
+  isShared?: boolean;
+  canManage?: boolean;
+  workspaceName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  unlockToken?: string;
+  expiresAt?: string;
+}
+
+export interface FinanceAccount {
+  id: string;
+  ledgerId: string;
+  name: string;
+  type: "ASSETS" | "LIABILITIES" | "EQUITY" | "INCOME" | "EXPENSES";
+  currency: string;
+  icon: string | null;
+  isOpen: number;
+  notes: string | null;
+  balanceMinor?: number;
+}
+
+export interface FinancePosting {
+  id: string;
+  accountId: string;
+  amountMinor: number;
+  currency: string;
+  accountName?: string;
+  accountType?: string;
+}
+
+export interface FinanceTransaction {
+  id: string;
+  ledgerId: string;
+  date: string;
+  time?: string | null;
+  payee?: string | null;
+  narration?: string | null;
+  tags?: string[];
+  source?: string | null;
+  sourceRef?: string | null;
+  postings?: FinancePosting[];
+  createdAt?: string;
+}
+
+export interface FinanceInsight {
+  id: string;
+  level: "info" | "warn" | "good";
+  title: string;
+  detail: string;
+  metric?: string;
+}
 
 export interface Notebook {
   id: string;
@@ -204,7 +270,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance";
 
 export type MobileView = "list" | "editor";
 

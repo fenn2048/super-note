@@ -98,6 +98,7 @@
     "react-i18next": "^16.5.4",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",
+    "recharts": "^3.10.0",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "tesseract.js": "^7.0.0",

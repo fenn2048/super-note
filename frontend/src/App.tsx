@@ -28,6 +28,7 @@ const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
 const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 const LibraryCenter = React.lazy(() => import("@/components/LibraryCenter"));
+const FinanceCenter = React.lazy(() => import("@/components/finance/FinanceCenter"));
 import MobileCameraModal from "@/components/MobileCameraModal";
 import GlobalMusicPlayer from "@/components/media/GlobalMusicPlayer";
 import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
@@ -574,6 +575,7 @@ function AppLayout() {
   const isBooksView = state.viewMode === "books";
   const isMediaView = state.viewMode === "media";
   const isLibraryView = state.viewMode === "library";
+  const isFinanceView = state.viewMode === "finance";
 
   /**
    * Cmd-K 全局搜索面板开关
@@ -1212,14 +1214,17 @@ function AppLayout() {
   // 滚动隐栏只控制视觉 visible，不卸载
   const barsVisuallyVisible = barsVisible && !keyboardVisible;
 
-  // 底栏 CSS 避让高度：只随「是否根页有底栏」变化，
-  // 不随滚动隐栏 barsVisible 变化——否则 padding 跳变会改 scrollTop，导致 tab/FAB 闪烁。
+  // 底栏 CSS 避让：根页有底栏结构且底栏当前「可见」时才占用高度。
+  // 向下滚动隐栏后 --mobile-tab-h→0，说说/任务列表可铺满原 Tab 区域；
+  // 与 scroll-hide 冷却配合，避免 padding 与滚动方向互抢导致闪烁。
   useEffect(() => {
-    syncMobileShellCssVars({ tabBarVisible: showMobileTabBar });
+    syncMobileShellCssVars({
+      tabBarVisible: showMobileTabBar && barsVisuallyVisible,
+    });
     return () => {
       syncMobileShellCssVars({ tabBarVisible: true });
     };
-  }, [showMobileTabBar]);
+  }, [showMobileTabBar, barsVisuallyVisible]);
 
   // 工作区检测：新用户若无工作区则显示引导页
   const [hasFamilySpace, setHasFamilySpace] = useState<boolean | null>(null);
@@ -1377,6 +1382,13 @@ function AppLayout() {
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
                   <LibraryCenter />
+                </Suspense>
+              </div>
+            ) : isFinanceView ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <MobileTopBar />
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                  <FinanceCenter />
                 </Suspense>
               </div>
             ) : isFilesView ? (

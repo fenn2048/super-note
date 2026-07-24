@@ -149,6 +149,17 @@ export const NAV_MODULES: NavModule[] = [
     group: "secondary",
     moreDesc: "文件、书库与媒体",
   },
+  {
+    id: "finance",
+    mode: "finance",
+    labelKey: "sidebar.finance",
+    labelFallback: "记账",
+    feature: "finance",
+    tier: 2,
+    placements: ["desktopRail", "mobileMore", "cmdk"],
+    group: "secondary",
+    moreDesc: "个人账本、账单导入与收支统计",
+  },
   // 移动快捷：仍保留分项，进入 library + 对应 tab
   {
     id: "files",
@@ -402,7 +413,10 @@ export function shouldShowMobileFAB(ctx: MobileShellContext): boolean {
 
 /**
  * 同步移动端贴底 CSS 变量（Tab / 播放器额外高度）
- * --mobile-tab-h：底栏内容高；隐栏或栈页时为 0
+ * --mobile-tab-h：底栏内容高；
+ *   - 栈页 / 无底栏结构 → 0
+ *   - 根页且底栏当前显示 → 64px
+ *   - 根页但滚动隐栏后 → 0（内容区可铺满原 Tab 区域）
  */
 export function syncMobileShellCssVars(opts: {
   tabBarVisible: boolean;
