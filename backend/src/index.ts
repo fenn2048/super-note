@@ -48,6 +48,7 @@ import versionRouter, { resolveAppVersion } from "./routes/version";
 import releasesRouter from "./routes/releases";
 import booksRouter from "./routes/books";
 import mediaRouter from "./routes/media";
+import financeRouter from "./routes/finance";
 import { seedDatabase } from "./db/seed";
 import { initApiTokensTable, looksLikeApiToken, resolveApiToken } from "./lib/api-tokens";
 import { getDb, closeDb } from "./db/schema";
@@ -62,6 +63,7 @@ import { streamSSE } from "hono/streaming";
 import { createSubClient } from "./services/redis";
 
 import { startAiTaskWorker, stopAiTaskWorker } from "./services/ai-worker";
+import { startFinanceWorker, stopFinanceWorker } from "./services/finance-worker";
 
 const app = new Hono();
 
@@ -131,7 +133,7 @@ app.use("*", cors({
   //     CORS 预检；如果没列入白名单，OPTIONS 直接 403/被浏览器拦下，所有"WS 连上之后"
   //     的 fetch 都会报 TypeError: Failed to fetch（典型现象：APK 列表能加载但点笔记
   //     立刻 Failed to fetch、点同一个笔记没反应）。
-  allowHeaders: ["Content-Type", "X-User-Id", "Authorization", "X-Sudo-Token", "X-Connection-Id"],
+  allowHeaders: ["Content-Type", "X-User-Id", "Authorization", "X-Sudo-Token", "X-Connection-Id", "X-Finance-Unlock"],
   credentials: true,
 }));
 
@@ -554,6 +556,7 @@ app.route("/api/icloud", icloudRouter);
 app.route("/api/mindmaps", mindmapsRouter);
 app.route("/api/diary", diaryRouter);
 app.route("/api/media", mediaRouter);
+app.route("/api/finance", financeRouter);
 app.route("/api/mentions", mentionsRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/url-import", urlImportRouter);
@@ -647,6 +650,63 @@ app.get("/api/me", (c) => {
       ? true
       : user.personalImportEnabled !== 0;
   }
+  return c.json(user);
+});
+
+/**
+ * 更新当前用户公开资料（昵称等）
+ * 任意已登录用户可改自己的 displayName；不改 username / 密码 / 角色。
+ */
+app.patch("/api/me", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id");
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  let body: { displayName?: string | null };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "请求体无效" }, 400);
+  }
+
+  if (body.displayName === undefined) {
+    return c.json({ error: "没有可更新的字段" }, 400);
+  }
+
+  let displayName: string | null = null;
+  if (body.displayName !== null && body.displayName !== undefined) {
+    const trimmed = String(body.displayName).trim();
+    if (trimmed.length === 0) {
+      displayName = null;
+    } else if (trimmed.length > 32) {
+      return c.json({ error: "昵称不能超过 32 个字符" }, 400);
+    } else if (/[\r\n\t]/.test(trimmed)) {
+      return c.json({ error: "昵称不能包含换行或制表符" }, 400);
+    } else {
+      displayName = trimmed;
+    }
+  }
+
+  db.prepare(
+    "UPDATE users SET displayName = ?, updatedAt = datetime('now') WHERE id = ?",
+  ).run(displayName, userId);
+
+  const user = db
+    .prepare(
+      `SELECT id, username, email, avatarUrl, displayName, role, isDemo,
+              personalExportEnabled, personalImportEnabled,
+              createdAt, updatedAt
+       FROM users WHERE id = ?`,
+    )
+    .get(userId) as any;
+  if (!user) return c.json({ error: "用户不存在" }, 404);
+  if (!user.role) user.role = "user";
+  user.isDemo = user.isDemo === 1;
+  user.personalExportEnabled =
+    user.personalExportEnabled === undefined ? true : user.personalExportEnabled !== 0;
+  user.personalImportEnabled =
+    user.personalImportEnabled === undefined ? true : user.personalImportEnabled !== 0;
+
   return c.json(user);
 });
 
@@ -840,6 +900,12 @@ try {
   console.warn("[init] startAiTaskWorker failed:", e);
 }
 
+try {
+  startFinanceWorker();
+} catch (e) {
+  console.warn("[init] startFinanceWorker failed:", e);
+}
+
 
 console.log(`🚀 蜉蝣 API running on http://localhost:${port}`);
 
@@ -867,6 +933,7 @@ async function gracefulShutdown(signal: string) {
     // 停掉 embedding worker 的轮询定时器，避免 process.exit 之前还在发起 fetch
     try { stopEmbeddingWorker(); } catch { /* ignore */ }
     try { stopAiTaskWorker(); } catch { /* ignore */ }
+    try { stopFinanceWorker(); } catch { /* ignore */ }
     // 关停 DB 连接：内部会先 wal_checkpoint(TRUNCATE)，把 -wal 中的事务全部
     // 写回主 .db 文件。这样无论用户接下来是 cp 冷备、docker volume snapshot
     // 还是直接关机，拿到的 .db 都是完整的一致快照，不会丢最近事务。

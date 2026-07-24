@@ -2119,6 +2119,232 @@ export const MIGRATIONS: Migration[] = [
       // 可选：若 tasks 表仍存在且为空，加注释性索引无意义；保持数据以便回滚
     },
   },
+
+  // ==========================================================================
+  // v36：个人记账模块（Finance / Ledger）
+  // --------------------------------------------------------------------------
+  // SQLite 复式记账为真源；V1 仅个人（ownerUserId），workspaceId 预留共享。
+  // ==========================================================================
+  {
+    version: 36,
+    name: "finance-ledger-module",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_ledgers (
+          id TEXT PRIMARY KEY,
+          ownerUserId TEXT NOT NULL,
+          workspaceId TEXT,
+          title TEXT NOT NULL,
+          operatingCurrency TEXT NOT NULL DEFAULT 'CNY',
+          startDate TEXT NOT NULL,
+          passwordHash TEXT,
+          icon TEXT,
+          sortOrder INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ownerUserId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_ledgers_owner ON finance_ledgers(ownerUserId);
+
+        CREATE TABLE IF NOT EXISTS finance_accounts (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'CNY',
+          icon TEXT,
+          parentId TEXT,
+          isOpen INTEGER NOT NULL DEFAULT 1,
+          notes TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(ledgerId, name),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_accounts_ledger ON finance_accounts(ledgerId);
+
+        CREATE TABLE IF NOT EXISTS finance_transactions (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          date TEXT NOT NULL,
+          time TEXT,
+          payee TEXT,
+          narration TEXT,
+          tagsJson TEXT,
+          source TEXT,
+          sourceRef TEXT,
+          importBatchId TEXT,
+          metaJson TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_tx_ledger_date ON finance_transactions(ledgerId, date DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_tx_source_ref
+          ON finance_transactions(ledgerId, source, sourceRef)
+          WHERE sourceRef IS NOT NULL AND sourceRef != '';
+
+        CREATE TABLE IF NOT EXISTS finance_postings (
+          id TEXT PRIMARY KEY,
+          transactionId TEXT NOT NULL,
+          ledgerId TEXT NOT NULL,
+          accountId TEXT NOT NULL,
+          amountMinor INTEGER NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'CNY',
+          sortOrder INTEGER DEFAULT 0,
+          FOREIGN KEY (transactionId) REFERENCES finance_transactions(id) ON DELETE CASCADE,
+          FOREIGN KEY (accountId) REFERENCES finance_accounts(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_post_ledger_acct ON finance_postings(ledgerId, accountId);
+        CREATE INDEX IF NOT EXISTS idx_fin_post_tx ON finance_postings(transactionId);
+        CREATE INDEX IF NOT EXISTS idx_fin_post_ledger ON finance_postings(ledgerId);
+
+        CREATE TABLE IF NOT EXISTS finance_import_rules (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          priority INTEGER NOT NULL DEFAULT 0,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          matchJson TEXT NOT NULL,
+          actionJson TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_rules_ledger ON finance_import_rules(ledgerId);
+
+        CREATE TABLE IF NOT EXISTS finance_import_batches (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          fileName TEXT,
+          status TEXT NOT NULL DEFAULT 'preview',
+          statsJson TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          expiresAt TEXT,
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_batches_ledger ON finance_import_batches(ledgerId);
+
+        CREATE TABLE IF NOT EXISTS finance_import_rows (
+          id TEXT PRIMARY KEY,
+          batchId TEXT NOT NULL,
+          rowIndex INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          confidence REAL,
+          parsedJson TEXT NOT NULL,
+          draftJson TEXT NOT NULL,
+          matchRuleId TEXT,
+          duplicateTxId TEXT,
+          FOREIGN KEY (batchId) REFERENCES finance_import_batches(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_rows_batch ON finance_import_rows(batchId);
+
+        CREATE TABLE IF NOT EXISTS finance_unlock_sessions (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          tokenHash TEXT NOT NULL,
+          expiresAt TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_unlock_ledger_user ON finance_unlock_sessions(ledgerId, userId);
+
+        CREATE TABLE IF NOT EXISTS finance_tx_templates (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          payloadJson TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
+
+  // v37：账本生物识别解锁令牌 + 导出无关（仅 bio 表）
+  {
+    version: 37,
+    name: "finance-bio-unlock-tokens",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_bio_tokens (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          tokenHash TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          lastUsedAt TEXT,
+          UNIQUE(ledgerId, userId),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_bio_ledger_user ON finance_bio_tokens(ledgerId, userId);
+      `);
+    },
+  },
+
+  // v38：月度预算
+  {
+    version: 38,
+    name: "finance-monthly-budgets",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_budgets (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          yearMonth TEXT NOT NULL,
+          accountId TEXT,
+          amountMinor INTEGER NOT NULL,
+          note TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE,
+          FOREIGN KEY (accountId) REFERENCES finance_accounts(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_budget_unique
+          ON finance_budgets(ledgerId, yearMonth, IFNULL(accountId, ''));
+        CREATE INDEX IF NOT EXISTS idx_fin_budget_ledger_ym
+          ON finance_budgets(ledgerId, yearMonth);
+      `);
+    },
+  },
+
+  // v39：定期记账 + 预算告警去重
+  {
+    version: 39,
+    name: "finance-recurring-and-budget-alerts",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_recurring (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          ruleType TEXT NOT NULL,
+          ruleJson TEXT NOT NULL DEFAULT '{}',
+          payloadJson TEXT NOT NULL,
+          nextRunDate TEXT NOT NULL,
+          lastRunAt TEXT,
+          endDate TEXT,
+          autoPost INTEGER NOT NULL DEFAULT 1,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (ledgerId) REFERENCES finance_ledgers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fin_recurring_due
+          ON finance_recurring(enabled, nextRunDate);
+
+        CREATE TABLE IF NOT EXISTS finance_alert_log (
+          id TEXT PRIMARY KEY,
+          ledgerId TEXT NOT NULL,
+          alertKey TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(ledgerId, alertKey)
+        );
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */
