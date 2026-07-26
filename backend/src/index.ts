@@ -750,9 +750,13 @@ if (process.env.NODE_ENV === "production") {
   console.log("[Static] Serving frontend from:", frontendDist);
 
   // MIME 类型映射
+  // 注意：.mjs 必须是 JavaScript，否则 PDF.js worker（pdf.worker.mjs）会被浏览器
+  // 以 strict MIME 拒绝（application/octet-stream → Failed to load module script）。
   const mimeTypes: Record<string, string> = {
     ".html": "text/html",
     ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".cjs": "application/javascript",
     ".css": "text/css",
     ".json": "application/json",
     ".png": "image/png",
@@ -767,8 +771,10 @@ if (process.env.NODE_ENV === "production") {
     ".eot": "application/vnd.ms-fontobject",
     ".webp": "image/webp",
     ".map": "application/json",
+    ".bcmap": "application/octet-stream",
     ".apk": "application/vnd.android.package-archive",
     ".zip": "application/zip",
+    ".wasm": "application/wasm",
   };
 
   // 镜像默认不内置 APK（.dockerignore 排除）。Android 客户端仍可能请求

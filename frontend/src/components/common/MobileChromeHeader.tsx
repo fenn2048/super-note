@@ -95,8 +95,9 @@ export default function MobileChromeHeader({
   return (
     <header
       className={cn(
-        "md:hidden shrink-0 select-none z-40",
+        "mobile-chrome-header md:hidden shrink-0 select-none z-40",
         "flex items-center gap-1 px-3 sm:px-4",
+        // 默认半透明毛玻璃；Android 原生由 index.css 覆盖为实色，避免状态栏区发白
         "bg-app-elevated/70 backdrop-blur-md",
         !borderless && "border-b border-app-border/60",
         "transition-all duration-300 ease-soft overflow-hidden",

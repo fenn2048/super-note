@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与前端 index.css 浅色主题对齐：宣纸米 / 奶油浮层 -->
+    <color name="app_bg">#F3EFE6</color>
+    <color name="app_elevated">#FFFAF2</color>
+    <color name="app_bg_dark">#16131C</color>
+    <color name="app_elevated_dark">#252033</color>
+    <color name="colorPrimary">#6D4AFF</color>
+    <color name="colorPrimaryDark">#5A38EF</color>
+    <color name="colorAccent">#6D4AFF</color>
+</resources>

@@ -1810,9 +1810,12 @@ function MobileTabBar({ visible }: { visible: boolean }) {
         "mobile-tab-bar fixed bottom-0 left-0 right-0 z-35 md:hidden flex items-center justify-around transition-all duration-300 ease-soft",
         visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
       )}
-      style={{ 
+      style={{
+        // 底栏背景必须铺满手势条区域；内容区固定 64px，底部用 padding 消化 safe-area
         paddingBottom: "var(--safe-area-bottom)",
-        height: "calc(64px + var(--safe-area-bottom))"
+        minHeight: "calc(64px + var(--safe-area-bottom))",
+        height: "calc(64px + var(--safe-area-bottom))",
+        boxSizing: "border-box",
       }}
     >
       {tabs.map((tab) => (
@@ -1822,7 +1825,8 @@ function MobileTabBar({ visible }: { visible: boolean }) {
             handleTabClick(tab.mode, { openMyTasks: tab.openMyTasks });
           }}
           className={cn(
-            "flex flex-col items-center justify-center flex-1 h-16 relative transition-all duration-fast ease-soft active:scale-95",
+            // h-16 只约束图标+文字行，整体栏高由外层 minHeight 含 safe-area
+            "flex flex-col items-center justify-center flex-1 h-16 max-h-16 relative transition-all duration-fast ease-soft active:scale-95",
             tab.active ? "text-accent-primary" : "text-tx-tertiary hover:text-tx-primary"
           )}
         >

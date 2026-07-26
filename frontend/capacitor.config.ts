@@ -49,9 +49,12 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      // 冷启动初始值（浅色）；启动后由 useStatusBarSync 根据主题动态切换
+      // 冷启动初始值（浅色纸感，勿用 #FFFFFF——会在 Honor 等机顶出一条白带）
+      // 启动后由 useStatusBarSync / AndroidSystemBarsBridge 按主题动态切换
       style: "LIGHT",
-      backgroundColor: "#F5F3EE",
+      backgroundColor: "#F3EFE6",
+      // Edge-to-Edge：内容延伸至系统栏下，由 CSS --safe-area-* 避让
+      overlaysWebView: true,
     },
     Keyboard: {
       // 键盘弹出时不自动调整 WebView 大小，由前端 JS 手动控制布局。

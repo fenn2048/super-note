@@ -177,27 +177,68 @@ export function isAppDarkMode(): boolean {
   return false;
 }
 
+/** 读 CSS 主题色；失败时回退到 index.css 默认纸感/墨底 */
+function readThemeSurfaceColors(isDark: boolean): { bg: string; elevated: string } {
+  try {
+    const cs = getComputedStyle(document.documentElement);
+    const bg = (cs.getPropertyValue("--color-bg") || "").trim();
+    const elevated =
+      (cs.getPropertyValue("--color-elevated-solid") || "").trim() ||
+      (cs.getPropertyValue("--color-elevated") || "").trim();
+    // color-mix / rgba 无法直接喂给 Android Color.parseColor，只接受 #hex
+    const hex = (v: string, fallback: string) =>
+      /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v) ? v : fallback;
+    return {
+      bg: hex(bg, isDark ? "#16131c" : "#f3efe6"),
+      elevated: hex(elevated, isDark ? "#252033" : "#fffaf2"),
+    };
+  } catch {
+    return {
+      bg: isDark ? "#16131c" : "#f3efe6",
+      elevated: isDark ? "#252033" : "#fffaf2",
+    };
+  }
+}
+
+/** 同步 Android 导航栏/状态栏实体色（MainActivity.AndroidSystemBarsBridge） */
+function applyAndroidSystemBarsColors(statusHex: string, navHex: string, lightIconsBg: boolean) {
+  try {
+    const bridge = (window as unknown as {
+      AndroidSystemBarsBridge?: {
+        setColors: (s: string, n: string, light: boolean) => void;
+      };
+    }).AndroidSystemBarsBridge;
+    bridge?.setColors?.(statusHex, navHex, lightIconsBg);
+  } catch {
+    /* bridge 尚未注入时忽略 */
+  }
+}
+
 /**
  * 同步原生状态栏图标/背景色。
  * - isDarkSurface=true（深色背景）→ 白色时间/信号/电量（Style.Dark）
  * - isDarkSurface=false（浅色背景）→ 黑色时间/信号/电量（Style.Light）
  * 阅读器等全屏场景可临时覆盖；离开时用 syncStatusBarToAppTheme 恢复。
  *
- * Android 上 setAppearanceLightStatusBars(!DARK)：DARK → 白图标，LIGHT → 黑图标。
+ * 浅色务必用纸感米色（#f3efe6），不要 #ffffff——Honor 等机会在顶部留一条刺眼白带。
  */
 export function applyNativeStatusBar(opts: {
   isDarkSurface: boolean;
   backgroundColor?: string;
+  navigationColor?: string;
 }) {
   if (!isNativePlatform()) return;
-  const { isDarkSurface, backgroundColor } = opts;
-  const bg =
-    backgroundColor || (isDarkSurface ? "#151b26" : "#d6d6d6");
+  const { isDarkSurface } = opts;
+  const surfaces = readThemeSurfaceColors(isDarkSurface);
+  const bg = opts.backgroundColor || surfaces.bg;
+  const nav = opts.navigationColor || surfaces.elevated;
   // Style.Dark = 浅色内容（白字）；Style.Light = 深色内容（黑字）
   const style = isDarkSurface ? Style.Dark : Style.Light;
   const apply = () => {
     StatusBar.setStyle({ style }).catch(() => {});
     StatusBar.setBackgroundColor({ color: bg }).catch(() => {});
+    // lightIconsBg=true → 浅色底 + 深色图标
+    applyAndroidSystemBarsColors(bg, nav, !isDarkSurface);
   };
   apply();
   // Android 偶发首帧被系统/其它 effect 覆盖，短延迟再刷一次
@@ -209,9 +250,11 @@ export function applyNativeStatusBar(opts: {
 export function syncStatusBarToAppTheme() {
   if (typeof document === "undefined") return;
   const isDark = isAppDarkMode();
+  const surfaces = readThemeSurfaceColors(isDark);
   applyNativeStatusBar({
     isDarkSurface: isDark,
-    backgroundColor: isDark ? "#0d1117" : "#ffffff",
+    backgroundColor: surfaces.bg,
+    navigationColor: surfaces.elevated,
   });
 }
 
@@ -229,63 +272,55 @@ export function useStatusBarSync() {
     const platform = Capacitor.getPlatform(); // "android" | "ios" | "web"
     document.documentElement.setAttribute("data-native", platform);
 
-    // 确保状态栏不覆盖 WebView 内容（状态栏占据独立空间，不盖住返回按钮）
-    // 延迟执行确保原生层已就绪
-    const ensureNoOverlay = () => {
-      StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    // Android 15+ (targetSdk 35) 强制 Edge-to-Edge：setOverlaysWebView(false) 往往无效，
+    // 且会与系统栏颜色/安全区打架。统一走 overlay:true，由 CSS --safe-area-* 避让。
+    // MainActivity 还会通过 WindowInsets 注入更准的 --android-*-height。
+    const ensureOverlay = () => {
+      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     };
-    ensureNoOverlay();
-    // 延迟再执行一次，防止初始化时序问题
-    const timer = setTimeout(ensureNoOverlay, 500);
+    ensureOverlay();
+    const timer = setTimeout(ensureOverlay, 500);
 
-    // Android overlay:false 下 env(safe-area-inset-top) 永远是 0；
-    // 但 Android 15+ (targetSdk>=35) 强制 Edge-to-Edge，setOverlaysWebView(false)
-    // 在新系统上事实上不再生效——状态栏会持续 overlay 在 WebView 上。无论哪种
-    // 情况，顶部都需要避让一段距离。
-    //
-    // 测量策略（按可信度从高到低尝试）：
-    //   1) env(safe-area-inset-top)：浏览器规范的安全区，Capacitor 6+ Android 14+
-    //      Edge-to-Edge 下能正确返回真实状态栏（含刘海避让）。最可信，优先使用。
-    //   2) 兜底常量 28px：覆盖普通屏真实状态栏（Android 24dp ≈ 24-30px CSS）。
-    //      故意不再用 `screen.height - visualViewport.height` 做差值估算——
-    //      该差值在 Edge-to-Edge 下混合了状态栏 + 系统导航条 + 输入法等多种
-    //      占用，硬分给顶部会导致顶部留白远大于真实状态栏（实测 70~80px），
-    //      视觉上极不雅观。刘海屏由 (1) env() 提供真值即可，无需"猜"。
-    //   - 只在 Android 上注入，iOS 走 env()
+    // 测量 env(safe-area-inset-*)；Honor/MagicOS 上常为 0，此时保留 CSS 硬兜底，
+    // 等 MainActivity.injectSafeAreaCss 用真实 WindowInsets 覆盖。
     let applyStatusBarHeight: (() => void) | null = null;
     if (platform === "android") {
-      applyStatusBarHeight = () => {
-        // 1) 先尝试读 env(safe-area-inset-top) —— 临时塞进一个隐藏元素再 getComputedStyle
-        let topInset = 0;
+      const readEnvInset = (prop: string): number => {
         try {
           const probe = document.createElement("div");
           probe.style.cssText =
-            "position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none;";
+            `position:fixed;top:0;left:0;width:0;height:env(${prop},0px);visibility:hidden;pointer-events:none;`;
           document.body.appendChild(probe);
-          const rect = probe.getBoundingClientRect();
-          topInset = rect.height;
+          const h = probe.getBoundingClientRect().height;
           document.body.removeChild(probe);
+          return h;
         } catch {
-          /* ignore */
+          return 0;
         }
+      };
 
-        // 2) 兜底：env() 失效时使用 28px 常量。不再做差值估算，避免误差。
-        //    刘海/挖孔屏 env() 通常正常返回 36-50px+，由 (1) 自动覆盖。
-        const finalTop = topInset > 0 ? topInset : 28;
+      applyStatusBarHeight = () => {
+        const topInset = readEnvInset("safe-area-inset-top");
+        const bottomInset = readEnvInset("safe-area-inset-bottom");
 
-        document.documentElement.style.setProperty(
-          "--android-status-bar-height",
-          `${finalTop}px`,
-        );
-        // Android 15+ Edge-to-Edge 下底部导航/手势栏也是 overlay。
-        // 兜底 24px（手势条 16dp + 少量呼吸），与 CSS 兜底保持一致。
-        document.documentElement.style.setProperty(
-          "--android-nav-bar-height",
-          `24px`,
-        );
+        // 仅当 env 给出可信值时才写入；否则交给 CSS 兜底 / 原生 WindowInsets 注入
+        if (topInset > 0) {
+          document.documentElement.style.setProperty(
+            "--android-status-bar-height",
+            `${topInset}px`,
+          );
+        }
+        if (bottomInset > 0) {
+          document.documentElement.style.setProperty(
+            "--android-nav-bar-height",
+            `${bottomInset}px`,
+          );
+        } else if (!document.documentElement.style.getPropertyValue("--android-nav-bar-height")) {
+          // 尚无原生注入时给手势条机型更稳妥的 32px（Magic7 底部指示条区域）
+          document.documentElement.style.setProperty("--android-nav-bar-height", "32px");
+        }
       };
       applyStatusBarHeight();
-      // 旋转屏或 splitscreen 变化后重新测量
       window.visualViewport?.addEventListener("resize", applyStatusBarHeight);
       window.addEventListener("orientationchange", applyStatusBarHeight);
     }

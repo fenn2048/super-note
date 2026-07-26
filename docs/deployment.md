@@ -95,6 +95,36 @@ docker run -d \
 | `DB_PATH` | `/app/data/super-note.db` | 数据库文件路径 |
 | `NODE_ENV` | `production` | 运行环境 |
 | `OLLAMA_URL` | （未设置） | Ollama 服务地址（如需本地 AI 请自行部署 Ollama） |
+| `MAX_BOOK_UPLOAD_MB` | `512` | 书库单本上传上限（MB）；超大 PDF 需同步调大反代 body 限制 |
+
+### 反代上传大文件（413 Request Entity Too Large）
+
+书库导入 / 附件上传走 `multipart`，体积常超过 nginx 默认 `1m`。在 **super-note 所在 server** 中设置：
+
+```nginx
+server {
+    server_name fly.example.com;
+
+    client_max_body_size 512m;   # 或 1024m；需 ≥ 最大电子书
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_request_buffering off; # 可选：大文件少占反代磁盘缓冲
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # WebSocket（协同编辑）
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+修改后执行 `nginx -t && systemctl reload nginx`。若只放大 `MAX_BOOK_UPLOAD_MB` 而反代仍 1m，浏览器仍会看到 **413**。
 
 ---
 

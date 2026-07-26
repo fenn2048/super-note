@@ -259,19 +259,37 @@ html, body, #root {
   --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
-/* Android 原生壳：status bar / nav bar 不 overlay WebView，env() 恒为 0；
- * 由 JS 注入 --android-status-bar-height / --android-nav-bar-height 作为更精确的
- * 兜底值，但即便 JS 没跑（极端时序问题），CSS 这里也给一份**硬兜底**：
- *   - 顶部 28px：贴近普通屏真实状态栏高度，避免按钮压在时间/电池图标上；
- *               刘海/挖孔屏由 JS 注入的真实值通过 max() 自动覆盖。
- *   - 底部 24px：覆盖手势条，避免 home indicator 压住内容。
- * JS 注入的值会通过 max() 与硬兜底取较大者，高状态栏机型依然精准。
- *
- * 注：Android 15+ (targetSdk>=35) 强制 Edge-to-Edge，状态栏/手势栏会 overlay
- * 在 WebView 上，必须依靠这两个兜底变量做避让。 */
+/* Android 原生壳（含 Honor Magic7 / targetSdk 35 Edge-to-Edge）：
+ * env(safe-area-inset-*) 在部分 MagicOS WebView 上恒为 0；
+ * 由 MainActivity WindowInsets + useStatusBarSync 写入
+ * --android-status-bar-height / --android-nav-bar-height。
+ * 即便 JS 未就绪，这里也给硬兜底，避免顶栏贴时间、底栏贴手势条。
+ *   - 顶部 ≥28px（普通状态栏）；刘海/挖孔由注入真值抬高
+ *   - 底部 ≥32px（手势指示条；Magic 系列比 24 更稳）
+ */
 html[data-native="android"] {
-  --safe-area-top: max(var(--android-status-bar-height, 0px), 28px);
-  --safe-area-bottom: max(var(--android-nav-bar-height, 0px), 24px);
+  --safe-area-top: max(
+    env(safe-area-inset-top, 0px),
+    var(--android-status-bar-height, 0px),
+    28px
+  );
+  --safe-area-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--android-nav-bar-height, 0px),
+    32px
+  );
+}
+
+/* 原生 Android：顶栏/底栏用实色，避免半透明叠在系统白底上发灰发白 */
+html[data-native="android"] .mobile-tab-bar {
+  background: var(--color-elevated-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-native="android"] .mobile-chrome-header {
+  background: var(--color-bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* iOS 原生壳：env(safe-area-inset-*) 通常能正确返回，但某些机型/初始化时机

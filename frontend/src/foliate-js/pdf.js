@@ -2,7 +2,45 @@ const pdfjsPath = path => `/vendor/pdfjs/${path}`
 
 import '@pdfjs/pdf.min.mjs'
 const pdfjsLib = globalThis.pdfjsLib
+
+// 默认路径（开发 / 正确 MIME 时直接可用）
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsPath('pdf.worker.mjs')
+
+/**
+ * 部分反向代理 / 旧静态服务会把 .mjs 标成 application/octet-stream，
+ * 浏览器 strict MIME 拒绝作为 module worker 加载。
+ * 这里 fetch 后用 Blob URL（显式 text/javascript）兜底。
+ */
+let pdfWorkerReady = null
+const ensurePdfWorker = () => {
+    if (pdfWorkerReady) return pdfWorkerReady
+    pdfWorkerReady = (async () => {
+        const src = pdfjsPath('pdf.worker.mjs')
+        try {
+            const res = await fetch(src)
+            if (!res.ok) throw new Error(`worker HTTP ${res.status}`)
+            const ct = (res.headers.get('content-type') || '').toLowerCase()
+            // 已是 JS MIME 时无需再 blob（省内存、可缓存）
+            if (
+                ct.includes('javascript') ||
+                ct.includes('ecmascript') ||
+                ct.includes('module')
+            ) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = src
+                return
+            }
+            const text = await res.text()
+            const blobUrl = URL.createObjectURL(
+                new Blob([text], { type: 'text/javascript' }),
+            )
+            pdfjsLib.GlobalWorkerOptions.workerSrc = blobUrl
+        } catch (err) {
+            console.warn('[pdfjs] worker blob fallback failed, using path:', err)
+            pdfjsLib.GlobalWorkerOptions.workerSrc = src
+        }
+    })()
+    return pdfWorkerReady
+}
 
 const fetchText = async url => await (await fetch(url)).text()
 
@@ -346,6 +384,7 @@ const parseCalibreSeriesFromXMP = raw => {
 }
 
 export const makePDF = async file => {
+    await ensurePdfWorker()
     const transport = new pdfjsLib.PDFDataRangeTransport(file.size, [])
     transport.requestDataRange = (begin, end) => {
         file.slice(begin, end).arrayBuffer().then(chunk => {

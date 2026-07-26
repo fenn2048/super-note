@@ -29,6 +29,10 @@ import {
   EmptyActionButton,
   LoadingBlock,
 } from "@/components/common/FeedbackStates";
+import {
+  collectBookFilesFromDataTransfer,
+  epubPackageAccessHint,
+} from "@/lib/epubPackage";
 
 interface BookCenterProps {
   onOpenBook: (bookHash: string) => void;
@@ -138,7 +142,89 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
     return String(field);
   };
 
-  const processAndImportBook = async (file: File) => {
+  /**
+   * 立刻把 File 读进内存，避免：
+   * 1) 拖放后的 File 在 drop 事件结束 / 后续 await 后失效（NotFoundError）
+   * 2) FormData 上传时浏览器读不到磁盘路径（net::ERR_ACCESS_DENIED / Failed to fetch）
+   * 3) iCloud/网盘占位文件“可见但未本地下载”
+   */
+  const materializeFile = async (file: File): Promise<File> => {
+    const looksEpub = /\.epub$/i.test(file.name);
+    try {
+      // 解包 epub 目录被当成 File 时 size 常为 0 或不可读
+      if (looksEpub && file.size === 0) {
+        throw new Error(epubPackageAccessHint(file.name));
+      }
+      const buffer = await file.arrayBuffer();
+      if (buffer.byteLength === 0) {
+        throw new Error(
+          looksEpub
+            ? epubPackageAccessHint(file.name)
+            : `无法读取「${file.name}」内容（可能是云端占位文件，请先在本地下载完整文件后再导入）`
+        );
+      }
+      // ZIP 魔数 PK\x03\x04；解包目录不会通过这里（通常读失败），若读到非 zip 的“假 epub”再提示
+      if (looksEpub) {
+        const u8 = new Uint8Array(buffer.slice(0, 4));
+        const isZip = u8[0] === 0x50 && u8[1] === 0x4b;
+        if (!isZip) {
+          throw new Error(
+            `「${file.name}」不是标准 epub 压缩包（内容不是 ZIP）。` +
+              `若来自 Apple Books 的解包目录，请把文件夹拖进导入区自动打包，或先 zip 成真正的 .epub。`
+          );
+        }
+      }
+      return new File([buffer], file.name, {
+        type: file.type || (looksEpub ? "application/epub+zip" : "application/octet-stream"),
+        lastModified: file.lastModified,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("Apple Books")) throw err;
+      const name = (err as DOMException)?.name;
+      if (name === "NotFoundError" || name === "NotAllowedError" || name === "SecurityError") {
+        throw new Error(
+          looksEpub
+            ? epubPackageAccessHint(file.name)
+            : `无法访问文件「${file.name}」。请确认文件仍在本地（iCloud/网盘需先下载完成），或改用「选择文件」按钮导入。`
+        );
+      }
+      throw err;
+    }
+  };
+
+  const formatImportError = (err: unknown): string => {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/413|entity too large|Request Entity Too Large|BOOK_TOO_LARGE|过大/i.test(msg)) {
+      return (
+        "上传被拒绝（413 文件过大）。400MB+ 的 PDF 需要：\n" +
+        "1) 反代 nginx 设置 client_max_body_size 512m;（或更大）\n" +
+        "2) 后端环境变量 MAX_BOOK_UPLOAD_MB（默认 512）\n" +
+        "详情: " +
+        msg
+      );
+    }
+    if (
+      msg === "Failed to fetch" ||
+      msg.includes("NetworkError") ||
+      msg.includes("Load failed")
+    ) {
+      return (
+        "网络请求失败（Failed to fetch）。常见原因：1) 文件读取权限丢失，请改用「选择文件」或确认云盘文件已本地下载；" +
+        "2) 后端未启动或代理异常；3) 大文件被反代截断。原始错误: " +
+        msg
+      );
+    }
+    return msg;
+  };
+
+  /** 超过该体积不再整文件物化到内存（避免 400MB PDF 双倍占用）；也不再强解封面 */
+  const LARGE_BOOK_BYTES = 80 * 1024 * 1024;
+
+  const processAndImportBook = async (
+    file: File,
+    opts: { alreadyMaterialized?: boolean; manageUploading?: boolean } = {}
+  ) => {
+    const { alreadyMaterialized = false, manageUploading = true } = opts;
     const ext = file.name.split(".").pop()?.toLowerCase();
     const allowed = ["epub", "pdf", "mobi", "azw", "azw3", "cbz", "fb2"];
     if (!ext || !allowed.includes(ext)) {
@@ -146,35 +232,66 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
       return;
     }
 
-    setIsUploading(true);
+    if (manageUploading) setIsUploading(true);
     try {
+      // 小文件：立刻读入内存，避免拖放句柄失效。
+      // 大文件：整本 materialize 会 OOM，仅探测可读后直接上传原 File。
+      let localFile: File;
+      if (alreadyMaterialized) {
+        localFile = file;
+      } else if (file.size > LARGE_BOOK_BYTES) {
+        try {
+          const head = await file.slice(0, 8).arrayBuffer();
+          if (!head.byteLength) {
+            throw new Error(`无法读取「${file.name}」（文件可能不可访问）`);
+          }
+        } catch (err) {
+          const name = (err as DOMException)?.name;
+          if (name === "NotFoundError" || name === "NotAllowedError") {
+            throw new Error(epubPackageAccessHint(file.name));
+          }
+          throw err;
+        }
+        localFile = file;
+      } else {
+        localFile = await materializeFile(file);
+      }
+
       let coverBlob: Blob | null = null;
       let parsedTitle: string | undefined;
       let parsedAuthor: string | undefined;
 
-      try {
-        const { DocumentLoader } = await import("@/lib/bookDocument");
-        const loader = new DocumentLoader(file);
-        const { book: bookDoc } = await loader.open();
-        if (bookDoc) {
-          coverBlob = await bookDoc.getCover();
-          if (bookDoc.metadata) {
-            if (bookDoc.metadata.title) parsedTitle = stringifyMetadataField(bookDoc.metadata.title);
-            if (bookDoc.metadata.author) parsedAuthor = stringifyMetadataField(bookDoc.metadata.author);
+      // 超大 PDF 解析封面/元数据很慢且易失败（worker MIME 等），导入时跳过，书名用文件名
+      const skipMeta = localFile.size > LARGE_BOOK_BYTES && ext === "pdf";
+      if (!skipMeta) {
+        try {
+          const { DocumentLoader } = await import("@/lib/bookDocument");
+          const loader = new DocumentLoader(localFile);
+          const { book: bookDoc } = await loader.open();
+          if (bookDoc) {
+            coverBlob = await bookDoc.getCover();
+            if (bookDoc.metadata) {
+              if (bookDoc.metadata.title) parsedTitle = stringifyMetadataField(bookDoc.metadata.title);
+              if (bookDoc.metadata.author) parsedAuthor = stringifyMetadataField(bookDoc.metadata.author);
+            }
           }
+        } catch (err) {
+          console.warn("解析电子书元数据或封面失败:", err);
         }
-      } catch (err) {
-        console.warn("解析电子书元数据或封面失败:", err);
+      } else {
+        console.info(
+          `跳过超大 PDF 元数据解析（${(localFile.size / 1024 / 1024).toFixed(0)}MB），直接上传`
+        );
       }
 
       const activeGroup = (selectedFilter !== "all" && selectedFilter !== "uncategorized" && selectedFilter !== "reading" && selectedFilter !== "finished") ? selectedFilter : null;
-      await api.books.import(file, activeGroup, coverBlob || undefined, parsedTitle, parsedAuthor);
+      await api.books.import(localFile, activeGroup, coverBlob || undefined, parsedTitle, parsedAuthor);
       fetchData();
     } catch (err) {
       console.error("导入书籍失败:", err);
-      alert("导入书籍失败: " + (err as Error).message);
+      alert("导入书籍失败: " + formatImportError(err));
     } finally {
-      setIsUploading(false);
+      if (manageUploading) setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -182,7 +299,9 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    await processAndImportBook(files[0]);
+    // 同步取出 FileList 引用，再立刻 materialize（input value 清空前）
+    const picked = files[0];
+    await processAndImportBook(picked);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -199,11 +318,36 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
     e.preventDefault();
     setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
+    setIsUploading(true);
+    try {
+      // 支持：普通 epub/pdf 文件 + macOS/Apple Books 解包 .epub 目录（自动打成 zip）
+      const rawFiles = await collectBookFilesFromDataTransfer(e.dataTransfer);
+      if (rawFiles.length === 0) {
+        alert("未识别到可导入的电子书文件。若是 Apple Books 的 .epub 包，请直接拖到此区域。");
+        return;
+      }
 
-    for (const file of files) {
-      await processAndImportBook(file);
+      // 小文件立刻 materialize（防拖放句柄失效）；大文件（如 400MB PDF）原样交给 processAndImportBook
+      const prepared: { file: File; alreadyMaterialized: boolean }[] = [];
+      for (const f of rawFiles) {
+        if (f.size > LARGE_BOOK_BYTES) {
+          prepared.push({ file: f, alreadyMaterialized: false });
+        } else {
+          prepared.push({ file: await materializeFile(f), alreadyMaterialized: true });
+        }
+      }
+
+      for (const item of prepared) {
+        await processAndImportBook(item.file, {
+          alreadyMaterialized: item.alreadyMaterialized,
+          manageUploading: false,
+        });
+      }
+    } catch (err) {
+      console.error("导入书籍失败:", err);
+      alert("导入书籍失败: " + formatImportError(err));
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -465,7 +609,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
             <EmptyState
               icon={BookOpen}
               title="书架还是空的"
-              description="导入 EPUB / PDF 等格式，点网格中的加号卡片或下方按钮"
+              description="导入 EPUB / PDF 等。Apple Books 解包的 .epub 包请拖到此区域（会自动打包），或先选 *-fixed.epub"
               action={
                 <EmptyActionButton onClick={handleUploadClick}>
                   导入书籍

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,6 +13,9 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -19,6 +23,11 @@ import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -35,6 +44,11 @@ import java.util.List;
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "MainActivity";
 
+    /** 浅色主题默认：与前端 --color-bg / --color-elevated 一致 */
+    private int statusBarColor = Color.parseColor("#F3EFE6");
+    private int navigationBarColor = Color.parseColor("#FFFAF2");
+    private boolean lightSystemBars = true;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         AppLogger.init(this);
@@ -43,6 +57,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ShareReceivePlugin.class);
         registerPlugin(MediaPlaybackPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // 系统栏与 App 米色主题对齐，避免 Honor Magic7 等机型上下留纯白条
+        applySystemBars();
 
         // 通知渠道；KeepAlive 默认关闭
         NotificationChannels.ensureAll(this);
@@ -54,12 +71,119 @@ public class MainActivity extends BridgeActivity {
             this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidLogBridge(), "AndroidLogBridge");
+            this.bridge.getWebView().addJavascriptInterface(new AndroidSystemBarsBridge(), "AndroidSystemBarsBridge");
 
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
                 public void onPermissionRequest(final android.webkit.PermissionRequest request) {
                     runOnUiThread(() -> request.grant(request.getResources()));
                 }
+            });
+
+            // 把真实 WindowInsets 注入 WebView CSS 变量（Honor/MagicOS 上 env(safe-area) 常为 0）
+            final WebView webView = this.bridge.getWebView();
+            ViewCompat.setOnApplyWindowInsetsListener(webView, (v, insets) -> {
+                Insets sys = insets.getInsets(
+                    WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.displayCutout()
+                );
+                Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());
+                Insets gest = insets.getInsets(WindowInsetsCompat.Type.systemGestures());
+                int topPx = Math.max(sys.top, 0);
+                // 手势条机型 navigationBars 可能偏小；systemGestures 底部区域往往过大，封顶 48dp
+                int gestureBottom = gest.bottom > 0 ? Math.min(gest.bottom, dp(48)) : 0;
+                int bottomPx = Math.max(nav.bottom, gestureBottom);
+                injectSafeAreaCss(webView, topPx, bottomPx);
+                return insets;
+            });
+            ViewCompat.requestApplyInsets(webView);
+        }
+    }
+
+    private int dp(int value) {
+        float d = getResources().getDisplayMetrics().density;
+        return Math.round(value * d);
+    }
+
+    private void applySystemBars() {
+        Window window = getWindow();
+        if (window == null) return;
+
+        // Edge-to-Edge：内容可画到系统栏下方，由 CSS safe-area 避让
+        WindowCompat.setDecorFitsSystemWindows(window, false);
+
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.setStatusBarColor(statusBarColor);
+        window.setNavigationBarColor(navigationBarColor);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.setNavigationBarContrastEnforced(false);
+            window.setStatusBarContrastEnforced(false);
+        }
+
+        View decor = window.getDecorView();
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(window, decor);
+        if (controller != null) {
+            controller.setAppearanceLightStatusBars(lightSystemBars);
+            controller.setAppearanceLightNavigationBars(lightSystemBars);
+        }
+    }
+
+    private void injectSafeAreaCss(WebView webView, int topPx, int bottomPx) {
+        // 转 CSS px（与 density 无关：WindowInsets 已是物理 px，CSS 需要除以 density）
+        float density = getResources().getDisplayMetrics().density;
+        if (density <= 0) density = 1f;
+        float topCss = topPx / density;
+        float bottomCss = bottomPx / density;
+        // 兜底：至少状态栏 28、手势条 32，避免 inset 上报 0 时贴边（Magic 系列）
+        if (topCss < 1f) topCss = 28f;
+        if (bottomCss < 1f) bottomCss = 32f;
+
+        final String js =
+            "(function(){try{"
+                + "var r=document.documentElement;"
+                + "r.style.setProperty('--android-status-bar-height','" + topCss + "px');"
+                + "r.style.setProperty('--android-nav-bar-height','" + bottomCss + "px');"
+                + "r.setAttribute('data-native','android');"
+                + "}catch(e){}})();";
+        webView.post(() -> webView.evaluateJavascript(js, null));
+    }
+
+    /**
+     * 前端主题切换时同步系统栏颜色（浅色纸感 / 深色墨底）。
+     * 入参为 #RRGGBB 或 #AARRGGBB。
+     */
+    public class AndroidSystemBarsBridge {
+        @JavascriptInterface
+        public void setColors(String statusHex, String navHex, boolean lightIconsBg) {
+            runOnUiThread(() -> {
+                try {
+                    if (statusHex != null && statusHex.length() >= 7) {
+                        statusBarColor = Color.parseColor(statusHex.trim());
+                    }
+                    if (navHex != null && navHex.length() >= 7) {
+                        navigationBarColor = Color.parseColor(navHex.trim());
+                    }
+                    lightSystemBars = lightIconsBg;
+                    applySystemBars();
+                } catch (Exception e) {
+                    AppLogger.w(TAG, "setColors failed: " + e.getMessage());
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setLight(boolean light) {
+            runOnUiThread(() -> {
+                lightSystemBars = light;
+                if (light) {
+                    statusBarColor = Color.parseColor("#F3EFE6");
+                    navigationBarColor = Color.parseColor("#FFFAF2");
+                } else {
+                    statusBarColor = Color.parseColor("#16131C");
+                    navigationBarColor = Color.parseColor("#252033");
+                }
+                applySystemBars();
             });
         }
     }

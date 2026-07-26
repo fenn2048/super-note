@@ -2041,13 +2041,37 @@ export const api = {
       if (author) form.append("author", author);
       const ws = getCurrentWorkspace();
       if (ws && ws !== "") form.append("workspaceId", ws);
-      const res = await fetch(`${getBaseUrl()}/books/import`, {
-        method: "POST",
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: form,
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${getBaseUrl()}/books/import`, {
+          method: "POST",
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: form,
+        });
+      } catch (err) {
+        // 浏览器读 File 失败时常表现为 TypeError: Failed to fetch + net::ERR_ACCESS_DENIED
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          msg === "Failed to fetch"
+            ? `电子书上传请求失败（无法读取文件或网络中断）。请确认文件在本地可访问，且后端/代理正常。`
+            : `电子书上传请求失败: ${msg}`
+        );
+      }
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        // nginx 413 常返回 HTML「Request Entity Too Large」，json 解析会失败
+        const text = await res.text().catch(() => "");
+        let err: { error?: string; code?: string } = {};
+        try {
+          err = text ? JSON.parse(text) : {};
+        } catch {
+          err = { error: text.replace(/<[^>]+>/g, " ").trim().slice(0, 200) || undefined };
+        }
+        if (res.status === 413) {
+          throw new Error(
+            err.error ||
+              `电子书过大（HTTP 413）。请在反代增加 client_max_body_size（如 512m），后端可用 MAX_BOOK_UPLOAD_MB 调整上限。文件约 ${(file.size / 1024 / 1024).toFixed(0)}MB`
+          );
+        }
         throw new Error(err.error || `电子书导入失败: ${res.status}`);
       }
       return res.json();
@@ -3907,17 +3931,6 @@ export const api = {
         { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
       );
     },
-    getAdvice: (
-      ledgerId: string,
-      params: { year?: string; month?: string } = {},
-      unlockToken?: string | null,
-    ) => {
-      const q = new URLSearchParams(params as Record<string, string>);
-      return request<{ summary: any; insights: any[]; budgets: any[] }>(
-        `/finance/ledgers/${ledgerId}/advice?${q}`,
-        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
-      );
-    },
     listImportBatches: (ledgerId: string, unlockToken?: string | null, limit = 10) =>
       request<
         Array<{
@@ -3995,10 +4008,13 @@ export const api = {
       unlockToken?: string | null,
     ) => {
       const q = new URLSearchParams(params as Record<string, string>);
-      return request<{ summary: any; insights: import("@/types").FinanceInsight[] }>(
-        `/finance/ledgers/${ledgerId}/advice?${q}`,
-        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
-      );
+      return request<{
+        summary: any;
+        insights: import("@/types").FinanceInsight[];
+        budgets?: any[];
+      }>(`/finance/ledgers/${ledgerId}/advice?${q}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      });
     },
     getAdviceAi: (
       ledgerId: string,

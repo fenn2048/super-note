@@ -17,6 +17,9 @@ import {
 
 const app = new Hono();
 
+/** 单本电子书上传上限（PDF 扫描件常较大；再大请走对象存储/分片，需配合反代 client_max_body_size） */
+const MAX_BOOK_UPLOAD_SIZE = Number(process.env.MAX_BOOK_UPLOAD_MB || 512) * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // 权限辅助函数
 // ---------------------------------------------------------------------------
@@ -240,6 +243,18 @@ app.post("/import", async (c) => {
 
   if (!(file instanceof File)) {
     return c.json({ error: "file 字段缺失或非文件" }, 400);
+  }
+
+  if (file.size > MAX_BOOK_UPLOAD_SIZE) {
+    const maxMb = Math.round(MAX_BOOK_UPLOAD_SIZE / 1024 / 1024);
+    return c.json(
+      {
+        error: `电子书过大（${(file.size / 1024 / 1024).toFixed(0)}MB），当前上限 ${maxMb}MB。可设置环境变量 MAX_BOOK_UPLOAD_MB，并确认反代 client_max_body_size 足够大。`,
+        code: "BOOK_TOO_LARGE",
+        maxBytes: MAX_BOOK_UPLOAD_SIZE,
+      },
+      413,
+    );
   }
 
   const mime = (file.type || "application/octet-stream").toLowerCase();
