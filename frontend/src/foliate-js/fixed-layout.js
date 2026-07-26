@@ -1,4 +1,17 @@
-import 'construct-style-sheets-polyfill'
+// Constructable Stylesheets：Chrome 73+ / Safari 16.4+ 已原生支持。
+// 仅缺 API 时再拉 polyfill；现代浏览器跳过依赖预构建，避免
+// Vite「504 Outdated Optimize Dep」把整个 fixed-layout（PDF 阅读）拖死。
+const needsConstructableStylesheetPolyfill =
+  typeof CSSStyleSheet === 'undefined' ||
+  typeof CSSStyleSheet.prototype?.replaceSync !== 'function'
+
+if (needsConstructableStylesheetPolyfill) {
+  try {
+    await import('construct-style-sheets-polyfill')
+  } catch (err) {
+    console.warn('[foliate] construct-style-sheets-polyfill failed:', err)
+  }
+}
 
 const parseViewport = str => str
     ?.split(/[,;\s]/) // NOTE: technically, only the comma is valid

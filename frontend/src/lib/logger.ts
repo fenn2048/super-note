@@ -59,9 +59,30 @@ export const logger = {
   },
 };
 
+/**
+ * 浏览器在同一帧里 ResizeObserver 回调又触发尺寸变化时会抛出该通知。
+ * 常见于阅读器 / 列表 / 图表，**不是真正的业务异常**，Chrome 也会在控制台
+ * 显示为 error 级别。过滤掉避免污染 GlobalJSError 与 Android 日志。
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver#observation_errors
+ */
+function isBenignResizeObserverNoise(message: unknown): boolean {
+  const msg = String(message || "");
+  return (
+    msg.includes("ResizeObserver loop completed with undelivered notifications") ||
+    msg.includes("ResizeObserver loop limit exceeded")
+  );
+}
+
 // 自动拦截未捕获全局 JS 错误
 if (typeof window !== "undefined") {
   window.addEventListener("error", (event) => {
+    if (isBenignResizeObserverNoise(event.message)) {
+      // 阻止继续冒泡到其它全局 handler / 控制台重复刷屏（部分环境）
+      event.stopImmediatePropagation?.();
+      event.preventDefault?.();
+      return;
+    }
     logger.error(
       "GlobalJSError",
       `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`,
@@ -72,6 +93,10 @@ if (typeof window !== "undefined") {
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason;
     const msg = reason?.message || String(reason);
+    if (isBenignResizeObserverNoise(msg)) {
+      event.preventDefault?.();
+      return;
+    }
     logger.error("UnhandledPromiseRejection", msg, reason?.stack || "");
   });
 }

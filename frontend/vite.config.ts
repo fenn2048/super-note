@@ -28,8 +28,14 @@ export default defineConfig({
   },
   optimizeDeps: {
     entries: ["index.html"],
-    // 记账统计等按需模块依赖；新装包后避免 504 Outdated Optimize Dep
-    include: ["recharts"],
+    // 显式预构建：避免「504 Outdated Optimize Dep」拖垮按需 import
+    //（fixed-layout.js → construct-style-sheets-polyfill → 阅读器整页挂）
+    include: [
+      "recharts",
+      "construct-style-sheets-polyfill",
+      "jszip",
+      "@zip.js/zip.js",
+    ],
     esbuildOptions: {
       keepNames: true,
     },
