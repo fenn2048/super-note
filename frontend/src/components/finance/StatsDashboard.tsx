@@ -493,7 +493,7 @@ export default function StatsDashboard({
       )}
 
       {summaryLine && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm text-tx-primary">
+        <div className="rounded-xl border border-accent-primary/30 bg-accent-primary/5 px-3 py-2 text-sm text-tx-primary">
           {summaryLine}
         </div>
       )}
@@ -550,7 +550,7 @@ export default function StatsDashboard({
               </div>
               <div className="h-1.5 rounded-full bg-app-hover overflow-hidden">
                 <div
-                  className={cn("h-full rounded-full", b.ratio > 1 ? "bg-rose-500" : "bg-emerald-500")}
+                  className={cn("h-full rounded-full", b.ratio > 1 ? "bg-rose-500" : "bg-accent-primary")}
                   style={{ width: `${Math.min(100, (b.ratio || 0) * 100)}%` }}
                 />
               </div>
@@ -565,7 +565,7 @@ export default function StatsDashboard({
           {onGoImport && (
             <button
               type="button"
-              className="mt-2 text-emerald-600 text-sm"
+              className="mt-2 text-accent-primary text-sm"
               onClick={onGoImport}
             >
               去导入账单
@@ -583,7 +583,7 @@ export default function StatsDashboard({
             className={cn(
               "shrink-0 px-3 py-2 text-sm border-b-2 -mb-px transition-colors",
               tab === t.id
-                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 font-medium"
+                ? "border-accent-primary text-accent-primary font-medium"
                 : "border-transparent text-tx-tertiary hover:text-tx-secondary",
             )}
           >
@@ -646,7 +646,7 @@ export default function StatsDashboard({
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-xs border",
                     balanceType === k
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
+                      ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                       : "border-app-border text-tx-tertiary",
                   )}
                 >
@@ -724,7 +724,7 @@ export default function StatsDashboard({
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-xs border",
                     pieMode === k
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
+                      ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                       : "border-app-border text-tx-tertiary",
                   )}
                 >
@@ -858,7 +858,7 @@ export default function StatsDashboard({
                       </div>
                       <div className="h-2 rounded-full bg-app-hover overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-emerald-500/80"
+                          className="h-full rounded-full bg-accent-primary/80"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -884,7 +884,7 @@ export default function StatsDashboard({
                       className="w-full text-left text-sm flex justify-between gap-2 hover:bg-app-hover rounded-lg px-2 py-1.5"
                       onClick={() => drillMonth({ tag: t.tag })}
                     >
-                      <span className="text-emerald-600">#{t.tag}</span>
+                      <span className="text-accent-primary">#{t.tag}</span>
                       <span className="tabular-nums text-tx-secondary">
                         {t.count} 笔 · {hideMoney ? "****" : `¥${yuan(t.amountMinor)}`}
                       </span>
@@ -913,7 +913,7 @@ export default function StatsDashboard({
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-xs border",
                     payeeMode === k
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
+                      ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                       : "border-app-border text-tx-tertiary",
                   )}
                 >
@@ -984,7 +984,7 @@ export default function StatsDashboard({
               className={cn(
                 "text-xs rounded-lg px-2 py-1.5",
                 ins.level === "warn" && "bg-amber-500/10 text-amber-800 dark:text-amber-200",
-                ins.level === "good" && "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+                ins.level === "good" && "bg-accent-primary/10 text-accent-primary",
                 ins.level === "info" && "bg-app-hover text-tx-secondary",
               )}
             >
@@ -1018,14 +1018,14 @@ function KpiCard({
       onClick={onClick}
       className={cn(
         "rounded-xl border border-app-border bg-app-card p-3 text-left w-full",
-        onClick && "hover:border-emerald-500/40 transition-colors",
+        onClick && "hover:border-accent-primary/40 transition-colors",
       )}
     >
       <div className="text-xs text-tx-tertiary">{label}</div>
       <div
         className={cn(
           "text-lg font-semibold mt-1 tabular-nums tracking-tight",
-          tone === "income" && "text-emerald-600 dark:text-emerald-400",
+          tone === "income" && "text-accent-primary",
           tone === "expense" && "text-rose-500",
         )}
       >
@@ -1042,7 +1042,7 @@ function Empty({ hint, onImport }: { hint?: string; onImport?: () => void }) {
       <span>暂无图表数据</span>
       {hint && <span className="text-xs opacity-80">{hint}</span>}
       {onImport && (
-        <button type="button" className="text-emerald-600 text-xs mt-2" onClick={onImport}>
+        <button type="button" className="text-accent-primary text-xs mt-2" onClick={onImport}>
           去导入账单
         </button>
       )}

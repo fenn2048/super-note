@@ -274,6 +274,16 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
   // icon 模式：48px 宽栏 / 40px 方按钮
   // label 模式：64px 宽栏 / 整宽纵向按钮（图标 + 文字两行）
   const railWidthClass = showLabel ? "w-16" : "w-12";
+  const railWidthPx = showLabel ? 64 : 48;
+
+  // 供全局音乐播放器等贴底组件避让 Rail（不覆盖左侧导航）
+  useEffect(() => {
+    if (isMobile) return;
+    document.documentElement.style.setProperty("--nav-rail-width", `${railWidthPx}px`);
+    return () => {
+      document.documentElement.style.setProperty("--nav-rail-width", "0px");
+    };
+  }, [isMobile, railWidthPx]);
   const itemBaseClass = showLabel
     ? "relative w-14 py-1.5 rounded-button flex flex-col items-center justify-center gap-0.5 transition-all duration-fast ease-soft"
     : "relative w-10 h-10 rounded-button flex items-center justify-center transition-all duration-fast ease-soft";
@@ -326,11 +336,16 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
         // mobile：仅在抽屉里使用，本身已被 md:hidden 包裹的容器约束；这里再加 md:hidden 双保险
         isMobile
           ? "flex md:hidden h-full"
-          : "hidden md:flex h-full",
+          : "hidden md:flex h-full self-stretch",
         "vibrancy-sidebar bg-app-sidebar border-r border-app-border/80 flex-col items-center shrink-0 transition-[width] duration-150",
         railWidthClass,
       )}
-      style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)', paddingBottom: '8px' }}
+      style={{
+        paddingTop: "calc(var(--safe-area-top) + 4px)",
+        paddingBottom: "8px",
+        // 实体侧栏色铺满整高，避免 vibrancy / 透明叠出底部发白
+        backgroundColor: "var(--color-sidebar-solid, var(--color-sidebar))",
+      }}
     >
       {/* 顶部按钮区：
           - desktop：折叠/展开主侧栏（合并 Sidebar 原 Header 折叠按钮的功能）。

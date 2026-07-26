@@ -3810,10 +3810,21 @@ export const api = {
         headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
       }),
     getImportBatch: (ledgerId: string, batchId: string, unlockToken?: string | null) =>
-      request<{ batch: any; rows: any[] }>(
-        `/finance/ledgers/${ledgerId}/import/batches/${batchId}`,
-        { headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {} },
-      ),
+      request<{
+        batch: {
+          id: string;
+          channel: string;
+          fileName?: string;
+          status: string;
+          stats: Record<string, number>;
+          createdAt?: string;
+          readOnly?: boolean;
+        };
+        rows: any[];
+        readOnly?: boolean;
+      }>(`/finance/ledgers/${ledgerId}/import/batches/${batchId}`, {
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
     updateImportRow: (
       ledgerId: string,
       batchId: string,
@@ -3829,17 +3840,24 @@ export const api = {
     commitImportBatch: (
       ledgerId: string,
       batchId: string,
-      body: { rowIds?: string[] } = {},
+      body: {
+        mode?: "ready_only" | "include_review";
+        rowIds?: string[];
+      } = {},
       unlockToken?: string | null,
     ) =>
-      request<{ committed: number; skipped: number; errors: string[] }>(
-        `/finance/ledgers/${ledgerId}/import/batches/${batchId}/commit`,
-        {
-          method: "POST",
-          body: JSON.stringify(body),
-          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
-        },
-      ),
+      request<{
+        committed: number;
+        skipped: number;
+        errors: string[];
+        batchStatus?: string;
+        stats?: Record<string, number>;
+        remaining?: number;
+      }>(`/finance/ledgers/${ledgerId}/import/batches/${batchId}/commit`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
     statsSummary: (
       ledgerId: string,
       params: { year?: string; month?: string } = {},
@@ -3954,17 +3972,21 @@ export const api = {
         methodAccountId?: string;
         selected?: boolean;
         forceImportDuplicates?: boolean;
+        markIgnored?: boolean;
       },
       unlockToken?: string | null,
     ) =>
-      request<{ updated: number }>(
-        `/finance/ledgers/${ledgerId}/import/batches/${batchId}/bulk`,
-        {
-          method: "POST",
-          body: JSON.stringify(body),
-          headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
-        },
-      ),
+      request<{
+        updated: number;
+        skippedCommitted?: number;
+        batchStatus?: string;
+        stats?: Record<string, number>;
+        remaining?: number;
+      }>(`/finance/ledgers/${ledgerId}/import/batches/${batchId}/bulk`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: unlockToken ? { "X-Finance-Unlock": unlockToken } : {},
+      }),
     listBudgets: (ledgerId: string, yearMonth: string, unlockToken?: string | null) =>
       request<
         Array<{

@@ -94,6 +94,7 @@ export default function MobileChromeHeader({
 
   return (
     <header
+      data-mobile-chrome-header
       className={cn(
         "mobile-chrome-header md:hidden shrink-0 select-none z-40",
         "flex items-center gap-1 px-3 sm:px-4",

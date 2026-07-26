@@ -28,6 +28,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     entries: ["index.html"],
+    // 记账统计等按需模块依赖；新装包后避免 504 Outdated Optimize Dep
+    include: ["recharts"],
     esbuildOptions: {
       keepNames: true,
     },

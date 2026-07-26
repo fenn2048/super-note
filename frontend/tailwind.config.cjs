@@ -28,6 +28,8 @@ module.exports = {
           surface: "var(--color-surface)",
           sidebar: "var(--color-sidebar)",
           elevated: "var(--color-elevated)",
+          // 卡片/弹窗实体背景：优先 solid，避免 glass 皮肤半透明导致「看不清」
+          card: "var(--color-elevated-solid, var(--color-elevated))",
           border: "var(--color-border)",
           hover: "var(--color-hover)",
           active: "var(--color-active)",

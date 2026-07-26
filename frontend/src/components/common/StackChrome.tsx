@@ -58,6 +58,7 @@ export default function StackChrome({
 
   return (
     <div
+      data-stack-chrome
       className={cn(
         "shrink-0 border-b border-app-border bg-app-surface/90 backdrop-blur-md px-2 md:px-4",
         className,

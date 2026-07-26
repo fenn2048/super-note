@@ -6,6 +6,7 @@
  * - 动作：目标账户、支付账户、支付方式映射、打上标签、忽略
  */
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -200,7 +201,7 @@ export default function RulesPanel({
         <button
           type="button"
           onClick={openNew}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-primary text-white text-sm"
         >
           <Plus size={14} /> 添加规则
         </button>
@@ -293,7 +294,7 @@ export default function RulesPanel({
                   </button>
                   <button
                     type="button"
-                    className="p-1.5 text-tx-tertiary hover:text-emerald-600"
+                    className="p-1.5 text-tx-tertiary hover:text-accent-primary"
                     title="编辑"
                     onClick={() => openEdit(r)}
                   >
@@ -367,18 +368,27 @@ function RuleEditorModal({
 
   const mappings = rule.methodMappings || [];
 
-  return (
+  // portal 到 body：避免被 FinanceCenter overflow 裁切；实体背景避免 glass 皮肤半透明看不清
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={rule.id ? "编辑规则" : "添加规则"}
       onClick={onClose}
     >
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div
-        className="w-full sm:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-app-card border border-app-border p-4 shadow-xl"
+        className="relative z-10 w-full sm:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-app-border p-4 shadow-xl bg-app-elevated text-tx-primary"
+        style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-3 sticky top-0 bg-app-card pb-2 z-10">
-          <h3 className="font-semibold">{rule.id ? "编辑规则" : "添加规则"}</h3>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-app-hover">
+        <div
+          className="flex items-center justify-between mb-3 sticky top-0 pb-2 z-10 border-b border-app-border -mx-4 px-4"
+          style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
+        >
+          <h3 className="font-semibold text-tx-primary">{rule.id ? "编辑规则" : "添加规则"}</h3>
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-app-hover text-tx-secondary">
             <X size={16} />
           </button>
         </div>
@@ -738,7 +748,10 @@ function RuleEditorModal({
           </Field>
         </Section>
 
-        <div className="flex justify-end gap-2 mt-4 sticky bottom-0 bg-app-card pt-2">
+        <div
+          className="flex justify-end gap-2 mt-4 sticky bottom-0 pt-2 border-t border-app-border -mx-4 px-4"
+          style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
+        >
           <button type="button" className="px-3 py-1.5 text-sm text-tx-secondary" onClick={onClose}>
             取消
           </button>
@@ -746,7 +759,7 @@ function RuleEditorModal({
             type="button"
             disabled={saving}
             onClick={onSave}
-            className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-sm disabled:opacity-50"
+            className="px-4 py-1.5 rounded-lg bg-accent-primary text-white text-sm disabled:opacity-50"
           >
             {saving ? "保存中…" : "保存"}
           </button>
@@ -758,12 +771,19 @@ function RuleEditorModal({
           width: 100%;
           padding: 0.5rem 0.75rem;
           border-radius: 0.5rem;
-          border: 1px solid var(--border, #3333);
-          background: var(--bg, transparent);
+          border: 1px solid var(--color-border);
+          background: var(--color-bg);
+          color: var(--color-text-primary);
           font-size: 0.875rem;
         }
+        .field:focus {
+          outline: 2px solid color-mix(in srgb, var(--color-accent-primary) 45%, transparent);
+          outline-offset: 0;
+          border-color: var(--color-accent-primary);
+        }
       `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

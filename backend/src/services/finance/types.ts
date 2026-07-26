@@ -16,7 +16,18 @@ export type ImportChannel =
   | "icbc_debit_pdf"
   | "unknown";
 
-export type ImportRowStatus = "ready" | "needs_review" | "duplicate" | "ignored" | "error";
+export type ImportRowStatus =
+  | "ready"
+  | "needs_review"
+  | "duplicate"
+  | "ignored"
+  | "error"
+  | "committed";
+
+/** 导入批次状态（TEXT 列，无 enum migration） */
+export type ImportBatchStatus = "preview" | "partial" | "committed" | "discarded";
+
+export type ImportCommitMode = "ready_only" | "include_review";
 
 export interface ImportEntry {
   sourceId: string;
