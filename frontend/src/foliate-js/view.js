@@ -254,7 +254,12 @@ export class View extends HTMLElement {
 
         this.isFixedLayout = this.book.rendition?.layout === 'pre-paginated'
         if (this.isFixedLayout) {
-            await import('./fixed-layout.js')
+            const fxl = await import('./fixed-layout.js')
+            // 等 polyfill；define 挂在同一 ready 链上，再 whenDefined 兜底
+            if (fxl.fixedLayoutReady) await fxl.fixedLayoutReady
+            if (!customElements.get('foliate-fxl')) {
+                await customElements.whenDefined('foliate-fxl')
+            }
             this.renderer = document.createElement('foliate-fxl')
         } else {
             await import('./paginator.js')
