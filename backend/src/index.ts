@@ -38,6 +38,7 @@ import backupsRouter from "./routes/backups";
 import emailRouter from "./routes/email";
 import { sharesRouter, sharedRouter } from "./routes/shares";
 import workspacesRouter from "./routes/workspaces";
+import workspaceSplashRouter from "./routes/workspace-splash";
 import clipRouter from "./routes/clip";
 import authRouter from "./routes/auth";
 import usersRouter, { handleGetAvatar } from "./routes/users";
@@ -569,6 +570,7 @@ app.route("/api/audit", auditRouter);
 app.route("/api/backups", backupsRouter);
 app.route("/api/email", emailRouter);
 app.route("/api/shares", sharesRouter);
+app.route("/api/workspaces", workspaceSplashRouter);
 app.route("/api/workspaces", workspacesRouter);
 app.route("/api/clip", clipRouter);
 // /me/preferences 须在 /:id 之前挂载

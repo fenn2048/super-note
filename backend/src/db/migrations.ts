@@ -2345,6 +2345,27 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  // v40：工作区级 APP 启动闪屏（云端图 + 鉴权下载）
+  {
+    version: 40,
+    name: "workspace-splash",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS workspace_splash (
+          workspaceId TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+          imageId TEXT NOT NULL,
+          fileName TEXT NOT NULL,
+          mimeType TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          displayDurationSec INTEGER NOT NULL DEFAULT 5,
+          expiresAt TEXT,
+          uploadedBy TEXT NOT NULL REFERENCES users(id),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */
