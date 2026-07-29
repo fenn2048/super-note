@@ -187,8 +187,17 @@ export default function DataManager() {
 
   // -----------------------------------------------------------------
   // 一级 / 二级 tab 状态
+  // 默认跟随侧边栏当前空间：在工作区里打开「数据管理」应默认导入到该工作区，
+  // 而不是静默落到「个人空间」（否则用户会误以为导入到了当前工作区）。
   // -----------------------------------------------------------------
-  const [scope, setScope] = useState<Scope>("personal");
+  const initialWs = (() => {
+    try {
+      const ws = getCurrentWorkspace();
+      if (ws && ws !== "" && ws !== "personal") return ws;
+    } catch { /* ignore */ }
+    return "";
+  })();
+  const [scope, setScope] = useState<Scope>(initialWs ? "workspace" : "personal");
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("export");
 
   // 切换一级 tab 时，把二级 tab 自动重置到该 scope 下的首项，避免出现
@@ -204,7 +213,7 @@ export default function DataManager() {
   // 工作区列表（仅在 scope=workspace 时使用，用于下拉选择目标工作区）
   // -----------------------------------------------------------------
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(initialWs);
   useEffect(() => {
     if (scope !== "workspace") return;
     let cancelled = false;
@@ -212,8 +221,16 @@ export default function DataManager() {
       .then((list) => {
         if (cancelled) return;
         setWorkspaces(list || []);
-        // 自动选中第一个工作区，避免空态
-        if ((list?.length ?? 0) > 0 && !selectedWorkspaceId) {
+        if ((list?.length ?? 0) === 0) return;
+        // 优先：已选中且仍有效 → 侧边栏当前工作区 → 列表第一项
+        const current = getCurrentWorkspace();
+        const preferred =
+          (selectedWorkspaceId && list.some((w) => w.id === selectedWorkspaceId) && selectedWorkspaceId) ||
+          (current && current !== "personal" && list.some((w) => w.id === current) && current) ||
+          list[0].id;
+        if (preferred && preferred !== selectedWorkspaceId) {
+          setSelectedWorkspaceId(preferred);
+        } else if (!selectedWorkspaceId) {
           setSelectedWorkspaceId(list[0].id);
         }
       })
@@ -1122,7 +1139,13 @@ export default function DataManager() {
 
       {/* P1-6：第三方导入向导 —— 先选来源再展开具体导入器，避免首屏堆叠 */}
       {!personalImportLocked && (
-        <ImportSourceWizard workspaceId={effectiveWorkspaceId} />
+        workspaceScopeNotReady ? (
+          <div className="mt-6 rounded-lg border border-amber-200/60 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+            请先在上方选择目标工作区，再导入 Memos 等数据。未选择时不会导入到任何工作区。
+          </div>
+        ) : (
+          <ImportSourceWizard workspaceId={effectiveWorkspaceId} />
+        )
       )}
       </>
       )}

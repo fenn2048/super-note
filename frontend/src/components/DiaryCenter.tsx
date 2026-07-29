@@ -3988,6 +3988,21 @@ export default function DiaryCenter() {
     return () => window.removeEventListener("super:profile-updated", handleProfileUpdated);
   }, [loadTimeline, loadStats]);
 
+  // Memos / 数据导入完成后刷新时间线（含跨空间切换后回到说说页的情况）
+  useEffect(() => {
+    const handleImported = () => {
+      setNextCursor(null);
+      loadTimeline(true);
+      loadStats();
+    };
+    window.addEventListener("super:diaries-imported", handleImported);
+    window.addEventListener("super:workspace-changed", handleImported);
+    return () => {
+      window.removeEventListener("super:diaries-imported", handleImported);
+      window.removeEventListener("super:workspace-changed", handleImported);
+    };
+  }, [loadTimeline, loadStats]);
+
   useEffect(() => {
     const handleAiReply = (payload: { mode: "post" | "comment"; diaryId: string; answer: string }) => {
       if (payload.mode === "post") {

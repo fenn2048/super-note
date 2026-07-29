@@ -18,10 +18,19 @@ import {
 } from "lucide-react";
 import { importMemos, ImportProgress } from "@/lib/importService";
 import { toast } from "@/lib/toast";
+import { getCurrentWorkspace, setCurrentWorkspace } from "@/lib/api";
 
 export interface MemosImportProps {
   workspaceId?: string;
   onImportComplete?: () => void;
+}
+
+/** 把 DataManager 的 workspaceId（personal / uuid / 空）归一成侧边栏用的 currentWorkspace 值 */
+function normalizeImportScope(workspaceId?: string): { isPersonal: boolean; scopeKey: string; label: string } {
+  if (!workspaceId || workspaceId === "" || workspaceId === "personal") {
+    return { isPersonal: true, scopeKey: "", label: "个人空间" };
+  }
+  return { isPersonal: false, scopeKey: workspaceId, label: "当前工作区" };
 }
 
 export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps) {
@@ -77,6 +86,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
   const handleStartImport = async () => {
     if (!file) return;
     try {
+      const scope = normalizeImportScope(workspaceId);
       const res = await importMemos(
         file,
         targetType,
@@ -84,11 +94,43 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
         { workspaceId }
       );
       if (res.success) {
-        toast.success(
-          targetType === "diaries"
-            ? `成功导入了 ${res.count} 条说说！`
-            : `成功导入了 ${res.count} 条笔记！`
-        );
+        const kind = targetType === "diaries" ? "说说" : "笔记";
+        // 侧边栏 currentWorkspace：'' = 个人空间；uuid = 工作区
+        // 若导入到个人空间而侧边栏在工作区，时间线按 workspaceId 过滤会「看不到」数据
+        const currentWs = getCurrentWorkspace() || "";
+        const currentNorm = currentWs === "personal" ? "" : currentWs;
+        const viewingMismatch = currentNorm !== scope.scopeKey;
+
+        if (targetType === "diaries") {
+          window.dispatchEvent(
+            new CustomEvent("super:diaries-imported", {
+              detail: {
+                count: res.count,
+                workspaceId: scope.isPersonal ? "personal" : scope.scopeKey,
+              },
+            })
+          );
+        }
+
+        if (viewingMismatch && res.count > 0) {
+          toast.success(
+            `已导入 ${res.count} 条${kind}到「${scope.label}」。侧边栏不在该空间，正在切换…`,
+            5500
+          );
+          setCurrentWorkspace(scope.scopeKey);
+          window.dispatchEvent(
+            new CustomEvent("super:workspace-changed", {
+              detail: { workspaceId: scope.scopeKey },
+            })
+          );
+          window.dispatchEvent(new CustomEvent("super:close-settings"));
+        } else {
+          toast.success(`成功导入了 ${res.count} 条${kind}到「${scope.label}」！可到${kind === "说说" ? "说说时间线" : "Memos 笔记本"}查看`);
+          if (targetType === "diaries") {
+            // 同空间也强制刷新时间线
+            window.dispatchEvent(new CustomEvent("super:diaries-imported"));
+          }
+        }
         onImportComplete?.();
       }
     } catch (err: any) {
@@ -129,6 +171,11 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
           .zip
         </code>{" "}
         备份文件。
+        <span className="block mt-1.5 text-zinc-600 dark:text-zinc-300">
+          导入目标 = 数据管理顶部当前 Tab：
+          <strong>个人空间</strong> 或 <strong>工作区（需选中具体工作区）</strong>
+          。在侧边栏打开设置不会自动带入工作区，请确认顶部已选对。
+        </span>
       </p>
 
       {!file ? (
