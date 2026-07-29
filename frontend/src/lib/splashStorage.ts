@@ -1,8 +1,8 @@
 /**
- * 用户自定义本机图片（启动闪屏 / 休息屏保）
+ * 用户自定义本机图片（休息屏保；启动闪屏已迁至云端 workspace_splash）
  * ---------------------------------------------------------------------------
- * 存 IndexedDB（Web / Capacitor WebView 通用）；展示侧走 data URL。
- * 不上云；原生 Capacitor SplashScreen 资源仍用品牌默认图（打包写死）。
+ * 屏保仍存 IndexedDB（本机）；展示侧走 data URL。
+ * APP 启动闪屏见 splashCache.ts / splashSync.ts。
  */
 import { openDB, type IDBPDatabase } from "idb";
 

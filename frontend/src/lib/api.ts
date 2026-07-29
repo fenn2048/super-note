@@ -439,6 +439,22 @@ export function getToken(): string | null {
   return localStorage.getItem("super-token");
 }
 
+/** 工作区 APP 闪屏元数据（下载地址须鉴权，不可作公开链） */
+export type WorkspaceSplashMeta =
+  | { configured: false }
+  | {
+      configured: true;
+      imageId: string;
+      downloadPath: string;
+      displayDurationSec: number;
+      expiresAt: string | null;
+      expired: boolean;
+      updatedAt: string;
+      mimeType: string;
+      size: number;
+      uploadedBy?: string;
+    };
+
 /**
  * L10: 退出登录的统一入口。
  *
@@ -1460,6 +1476,77 @@ export const api = {
       method: "POST",
       body: formData,
     });
+  },
+
+  // ========== Workspace Splash（APP 启动闪屏，云端 + 鉴权）==========
+  getWorkspaceSplash: (workspaceId: string) =>
+    request<WorkspaceSplashMeta>(`/workspaces/${encodeURIComponent(workspaceId)}/splash`),
+
+  uploadWorkspaceSplash: async (
+    workspaceId: string,
+    file: File,
+    opts?: { displayDurationSec?: number; expiresAt?: string | null },
+  ): Promise<WorkspaceSplashMeta> => {
+    const token = getToken();
+    const form = new FormData();
+    form.append("file", file);
+    if (opts?.displayDurationSec != null) {
+      form.append("displayDurationSec", String(opts.displayDurationSec));
+    }
+    if (opts && "expiresAt" in opts) {
+      form.append("expiresAt", opts.expiresAt ?? "");
+    }
+    const res = await fetch(
+      `${getBaseUrl()}/workspaces/${encodeURIComponent(workspaceId)}/splash`,
+      {
+        method: "POST",
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: form,
+      },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).error || `上传闪屏失败: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  updateWorkspaceSplashMeta: (
+    workspaceId: string,
+    data: { displayDurationSec?: number; expiresAt?: string | null },
+  ) =>
+    request<WorkspaceSplashMeta>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/splash`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+    ),
+
+  deleteWorkspaceSplash: (workspaceId: string) =>
+    request<{ success: boolean; configured: boolean }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/splash`,
+      { method: "DELETE" },
+    ),
+
+  /** 鉴权下载闪屏图片字节（不可用 <img src> 裸链） */
+  downloadWorkspaceSplashImage: async (workspaceId: string): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(
+      `${getBaseUrl()}/workspaces/${encodeURIComponent(workspaceId)}/splash/image`,
+      {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = (err as any).error || `下载闪屏失败: ${res.status}`;
+      const e = new Error(msg) as Error & { status?: number; code?: string };
+      e.status = res.status;
+      e.code = (err as any).code;
+      throw e;
+    }
+    return res.blob();
   },
 
   // Site Settings
