@@ -16,16 +16,19 @@ import ManualPanel from "@/components/ManualPanel";
 import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import {
-  getCustomSplashDataUrl,
-  saveCustomSplashFromFile,
-  clearCustomSplash,
   getCustomScreensaverDataUrl,
   saveCustomScreensaverFromFile,
   clearCustomScreensaver,
 } from "@/lib/splashStorage";
+import {
+  clearSplashCache,
+  getReadySplashForDisplay,
+  putSplashCache,
+} from "@/lib/splashCache";
+import { syncWorkspaceSplash } from "@/lib/splashSync";
 import BrandMark from "@/components/BrandMark";
 import { MODULE_PACK_META, getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
-import { api, getServerUrl } from "@/lib/api";
+import { api, getCurrentWorkspace, getServerUrl } from "@/lib/api";
 import { downloadApkFromUrl, downloadAttachment } from "@/lib/downloadFile";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
@@ -991,52 +994,294 @@ function SwitchesPanel() {
   );
 }
 
-/** 站点级闪屏 URL（管理员） */
-function SiteSplashUrlField() {
-  const [url, setUrl] = useState("");
-  const [msg, setMsg] = useState("");
+/** 原生 APP：工作区云端启动闪屏配置（owner/admin 可改） */
+function WorkspaceSplashSettingsCard() {
+  const { t } = useTranslation();
+  const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
+  const [canEdit, setCanEdit] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [durationSec, setDurationSec] = useState(5);
+  const [expiresAtLocal, setExpiresAtLocal] = useState(""); // datetime-local value
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    api
-      .getSiteSettings()
-      .then((s) => setUrl(s.site_splash_url || ""))
-      .catch(() => {});
+  const [msg, setMsg] = useState("");
+  const [configured, setConfigured] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const ws = getCurrentWorkspace();
+    setWorkspaceId(ws);
+    if (!ws || ws === "personal") {
+      setCanEdit(false);
+      setConfigured(false);
+      setPreview(null);
+      return;
+    }
+    try {
+      const list = await api.getWorkspaces();
+      const cur = list.find((w) => w.id === ws);
+      const role = cur?.role;
+      setCanEdit(role === "owner" || role === "admin");
+    } catch {
+      setCanEdit(false);
+    }
+    try {
+      const meta = await api.getWorkspaceSplash(ws);
+      if (!meta.configured || meta.expired) {
+        setConfigured(false);
+        setPreview(null);
+        setDurationSec(5);
+        setExpiresAtLocal("");
+        if (meta.configured && meta.expired) {
+          await clearSplashCache(ws);
+        }
+        return;
+      }
+      setConfigured(true);
+      setDurationSec(meta.displayDurationSec || 5);
+      if (meta.expiresAt) {
+        const d = new Date(meta.expiresAt);
+        // datetime-local: YYYY-MM-DDTHH:mm
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setExpiresAtLocal(
+          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+        );
+      } else {
+        setExpiresAtLocal("");
+      }
+      const local = await getReadySplashForDisplay(ws);
+      if (local?.imageId === meta.imageId) {
+        setPreview(local.dataUrl);
+      } else {
+        try {
+          const blob = await api.downloadWorkspaceSplashImage(ws);
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result));
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(blob);
+          });
+          setPreview(dataUrl);
+          await putSplashCache({
+            workspaceId: ws,
+            imageId: meta.imageId,
+            blob,
+            displayDurationSec: meta.displayDurationSec,
+            expiresAt: meta.expiresAt,
+            updatedAt: meta.updatedAt,
+            mimeType: meta.mimeType,
+          });
+        } catch {
+          setPreview(null);
+        }
+      }
+    } catch {
+      setConfigured(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+    const onWs = () => void load();
+    window.addEventListener("super:workspace-changed", onWs);
+    return () => window.removeEventListener("super:workspace-changed", onWs);
+  }, [load]);
+
+  const expiresAtIso = (): string | null => {
+    if (!expiresAtLocal.trim()) return null;
+    const t = Date.parse(expiresAtLocal);
+    if (Number.isNaN(t)) return null;
+    return new Date(t).toISOString();
+  };
+
+  if (!workspaceId || workspaceId === "personal") {
+    return (
+      <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-2">
+        <h3 className="text-sm font-semibold text-tx-primary">
+          {t("settings.customSplash", { defaultValue: "启动闪屏图" })}
+        </h3>
+        <p className="text-xs text-tx-tertiary">
+          {t("settings.customSplashNeedWorkspace", {
+            defaultValue: "请先进入家庭工作区后再配置启动闪屏。",
+          })}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-tx-primary">站点默认闪屏 URL</h3>
+        <h3 className="text-sm font-semibold text-tx-primary">
+          {t("settings.customSplash", { defaultValue: "启动闪屏图" })}
+        </h3>
         <p className="text-xs text-tx-tertiary mt-1">
-          管理员配置后，无本机自定义图时全站启动门使用此图（多设备一致）
+          {t("settings.customSplashDesc", {
+            defaultValue:
+              "上传到云端，可在 Web/桌面设置中配置；同工作区成员仅在 APP 冷启动时展示。下载需登录鉴权。系统冷启动瞬间仍为默认品牌图。",
+          })}
         </p>
       </div>
-      <input
-        type="url"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://…/splash.jpg"
-        className="w-full px-3 py-2 rounded-lg border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:ring-2 focus:ring-accent-primary/40"
-      />
-      <button
-        type="button"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          setMsg("");
-          try {
-            await api.updateSiteSettings({ site_splash_url: url.trim() });
-            setMsg("已保存");
-          } catch (e: any) {
-            setMsg(e?.message || "保存失败");
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
-      >
-        {busy ? "…" : "保存站点闪屏"}
-      </button>
-      {msg && <p className="text-[11px] text-accent-primary">{msg}</p>}
+      <div className="flex flex-col sm:flex-row items-start gap-4">
+        <div className="w-20 h-28 rounded-lg border border-app-border overflow-hidden bg-[#F5F3EE] flex items-center justify-center shrink-0">
+          {preview ? (
+            <img src={preview} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <BrandMark size={40} />
+          )}
+        </div>
+        <div className="flex flex-col gap-2 min-w-0 flex-1 w-full">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            disabled={!canEdit || busy}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f || !canEdit) return;
+              setBusy(true);
+              setMsg("");
+              try {
+                const meta = await api.uploadWorkspaceSplash(workspaceId, f, {
+                  displayDurationSec: durationSec,
+                  expiresAt: expiresAtIso(),
+                });
+                if (meta.configured) {
+                  setConfigured(true);
+                  setDurationSec(meta.displayDurationSec);
+                  const blob = await api.downloadWorkspaceSplashImage(workspaceId);
+                  const dataUrl = await new Promise<string>((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(String(r.result));
+                    r.onerror = () => reject(r.error);
+                    r.readAsDataURL(blob);
+                  });
+                  setPreview(dataUrl);
+                  await putSplashCache({
+                    workspaceId,
+                    imageId: meta.imageId,
+                    blob,
+                    displayDurationSec: meta.displayDurationSec,
+                    expiresAt: meta.expiresAt,
+                    updatedAt: meta.updatedAt,
+                    mimeType: meta.mimeType,
+                  });
+                }
+                setMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
+                void syncWorkspaceSplash(workspaceId, { force: true });
+              } catch (err: any) {
+                setMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!canEdit || busy}
+              onClick={() => inputRef.current?.click()}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
+            >
+              {busy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
+            </button>
+            {configured && canEdit && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setMsg("");
+                  try {
+                    await api.deleteWorkspaceSplash(workspaceId);
+                    await clearSplashCache(workspaceId);
+                    setConfigured(false);
+                    setPreview(null);
+                    setMsg("");
+                  } catch (err: any) {
+                    setMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
+              >
+                {t("settings.customSplashClear", { defaultValue: "恢复默认" })}
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-tx-tertiary">
+                {t("settings.customSplashDuration", { defaultValue: "展示时长（秒）" })}
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={durationSec}
+                disabled={!canEdit || busy}
+                onChange={(e) => setDurationSec(Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 5)))}
+                className="w-full px-2 py-1.5 rounded-lg border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:ring-2 focus:ring-accent-primary/40 disabled:opacity-60"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-tx-tertiary">
+                {t("settings.customSplashExpires", { defaultValue: "过期时间（可选）" })}
+              </span>
+              <input
+                type="datetime-local"
+                value={expiresAtLocal}
+                disabled={!canEdit || busy}
+                onChange={(e) => setExpiresAtLocal(e.target.value)}
+                className="w-full px-2 py-1.5 rounded-lg border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:ring-2 focus:ring-accent-primary/40 disabled:opacity-60"
+              />
+            </label>
+          </div>
+
+          {canEdit && configured && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setMsg("");
+                try {
+                  await api.updateWorkspaceSplashMeta(workspaceId, {
+                    displayDurationSec: durationSec,
+                    expiresAt: expiresAtIso(),
+                  });
+                  await syncWorkspaceSplash(workspaceId, { force: true });
+                  setMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
+                } catch (err: any) {
+                  setMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="self-start text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
+            >
+              {t("settings.customSplashSaveMeta", { defaultValue: "保存时长与过期" })}
+            </button>
+          )}
+
+          <p className="text-[11px] text-tx-tertiary">
+            {t("settings.customSplashHint", {
+              defaultValue: "建议竖图，≤5MB。JPG / PNG / WebP。仅工作区 owner/admin 可改；成员可在 APP 冷启动看到。",
+            })}
+          </p>
+          {!canEdit && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              {t("settings.customSplashAdminOnly", {
+                defaultValue: "仅工作区所有者或管理员可修改闪屏配置。",
+              })}
+            </p>
+          )}
+          {msg && <p className="text-[11px] text-accent-primary">{msg}</p>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1046,17 +1291,12 @@ function AppearancePanel() {
   const { siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled } = useSiteSettings();
   const { prefs: userPrefs, setPref: setUserPref, cloudSynced } = useUserPreferences();
   const [title, setTitle] = useState(siteConfig.title);
-  const [splashPreview, setSplashPreview] = useState<string | null>(null);
-  const [splashBusy, setSplashBusy] = useState(false);
-  const [splashMsg, setSplashMsg] = useState("");
-  const splashInputRef = useRef<HTMLInputElement>(null);
   const [ssPreview, setSsPreview] = useState<string | null>(null);
   const [ssBusy, setSsBusy] = useState(false);
   const [ssMsg, setSsMsg] = useState("");
   const ssInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let cancelled = false;
-    getCustomSplashDataUrl().then((u) => { if (!cancelled) setSplashPreview(u); }).catch(() => {});
     getCustomScreensaverDataUrl().then((u) => { if (!cancelled) setSsPreview(u); }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -1304,85 +1544,8 @@ function AppearancePanel() {
           </div>
         </div>
 
-        {/* 本机启动闪屏（独立卡片，避免被塞进图标行） */}
-        <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold text-tx-primary">
-              {t("settings.customSplash", { defaultValue: "启动闪屏图" })}
-            </h3>
-            <p className="text-xs text-tx-tertiary mt-1">
-              {t("settings.customSplashDesc", {
-                defaultValue: "自定义 App 加载阶段显示的图片（本机保存）。系统冷启动瞬间仍为默认品牌图。",
-              })}
-            </p>
-          </div>
-          <div className="flex flex-col xs:flex-row sm:flex-row items-start gap-4">
-            <div className="w-20 h-28 rounded-lg border border-app-border overflow-hidden bg-[#F5F3EE] flex items-center justify-center shrink-0">
-              {splashPreview ? (
-                <img src={splashPreview} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <BrandMark size={40} />
-              )}
-            </div>
-            <div className="flex flex-col gap-2 min-w-0 flex-1">
-              <input
-                ref={splashInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!f) return;
-                  setSplashBusy(true);
-                  setSplashMsg("");
-                  try {
-                    const url = await saveCustomSplashFromFile(f);
-                    setSplashPreview(url);
-                    setSplashMsg(t("settings.saveSuccess", { defaultValue: "已保存" }));
-                  } catch (err: any) {
-                    setSplashMsg(err?.message || t("settings.saveFailed", { defaultValue: "失败" }));
-                  } finally {
-                    setSplashBusy(false);
-                  }
-                }}
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={splashBusy}
-                  onClick={() => splashInputRef.current?.click()}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-accent-primary text-white disabled:opacity-50"
-                >
-                  {splashBusy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
-                </button>
-                {splashPreview && (
-                  <button
-                    type="button"
-                    disabled={splashBusy}
-                    onClick={async () => {
-                      setSplashBusy(true);
-                      try {
-                        await clearCustomSplash();
-                        setSplashPreview(null);
-                        setSplashMsg("");
-                      } finally {
-                        setSplashBusy(false);
-                      }
-                    }}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
-                  >
-                    {t("settings.customSplashClear", { defaultValue: "恢复默认" })}
-                  </button>
-                )}
-              </div>
-              <p className="text-[11px] text-tx-tertiary">
-                {t("settings.customSplashHint", { defaultValue: "建议竖图，≤5MB。JPG / PNG / WebP。仅保存在本机，不会上传到服务器。" })}
-              </p>
-              {splashMsg && <p className="text-[11px] text-accent-primary">{splashMsg}</p>}
-            </div>
-          </div>
-        </div>
+        {/* 工作区云端启动闪屏：Web/桌面/APP 均可配置；仅 APP 冷启动展示 */}
+        <WorkspaceSplashSettingsCard />
 
         {/* 本机休息屏保图 */}
         <div className="rounded-xl border border-app-border bg-app-elevated p-4 space-y-3">
@@ -1464,8 +1627,6 @@ function AppearancePanel() {
           </div>
         </div>
 
-        {/* 站点级默认闪屏 URL（管理员，独立整行卡片） */}
-        {isAdmin && <SiteSplashUrlField />}
       </div>
 
       {/* 分割线 */}

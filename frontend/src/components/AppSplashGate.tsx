@@ -1,11 +1,16 @@
 /**
- * 应用内启动门（P2-7 / P2-7b）
- * 优先级：本机自定义图 → 站点级 site_splash_url → 品牌默认 Logo
+ * 应用内启动门（仅原生 APP）
+ * ---------------------------------------------------------------------------
+ * 冷启动展示「上次同步」到本地的工作区闪屏缓存：
+ *   缓存就绪且未过期 → 全屏图 + 右上角跳过 + 可配置时长
+ *   否则 → 品牌默认短淡出
+ * 不在此处等网络；云端同步由 splashSync 在登录后 / 热启动时完成，供下次冷启动用。
  */
 import { useEffect, useState, useCallback } from "react";
-import { getCustomSplashDataUrl } from "@/lib/splashStorage";
 import BrandMark from "@/components/BrandMark";
-import { api } from "@/lib/api";
+import { getCurrentWorkspace } from "@/lib/api";
+import { getReadySplashForDisplay } from "@/lib/splashCache";
+import { isNativePlatform } from "@/hooks/useCapacitor";
 
 export type AppSplashGateProps = {
   /** true 时表示应用数据就绪 */
@@ -15,28 +20,30 @@ export type AppSplashGateProps = {
 };
 
 export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplashGateProps) {
-  const [customUrl, setCustomUrl] = useState<string | null | undefined>(undefined);
+  const native = isNativePlatform();
+  const [customUrl, setCustomUrl] = useState<string | null | undefined>(
+    () => (native ? undefined : null),
+  );
+  const [durationMs, setDurationMs] = useState(5000);
   const [visible, setVisible] = useState(true);
   const [mountedAt] = useState(() => Date.now());
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
+    if (!native) return;
     let cancelled = false;
     (async () => {
       try {
-        const local = await getCustomSplashDataUrl();
+        const ws = getCurrentWorkspace();
+        const readySplash = ws ? await getReadySplashForDisplay(ws) : null;
         if (cancelled) return;
-        if (local) {
-          setCustomUrl(local);
-          return;
-        }
-        // 站点级默认闪屏（多设备一致）
-        try {
-          const site = await api.getSiteSettings();
-          const siteUrl = (site.site_splash_url || "").trim();
-          if (!cancelled) setCustomUrl(siteUrl || null);
-        } catch {
-          if (!cancelled) setCustomUrl(null);
+        if (readySplash) {
+          setCustomUrl(readySplash.dataUrl);
+          const sec = readySplash.displayDurationSec || 5;
+          setDurationMs(sec * 1000);
+          setCountdown(sec);
+        } else {
+          setCustomUrl(null);
         }
       } catch {
         if (!cancelled) setCustomUrl(null);
@@ -45,7 +52,7 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [native]);
 
   const handleDismiss = useCallback(() => {
     setVisible(false);
@@ -53,11 +60,11 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
   }, [onHidden]);
 
   useEffect(() => {
+    if (!native) return;
     if (customUrl === undefined) return;
 
     if (customUrl) {
-      // 有自定义闪屏图：展示 5 秒，并实时更新倒计时
-      const targetDuration = 5000;
+      const targetDuration = durationMs;
       const interval = window.setInterval(() => {
         const elapsed = Date.now() - mountedAt;
         const leftSec = Math.max(0, Math.ceil((targetDuration - elapsed) / 1000));
@@ -75,7 +82,6 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
         clearTimeout(t);
       };
     } else {
-      // 无自定义图：常规淡出
       if (!ready) return;
       const elapsed = Date.now() - mountedAt;
       const wait = Math.max(0, minMs - elapsed);
@@ -84,15 +90,17 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
       }, wait);
       return () => clearTimeout(t);
     }
-  }, [ready, customUrl, mountedAt, minMs, handleDismiss]);
+  }, [native, ready, customUrl, mountedAt, minMs, handleDismiss, durationMs]);
 
-  // 当 app 数据就绪且 5s 倒计时结束时自动关闭
   useEffect(() => {
-    if (customUrl && ready && Date.now() - mountedAt >= 5000) {
+    if (!native) return;
+    if (customUrl && ready && Date.now() - mountedAt >= durationMs) {
       handleDismiss();
     }
-  }, [ready, customUrl, mountedAt, handleDismiss]);
+  }, [native, ready, customUrl, mountedAt, handleDismiss, durationMs]);
 
+  // 桌面 Web / Electron：不展示自定义闪屏门
+  if (!native) return null;
   if (!visible && ready) return null;
 
   return (
@@ -103,7 +111,6 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
       style={{ backgroundColor: "#F5F3EE" }}
       aria-hidden
     >
-      {/* 跳过按钮：仅在有自定义图片时显示 */}
       {customUrl && visible && (
         <button
           type="button"
@@ -111,11 +118,16 @@ export default function AppSplashGate({ ready, minMs = 600, onHidden }: AppSplas
             e.stopPropagation();
             handleDismiss();
           }}
-          className="fixed z-[310] top-[max(12px,env(safe-area-inset-top))] right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/55 text-white/90 border border-white/20 text-xs font-semibold backdrop-blur-md shadow-md active:scale-95 transition-all cursor-pointer select-none"
+          // 必须落在状态栏下方。闪屏很早渲染，--safe-area-top / data-native 可能尚未就绪，
+          // 因此用 max(CSS 变量, env, 32px) 兜底，再 +8px 与时间/电量拉开间距。
+          className="fixed z-[310] right-4 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-200/85 text-zinc-700 border border-zinc-300/70 text-xs font-semibold backdrop-blur-md shadow-sm active:scale-95 transition-all cursor-pointer select-none"
+          style={{
+            top: "calc(max(var(--safe-area-top, 0px), env(safe-area-inset-top, 0px), 32px) + 8px)",
+          }}
           aria-label="跳过闪屏"
         >
           <span>跳过</span>
-          <span className="opacity-75 font-mono">({countdown}s)</span>
+          <span className="text-zinc-500 font-mono">({countdown}s)</span>
         </button>
       )}
 

@@ -74,6 +74,7 @@ import {
 } from "@/lib/navigation.config";
 import AppSplashGate from "@/components/AppSplashGate";
 import CreateMenu, { CreateFabButton } from "@/components/common/CreateMenu";
+import { syncWorkspaceSplash } from "@/lib/splashSync";
 
 import { App as CapApp } from "@capacitor/app";
 
@@ -718,6 +719,8 @@ function AppLayout() {
         api.getTaskStats().then((stats) => {
           actions.setReminderActiveCount(stats.activeReminders || 0);
         }).catch(console.error);
+        // 热启动：拉最新闪屏元数据并缓存（不弹闪屏门）
+        void syncWorkspaceSplash(undefined, { force: true });
       }
     });
 
@@ -726,6 +729,17 @@ function AppLayout() {
       handler.then((h) => h.remove());
     };
   }, [actions]);
+
+  // 登录后 / 工作区切换：同步闪屏缓存（供下次冷启动展示）
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    void syncWorkspaceSplash(undefined, { force: true });
+    const onWs = () => {
+      void syncWorkspaceSplash(undefined, { force: true });
+    };
+    window.addEventListener("super:workspace-changed", onWs);
+    return () => window.removeEventListener("super:workspace-changed", onWs);
+  }, []);
 
   // 监听通知点击/仪表盘点击的快捷跳转事件
   useEffect(() => {
@@ -2461,13 +2475,14 @@ function AuthGate() {
     handleLogin(token, userData);
   };
 
-  // 加载中
-  const splashGate = !splashDismissed ? (
-    <AppSplashGate
-      ready={isAuthenticated !== null}
-      onHidden={() => setSplashDismissed(true)}
-    />
-  ) : null;
+  // 应用内闪屏门：仅原生 APP；Web / Electron 不挂载
+  const splashGate =
+    isNativePlatform() && !splashDismissed ? (
+      <AppSplashGate
+        ready={isAuthenticated !== null}
+        onHidden={() => setSplashDismissed(true)}
+      />
+    ) : null;
 
   if (isAuthenticated === null) {
     return (
