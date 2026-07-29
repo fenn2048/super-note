@@ -612,6 +612,7 @@
     "customSplashSaveMeta": "保存时长与过期",
     "customSplashAdminOnly": "仅工作区所有者或管理员可修改闪屏配置。",
     "customSplashNeedWorkspace": "请先进入家庭工作区后再配置启动闪屏。",
+    "customSplashPreview": "预览",
     "healthReminder": "健康休息提醒",
     "healthReminderDesc": "定时弹出全屏屏保，提醒休息眼睛与活动身体。默认关闭。",
     "healthReminderInterval": "提醒间隔（分钟）"

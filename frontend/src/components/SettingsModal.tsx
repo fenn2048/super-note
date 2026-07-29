@@ -27,6 +27,7 @@ import {
 } from "@/lib/splashCache";
 import { syncWorkspaceSplash } from "@/lib/splashSync";
 import BrandMark from "@/components/BrandMark";
+import SplashOverlay from "@/components/SplashOverlay";
 import { MODULE_PACK_META, getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
 import { api, getCurrentWorkspace, getServerUrl } from "@/lib/api";
 import { downloadApkFromUrl, downloadAttachment } from "@/lib/downloadFile";
@@ -994,18 +995,39 @@ function SwitchesPanel() {
   );
 }
 
-/** 原生 APP：工作区云端启动闪屏配置（owner/admin 可改） */
+/** 工作区云端启动闪屏配置（owner/admin 可改）；支持全屏预览 */
 function WorkspaceSplashSettingsCard() {
   const { t } = useTranslation();
   const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
   const [canEdit, setCanEdit] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [durationSec, setDurationSec] = useState(5);
+  /**
+   * 编辑中的时长文案。手机数字键盘往往在旧值后追加数字（如 5→53），
+   * 若 onChange 立刻 Math.min(30,…) 会一律变成 30。
+   * 聚焦时用自由草稿，失焦再钳到 1–30。
+   */
+  const [durationDraft, setDurationDraft] = useState<string | null>(null);
   const [expiresAtLocal, setExpiresAtLocal] = useState(""); // datetime-local value
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [configured, setConfigured] = useState(false);
+  /** 全屏模拟冷启动闪屏 */
+  const [showSplashPreview, setShowSplashPreview] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const clampDurationSec = (raw: string | number | null | undefined): number => {
+    const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
+    if (!Number.isFinite(n)) return 5;
+    return Math.min(30, Math.max(1, Math.round(n)));
+  };
+
+  const commitDurationDraft = () => {
+    if (durationDraft === null) return;
+    const next = clampDurationSec(durationDraft);
+    setDurationSec(next);
+    setDurationDraft(null);
+  };
 
   const load = useCallback(async () => {
     const ws = getCurrentWorkspace();
@@ -1030,6 +1052,7 @@ function WorkspaceSplashSettingsCard() {
         setConfigured(false);
         setPreview(null);
         setDurationSec(5);
+        setDurationDraft(null);
         setExpiresAtLocal("");
         if (meta.configured && meta.expired) {
           await clearSplashCache(ws);
@@ -1037,7 +1060,8 @@ function WorkspaceSplashSettingsCard() {
         return;
       }
       setConfigured(true);
-      setDurationSec(meta.displayDurationSec || 5);
+      setDurationSec(clampDurationSec(meta.displayDurationSec || 5));
+      setDurationDraft(null);
       if (meta.expiresAt) {
         const d = new Date(meta.expiresAt);
         // datetime-local: YYYY-MM-DDTHH:mm
@@ -1144,12 +1168,15 @@ function WorkspaceSplashSettingsCard() {
               setMsg("");
               try {
                 const meta = await api.uploadWorkspaceSplash(workspaceId, f, {
-                  displayDurationSec: durationSec,
+                  displayDurationSec: clampDurationSec(
+                    durationDraft !== null ? durationDraft : durationSec,
+                  ),
                   expiresAt: expiresAtIso(),
                 });
                 if (meta.configured) {
                   setConfigured(true);
-                  setDurationSec(meta.displayDurationSec);
+                  setDurationSec(clampDurationSec(meta.displayDurationSec));
+                  setDurationDraft(null);
                   const blob = await api.downloadWorkspaceSplashImage(workspaceId);
                   const dataUrl = await new Promise<string>((resolve, reject) => {
                     const r = new FileReader();
@@ -1186,6 +1213,14 @@ function WorkspaceSplashSettingsCard() {
             >
               {busy ? "..." : t("settings.customSplashUpload", { defaultValue: "选择图片" })}
             </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setShowSplashPreview(true)}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-app-border text-tx-secondary"
+            >
+              {t("settings.customSplashPreview", { defaultValue: "预览" })}
+            </button>
             {configured && canEdit && (
               <button
                 type="button"
@@ -1218,12 +1253,26 @@ function WorkspaceSplashSettingsCard() {
                 {t("settings.customSplashDuration", { defaultValue: "展示时长（秒）" })}
               </span>
               <input
-                type="number"
-                min={1}
-                max={30}
-                value={durationSec}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                enterKeyHint="done"
+                autoComplete="off"
+                value={durationDraft ?? String(durationSec)}
                 disabled={!canEdit || busy}
-                onChange={(e) => setDurationSec(Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 5)))}
+                onFocus={() => setDurationDraft(String(durationSec))}
+                onChange={(e) => {
+                  // 只允许最多两位数字；允许清空以便重输
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+                  setDurationDraft(digits);
+                }}
+                onBlur={commitDurationDraft}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
                 className="w-full px-2 py-1.5 rounded-lg border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:ring-2 focus:ring-accent-primary/40 disabled:opacity-60"
               />
             </label>
@@ -1249,8 +1298,13 @@ function WorkspaceSplashSettingsCard() {
                 setBusy(true);
                 setMsg("");
                 try {
+                  const sec = clampDurationSec(
+                    durationDraft !== null ? durationDraft : durationSec,
+                  );
+                  setDurationSec(sec);
+                  setDurationDraft(null);
                   await api.updateWorkspaceSplashMeta(workspaceId, {
-                    displayDurationSec: durationSec,
+                    displayDurationSec: sec,
                     expiresAt: expiresAtIso(),
                   });
                   await syncWorkspaceSplash(workspaceId, { force: true });
@@ -1282,6 +1336,22 @@ function WorkspaceSplashSettingsCard() {
           {msg && <p className="text-[11px] text-accent-primary">{msg}</p>}
         </div>
       </div>
+
+      {showSplashPreview &&
+        createPortal(
+          <SplashOverlay
+            imageUrl={preview}
+            durationSec={clampDurationSec(
+              durationDraft !== null ? durationDraft : durationSec,
+            )}
+            minMs={1200}
+            ready
+            zIndex={500}
+            showSkip={!!preview}
+            onHidden={() => setShowSplashPreview(false)}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

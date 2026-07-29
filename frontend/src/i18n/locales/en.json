@@ -604,6 +604,7 @@
     "customSplashSaveMeta": "Save duration & expiry",
     "customSplashAdminOnly": "Only the workspace owner or admin can change the splash.",
     "customSplashNeedWorkspace": "Join a family workspace before configuring the splash.",
+    "customSplashPreview": "Preview",
     "healthReminder": "Health break reminder",
     "healthReminderDesc": "Shows a full-screen screensaver after continuous browsing, prompting rest. Off by default.",
     "healthReminderInterval": "Interval (minutes)"

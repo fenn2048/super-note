@@ -2505,28 +2505,36 @@ function AuthGate() {
     //     置为 "skipped"，下面继续渲染 LoginPage
     //   - 成功：onSettled(true, payload) 直接走 handleLogin 进主界面
     if (isClientMode && quickLoginState === "pending") {
+      // 原生 APP：等应用内闪屏淡出后再挂载 QuickLoginGate，
+      // 避免系统指纹/人脸浮层盖在闪屏图上。
+      const canStartQuickLogin = !isNativePlatform() || splashDismissed;
+      const verifyingFallback = (
+        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+          </div>
+        </div>
+      );
       return (
         <>
           {splashGate}
-          <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
-              </div>
-            </div>
-          }>
-            <QuickLoginGate
-              isClientMode={isClientMode}
-              onSettled={(used, payload) => {
-                if (used && payload) {
-                  handleLogin(payload.token, payload.user);
-                } else {
-                  setQuickLoginState("skipped");
-                }
-              }}
-            />
-          </Suspense>
+          {canStartQuickLogin ? (
+            <Suspense fallback={verifyingFallback}>
+              <QuickLoginGate
+                isClientMode={isClientMode}
+                onSettled={(used, payload) => {
+                  if (used && payload) {
+                    handleLogin(payload.token, payload.user);
+                  } else {
+                    setQuickLoginState("skipped");
+                  }
+                }}
+              />
+            </Suspense>
+          ) : (
+            verifyingFallback
+          )}
         </>
       );
     }
