@@ -1835,8 +1835,10 @@ export const api = {
     data: { contentText: string; mood?: string; images?: string[]; visibility?: string; voice?: { id: string; duration: number } | null; createdAt?: string; tagIds?: string[]; bookHash?: string; bookNoteId?: string },
     workspaceId?: string,
   ) => {
-    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    // "personal" / 空串 = 个人空间（与 DataManager effectiveWorkspaceId 对齐）
+    const raw = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    const ws = raw && raw !== "personal" ? raw : "";
+    const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
     return request<Diary>(`/diary${qs}`, { method: "POST", body: JSON.stringify(data) });
   },
   getDiaryTimeline: (
@@ -1859,7 +1861,10 @@ export const api = {
     if (search) params.set("search", search);
     if (searchMode) params.set("searchMode", searchMode);
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "") params.set("workspaceId", ws);
+    // '' / 'personal' = 个人空间，不要带 query（避免被当成工作区 UUID）
+    if (ws && ws !== "" && ws !== "personal") {
+      params.set("workspaceId", ws);
+    }
     const qs = params.toString();
     return request<DiaryTimeline>(`/diary/timeline${qs ? `?${qs}` : ""}`);
   },
@@ -1883,14 +1888,14 @@ export const api = {
     if (range?.from) params.set("from", range.from);
     if (range?.to) params.set("to", range.to);
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "") params.set("workspaceId", ws);
+    if (ws && ws !== "" && ws !== "personal") params.set("workspaceId", ws);
     const qs = params.toString();
     return request<DiaryStats>(`/diary/stats${qs ? `?${qs}` : ""}`);
   },
   getDiaryCalendar: (year: number, month: number, tagId?: string, search?: string, searchMode?: string) => {
     const params = new URLSearchParams({ year: String(year), month: String(month) });
     const ws = getCurrentWorkspace();
-    if (ws && ws !== "") params.set("workspaceId", ws);
+    if (ws && ws !== "" && ws !== "personal") params.set("workspaceId", ws);
     if (tagId) params.set("tagId", tagId);
     if (search) params.set("search", search);
     if (searchMode) params.set("searchMode", searchMode);
@@ -1932,8 +1937,10 @@ export const api = {
       const form = new FormData();
       form.append("file", file);
       // Y2: 上传时即记录目标工作区，发布时再 attach 一致。
-      const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
-      const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      // "personal" / 空串 = 个人空间：不带 query，避免中间件把 "personal" 当 UUID。
+      const raw = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+      const ws = raw && raw !== "personal" ? raw : "";
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
       const res = await fetch(`${getBaseUrl()}/diary/attachments${qs}`, {
         method: "POST",
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
