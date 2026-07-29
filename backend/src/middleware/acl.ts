@@ -447,7 +447,12 @@ export function canManageResource(
 export function requireWorkspaceFeature(feature: WorkspaceFeature) {
   return async (c: Context, next: Next) => {
     const userId = c.req.header("X-User-Id") || "";
-    const workspaceId = c.req.query("workspaceId") || c.req.param("workspaceId") || "";
+    const rawWorkspaceId = c.req.query("workspaceId") || c.req.param("workspaceId") || "";
+    // 与 resolveDiaryScope / tags.normalizeWorkspaceId 对齐：
+    // 未传 / 空串 / 字面量 "personal" 均表示个人空间，不得当工作区 UUID 做成员校验。
+    // 否则 DataManager 个人空间导入会带 ?workspaceId=personal，在此处被误判为 403。
+    const workspaceId =
+      !rawWorkspaceId || rawWorkspaceId === "personal" ? "" : rawWorkspaceId;
 
     // 个人空间：永远放行
     if (!workspaceId) {
