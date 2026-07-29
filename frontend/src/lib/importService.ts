@@ -1537,9 +1537,347 @@ export async function importMarkdownAsNote(params: {
  * 导入 Memos 0.18.0 数据
  */
 const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac", ".opus", ".webm"];
+const VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".ogg", ".m4v"];
 function isAudioFile(name: string): boolean {
   const lower = name.toLowerCase();
   return AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+function isVideoFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * 说说附件接口允许的媒体（图片/音视频）。
+ * PDF、pem、文档等不在此列，导入为说说时应落到笔记附件。
+ */
+export function isDiaryCompatibleMedia(filename: string, mimeHint?: string): boolean {
+  if (!filename) return false;
+  if (isImageFile(filename) || isAudioFile(filename) || isVideoFile(filename)) return true;
+  const mime = (mimeHint || "").toLowerCase();
+  if (!mime || mime.endsWith("/*")) return false;
+  return (
+    mime.startsWith("image/") ||
+    mime.startsWith("audio/") ||
+    mime.startsWith("video/")
+  );
+}
+
+function guessResourceMime(filename: string, typeHint?: string): string {
+  const hint = (typeHint || "").toLowerCase();
+  if (hint && !hint.endsWith("/*") && hint.includes("/")) return hint;
+  if (isImageFile(filename)) return getImageMime(filename);
+  if (isAudioFile(filename)) {
+    if (filename.toLowerCase().endsWith(".mp3")) return "audio/mpeg";
+    if (filename.toLowerCase().endsWith(".wav")) return "audio/wav";
+    if (filename.toLowerCase().endsWith(".m4a")) return "audio/mp4";
+    return "audio/mpeg";
+  }
+  if (isVideoFile(filename)) {
+    if (filename.toLowerCase().endsWith(".mp4")) return "video/mp4";
+    if (filename.toLowerCase().endsWith(".webm")) return "video/webm";
+    return "video/mp4";
+  }
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  return "application/octet-stream";
+}
+
+/** 在 zip 中按 Memos 常见路径解析资源条目 */
+function findMemosZipEntry(zip: any, filename: string, id?: string | number): any | null {
+  if (!zip || !filename) return null;
+  let zipEntry = zip.file(filename);
+  if (!zipEntry) zipEntry = zip.file(`resources/${filename}`);
+  if (!zipEntry) zipEntry = zip.file(`assets/${filename}`);
+  if (!zipEntry && id != null) {
+    zipEntry = zip.file(`${id}_${filename}`);
+    if (!zipEntry) zipEntry = zip.file(`resources/${id}_${filename}`);
+    if (!zipEntry) zipEntry = zip.file(`assets/${id}_${filename}`);
+  }
+  if (!zipEntry) {
+    const entryKeys = Object.keys(zip.files || {});
+    const foundKey = entryKeys.find(
+      (k) => k.endsWith(filename) || (id != null && k.includes(String(id)))
+    );
+    if (foundKey) zipEntry = zip.file(foundKey);
+  }
+  return zipEntry || null;
+}
+
+function memoTitleFromContent(content: string, idx: number): string {
+  let title = content.replace(/[#*_~`\[\]()>|-]/g, "").trim().split("\n")[0] || "";
+  if (title.length > 30) title = title.slice(0, 30) + "...";
+  if (!title) title = `Memo ${idx + 1}`;
+  return title;
+}
+
+/**
+ * 将非图片等文件附件导入为「Memos」笔记本下的笔记附件，并写入链接到正文。
+ */
+async function importMemosFileResourcesAsNote(params: {
+  content: string;
+  createdTs: number;
+  updatedTs?: number;
+  idx: number;
+  fileItems: Array<{ filename: string; fileObj: File }>;
+  tagIds: string[];
+  workspaceId?: string;
+  failedItems: Array<{ name: string; reason: string }>;
+}): Promise<boolean> {
+  const { content, createdTs, updatedTs, idx, fileItems, tagIds, workspaceId, failedItems } = params;
+  if (fileItems.length === 0) return false;
+
+  const createdAtStr = formatSqlDatetime(createdTs);
+  const updatedAtStr = formatSqlDatetime(updatedTs || createdTs);
+  const title = memoTitleFromContent(content, idx);
+
+  let body = content || "";
+  let refs = "\n";
+  for (const item of fileItems) {
+    if (!body.includes(item.filename)) {
+      refs += `\n[📎 ${item.filename}](${item.filename})`;
+    }
+  }
+  if (refs.trim()) body += refs;
+  body += "\n\n> 来自 Memos 导入的文件附件（非图片资源）";
+
+  const markdownWithFrontmatter = `---\ncreated: ${createdAtStr}\nupdated: ${updatedAtStr}\n---\n${body}`;
+  const fakeFileInfo: ImportFileInfo = {
+    name: `memo_files_${idx + 1}.md`,
+    title: `${title} · 附件`,
+    content: markdownWithFrontmatter,
+    size: markdownWithFrontmatter.length,
+    selected: true,
+    source: "md",
+  };
+
+  let importRes: any;
+  try {
+    importRes = await api.importNotes(
+      [
+        {
+          title: fakeFileInfo.title,
+          content: convertToTiptapJson(fakeFileInfo),
+          contentText: extractPlainText(fakeFileInfo),
+          createdAt: createdAtStr,
+          updatedAt: updatedAtStr,
+          notebookName: "Memos",
+          notebookPath: ["Memos"],
+        },
+      ],
+      undefined,
+      undefined,
+      workspaceId
+    );
+    if (!importRes?.success || !importRes.notes?.[0]) {
+      throw new Error("创建附件笔记失败");
+    }
+  } catch (err: any) {
+    failedItems.push({
+      name: fakeFileInfo.title,
+      reason: err?.message || "创建附件笔记失败",
+    });
+    return false;
+  }
+
+  const note = importRes.notes[0];
+  const uploadMapping: Record<string, string> = {};
+  for (const item of fileItems) {
+    try {
+      const uploadRes = await api.attachments.upload(note.id, item.fileObj);
+      if (uploadRes?.url) {
+        uploadMapping[item.filename] = uploadRes.url;
+      } else {
+        failedItems.push({ name: item.filename, reason: "笔记附件上传失败：未返回链接" });
+      }
+    } catch (err: any) {
+      console.warn(`Memos file→note attachment failed: ${item.filename}`, err);
+      failedItems.push({ name: item.filename, reason: err?.message || "笔记附件上传失败" });
+    }
+  }
+
+  if (Object.keys(uploadMapping).length > 0) {
+    const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let updatedContent = body;
+    for (const [filename, url] of Object.entries(uploadMapping)) {
+      const regex = new RegExp(`\\]\\((${escapeRegExp(filename)})([?\\s][^)]*)?\\)`, "g");
+      updatedContent = updatedContent.replace(regex, `](${url}$2)`);
+    }
+    const md = `---\ncreated: ${createdAtStr}\nupdated: ${updatedAtStr}\n---\n${updatedContent}`;
+    const fi: ImportFileInfo = {
+      name: fakeFileInfo.name,
+      title: fakeFileInfo.title,
+      content: md,
+      size: md.length,
+      selected: true,
+      source: "md",
+    };
+    try {
+      await api.updateNote(note.id, {
+        content: convertToTiptapJson(fi),
+        contentText: extractPlainText(fi),
+        version: note.version,
+      });
+    } catch (err: any) {
+      failedItems.push({
+        name: fakeFileInfo.title,
+        reason: `更新附件链接失败: ${err?.message || err}`,
+      });
+    }
+  }
+
+  for (const tagId of tagIds) {
+    try {
+      await api.addTagToNote(note.id, tagId);
+    } catch {
+      /* ignore tag attach errors on companion note */
+    }
+  }
+
+  return true;
+}
+
+/** 从 Memos 正文提取 hashtag（无 # 前缀）；支持中文与 memos 层级标签 foo/bar */
+export function extractMemosHashtags(content: string): string[] {
+  if (!content) return [];
+  const re = /#([^\s#]+)/g;
+  const names: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    // 去掉尾部常见标点（中英文）
+    let name = m[1].replace(/[.,;:!?，。；：！？、）)】》」』"']+$/u, "").trim();
+    if (!name) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/**
+ * 标签已落到 super-note tags 实体后，从正文去掉对应的 #标签 文字。
+ * - 仅匹配 memos 风格 `#tag`（# 后无空格），不会误伤 markdown 标题 `# Title`
+ * - 若传入 tagNames，只去掉这些标签；否则去掉全部 hashtag
+ */
+export function stripMemosHashtags(content: string, tagNames?: string[]): string {
+  if (!content) return "";
+  let s = content;
+
+  if (tagNames && tagNames.length > 0) {
+    const sorted = [...tagNames].sort((a, b) => b.length - a.length);
+    for (const name of sorted) {
+      if (!name) continue;
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // 完整匹配 #标签名，避免短名吃掉长名的前缀
+      const re = new RegExp(`#${escaped}(?=$|[\\s#.,;:!?，。；：！？、）)\\]】》」』"'])`, "g");
+      s = s.replace(re, "");
+    }
+  } else {
+    // 与 extractMemosHashtags 同口径
+    s = s.replace(/#[^\s#]+/g, "");
+  }
+
+  // 收尾空白：行尾空格、多余空行、连续空格、标点前空格
+  s = s.replace(/[ \t]+\n/g, "\n");
+  s = s.replace(/\n{3,}/g, "\n\n");
+  s = s.replace(/[ \t]{2,}/g, " ");
+  s = s.replace(/[ \t]+([,，.。!！?？;；:：])/g, "$1");
+  s = s.replace(/^[ \t]+|[ \t]+$/gm, "");
+  return s.trim();
+}
+
+/** 从 memo 记录解析标签名列表：优先 tags/tagList 字段，否则从 content 提取 #标签 */
+export function resolveMemosTagNames(memo: any): string[] {
+  const content = memo?.content || memo?.contentText || "";
+  const raw =
+    memo?.tags ??
+    memo?.tagList ??
+    memo?.tagNames ??
+    memo?.Tags ??
+    null;
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const push = (v: unknown) => {
+    if (v == null) return;
+    let s = "";
+    if (typeof v === "string") s = v;
+    else if (typeof v === "object" && v !== null && "name" in (v as any)) s = String((v as any).name ?? "");
+    else s = String(v);
+    s = s.replace(/^#/, "").trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    names.push(s);
+  };
+  if (Array.isArray(raw)) {
+    for (const item of raw) push(item);
+  } else if (typeof raw === "string" && raw.trim()) {
+    // 支持逗号/空格分隔
+    for (const part of raw.split(/[,，\s]+/)) push(part);
+  }
+  // 始终合并正文 hashtag，避免只写在 content 里的标签丢失
+  for (const t of extractMemosHashtags(content)) push(t);
+  return names;
+}
+
+/**
+ * 确保标签存在于当前空间，返回 name -> tagId 映射。
+ * 同名已存在则复用；创建失败记入 failedItems 但不中断导入。
+ */
+async function ensureMemosTagIds(
+  tagNames: string[],
+  workspaceId: string | undefined,
+  failedItems: Array<{ name: string; reason: string }>
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (tagNames.length === 0) return map;
+
+  // "personal" / 空 = 个人空间：getTags/createTag 不传 workspaceId，落到 NULL 空间
+  const tagWs =
+    workspaceId && workspaceId !== "" && workspaceId !== "personal"
+      ? workspaceId
+      : undefined;
+
+  let existing: Array<{ id: string; name: string }> = [];
+  try {
+    existing = (await api.getTags(tagWs)) || [];
+  } catch (err: any) {
+    console.warn("Memos import: getTags failed", err);
+    failedItems.push({ name: "标签列表", reason: err?.message || "获取标签失败，将尝试直接创建" });
+  }
+  for (const t of existing) {
+    if (t?.name && t?.id) map.set(t.name, t.id);
+  }
+
+  for (const name of tagNames) {
+    if (map.has(name)) continue;
+    try {
+      const created = await api.createTag({
+        name,
+        ...(tagWs ? { workspaceId: tagWs } : {}),
+      } as any);
+      if (created?.id) {
+        map.set(name, created.id);
+        continue;
+      }
+    } catch (err: any) {
+      // 409 同名：刷新列表再取
+      const msg = String(err?.message || err || "");
+      if (msg.includes("同名") || msg.includes("409") || msg.includes("UNIQUE")) {
+        try {
+          existing = (await api.getTags(tagWs)) || [];
+          for (const t of existing) {
+            if (t?.name && t?.id) map.set(t.name, t.id);
+          }
+          if (map.has(name)) continue;
+        } catch {
+          /* ignore */
+        }
+      }
+      failedItems.push({ name: `标签 ${name}`, reason: err?.message || "创建标签失败" });
+    }
+  }
+  return map;
 }
 
 /**
@@ -1614,22 +1952,62 @@ export async function importMemos(
   }
 
   let successCount = 0;
-  const workspaceId = options?.workspaceId;
+  // 规范化目标空间：
+  //   - "personal" / 未传 → 个人空间
+  //   - 合法 uuid → 工作区
+  //   - 空字符串（工作区 Tab 未选中）→ 明确报错，禁止静默落到个人空间
+  const rawWs = options?.workspaceId;
+  if (rawWs === "") {
+    onProgress({
+      phase: "error",
+      current: 0,
+      total: 0,
+      message: "未指定目标工作区：请在数据管理中选择「工作区」并选中具体工作区后再导入",
+      failedItems,
+      transcribingItems,
+    });
+    return { success: false, count: 0 };
+  }
+  const workspaceId = rawWs;
+
+  // 预收集全部标签名，先批量确保 tags 实体存在
+  const allTagNames = new Set<string>();
+  for (const memo of memosList) {
+    for (const n of resolveMemosTagNames(memo)) allTagNames.add(n);
+  }
+  onProgress({
+    phase: "uploading",
+    current: 0,
+    total: memosList.length,
+    message: allTagNames.size > 0
+      ? `正在同步 ${allTagNames.size} 个标签到${workspaceId && workspaceId !== "personal" ? "工作区" : "个人空间"}...`
+      : "准备开始导入...",
+    failedItems,
+    transcribingItems,
+  });
+  const tagIdByName = await ensureMemosTagIds([...allTagNames], workspaceId, failedItems);
 
   if (targetType === "diaries") {
     onProgress({ phase: "uploading", current: 0, total: memosList.length, message: "准备开始导入说说...", failedItems, transcribingItems });
 
     for (let i = 0; i < memosList.length; i++) {
       const memo = memosList[i];
-      const content = memo.content || memo.contentText || "";
+      const rawContent = memo.content || memo.contentText || "";
+      const tagNames = resolveMemosTagNames(memo);
+      // 标签实体创建后，正文去掉 #标签 文字，避免重复展示
+      const content = stripMemosHashtags(rawContent, tagNames);
       const visibility = memo.visibility === "PUBLIC" ? "PUBLIC" : "PRIVATE";
       const createdTs = memo.createdTs || Math.floor(Date.now() / 1000);
       const createdAt = formatSqlDatetime(createdTs);
+      const tagIds = tagNames
+        .map((n) => tagIdByName.get(n))
+        .filter((id): id is string => Boolean(id));
 
-      // 上传附件
+      // 上传附件：说说兼容媒体 → diary 附件；PDF/文档等 → 笔记附件
       const imageIds: string[] = [];
       const resourceList = memo.resourceList || memo.resources || [];
       const voiceResources: Array<{ filename: string; uploadResId: string }> = [];
+      const fileItemsForNote: Array<{ filename: string; fileObj: File }> = [];
 
       if (isZip && zip && Array.isArray(resourceList) && resourceList.length > 0) {
         onProgress({
@@ -1646,26 +2024,18 @@ export async function importMemos(
           const id = resource.id;
           if (!filename) continue;
 
-          let zipEntry = zip.file(filename);
-          if (!zipEntry) zipEntry = zip.file(`resources/${filename}`);
-          if (!zipEntry) zipEntry = zip.file(`assets/${filename}`);
-          if (!zipEntry && id) {
-            zipEntry = zip.file(`${id}_${filename}`);
-            if (!zipEntry) zipEntry = zip.file(`resources/${id}_${filename}`);
-            if (!zipEntry) zipEntry = zip.file(`assets/${id}_${filename}`);
-          }
+          const zipEntry = findMemosZipEntry(zip, filename, id);
           if (!zipEntry) {
-            const entryKeys = Object.keys(zip.files);
-            const foundKey = entryKeys.find((k) => k.endsWith(filename) || (id && k.includes(String(id))));
-            if (foundKey) {
-              zipEntry = zip.file(foundKey);
-            }
+            failedItems.push({ name: filename, reason: "ZIP 压缩包中未找到文件" });
+            continue;
           }
 
-          if (zipEntry) {
-            try {
-              const blob = await zipEntry.async("blob");
-              const fileObj = new File([blob], filename, { type: resource.type || "application/octet-stream" });
+          try {
+            const blob = await zipEntry.async("blob");
+            const mime = guessResourceMime(filename, resource.type);
+            const fileObj = new File([blob], filename, { type: mime });
+
+            if (isDiaryCompatibleMedia(filename, mime)) {
               const uploadRes = await api.diaryImages.upload(fileObj, workspaceId);
               if (uploadRes && uploadRes.id) {
                 imageIds.push(uploadRes.id);
@@ -1675,33 +2045,66 @@ export async function importMemos(
               } else {
                 failedItems.push({ name: filename, reason: "上传失败：服务器未返回ID" });
               }
-            } catch (err: any) {
-              console.warn(`Memos resource upload failed: ${filename}`, err);
-              failedItems.push({ name: filename, reason: err?.message || "上传失败" });
+            } else {
+              // PDF / 文档 / 其它非媒体 → 稍后写入「Memos」笔记本笔记附件
+              fileItemsForNote.push({ filename, fileObj });
             }
-          } else {
-            failedItems.push({ name: filename, reason: "ZIP 压缩包中未找到文件" });
+          } catch (err: any) {
+            console.warn(`Memos resource upload failed: ${filename}`, err);
+            failedItems.push({ name: filename, reason: err?.message || "上传失败" });
           }
         }
       }
 
-      // 发布说说
+      // 发布说说（附带标签 + 图片/媒体）
       let postedDiary: any = null;
-      try {
-        postedDiary = await api.postDiary({
-          contentText: content,
-          images: imageIds,
-          visibility,
-          createdAt,
-        }, workspaceId);
-        successCount++;
-      } catch (err: any) {
-        console.error(`Post imported diary failed at index ${i}:`, err);
-        const excerpt = content.slice(0, 30) + (content.length > 30 ? "..." : "");
-        failedItems.push({ name: `说说 #${i + 1} (${excerpt})`, reason: err?.message || "发布说说失败" });
+      const hasText = typeof content === "string" && content.trim().length > 0;
+      const canPostDiary = hasText || imageIds.length > 0;
+      if (canPostDiary) {
+        try {
+          postedDiary = await api.postDiary({
+            contentText: content,
+            images: imageIds,
+            visibility,
+            createdAt,
+            ...(tagIds.length > 0 ? { tagIds } : {}),
+          }, workspaceId);
+          successCount++;
+        } catch (err: any) {
+          console.error(`Post imported diary failed at index ${i}:`, err);
+          const excerpt = content.slice(0, 30) + (content.length > 30 ? "..." : "");
+          failedItems.push({ name: `说说 #${i + 1} (${excerpt})`, reason: err?.message || "发布说说失败" });
+        }
+      } else if (fileItemsForNote.length === 0) {
+        failedItems.push({
+          name: `说说 #${i + 1}`,
+          reason: "无正文且无可用附件，已跳过",
+        });
       }
 
-
+      // 非图片资源 → 创建/挂到笔记附件（笔记本 Memos）
+      if (fileItemsForNote.length > 0) {
+        onProgress({
+          phase: "uploading",
+          current: i,
+          total: memosList.length,
+          message: `正在导入第 ${i + 1}/${memosList.length} 条的文件附件到笔记...`,
+          failedItems,
+          transcribingItems,
+        });
+        const ok = await importMemosFileResourcesAsNote({
+          content,
+          createdTs: typeof createdTs === "number" ? createdTs : Math.floor(Date.now() / 1000),
+          updatedTs: memo.updatedTs || createdTs,
+          idx: i,
+          fileItems: fileItemsForNote,
+          tagIds,
+          workspaceId,
+          failedItems,
+        });
+        // 若本条没有成功发说说，但笔记附件创建成功，仍计为成功一条
+        if (ok && !postedDiary) successCount++;
+      }
 
       onProgress({
         phase: "uploading",
@@ -1735,7 +2138,8 @@ export async function importMemos(
     });
 
     const notesPayload = memosList.map((memo, idx) => {
-      let content = memo.content || memo.contentText || "";
+      const tagNames = resolveMemosTagNames(memo);
+      let content = stripMemosHashtags(memo.content || memo.contentText || "", tagNames);
       const createdTs = memo.createdTs || Math.floor(Date.now() / 1000);
       const updatedTs = memo.updatedTs || createdTs;
       const createdAtStr = formatSqlDatetime(createdTs);
@@ -1836,45 +2240,33 @@ export async function importMemos(
           const id = resource.id;
           if (!filename) continue;
 
-          let zipEntry = zip.file(filename);
-          if (!zipEntry) zipEntry = zip.file(`resources/${filename}`);
-          if (!zipEntry) zipEntry = zip.file(`assets/${filename}`);
-          if (!zipEntry && id) {
-            zipEntry = zip.file(`${id}_${filename}`);
-            if (!zipEntry) zipEntry = zip.file(`resources/${id}_${filename}`);
-            if (!zipEntry) zipEntry = zip.file(`assets/${id}_${filename}`);
-          }
+          const zipEntry = findMemosZipEntry(zip, filename, id);
           if (!zipEntry) {
-            const entryKeys = Object.keys(zip.files);
-            const foundKey = entryKeys.find((k) => k.endsWith(filename) || (id && k.includes(String(id))));
-            if (foundKey) {
-              zipEntry = zip.file(foundKey);
-            }
+            failedItems.push({ name: filename, reason: "ZIP 压缩包中未找到文件" });
+            continue;
           }
 
-          if (zipEntry) {
-            try {
-              const blob = await zipEntry.async("blob");
-              const fileObj = new File([blob], filename, { type: resource.type || "application/octet-stream" });
-              const uploadRes = await api.attachments.upload(note.id, fileObj);
-              if (uploadRes && uploadRes.url) {
-                uploadMapping[filename] = uploadRes.url;
-              } else {
-                failedItems.push({ name: filename, reason: "上传失败：服务器未返回链接" });
-              }
-            } catch (err: any) {
-              console.warn(`Memos resource upload failed: ${filename}`, err);
-              failedItems.push({ name: filename, reason: err?.message || "上传失败" });
+          try {
+            const blob = await zipEntry.async("blob");
+            const mime = guessResourceMime(filename, resource.type);
+            const fileObj = new File([blob], filename, { type: mime });
+            const uploadRes = await api.attachments.upload(note.id, fileObj);
+            if (uploadRes && uploadRes.url) {
+              uploadMapping[filename] = uploadRes.url;
+            } else {
+              failedItems.push({ name: filename, reason: "上传失败：服务器未返回链接" });
             }
-          } else {
-            failedItems.push({ name: filename, reason: "ZIP 压缩包中未找到文件" });
+          } catch (err: any) {
+            console.warn(`Memos resource upload failed: ${filename}`, err);
+            failedItems.push({ name: filename, reason: err?.message || "上传失败" });
           }
         }
       }
 
       // If any attachment was successfully uploaded, update the note content
       if (Object.keys(uploadMapping).length > 0) {
-        let content = memo.content || memo.contentText || "";
+        const noteTagNames = resolveMemosTagNames(memo);
+        let content = stripMemosHashtags(memo.content || memo.contentText || "", noteTagNames);
         const createdTs = memo.createdTs || Math.floor(Date.now() / 1000);
         const updatedTs = memo.updatedTs || createdTs;
         const createdAtStr = formatSqlDatetime(createdTs);
@@ -1932,6 +2324,22 @@ export async function importMemos(
         }
       } else {
         successCount++;
+      }
+
+      // 关联标签到笔记
+      const noteTagIds = resolveMemosTagNames(memo)
+        .map((n) => tagIdByName.get(n))
+        .filter((id): id is string => Boolean(id));
+      for (const tagId of noteTagIds) {
+        try {
+          await api.addTagToNote(note.id, tagId);
+        } catch (err: any) {
+          console.warn(`Memos import: addTagToNote failed note=${note.id} tag=${tagId}`, err);
+          failedItems.push({
+            name: notesPayload[i]?.title || `笔记 #${i + 1}`,
+            reason: `关联标签失败: ${err?.message || err}`,
+          });
+        }
       }
 
       onProgress({
