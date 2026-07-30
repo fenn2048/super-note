@@ -7,6 +7,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
+import ContentCanvas from "@/components/layout/ContentCanvas";
 import { getMobileMoreModules, setLibraryTab, type NavModule } from "@/lib/navigation.config";
 import type { WorkspaceFeatures } from "@/types";
 import { isNativePlatform } from "@/hooks/useCapacitor";
@@ -114,54 +115,56 @@ export default function MobileMorePage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-app-bg overflow-y-auto">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-app-bg">
       <MobileChromeHeader
         variant="bare"
         title="我的"
         subtitle="资料库、AI、消息与设置"
       />
 
-      <div className="px-4 pt-2 pb-2 grid grid-cols-2 gap-3 flex-1 pb-6">
-        {menuItems.map((item, idx) => (
+      <ContentCanvas className="pb-6" flush>
+        <div className="px-4 pt-2 grid grid-cols-2 gap-3">
+          {menuItems.map((item, idx) => (
+            <motion.button
+              key={item.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: idx * 0.05 }}
+              onClick={item.onClick}
+              className="flex flex-col justify-between p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs hover:shadow-sm hover:border-app-border active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px]"
+            >
+              <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform duration-fast relative">
+                {item.icon}
+                {item.id === "mentions" && state.unreadMentionCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-elevated">
+                    {state.unreadMentionCount}
+                  </span>
+                )}
+              </div>
+              <div className="mt-4">
+                <div className="text-sm font-semibold text-tx-primary tracking-tight">{item.label}</div>
+                <div className="text-[11px] text-tx-tertiary mt-1 line-clamp-2 leading-snug">{item.desc}</div>
+              </div>
+            </motion.button>
+          ))}
+
           <motion.button
-            key={item.id}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: idx * 0.05 }}
-            onClick={item.onClick}
-            className="flex flex-col justify-between p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs hover:shadow-sm hover:border-app-border active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px]"
+            transition={{ duration: 0.3, delay: menuItems.length * 0.05 }}
+            onClick={handleLogout}
+            className="flex flex-col justify-between p-4 rounded-card border border-red-200/60 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 shadow-xs hover:shadow-sm active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px] col-span-2"
           >
-            <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform duration-fast relative">
-              {item.icon}
-              {item.id === "mentions" && state.unreadMentionCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-elevated">
-                  {state.unreadMentionCount}
-                </span>
-              )}
+            <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs">
+              <LogOut className="w-6 h-6 text-red-500" />
             </div>
             <div className="mt-4">
-              <div className="text-sm font-semibold text-tx-primary tracking-tight">{item.label}</div>
-              <div className="text-[11px] text-tx-tertiary mt-1 line-clamp-2 leading-snug">{item.desc}</div>
+              <div className="text-sm font-semibold text-red-600 dark:text-red-400 tracking-tight">退出登录</div>
+              <div className="text-[11px] text-tx-tertiary mt-1">安全退出当前账号</div>
             </div>
           </motion.button>
-        ))}
-
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: menuItems.length * 0.05 }}
-          onClick={handleLogout}
-          className="flex flex-col justify-between p-4 rounded-card border border-red-200/60 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 shadow-xs hover:shadow-sm active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px] col-span-2"
-        >
-          <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs">
-            <LogOut className="w-6 h-6 text-red-500" />
-          </div>
-          <div className="mt-4">
-            <div className="text-sm font-semibold text-red-600 dark:text-red-400 tracking-tight">退出登录</div>
-            <div className="text-[11px] text-tx-tertiary mt-1">安全退出当前账号</div>
-          </div>
-        </motion.button>
-      </div>
+        </div>
+      </ContentCanvas>
 
       <QrScanPage open={showQrScan} onClose={() => setShowQrScan(false)} />
     </div>

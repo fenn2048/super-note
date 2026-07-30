@@ -20,12 +20,21 @@ const buttonVariants = cva(
           "text-tx-secondary hover:bg-app-hover hover:text-tx-primary",
         link:
           "text-accent-primary underline-offset-4 hover:underline",
+        /** 底栏 / 分段控件内高亮 */
+        tab:
+          "text-tx-tertiary hover:text-tx-primary data-[active=true]:text-accent-primary data-[active=true]:bg-accent-primary/12",
+        /** 主 FAB 发光 */
+        fab:
+          "btn-primary-glow text-tx-inverse shadow-fab rounded-full",
       },
       size: {
         default: "h-9 px-4 py-2",
         sm: "h-8 rounded-button px-3 text-xs",
         lg: "h-11 rounded-button px-8 text-[15px]",
         icon: "h-9 w-9",
+        /** 触控友好图标按钮 */
+        "icon-lg": "h-11 w-11 min-h-[44px] min-w-[44px]",
+        fab: "h-14 w-14 rounded-full",
       },
     },
     defaultVariants: {

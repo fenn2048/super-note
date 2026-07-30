@@ -3053,7 +3053,12 @@ export default function NoteList() {
                 <div className="py-8 text-center text-xs text-tx-tertiary">正在加载收藏...</div>
               ) : favSegmentTab === "notes" ? (
                 sortedNotes.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-tx-tertiary">暂无收藏笔记</div>
+                  <EmptyState
+                    icon={Star}
+                    title="暂无收藏笔记"
+                    description="在笔记详情中点星标即可收藏"
+                    className="py-10"
+                  />
                 ) : (
                   sortedNotes.map((note) => (
                     <NoteCard
@@ -3072,7 +3077,12 @@ export default function NoteList() {
                 )
               ) : favSegmentTab === "tasks" ? (
                 favTasks.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-tx-tertiary">暂无收藏待办</div>
+                  <EmptyState
+                    icon={Star}
+                    title="暂无收藏待办"
+                    description="收藏的待办会出现在这里"
+                    className="py-10"
+                  />
                 ) : (
                   favTasks.map((task) => (
                     <div
@@ -3126,7 +3136,12 @@ export default function NoteList() {
                 )
               ) : (
                 favDiaries.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-tx-tertiary">暂无收藏说说</div>
+                  <EmptyState
+                    icon={Star}
+                    title="暂无收藏说说"
+                    description="收藏的说说会出现在这里"
+                    className="py-10"
+                  />
                 ) : (
                   favDiaries.map((diary) => (
                     <div
@@ -3235,7 +3250,10 @@ export default function NoteList() {
                     />
                   ))}
                 </AnimatePresence>
-                {state.notes.length === 0 && !state.isLoading && (
+                {state.isLoading && state.notes.length === 0 && (
+                  <LoadingBlock label={t("common.loading") || "加载中…"} className="py-12" />
+                )}
+                {!state.isLoading && state.notes.length === 0 && (
                   <EmptyState
                     icon={FileText}
                     title={t("common.noNotes")}
@@ -3249,8 +3267,15 @@ export default function NoteList() {
                     className="py-16"
                   />
                 )}
-                {state.isLoading && state.notes.length === 0 && (
-                  <LoadingBlock label={t("common.loading") || "加载中…"} className="py-12" />
+                {!state.isLoading && state.notes.length > 0 && sortedNotes.length === 0 && (
+                  <EmptyState
+                    icon={Search}
+                    title={t("noteList.noMatch", { defaultValue: "没有匹配的笔记" })}
+                    description={t("noteList.noMatchHint", {
+                      defaultValue: "试试调整搜索词、标签或日期筛选",
+                    })}
+                    className="py-16"
+                  />
                 )}
               </div>
             </ScrollArea>

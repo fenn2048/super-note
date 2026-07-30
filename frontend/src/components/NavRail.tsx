@@ -31,27 +31,26 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
-  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Plus, Wallet,
+  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Wallet,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace, getServerUrl, clearServerUrl } from "@/lib/api";
-import { ViewMode, WorkspaceFeatures } from "@/types";
+import { ViewMode } from "@/types";
 import { cn } from "@/lib/utils";
 import MigrationModal from "@/components/MigrationModal";
-import CreateMenu from "@/components/common/CreateMenu";
 import { useRailMode, nextRailMode, RailMode } from "@/hooks/useRailMode";
 import { getAppInfo, isDesktop as isDesktopApp, switchDesktopToFull, type AppInfo } from "@/lib/desktopBridge";
 import { clearLocalIdMap, clearQueue, getQueueLength } from "@/lib/offlineQueue";
 import {
   getDesktopRailModules,
-  isNotesViewMode,
-  isTasksViewMode,
+  isModuleActive,
   openTasksEntry,
   setLibraryTab,
   type NavModule,
 } from "@/lib/navigation.config";
+import { useWorkspaceFeatures } from "@/store/workspaceFeaturesStore";
 
 // Rail 上图标统一 18px——比主侧栏 16px 略大，因为没有文字陪衬时需要更醒目；
 // label 模式下也保持 18px，配 10px 字号视觉层级正好。
@@ -70,21 +69,6 @@ const RAIL_ICONS: Record<string, React.ReactNode> = {
   finance: <Wallet size={RAIL_ICON_SIZE} />,
 };
 
-/**
- * 判断 Rail 上某个模块是否处于激活态。
- * 产品决策（家庭 OS + 任务方案 A）：
- *   - 笔记及其派生视图高亮 notes
- *   - projects / plans / 历史 tasks 高亮 tasks
- */
-function isModuleActive(mod: NavModule, viewMode: ViewMode): boolean {
-  if (mod.id === "notes") return isNotesViewMode(viewMode) || viewMode === "favorites" || viewMode === "trash";
-  if (mod.id === "tasks") return isTasksViewMode(viewMode);
-  if (mod.id === "library") {
-    return viewMode === "library" || viewMode === "files" || viewMode === "books" || viewMode === "media";
-  }
-  return viewMode === mod.mode;
-}
-
 export default function NavRail({ variant = "desktop" }: { variant?: "desktop" | "mobile" } = {}) {
   const { t } = useTranslation();
   const { state } = useApp();
@@ -96,31 +80,8 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
   const showLabel = effectiveMode === "label";
   const isMobile = variant === "mobile";
 
-  // 工作区功能开关——独立订阅一份（与 Sidebar 内部各自一份，互不干扰）。
-  // 个人空间或加载失败时为 null = 全开。
-  const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
-  const [packTick, setPackTick] = useState(0);
-  useEffect(() => {
-    const load = () => {
-      const ws = getCurrentWorkspace();
-      if (!ws || ws === "personal") {
-        setFeatures(null);
-        return;
-      }
-      api.getWorkspaceFeatures(ws).then(setFeatures).catch(() => setFeatures(null));
-    };
-    load();
-    const onChange = () => load();
-    const onPack = () => setPackTick((n) => n + 1);
-    window.addEventListener("super:workspace-changed", onChange);
-    window.addEventListener("super:workspace-features-changed", onChange);
-    window.addEventListener("super:module-pack-changed", onPack);
-    return () => {
-      window.removeEventListener("super:workspace-changed", onChange);
-      window.removeEventListener("super:workspace-features-changed", onChange);
-      window.removeEventListener("super:module-pack-changed", onPack);
-    };
-  }, []);
+  // 工作区功能开关：全局 store（App 壳 bootstrap）
+  const { features, packTick } = useWorkspaceFeatures();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
 
@@ -141,24 +102,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
   // D-2：迁移向导弹窗。点"切换到云端"会先弹出，让用户选择是否把本地数据迁过去。
   const [showMigration, setShowMigration] = useState(false);
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [desktopInfo, setDesktopInfo] = useState<AppInfo | null>(null);
-
-  // 全局快捷键 Alt+C：打开/关闭创建菜单（App.tsx 派发事件）
-  useEffect(() => {
-    if (isMobile) return;
-    const onToggle = () => setCreateMenuOpen((v) => !v);
-    const onOpen = () => setCreateMenuOpen(true);
-    const onClose = () => setCreateMenuOpen(false);
-    window.addEventListener("super:toggle-create-menu", onToggle);
-    window.addEventListener("super:open-create-menu", onOpen);
-    window.addEventListener("super:close-create-menu", onClose);
-    return () => {
-      window.removeEventListener("super:toggle-create-menu", onToggle);
-      window.removeEventListener("super:open-create-menu", onOpen);
-      window.removeEventListener("super:close-create-menu", onClose);
-    };
-  }, [isMobile]);
 
   useEffect(() => {
     if (!isDesktopApp()) return;
@@ -385,45 +329,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
 
       <div className={cn("my-2 border-t border-app-border/60", showLabel ? "w-8" : "w-6")} aria-hidden />
 
-      {/* 桌面全局「+」：主操作区顶部（折叠按钮下方），快捷键 Alt+C */}
-      {!isMobile && (
-        <div className="relative mb-1">
-          <button
-            type="button"
-            onClick={() => setCreateMenuOpen((v) => !v)}
-            title="快速创建 (Alt+C)"
-            aria-label="快速创建"
-            aria-keyshortcuts="Alt+C"
-            aria-expanded={createMenuOpen}
-            className={cn(
-              itemBaseClass,
-              "text-white bg-accent-primary hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/25",
-            )}
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            {showLabel && (
-              <span className="text-[10px] leading-none mt-0.5 max-w-full truncate px-1 font-medium">
-                创建
-              </span>
-            )}
-          </button>
-          <CreateMenu
-            open={createMenuOpen}
-            onClose={() => setCreateMenuOpen(false)}
-            showCamera={false}
-            className="absolute left-full ml-2 top-0"
-            onAction={(action) => {
-              if (action === "note") {
-                window.dispatchEvent(new CustomEvent("super:quick-new-note"));
-              } else if (action === "diary") {
-                window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
-              } else if (action === "task") {
-                window.dispatchEvent(new CustomEvent("super:quick-new-task"));
-              }
-            }}
-          />
-        </div>
-      )}
+      {/* 桌面全局「+」已迁至屏幕右下角常驻 FAB（App.tsx），快捷键 Alt+C 仍可用 */}
 
       {/* 主导航：主路径 + 次要工具，组间细线分隔。来源：navigation.config */}
       <div className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar flex flex-col items-center gap-1 px-1">

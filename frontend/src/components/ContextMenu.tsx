@@ -78,19 +78,25 @@ export default function ContextMenu({
         position: "fixed",
         top: adjustedPos.y,
         left: adjustedPos.x,
-        zIndex: 9999,
         animation: "contextMenuIn 0.12s ease-out",
       }}
-      className="w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl dark:shadow-2xl dark:shadow-black/50 py-1 select-none"
+      // 必须用语义色：zinc-* 被映射成 CSS 变量后，dark:bg-zinc-900/95 透明度会失效，
+      // 深色模式仍露出 bg-white，菜单整块发白、文字发虚。
+      className={cn(
+        "z-popover w-48 py-1 select-none rounded-card shadow-lg",
+        "bg-app-elevated text-tx-primary",
+        "border border-app-border",
+        "backdrop-blur-md",
+      )}
     >
       {header && (
-        <div className="px-3 py-1.5 text-[11px] font-medium text-tx-tertiary border-b border-zinc-100 dark:border-zinc-800 mb-0.5 truncate">
+        <div className="px-3 py-1.5 text-[11px] font-medium text-tx-tertiary border-b border-app-border mb-0.5 truncate">
           {header}
         </div>
       )}
       {items.map((item) =>
         item.separator ? (
-          <div key={item.id} className="h-px bg-zinc-200 dark:bg-zinc-800 my-1 mx-2" />
+          <div key={item.id} className="h-px bg-app-border my-1 mx-2" />
         ) : (
           <button
             key={item.id}
@@ -103,11 +109,15 @@ export default function ContextMenu({
               "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
               item.disabled && "opacity-40 cursor-not-allowed",
               item.danger
-                ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-tx-primary"
+                ? "text-accent-danger hover:bg-accent-danger/10"
+                : "text-tx-primary hover:bg-app-hover",
             )}
           >
-            {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}
+            {item.icon && (
+              <span className="w-4 h-4 flex items-center justify-center text-tx-secondary">
+                {item.icon}
+              </span>
+            )}
             {item.label}
           </button>
         )

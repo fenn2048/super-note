@@ -6,29 +6,18 @@ import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
 import NavRail from "@/components/NavRail";
 import { useRailMode } from "@/hooks/useRailMode";
-import type { TabId } from "@/components/SettingsModal";
 
 // 延时加载的重型组件
 const NoteList = React.lazy(() => import("@/components/NoteList"));
-const Dashboard = React.lazy(() => import("@/components/Dashboard"));
-const DiaryCenter = React.lazy(() => import("@/components/DiaryCenter"));
-const MentionList = React.lazy(() => import("@/components/MentionList"));
 const SharedNoteView = React.lazy(() => import("@/components/SharedNoteView"));
 const LoginPage = React.lazy(() => import("@/components/LoginPage"));
 const QuickLoginGate = React.lazy(() => import("@/components/QuickLoginGate"));
 const AppLockOverlay = React.lazy(() => import("@/components/AppLockOverlay"));
 const QuickLoginEnrollDialog = React.lazy(() => import("@/components/QuickLoginEnrollDialog"));
 const WhatsNewModal = React.lazy(() => import("@/components/WhatsNewModal"));
-const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
 const BrowserScreensaver = React.lazy(() => import("@/components/BrowserScreensaver"));
-const MobileMorePage = React.lazy(() => import("@/components/MobileMorePage"));
 const DiaryComposeModal = React.lazy(() => import("@/components/DiaryComposeModal"));
 const EditorPane = React.lazy(() => import("@/components/EditorPane"));
-const MindMapCenter = React.lazy(() => import("@/components/MindMapEditor"));
-const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
-const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
-const LibraryCenter = React.lazy(() => import("@/components/LibraryCenter"));
-const FinanceCenter = React.lazy(() => import("@/components/finance/FinanceCenter"));
 const MobileCameraModal = React.lazy(() => import("@/components/MobileCameraModal"));
 const MobileTaskCreateModal = React.lazy(() => import("@/components/MobileTaskCreateModal"));
 const FirstRunWizard = React.lazy(() => import("@/components/FirstRunWizard"));
@@ -63,16 +52,22 @@ import { resetScrollHideBars } from "@/hooks/useScrollHideBars";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
+import MobileDrawer from "@/components/shell/MobileDrawer";
+import MobileTabBar from "@/components/shell/MobileTabBar";
+import MobileTopBar from "@/components/shell/MobileTopBar";
+import { renderRegisteredView } from "@/components/viewRegistry";
 import { realtime } from "@/lib/realtime";
 import {
   openTasksEntry,
   openPlansEntry,
   setLibraryTab,
-  getMobileTabModules,
   shouldShowMobileTabBar,
   shouldShowMobileFAB,
+  shouldShowDesktopFAB,
   syncMobileShellCssVars,
 } from "@/lib/navigation.config";
+import { useWorkspaceFeaturesBootstrap } from "@/store/workspaceFeaturesStore";
+import type { TabId } from "@/components/SettingsModal";
 import AppSplashGate from "@/components/AppSplashGate";
 import { CreateFabButton } from "@/components/common/CreateMenu";
 import { syncWorkspaceSplash } from "@/lib/splashSync";
@@ -93,10 +88,10 @@ function SplashUnderlay() {
 
 function AuthVerifyingSpinner({ label }: { label: string }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-app-bg transition-colors">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-zinc-400 dark:text-zinc-500">{label}</p>
+        <div className="w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-tx-tertiary">{label}</p>
       </div>
     </div>
   );
@@ -333,9 +328,11 @@ function AppLayout() {
   const { state } = useApp();
   const actions = useAppActions();
   const { t, i18n } = useTranslation();
+  useWorkspaceFeaturesBootstrap();
 
-  const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TabId>("appearance");
+  const showSettings = state.viewMode === "settings";
+
   const [barsVisible, setBarsVisible] = useState(true);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [showDiaryComposer, setShowDiaryComposer] = useState(false);
@@ -358,7 +355,7 @@ function AppLayout() {
     // 切页时强制显示底栏，并同步 hook 内部状态（避免无法再 hide）
     setBarsVisible(true);
     resetScrollHideBars();
-  }, [state.viewMode, state.mobileView, showSettings]);
+  }, [state.viewMode, state.mobileView]);
 
 
 
@@ -421,7 +418,19 @@ function AppLayout() {
         openPlansEntry();
         actions.setViewMode("projects");
       } else if (hash === "#/mindmaps") {
-        actions.setViewMode("mindmaps");
+        // 思维导图功能已移除；旧书签/深链落到首页
+        actions.setViewMode("home");
+        window.location.hash = "#/home";
+      } else if (hash === "#/settings" || hash.startsWith("#/settings/")) {
+        const tabRaw = hash.startsWith("#/settings/")
+          ? hash.slice("#/settings/".length).split(/[?#]/)[0]
+          : "appearance";
+        const tab = (tabRaw || "appearance") as TabId;
+        setSettingsTab(tab === "prompts" ? "ai" : tab);
+        if (viewModeRef.current !== "settings") {
+          settingsReturnViewRef.current = viewModeRef.current;
+        }
+        actions.setViewMode("settings");
       } else if (hash === "#/home" || hash === "#/") {
         actions.setViewMode("home");
       }
@@ -446,7 +455,11 @@ function AppLayout() {
       }
     } else {
       const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
-      const targetHash = notesViewModes.includes(state.viewMode) ? "#/notes" : `#/${state.viewMode}`;
+      const targetHash = state.viewMode === "settings"
+        ? `#/settings/${settingsTab}`
+        : notesViewModes.includes(state.viewMode)
+          ? "#/notes"
+          : `#/${state.viewMode}`;
       
       if (state.viewMode === "media" && window.location.hash.startsWith("#/media")) {
         // Let MediaCenter manage its own sub-routes
@@ -569,38 +582,45 @@ function AppLayout() {
     };
   }, []);
 
-  // Listen to custom open-settings event
+  // 打开设置：独立路由 #/settings[/tab]
+  const settingsReturnViewRef = useRef<ViewMode>("home");
+  const openSettingsPage = useCallback((tab: TabId = "appearance") => {
+    if (state.viewMode !== "settings") {
+      settingsReturnViewRef.current = state.viewMode;
+    }
+    setSettingsTab(tab);
+    actions.setViewMode("settings");
+    window.location.hash = `#/settings/${tab}`;
+  }, [state.viewMode, actions]);
+  const closeSettingsPage = useCallback(() => {
+    const back = settingsReturnViewRef.current || "home";
+    actions.setViewMode(back === "settings" ? "home" : back);
+    // hash 由 viewMode sync effect 写回
+  }, [actions]);
+
   useEffect(() => {
     const onOpenSettings = (e: Event) => {
       const customEvent = e as CustomEvent<{ tab?: TabId }>;
       const tab = customEvent.detail?.tab || "appearance";
-      setSettingsTab(tab);
-      setShowSettings(true);
+      openSettingsPage(tab);
     };
     window.addEventListener("super:open-settings", onOpenSettings);
     return () => {
       window.removeEventListener("super:open-settings", onOpenSettings);
     };
-  }, []);
+  }, [openSettingsPage]);
   // v16 P3 后续：Rail 视觉模式三档（icon / label / hidden）。
   // 约束：主侧栏折叠时强制显示 Rail（即便偏好是 hidden），
   // 否则用户会陷入"既无 Rail 又无主侧栏"的死局，找不到任何导航入口。
   const [railMode] = useRailMode();
   const railVisible = railMode !== "hidden" || state.sidebarCollapsed;
-  const isMindMapView = false;
-  const isAIChatView = state.viewMode === "ai-chat";
-  const isHomeView = state.viewMode === "home";
-  const isDiaryView = state.viewMode === "diary";
   const isProjectsView = state.viewMode === "projects";
   const isPlansView = state.viewMode === "plans";
   const isTasksView = state.viewMode === "tasks";
   const isNotesView = ["all", "notebook", "favorites", "search", "tag", "trash"].includes(state.viewMode);
   const isFilesView = state.viewMode === "files";
-  const isMentionsView = state.viewMode === "mentions";
   const isBooksView = state.viewMode === "books";
   const isMediaView = state.viewMode === "media";
-  const isLibraryView = state.viewMode === "library";
-  const isFinanceView = state.viewMode === "finance";
 
   /**
    * Cmd-K 全局搜索面板开关
@@ -840,7 +860,7 @@ function AppLayout() {
   useRegisterBackLayer(
     "settings",
     showSettings,
-    () => setShowSettings(false),
+    () => closeSettingsPage(),
     900
   );
   useRegisterBackLayer(
@@ -1100,7 +1120,7 @@ function AppLayout() {
   // ── 工作区切换：清空笔记会话态，按需回到笔记列表 ───────────────────
   //
   // WorkspaceSwitcher 切换后会广播 "super:workspace-changed"。之前只有 Sidebar /
-  // FileManager / DiaryCenter / MindMap 自己监听并各自重拉，但
+  // FileManager / DiaryCenter 自己监听并各自重拉，但
   // App 顶层并没有清理"正在编辑的笔记 + 笔记列表 + 选择/筛选状态"——于是会
   // 出现两类问题：
   //   1) 切到 A 空间后，右侧仍显示着 B 空间的 activeNote，且该笔记被 B 空间
@@ -1252,6 +1272,43 @@ function AppLayout() {
   // 滚动隐栏只控制视觉 visible，不卸载
   const barsVisuallyVisible = barsVisible && !keyboardVisible;
 
+  // 桌面全局「+」：右下角常驻；书籍阅读 / 视频影院时隐藏
+  const [mediaTheaterMode, setMediaTheaterMode] = useState(false);
+  useEffect(() => {
+    const onTheater = (e: Event) => {
+      setMediaTheaterMode(!!(e as CustomEvent<{ open?: boolean }>).detail?.open);
+    };
+    window.addEventListener("super:media-theater-mode", onTheater);
+    return () => window.removeEventListener("super:media-theater-mode", onTheater);
+  }, []);
+  const isBookReading =
+    !!activeBookHash &&
+    (state.viewMode === "books" || state.viewMode === "library");
+  const showDesktopFAB = shouldShowDesktopFAB({
+    isBookReading,
+    isMediaTheater: mediaTheaterMode,
+  });
+
+  // 进入书籍阅读 / 影院模式时收起创建菜单，避免悬空浮层
+  useEffect(() => {
+    if (!showDesktopFAB) setCreateMenuOpen(false);
+  }, [showDesktopFAB]);
+
+  // Alt+C / 外部事件：打开桌面或移动创建菜单
+  useEffect(() => {
+    const onToggle = () => setCreateMenuOpen((v) => !v);
+    const onOpen = () => setCreateMenuOpen(true);
+    const onClose = () => setCreateMenuOpen(false);
+    window.addEventListener("super:toggle-create-menu", onToggle);
+    window.addEventListener("super:open-create-menu", onOpen);
+    window.addEventListener("super:close-create-menu", onClose);
+    return () => {
+      window.removeEventListener("super:toggle-create-menu", onToggle);
+      window.removeEventListener("super:open-create-menu", onOpen);
+      window.removeEventListener("super:close-create-menu", onClose);
+    };
+  }, []);
+
   // 底栏 CSS 避让：根页有底栏结构且底栏当前「可见」时才占用高度。
   // 向下滚动隐栏后 --mobile-tab-h→0，说说/任务列表可铺满原 Tab 区域；
   // 与 scroll-hide 冷却配合，避免 padding 与滚动方向互抢导致闪烁。
@@ -1313,32 +1370,8 @@ function AppLayout() {
 
   return (
     <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
-      {/* ===== 移动端：抽屉式侧边栏（无 NavRail）=====
-          模块切换只走底部 Tab +「更多」；抽屉专注工作区 / 搜索 / 笔记本 / 标签，
-          避免 Rail 与 Tab 双重导航抢宽度。关闭 / 设置 / 登出在 Sidebar mobile 自管。 */}
-      <AnimatePresence>
-        {state.mobileSidebarOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => actions.setMobileSidebar(false)}
-              className="fixed inset-0 z-40 bg-zinc-900/60 backdrop-blur-sm md:hidden"
-            />
-            <motion.div
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", bounce: 0, duration: 0.35 }}
-              className="fixed inset-y-0 left-0 z-50 w-[86%] max-w-[340px] md:hidden shadow-2xl flex bg-app-sidebar"
-              style={{ paddingBottom: "var(--safe-area-bottom)" }}
-            >
-              <Sidebar variant="mobile" />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* ===== 移动端：抽屉式侧边栏 ===== */}
+      <MobileDrawer />
 
       {/* ===== 桌面端：永久 Rail + 可折叠主侧栏 + 拖拽条 =====
           v16 P3：左侧 Rail 永久可见（含模块切换 + 设置/登出 + 折叠按钮）；
@@ -1372,90 +1405,36 @@ function AppLayout() {
             transition={{ duration: 0.15, ease: "easeOut" }}
             className="flex-1 flex flex-col min-h-0 overflow-hidden"
           >
-            {isMindMapView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <MobileTopBar />
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <MindMapCenter />
-                </Suspense>
-              </div>
-            ) : isAIChatView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <AIChatPanel
-                    onClose={() => {
-                      actions.setViewMode("more");
-                      actions.setMobileView("list");
-                    }}
-                    onNavigateToNote={async (noteId) => {
-                      try {
-                        const { api } = await import("@/lib/api");
-                        const note = await api.getNote(noteId);
-                        if (note) {
-                          actions.setActiveNote(note);
-                          actions.setViewMode("all");
-                          actions.setMobileView("editor");
-                        }
-                      } catch (err) {
-                        console.error("Navigate to note failed:", err);
-                      }
-                    }}
-                  />
-                </Suspense>
-              </div>
-            ) : isDiaryView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <MobileTopBar />
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <DiaryCenter />
-                </Suspense>
-              </div>
-            ) : isProjectsView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <MobileTopBar />
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <ProjectCenter />
-                </Suspense>
-              </div>
-            ) : isPlansView ? (
-              <PlansToProjectsRedirect />
-            ) : isTasksView ? (
-              <TasksToProjectsRedirect />
-            ) : isLibraryView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <LibraryCenter />
-                </Suspense>
-              </div>
-            ) : isFinanceView ? (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* 记账列表顶栏由 FinanceCenter 自管（返回/居中标题/+），不再叠 MobileTopBar */}
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <FinanceCenter />
-                </Suspense>
-              </div>
-            ) : isFilesView ? (
-              <LegacyLibraryRedirect tab="files" />
-            ) : isBooksView ? (
-              <LegacyLibraryRedirect tab="books" />
-            ) : isMediaView ? (
-              <LegacyLibraryRedirect tab="media" />
-            ) : state.viewMode === "more" ? (
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                <MobileMorePage />
-              </Suspense>
-            ) : isHomeView ? (
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                <Dashboard />
-              </Suspense>
-            ) : isMentionsView ? (
-              <div className="flex-1 flex flex-col">
-                <MobileTopBar />
-                <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
-                  <MentionList />
-                </Suspense>
-              </div>
-            ) : (
+            {(() => {
+              const registered = renderRegisteredView(state.viewMode, {
+                onCloseSettings: closeSettingsPage,
+                settingsTab,
+                onAIClose: () => {
+                  actions.setViewMode("more");
+                  actions.setMobileView("list");
+                },
+                onAINavigateToNote: async (noteId) => {
+                  try {
+                    const { api } = await import("@/lib/api");
+                    const note = await api.getNote(noteId);
+                    if (note) {
+                      actions.setActiveNote(note);
+                      actions.setViewMode("all");
+                      actions.setMobileView("editor");
+                    }
+                  } catch (err) {
+                    console.error("Navigate to note failed:", err);
+                  }
+                },
+              });
+              if (registered) return registered;
+              if (isPlansView) return <PlansToProjectsRedirect />;
+              if (isTasksView) return <TasksToProjectsRedirect />;
+              if (isFilesView) return <LegacyLibraryRedirect tab="files" />;
+              if (isBooksView) return <LegacyLibraryRedirect tab="books" />;
+              if (isMediaView) return <LegacyLibraryRedirect tab="media" />;
+              // 笔记三栏布局
+              return (
               <div className="flex-1 flex relative overflow-hidden">
                 {/* 笔记列表
                     PR3：编辑器态仍渲染在下层（右滑时可露出），但 inert 禁止误点 */}
@@ -1518,7 +1497,8 @@ function AppLayout() {
                   </Suspense>
                 </div>
               </div>
-            )}
+              );
+            })()}
           </motion.div>
         </AnimatePresence>
         <GlobalMusicPlayer />
@@ -1526,18 +1506,21 @@ function AppLayout() {
 
       {showMobileTabBar && <MobileTabBar visible={barsVisuallyVisible} />}
 
-      {/* FAB：始终挂载（根页），用 opacity/transform 隐栏，避免 AnimatePresence 闪烁 */}
+      {/* 移动 FAB：根页；滚动隐栏时只藏视觉，不卸载 */}
       {showMobileFAB && (
         <>
           <div
             className={cn(
-              "mobile-fab-anchor fixed right-4 z-40 md:hidden transition-all duration-300 ease-soft",
+              "mobile-fab-anchor fixed right-4 z-rail-fab md:hidden transition-all duration-300 ease-soft",
               barsVisuallyVisible
                 ? "opacity-100 translate-y-0 pointer-events-auto"
                 : "opacity-0 translate-y-4 pointer-events-none",
             )}
           >
-            <CreateFabButton onClick={() => setCreateMenuOpen(true)} />
+            <CreateFabButton
+              open={createMenuOpen}
+              onClick={() => setCreateMenuOpen(true)}
+            />
           </div>
           {createMenuOpen && (
             <Suspense fallback={null}>
@@ -1561,6 +1544,37 @@ function AppLayout() {
             </Suspense>
           )}
         </>
+      )}
+
+      {/* 桌面全局「+」：屏幕右下角常驻；书籍阅读 / 影院模式隐藏 */}
+      {showDesktopFAB && (
+        <div className="hidden md:flex fixed bottom-6 right-6 z-rail-fab flex-col items-end gap-3">
+          {createMenuOpen && (
+            <Suspense fallback={null}>
+              <CreateMenu
+                open={createMenuOpen}
+                onClose={() => setCreateMenuOpen(false)}
+                className="absolute right-0 bottom-full mb-3"
+                showCamera={false}
+                onAction={(action) => {
+                  if (action === "note") void quickCreateNote();
+                  else if (action === "diary") {
+                    setComposerInitialImages([]);
+                    setShowDiaryComposer(true);
+                  } else if (action === "task") {
+                    setShowTaskComposer(true);
+                  }
+                }}
+              />
+            </Suspense>
+          )}
+          <CreateFabButton
+            size="lg"
+            jelly
+            open={createMenuOpen}
+            onClick={() => setCreateMenuOpen((v) => !v)}
+          />
+        </div>
       )}
 
       {showCameraModal && (
@@ -1629,17 +1643,7 @@ function AppLayout() {
       {/* 服务端版本升级提示（前端 bundle 与服务端不一致时） */}
       <UpdateNotifier />
 
-      {/* 全局设置弹窗 */}
-      <Suspense fallback={null}>
-        <AnimatePresence>
-          {showSettings && (
-            <SettingsModal
-              defaultTab={settingsTab}
-              onClose={() => setShowSettings(false)}
-            />
-          )}
-        </AnimatePresence>
-      </Suspense>
+      {/* 设置页已在主内容 VIEW_REGISTRY 内渲染（非 portal） */}
 
       {/* 健康休息屏保 */}
       <Suspense fallback={null}>
@@ -1659,443 +1663,6 @@ function AppLayout() {
   );
 }
 
-function MobileTopBar() {
-  const { state } = useApp();
-  const actions = useAppActions();
-  const { siteConfig } = useSiteSettings();
-  const { t } = useTranslation();
-  const [visible, setVisible] = useState(true);
-
-  const getTitle = () => {
-    switch (state.viewMode) {
-      case "all":
-      case "notebook":
-      case "tag":
-        return t("sidebar.allNotes") || "全部笔记";
-      case "favorites":
-        return "我的收藏";
-      case "tasks":
-        return t("projects.myTasks") || "我的待办";
-      case "trash":
-        return "回收站";
-      case "files":
-        return t("sidebar.fileManager") || "文件管理";
-      case "mentions":
-        return "消息盒子";
-      default:
-        return siteConfig.title || "蜉蝣";
-    }
-  };
-
-  useEffect(() => {
-    const show = () => setVisible(true);
-    const hide = () => setVisible(false);
-    window.addEventListener("super:scroll-show-bars", show);
-    window.addEventListener("super:scroll-hide-bars", hide);
-    return () => {
-      window.removeEventListener("super:scroll-show-bars", show);
-      window.removeEventListener("super:scroll-hide-bars", hide);
-    };
-  }, []);
-
-  if (state.viewMode === "projects" || state.viewMode === "diary") {
-    return null;
-  }
-
-  const closeToMore = () => {
-    actions.setViewMode("more");
-    actions.setMobileView("list");
-  };
-
-  if (state.viewMode === "files") {
-    return (
-      <MobileChromeHeader
-        variant="stack"
-        stackAction="back"
-        title={getTitle()}
-        onLeadingClick={closeToMore}
-        visible={visible}
-      />
-    );
-  }
-
-  if (state.viewMode === "mentions") {
-    return (
-      <MobileChromeHeader
-        variant="stack"
-        stackAction="back"
-        title={
-          <span className="flex items-center gap-2 min-w-0">
-            <Bell size={16} className="text-accent-primary shrink-0" />
-            <span className="text-[15px] font-bold text-tx-primary truncate">消息盒子</span>
-            {state.unreadMentionCount > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-danger text-white font-bold shrink-0">
-                {state.unreadMentionCount}
-              </span>
-            )}
-          </span>
-        }
-        onLeadingClick={closeToMore}
-        visible={visible}
-        right={
-          state.unreadMentionCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("super:mark-all-mentions-read"));
-              }}
-              className="flex items-center gap-1 text-xs text-accent-primary hover:underline font-medium px-2 min-h-[40px]"
-            >
-              <CheckCheck size={14} />
-              全部已读
-            </button>
-          ) : undefined
-        }
-      />
-    );
-  }
-
-  // 「我的」子页：收藏 / 回收站 / AI 等统一左返回
-  if (
-    ["favorites", "trash", "ai-chat", "home"].includes(state.viewMode)
-  ) {
-    const titles: Record<string, string> = {
-      favorites: "收藏",
-      trash: "回收站",
-      "ai-chat": "AI",
-      home: "首页",
-    };
-    return (
-      <MobileChromeHeader
-        variant="stack"
-        stackAction="back"
-        title={titles[state.viewMode] || getTitle()}
-        onLeadingClick={closeToMore}
-        visible={visible}
-      />
-    );
-  }
-
-  return (
-    <MobileChromeHeader
-      variant="root"
-      title={getTitle()}
-      visible={visible}
-    />
-  );
-}
-
-function MobileTabBar({ visible }: { visible: boolean }) {
-  const { state } = useApp();
-  const actions = useAppActions();
-  const { t } = useTranslation();
-  const [features, setFeatures] = useState<import("@/types").WorkspaceFeatures | null>(null);
-  const [packTick, setPackTick] = useState(0);
-
-  useEffect(() => {
-    const load = () => {
-      const ws = getCurrentWorkspace();
-      if (!ws || ws === "personal") {
-        setFeatures(null);
-        return;
-      }
-      api.getWorkspaceFeatures(ws).then(setFeatures).catch(() => setFeatures(null));
-    };
-    load();
-    const onWs = () => load();
-    const onPack = () => setPackTick((n) => n + 1);
-    window.addEventListener("super:workspace-changed", onWs);
-    window.addEventListener("super:workspace-features-changed", onWs);
-    window.addEventListener("super:module-pack-changed", onPack);
-    return () => {
-      window.removeEventListener("super:workspace-changed", onWs);
-      window.removeEventListener("super:workspace-features-changed", onWs);
-      window.removeEventListener("super:module-pack-changed", onPack);
-    };
-  }, []);
-
-  const handleTabClick = (mode: ViewMode, opts?: { openMyTasks?: boolean }) => {
-    haptic.light();
-    // 先写 filter 再切 viewMode，保证 ProjectCenter 挂载时能读到 my-tasks
-    if (opts?.openMyTasks) {
-      openTasksEntry();
-    }
-    actions.setViewMode(mode);
-    actions.setSelectedNotebook(null);
-    actions.setMobileView("list");
-    if (mode === "books" || mode === "library") {
-      window.dispatchEvent(new CustomEvent("super:close-book"));
-    }
-    // 已在 projects 视图时 setViewMode 不会 remount，再补一次 filter 同步
-    if (opts?.openMyTasks) {
-      openTasksEntry();
-    }
-  };
-
-  // 与 navigation.config + 模块包一致（P2 补完）
-  const tabModules = useMemo(() => getMobileTabModules(features), [features, packTick]);
-
-  const TAB_ICONS: Record<string, React.ReactNode> = {
-    notes: <BookOpen size={20} />,
-    tasks: <ListTodo size={20} />,
-    diary: <NotebookPen size={20} />,
-  };
-
-  const tabs = [
-    ...tabModules.map((m) => ({
-      id: m.id,
-      mode: m.mode,
-      label: t(m.labelKey, { defaultValue: m.labelFallback }),
-      icon: TAB_ICONS[m.id] || <BookOpen size={20} />,
-      active:
-        m.id === "notes"
-          ? ["all", "notebook", "search", "tag", "favorites"].includes(state.viewMode)
-          : m.id === "tasks"
-            ? ["projects", "plans", "tasks"].includes(state.viewMode)
-            : state.viewMode === m.mode,
-      openMyTasks: m.action === "openMyTasks",
-    })),
-    {
-      id: "more",
-      mode: "more" as ViewMode,
-      label: "我的",
-      icon: <UserIcon size={20} />,
-      active:
-        state.viewMode === "more" ||
-        ["media", "trash", "ai-chat", "mentions", "files", "books", "home", "library"].includes(state.viewMode),
-      openMyTasks: false,
-    },
-  ];
-
-  return (
-    <div 
-      className={cn(
-        "mobile-tab-bar fixed bottom-0 left-0 right-0 z-35 md:hidden flex items-center justify-around transition-all duration-300 ease-soft",
-        visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
-      )}
-      style={{
-        // 底栏背景必须铺满手势条区域；内容区固定 64px，底部用 padding 消化 safe-area
-        paddingBottom: "var(--safe-area-bottom)",
-        minHeight: "calc(64px + var(--safe-area-bottom))",
-        height: "calc(64px + var(--safe-area-bottom))",
-        boxSizing: "border-box",
-      }}
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => {
-            handleTabClick(tab.mode, { openMyTasks: tab.openMyTasks });
-          }}
-          className={cn(
-            // h-16 只约束图标+文字行，整体栏高由外层 minHeight 含 safe-area
-            "flex flex-col items-center justify-center flex-1 h-16 max-h-16 relative transition-all duration-fast ease-soft active:scale-95",
-            tab.active ? "text-accent-primary" : "text-tx-tertiary hover:text-tx-primary"
-          )}
-        >
-          <div className={cn(
-            "relative flex items-center justify-center w-11 h-7 rounded-full transition-all duration-fast ease-soft",
-            tab.active && "bg-accent-primary/12"
-          )}>
-            {tab.icon}
-            {tab.id === "more" && state.unreadMentionCount > 0 && (
-              <span className="absolute top-0.5 right-1 w-2 h-2 rounded-full bg-red-500 border border-app-elevated shadow-sm" />
-            )}
-            {tab.id === "tasks" && state.reminderActiveCount > 0 && (
-              <span className="absolute -top-1 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
-                {state.reminderActiveCount}
-              </span>
-            )}
-          </div>
-          <span className={cn(
-            "text-[10px] tracking-wide mt-0.5",
-            tab.active ? "font-semibold" : "font-medium"
-          )}>
-            {tab.label}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
- * PR4 MobileFAB：主创建一等公民
- * - 单击：按当前模块新建（笔记 / 说说 / 待办）
- * - 长按 或 点「⋯」：展开次要入口（笔记/说说/待办/拍照）
- * - 不再塞笔记本/项目创建；不拖拽，避免误触
- */
-function MobileFAB({
-  viewMode,
-  onNewNote,
-  onNewDiary,
-  onNewTask,
-  onCameraClick,
-}: {
-  viewMode: ViewMode;
-  onNewNote: () => void;
-  onNewDiary: () => void;
-  onNewTask: () => void;
-  onCameraClick: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressFired = useRef(false);
-
-  const primary =
-    viewMode === "diary"
-      ? { run: onNewDiary, label: "写说说", icon: <NotebookPen size={26} /> }
-      : viewMode === "projects"
-        ? { run: onNewTask, label: "加待办", icon: <ListTodo size={26} /> }
-        : { run: onNewNote, label: "新建笔记", icon: <Plus size={28} /> };
-
-  const clearLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const secondary = [
-    {
-      key: "note",
-      label: "新建笔记",
-      icon: <BookOpen size={16} />,
-      tone: "bg-amber-500/12 text-amber-500",
-      run: onNewNote,
-    },
-    {
-      key: "diary",
-      label: "新建说说",
-      icon: <NotebookPen size={16} />,
-      tone: "bg-violet-500/12 text-violet-500",
-      run: onNewDiary,
-    },
-    {
-      key: "task",
-      label: "新建待办",
-      icon: <ListTodo size={16} />,
-      tone: "bg-emerald-500/12 text-emerald-500",
-      run: onNewTask,
-    },
-    {
-      key: "camera",
-      label: "拍照",
-      icon: <Camera size={16} />,
-      tone: "bg-sky-500/12 text-sky-500",
-      run: onCameraClick,
-    },
-  ];
-
-  return (
-    <>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-30 bg-black/15 backdrop-blur-[1px] md:hidden"
-          />
-        )}
-      </AnimatePresence>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.5, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.5, y: 20 }}
-        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-        className="mobile-fab-anchor fixed right-4 z-40 md:hidden flex flex-col items-end gap-2 select-none"
-      >
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.88, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.88, y: 10 }}
-              className="flex flex-col gap-2 z-40 items-end mb-1"
-            >
-              {secondary.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => {
-                    haptic.light();
-                    setOpen(false);
-                    item.run();
-                  }}
-                  className="flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-app-elevated border border-app-border text-xs font-semibold text-tx-primary shadow-lg active:scale-95"
-                >
-                  <span>{item.label}</span>
-                  <div className={cn("w-9 h-9 rounded-full flex items-center justify-center", item.tone)}>
-                    {item.icon}
-                  </div>
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="flex items-end gap-2">
-          {/* 次要入口：展开菜单 */}
-          <button
-            type="button"
-            title="更多创建"
-            aria-label="更多创建"
-            onClick={() => {
-              haptic.light();
-              setOpen((v) => !v);
-            }}
-            className="w-10 h-10 rounded-full bg-app-elevated border border-app-border shadow-md text-tx-secondary flex items-center justify-center active:scale-95"
-          >
-            <MoreHorizontal size={18} />
-          </button>
-
-          {/* 主按钮：单击主创建，长按展开菜单 */}
-          <motion.button
-            type="button"
-            title={primary.label}
-            aria-label={primary.label}
-            onPointerDown={() => {
-              longPressFired.current = false;
-              clearLongPress();
-              longPressTimer.current = setTimeout(() => {
-                longPressFired.current = true;
-                haptic.medium();
-                setOpen(true);
-              }, 420);
-            }}
-            onPointerUp={clearLongPress}
-            onPointerLeave={clearLongPress}
-            onPointerCancel={clearLongPress}
-            onClick={() => {
-              if (longPressFired.current) {
-                longPressFired.current = false;
-                return;
-              }
-              if (open) {
-                setOpen(false);
-                return;
-              }
-              haptic.light();
-              primary.run();
-            }}
-            whileTap={{ scale: 0.92 }}
-            className="btn-primary-glow w-14 h-14 rounded-full flex items-center justify-center shadow-fab z-40"
-          >
-            <motion.div
-              animate={{ rotate: open ? 45 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {open ? <Plus size={28} /> : primary.icon}
-            </motion.div>
-          </motion.button>
-        </div>
-      </motion.div>
-    </>
-  );
-}
 
 function AuthGate() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);

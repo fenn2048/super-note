@@ -45,6 +45,8 @@ import {
   EmptyActionButton,
   LoadingBlock,
 } from "@/components/common/FeedbackStates";
+import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
+import PageHeader from "@/components/layout/PageHeader";
 
 const PlanCenter = React.lazy(() => import("./PlanCenter"));
 
@@ -1535,33 +1537,56 @@ export default function ProjectCenter() {
       {/* 1. Project Detail View */}
       {selectedProject ? (
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {/* Top Nav Bar */}
-          <div
-            className="px-4 py-3 border-b border-app-border bg-app-bg flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-2"
-            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
-          >
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={closeProjectDetail} className="h-8 w-8">
-                <ArrowLeft size={16} />
-              </Button>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-tx-primary truncate max-w-[200px] md:max-w-xs">
-                  {selectedProject.name}
-                </h1>
+          {/* Top Nav — Page Contract */}
+          <MobileChromeHeader
+            variant="stack"
+            title={
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <span className="truncate font-bold">{selectedProject.name}</span>
                 <button
+                  type="button"
                   onClick={(e) => toggleFavorite(selectedProject.id, e)}
-                  className="p-1 hover:bg-app-hover rounded transition-colors text-tx-tertiary hover:text-accent-primary"
+                  className="p-1 hover:bg-app-hover rounded-button text-tx-tertiary hover:text-accent-primary shrink-0"
+                  aria-label="收藏项目"
                 >
                   <Star
                     size={14}
                     className={isFavorite(selectedProject.id) ? "fill-accent-primary text-accent-primary" : ""}
                   />
                 </button>
-              </div>
-            </div>
+              </span>
+            }
+            onLeadingClick={closeProjectDetail}
+          />
+          <PageHeader
+            mdOnly
+            dense
+            title={
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <span className="truncate">{selectedProject.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => toggleFavorite(selectedProject.id, e)}
+                  className="p-1 hover:bg-app-hover rounded-button text-tx-tertiary hover:text-accent-primary"
+                  aria-label="收藏项目"
+                >
+                  <Star
+                    size={14}
+                    className={isFavorite(selectedProject.id) ? "fill-accent-primary text-accent-primary" : ""}
+                  />
+                </button>
+              </span>
+            }
+            leading={
+              <Button variant="ghost" size="icon" onClick={closeProjectDetail} className="h-8 w-8" aria-label="返回">
+                <ArrowLeft size={16} />
+              </Button>
+            }
+          />
 
-            {/* Inner Project Tabs Switcher */}
-            <div className="flex items-center bg-app-hover/50 p-0.5 rounded-lg border border-app-border/40 text-[11px] font-semibold">
+          {/* Inner Project Tabs Switcher */}
+          <div className="px-3 md:px-4 py-2 border-b border-app-border bg-app-bg shrink-0 overflow-x-auto">
+            <div className="flex items-center bg-app-hover/50 p-0.5 rounded-button border border-app-border/40 text-[11px] font-semibold w-max min-w-full md:min-w-0 md:w-auto">
               <button
                 className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
                   detailTab === "kanban" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
@@ -1689,102 +1714,96 @@ export default function ProjectCenter() {
         </div>
       ) : activeFilter.type === "my-tasks" ? (
         /* 2. Global "My Tasks" aggregated board */
-        <div className="flex-1 flex h-full min-h-0 overflow-hidden bg-app-bg dark:bg-[#121214] justify-center">
+        <div className="flex-1 flex h-full min-h-0 overflow-hidden bg-app-bg justify-center">
           <div className="w-full max-w-5xl flex h-full min-h-0 overflow-hidden">
             {/* 主内容区 */}
             <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
               {/* Header (仅移动端) */}
-              {window.innerWidth < 768 && (
-                <header
-                  className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0 z-40"
-                  style={{ paddingTop: "calc(var(--safe-area-top) + 4px)", minHeight: "56px" }}
-                >
-                  {showMobileMyTasksSearch ? (
-                    <motion.div
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: "100%", opacity: 1 }}
-                      className="flex items-center gap-2 w-full"
-                    >
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
-                        <Input
-                          autoFocus
-                          placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
-                          className="pl-9 pr-8 w-full rounded-full bg-app-hover border-none h-8 text-xs"
-                          value={projectSearchQuery}
-                          onChange={(e) => setProjectSearchQuery(e.target.value)}
-                        />
-                        {projectSearchQuery && (
-                          <button
-                            onClick={() => setProjectSearchQuery("")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-tx-tertiary"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowMobileMyTasksSearch(false);
-                          setProjectSearchQuery("");
-                        }}
-                        className="text-xs font-medium text-accent-primary px-2 py-1 active:scale-95"
-                      >
-                        取消
-                      </button>
-                    </motion.div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <h1 className="text-base font-bold text-tx-primary shrink-0">任务</h1>
-                          <button
-                            onClick={() => setShowProjectFilterSheet(true)}
-                            className="flex items-center gap-1 bg-app-hover hover:bg-app-hover/80 px-2.5 py-1.5 rounded-lg text-xs font-bold text-tx-secondary shrink-0 max-w-[150px] truncate transition-colors active:scale-95"
-                          >
-                            <span className="truncate">
-                              {myTasksProjectFilter === "all"
-                                ? "全部项目"
-                                : projects.find((p) => p.id === myTasksProjectFilter)?.name || "全部项目"}
-                            </span>
-                            <ChevronDown size={12} className="opacity-60 shrink-0" />
-                          </button>
+              <div className="md:hidden shrink-0">
+                {showMobileMyTasksSearch ? (
+                  <MobileChromeHeader
+                    variant="bare"
+                    center={
+                      <div className="flex items-center gap-2 w-full">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
+                          <Input
+                            autoFocus
+                            placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
+                            className="pl-9 pr-8 w-full rounded-full bg-app-hover border-none h-8 text-xs"
+                            value={projectSearchQuery}
+                            onChange={(e) => setProjectSearchQuery(e.target.value)}
+                          />
+                          {projectSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setProjectSearchQuery("")}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-tx-tertiary"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => setShowMobileMyTasksSearch(true)}
-                            className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
-                          >
-                            <Search size={18} />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMobileMyTasksSearch(false);
+                            setProjectSearchQuery("");
+                          }}
+                          className="text-xs font-medium text-accent-primary px-2 py-1 active:scale-95 shrink-0"
+                        >
+                          取消
+                        </button>
                       </div>
-                    </>
-                  )}
-                </header>
-              )}
+                    }
+                  />
+                ) : (
+                  <MobileChromeHeader
+                    variant="bare"
+                    title="任务"
+                    right={
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowProjectFilterSheet(true)}
+                          className="flex items-center gap-1 bg-app-hover px-2.5 py-1.5 rounded-button text-xs font-bold text-tx-secondary max-w-[150px] truncate active:scale-95"
+                        >
+                          <span className="truncate">
+                            {myTasksProjectFilter === "all"
+                              ? "全部项目"
+                              : projects.find((p) => p.id === myTasksProjectFilter)?.name || "全部项目"}
+                          </span>
+                          <ChevronDown size={12} className="opacity-60 shrink-0" />
+                        </button>
+                        <MobileChromeIconButton title="搜索" onClick={() => setShowMobileMyTasksSearch(true)}>
+                          <Search size={18} />
+                        </MobileChromeIconButton>
+                      </div>
+                    }
+                  />
+                )}
+              </div>
+              <PageHeader
+                mdOnly
+                title={
+                  <span className="inline-flex items-center gap-2.5">
+                    <span className="w-9 h-9 rounded-card bg-accent-primary flex items-center justify-center">
+                      <ListTodo size={18} className="text-white" />
+                    </span>
+                    <span>
+                      <span className="block">{t("projects.myTasks") || "我的任务"}</span>
+                      <span className="block text-xs font-normal text-tx-tertiary mt-0.5">
+                        {t("projects.myTasksDesc") || "跨项目指派给我的任务"}
+                      </span>
+                    </span>
+                  </span>
+                }
+              />
 
               {/* Scrollable Container */}
-              <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0 bg-app-bg dark:bg-[#121214]">
+              <PullToRefresh onRefresh={fetchMyTasks} className="flex-1 min-h-0 bg-app-bg">
                 <ScrollContainer className="h-full" ref={myTasksScrollRef}>
                   <div className="flex-1 p-4 pt-0 md:p-6 space-y-6">
-                    {/* 顶部标题 (仅在桌面端展示) */}
-                    {window.innerWidth >= 768 && (
-                      <div className="flex items-center gap-2.5 mb-4 max-w-[640px] mx-auto w-full">
-                        <div className="w-9 h-9 rounded-xl bg-accent-primary flex items-center justify-center animate-in fade-in">
-                          <ListTodo size={18} className="text-white" />
-                        </div>
-                        <div>
-                          <h1 className="text-lg font-bold text-tx-primary leading-tight">{t("projects.myTasks") || "我的任务"}</h1>
-                          <p className="text-[11px] text-tx-tertiary mt-0.5">
-                            {t("projects.myTasksDesc") || "跨项目指派给我的任务"}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-
-
                     {/* Quick Add Form Panel */}
                     {window.innerWidth >= 768 && (
                       <form
@@ -2545,38 +2564,41 @@ export default function ProjectCenter() {
       ) : activeFilter.type === "calendar" ? (
         /* 3. Global "Calendar" aggregated view */
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          <div
-            className={cn(
-              "border-b border-app-border bg-app-bg shrink-0 space-y-3",
-              window.innerWidth < 768 ? "px-4 py-3" : "px-6 py-4"
-            )}
-            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-2">
-                {window.innerWidth < 768 && (
-                  <button
-                    onClick={() => setActiveFilter({ type: "my" })}
-                    className="p-1 -ml-1 mr-1 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active shrink-0"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                )}
-                <Calendar size={18} className="text-accent-primary shrink-0" />
-                <div>
-                  <h1 className="text-base font-bold text-tx-primary">{t("projects.calendar") || "日历"}</h1>
-                  <p className="text-xs text-tx-tertiary hidden md:block">{t("projects.calendarDesc") || "按标签与标题搜索任务"}</p>
-                </div>
-              </div>
-              <div className="relative w-full lg:w-80">
+          <MobileChromeHeader
+            variant="stack"
+            title={t("projects.calendar") || "日历"}
+            onLeadingClick={() => setActiveFilter({ type: "my" })}
+          />
+          <PageHeader
+            mdOnly
+            title={
+              <span className="inline-flex items-center gap-2">
+                <Calendar size={18} className="text-accent-primary" />
+                {t("projects.calendar") || "日历"}
+              </span>
+            }
+            subtitle={t("projects.calendarDesc") || "按标签与标题搜索任务"}
+            actions={
+              <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
                 <Input
                   placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
-                  className="pl-9 h-10 text-sm"
+                  className="pl-9 h-9 text-sm"
                   value={projectSearchQuery}
                   onChange={(e) => setProjectSearchQuery(e.target.value)}
                 />
               </div>
+            }
+          />
+          <div className="border-b border-app-border bg-app-bg shrink-0 space-y-3 px-4 py-3 md:px-6">
+            <div className="md:hidden relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" size={14} />
+              <Input
+                placeholder={t("projects.searchTasksPlaceholder") || "搜索任务..."}
+                className="pl-9 h-10 text-sm"
+                value={projectSearchQuery}
+                onChange={(e) => setProjectSearchQuery(e.target.value)}
+              />
             </div>
             {availableProjectTags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
@@ -2629,43 +2651,63 @@ export default function ProjectCenter() {
       ) : (
         /* 4. Projects Dashboard Grid View */
         <div className="flex-1 flex flex-col h-full overflow-hidden select-text">
-          {/* Top Toolbar */}
-          <div
-            className={cn(
-              "border-b border-app-border bg-app-bg shrink-0 flex items-center justify-between",
-              window.innerWidth < 768 ? "px-4 py-3 min-h-[56px] h-auto" : "px-6 py-4"
-            )}
-            style={window.innerWidth < 768 ? { paddingTop: "calc(var(--safe-area-top) + 4px)" } : undefined}
-          >
-            <div className="flex items-center gap-2">
-              <Briefcase size={18} className="text-accent-primary shrink-0" />
-              <h1 className="text-base font-bold text-tx-primary">
-                {activeFilter.type === "group"
-                  ? groups.find((g) => g.id === activeFilter.groupId)?.name
-                  : t("projects.myProjects") || "我的项目"}
-              </h1>
-            </div>
-            <Button
-              onClick={handleOpenCreateModal}
-              className="h-8 text-xs font-semibold px-3 rounded-lg bg-accent-primary hover:bg-accent-primary/95 text-white flex items-center gap-1.5"
-            >
-              <Plus size={14} />
-              <span>{t("projects.createProject") || "新建项目"}</span>
-            </Button>
-          </div>
+          {(() => {
+            const gridTitle =
+              activeFilter.type === "group"
+                ? groups.find((g) => g.id === activeFilter.groupId)?.name
+                : t("projects.myProjects") || "我的项目";
+            const createBtn = (
+              <Button
+                onClick={handleOpenCreateModal}
+                size="sm"
+                className="font-semibold"
+              >
+                <Plus size={14} />
+                <span>{t("projects.createProject") || "新建项目"}</span>
+              </Button>
+            );
+            return (
+              <>
+                <MobileChromeHeader
+                  variant="bare"
+                  title={
+                    <span className="inline-flex items-center gap-2">
+                      <Briefcase size={18} className="text-accent-primary shrink-0" />
+                      {gridTitle}
+                    </span>
+                  }
+                  right={createBtn}
+                />
+                <PageHeader
+                  mdOnly
+                  title={
+                    <span className="inline-flex items-center gap-2">
+                      <Briefcase size={18} className="text-accent-primary" />
+                      {gridTitle}
+                    </span>
+                  }
+                  actions={createBtn}
+                />
+              </>
+            );
+          })()}
 
           {/* Project Cards Grid Scroll */}
           <ScrollContainer className="flex-1 min-h-0 p-4 md:p-6" ref={projectsScrollRef}>
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 size={24} className="animate-spin text-accent-primary" />
-              </div>
+              <LoadingBlock label={t("common.loading") || "加载中…"} />
             ) : filteredProjects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-12 text-center text-tx-tertiary h-full">
-                <FolderOpen size={48} className="stroke-1 mb-2 opacity-50" />
-                <p className="text-sm font-semibold">{t("projects.noProjects") || "暂无项目"}</p>
-                <p className="text-xs max-w-xs">{t("projects.noProjectsDesc") || "点击右上角“新建项目”开始吧！"}</p>
-              </div>
+              <EmptyState
+                icon={FolderOpen}
+                title={t("projects.noProjects") || "暂无项目"}
+                description={t("projects.noProjectsDesc") || "点击右上角「新建项目」开始吧！"}
+                action={
+                  <EmptyActionButton onClick={handleOpenCreateModal}>
+                    <Plus size={14} />
+                    {t("projects.createProject") || "新建项目"}
+                  </EmptyActionButton>
+                }
+              />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto pb-12">
                 {filteredProjects.map((p) => (

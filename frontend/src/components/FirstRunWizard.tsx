@@ -75,7 +75,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         </div>
         <h1 className="text-xl font-bold text-tx-primary mb-2">欢迎来到 蜉蝣</h1>
         <p className="text-sm text-tx-secondary mb-6 leading-relaxed">
-          创建或加入一个家庭空间，与家人一起使用笔记、说说、待办、思维导图等功能。
+          创建或加入一个家庭空间，与家人一起使用笔记、说说、待办等功能。
         </p>
 
         <div className="grid grid-cols-2 gap-2 mb-5 text-left">

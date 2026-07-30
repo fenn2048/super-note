@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   shouldShowMobileTabBar,
   shouldShowMobileFAB,
+  shouldShowDesktopFAB,
   isLibraryStackViewMode,
 } from "@/lib/navigation.config";
 
@@ -42,5 +43,39 @@ describe("mobile shell rules", () => {
         isProjectDetailOpen: true,
       }),
     ).toBe(false);
+  });
+
+  it("settings route hides tab bar and fab", () => {
+    expect(shouldShowMobileTabBar({ viewMode: "settings" })).toBe(false);
+    expect(shouldShowMobileFAB({ viewMode: "settings" })).toBe(false);
+  });
+});
+
+describe("shouldShowDesktopFAB", () => {
+  it("shows by default on desktop shell", () => {
+    expect(shouldShowDesktopFAB({})).toBe(true);
+  });
+
+  it("hides while reading a book", () => {
+    expect(shouldShowDesktopFAB({ isBookReading: true })).toBe(false);
+  });
+
+  it("hides in media theater / lights-out mode", () => {
+    expect(shouldShowDesktopFAB({ isMediaTheater: true })).toBe(false);
+  });
+
+  it("hides when explicitly blocked", () => {
+    expect(shouldShowDesktopFAB({ blocked: true })).toBe(false);
+  });
+});
+
+describe("isModuleActive", () => {
+  it("highlights notes for notebook views", async () => {
+    const { isModuleActive } = await import("@/lib/navigation.config");
+    expect(isModuleActive("notes", "all")).toBe(true);
+    expect(isModuleActive("notes", "favorites")).toBe(true);
+    expect(isModuleActive("tasks", "projects")).toBe(true);
+    expect(isModuleActive("more", "home")).toBe(true);
+    expect(isModuleActive("more", "favorites")).toBe(false);
   });
 });

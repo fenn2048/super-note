@@ -801,7 +801,7 @@ export default function MediaPlayer({
     }
   }, [seekTime, resetSeek]);
 
-  // Handle theater mode button UI toggle
+  // Handle theater mode button UI toggle + 通知全局壳（隐藏桌面 FAB 等）
   useEffect(() => {
     if (playerRef.current && playerRef.current.controls.lightsOut) {
       const btn = playerRef.current.controls.lightsOut;
@@ -811,6 +811,18 @@ export default function MediaPlayer({
         svg.style.color = isTheaterMode ? "#ffeb3b" : "currentColor";
       }
     }
+    window.dispatchEvent(
+      new CustomEvent("super:media-theater-mode", {
+        detail: { open: isTheaterMode },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("super:media-theater-mode", {
+          detail: { open: false },
+        }),
+      );
+    };
   }, [isTheaterMode]);
 
   // 耳机武装高亮

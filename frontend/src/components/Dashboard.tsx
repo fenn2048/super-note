@@ -30,6 +30,9 @@ import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import { renderDiaryContent } from "./DiaryCenter";
 import DashboardQuickActions from "@/components/dashboard/DashboardQuickActions";
 import { isModuleAllowedByPack } from "@/lib/modulePack";
+import { LoadingBlock, EmptyState, EmptyActionButton } from "@/components/common/FeedbackStates";
+import PageHeader from "@/components/layout/PageHeader";
+import ContentCanvas from "@/components/layout/ContentCanvas";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -682,20 +685,28 @@ export default function Dashboard() {
   useScrollHideBars(homeScrollRef, true, [loading, hasWorkspaces]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
-      {/* 首页顶栏：移动端统一 Chrome；桌面保留工作区切换 */}
+    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-app-bg">
+      {/* 首页顶栏：移动端统一 Chrome；桌面 PageHeader */}
       <MobileChromeHeader
         variant="root"
         title="首页"
         right={<WorkspaceSwitcher variant="header" />}
       />
-      <header className="hidden md:flex items-center justify-between px-4 py-3 border-b border-app-border/50 bg-app-elevated/40 shrink-0 select-none">
-        <span className="text-sm font-bold text-tx-primary tracking-tight">首页</span>
-        <WorkspaceSwitcher variant="header" />
-      </header>
+      <div className="hidden md:block shrink-0">
+        <PageHeader
+          title="首页"
+          actions={<WorkspaceSwitcher variant="header" />}
+          className="bg-app-elevated/40"
+        />
+      </div>
 
-      <div ref={homeScrollRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <ContentCanvas
+        scrollRef={homeScrollRef}
+        maxWidthClass="max-w-[720px]"
+        className="sm:px-6"
+        flush
+      >
+        <div className="px-4 sm:px-0 py-2 sm:py-4 space-y-6">
           {/* ===== 欢迎区域 ===== */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -907,9 +918,7 @@ export default function Dashboard() {
 
           {/* ===== 内容列表（有工作区时展示） ===== */}
           {hasWorkspaces && (loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 size={24} className="animate-spin text-accent-primary" />
-            </div>
+            <LoadingBlock label="加载工作台…" />
           ) : (
             <div className="space-y-6">
               {/* 最近说说 */}
@@ -932,17 +941,18 @@ export default function Dashboard() {
                   </button>
                 </div>
                 {diaries.length === 0 ? (
-                  <div className="px-4 py-8 text-center">
-                    <p className="text-xs text-tx-tertiary mb-3">还没有说说，去记录今天的生活吧</p>
-                    <button
-                      type="button"
-                      onClick={handleQuickWriteSays}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent-primary/10 text-accent-primary text-xs font-semibold active:scale-[0.98]"
-                    >
-                      <MessageCircle size={14} />
-                      写说说
-                    </button>
-                  </div>
+                  <EmptyState
+                    icon={MessageCircle}
+                    title="还没有说说"
+                    description="去记录今天的生活吧"
+                    action={
+                      <EmptyActionButton onClick={handleQuickWriteSays}>
+                        <MessageCircle size={14} />
+                        写说说
+                      </EmptyActionButton>
+                    }
+                    className="py-8"
+                  />
                 ) : (
                   diaries.map((item) => (
                     <DiaryEntry
@@ -1023,17 +1033,17 @@ export default function Dashboard() {
                   </button>
                 </div>
                 {notes.length === 0 ? (
-                  <div className="px-4 py-8 text-center">
-                    <p className="text-xs text-tx-tertiary mb-3">还没有笔记</p>
-                    <button
-                      type="button"
-                      onClick={handleQuickCreateNote}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent-primary/10 text-accent-primary text-xs font-semibold active:scale-[0.98]"
-                    >
-                      <FileText size={14} />
-                      记笔记
-                    </button>
-                  </div>
+                  <EmptyState
+                    icon={FileText}
+                    title="还没有笔记"
+                    action={
+                      <EmptyActionButton onClick={handleQuickCreateNote}>
+                        <FileText size={14} />
+                        记笔记
+                      </EmptyActionButton>
+                    }
+                    className="py-8"
+                  />
                 ) : (
                   notes.map((item) => (
                     <NoteItem
@@ -1046,13 +1056,13 @@ export default function Dashboard() {
               </motion.div>
             </div>
           ))}
-        </div>
-      </div>
 
-      {/* 数据备份状态 */}
-      {hasWorkspaces && !loading && (
-        <BackupStatusCard />
-      )}
+          {/* 数据备份状态 */}
+          {hasWorkspaces && !loading && (
+            <BackupStatusCard />
+          )}
+        </div>
+      </ContentCanvas>
 
       {/* 邀请码弹窗 */}
       <AnimatePresence>

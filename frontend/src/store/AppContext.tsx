@@ -102,9 +102,11 @@ function getSavedViewMode(): ViewMode {
     const saved = localStorage.getItem("super-view-mode");
     const validModes: ViewMode[] = [
       "home", "notebook", "favorites", "trash", "all", "search", "tasks", "tag",
-      "mindmaps", "ai-chat", "diary", "files", "mentions", "more", "projects",
+      "ai-chat", "diary", "files", "mentions", "more", "projects",
       "plans", "books", "media", "library", "finance",
     ];
+    // 思维导图功能已移除：旧 localStorage 值回退首页
+    if (saved === "mindmaps") return "home";
     if (saved && validModes.includes(saved as ViewMode)) {
       return saved as ViewMode;
     }
@@ -155,10 +157,13 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_SELECTED_TAG":
       return { ...state, selectedTagId: action.payload };
     case "SET_VIEW_MODE": {
-      try {
-        localStorage.setItem("super-view-mode", action.payload);
-      } catch {
-        // ignore
+      // 设置页为瞬时路由视图，不写入持久化，避免刷新后卡在 settings
+      if (action.payload !== "settings") {
+        try {
+          localStorage.setItem("super-view-mode", action.payload);
+        } catch {
+          // ignore
+        }
       }
       return { ...state, viewMode: action.payload };
     }

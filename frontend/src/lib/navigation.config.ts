@@ -354,6 +354,61 @@ export function isNotesViewMode(viewMode: ViewMode): boolean {
   );
 }
 
+/**
+ * 模块激活态（NavRail / 底栏 / 我的 共用）
+ * - notes：笔记派生 + 收藏/回收站（从笔记心智进入的）
+ * - tasks：projects / plans / 历史 tasks
+ * - library：资料库及分项
+ * - more：底栏「我的」——二级页也高亮
+ */
+export function isModuleActive(
+  mod: NavModule | string,
+  viewMode: ViewMode,
+): boolean {
+  const id = typeof mod === "string" ? mod : mod.id;
+  if (id === "notes") {
+    return (
+      isNotesViewMode(viewMode) ||
+      viewMode === "favorites" ||
+      viewMode === "trash"
+    );
+  }
+  if (id === "tasks") return isTasksViewMode(viewMode);
+  if (id === "library") {
+    return (
+      viewMode === "library" ||
+      viewMode === "files" ||
+      viewMode === "books" ||
+      viewMode === "media"
+    );
+  }
+  if (id === "more") {
+    // 与底栏「我的」历史行为对齐：二级页高亮我的；收藏归笔记 Tab
+    return (
+      viewMode === "more" ||
+      viewMode === "home" ||
+      viewMode === "ai-chat" ||
+      viewMode === "mentions" ||
+      viewMode === "finance" ||
+      viewMode === "settings" ||
+      viewMode === "library" ||
+      viewMode === "files" ||
+      viewMode === "books" ||
+      viewMode === "media" ||
+      viewMode === "trash"
+    );
+  }
+  if (typeof mod !== "string") {
+    return viewMode === mod.mode;
+  }
+  return false;
+}
+
+/** 底栏「我的」是否高亮（二级页也算） */
+export function isMoreTabActive(viewMode: ViewMode): boolean {
+  return isModuleActive("more", viewMode);
+}
+
 // ── 移动壳层规则（Phase A · 体验蓝图固化）────────────────────────────────
 // Web = Rail + 内容；移动 = 底栏三主 + 我的 + 栈页。
 // 栈页：无底栏、无 FAB；用 StackChrome 右上 × 关闭。
@@ -387,6 +442,7 @@ export interface MobileShellContext {
  */
 export function shouldShowMobileTabBar(ctx: MobileShellContext): boolean {
   const { viewMode, mobileView, isProjectDetailOpen } = ctx;
+  if (viewMode === "settings") return false;
   if (isLibraryStackViewMode(viewMode)) return false;
   if (viewMode === "trash") return false;
   if (viewMode === "home") return true;
@@ -402,12 +458,30 @@ export function shouldShowMobileTabBar(ctx: MobileShellContext): boolean {
 }
 
 /**
- * 是否显示全局「+」FAB
+ * 是否显示移动端「+」FAB
  * 根页且非「我的」、非栈页
  */
 export function shouldShowMobileFAB(ctx: MobileShellContext): boolean {
   if (!shouldShowMobileTabBar(ctx)) return false;
   if (ctx.viewMode === "more") return false;
+  return true;
+}
+
+/**
+ * 是否显示桌面端全局「+」FAB（右下角常驻）
+ * 排除：书籍阅读器、视频影院模式（由调用方传入 theater 标志）
+ */
+export function shouldShowDesktopFAB(opts: {
+  /** 正在全屏读某本书 */
+  isBookReading?: boolean;
+  /** 媒体播放器关灯/影院模式 */
+  isMediaTheater?: boolean;
+  /** 系统级遮罩（锁屏等）可再加 */
+  blocked?: boolean;
+}): boolean {
+  if (opts.blocked) return false;
+  if (opts.isBookReading) return false;
+  if (opts.isMediaTheater) return false;
   return true;
 }
 

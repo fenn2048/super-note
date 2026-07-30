@@ -328,7 +328,7 @@ function DialogShell({
   return (
     <motion.div
       className={cn(
-        "fixed inset-0 z-[10000] flex items-center justify-center px-4",
+        "fixed inset-0 z-system flex items-center justify-center px-4",
         isTop ? "pointer-events-auto" : "pointer-events-none",
       )}
       initial={{ opacity: 0 }}

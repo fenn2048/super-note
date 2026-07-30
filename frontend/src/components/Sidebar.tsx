@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Plus, Star, Trash, Trash2, Search, ChevronRight, FileText,
   ChevronDown, ListTodo,
-  Settings, LogOut, FilePlus, FolderPlus, Edit2, X, BrainCircuit,
+  Settings, LogOut, FilePlus, FolderPlus, Edit2, X,
   Sparkles, NotebookPen, Smile, GripVertical,
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2, FileUp,
@@ -430,7 +430,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
   const [showIconPicker, setShowIconPicker] = useState(false);
 
   // 移动端长按 → 触发上下文菜单（删除/重命名/导出 等）。
-  // - 600ms 阈值与笔记列表 (NoteList) / 思维导图项保持一致，避免用户跨场景手感不同。
+  // - 600ms 阈值与笔记列表 (NoteList) 保持一致，避免用户跨场景手感不同。
   // - touchmove / touchend / touchcancel 任一触发都要清掉计时器，否则用户只是
   //   在列表上滑动也会误触菜单。
   // - 计时器记录起始坐标：iOS/Android 在长按期间触摸点会有几像素抖动，

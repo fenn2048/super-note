@@ -3,7 +3,7 @@ import {
   Bot, Send, Trash2, X, Loader2, FileText, Sparkles, User,
   BookOpen, Database, MessageCircleQuestion, ArrowRight,
   Upload, FileUp, Wand2, FolderUp, Check, Copy, ChevronDown, ChevronUp,
-  Paperclip, Plus, MessageSquare, Menu, Pencil, Brain, ChevronLeft
+  Paperclip, Plus, MessageSquare, Menu, Pencil, Brain
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -12,6 +12,13 @@ import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import MobileChromeHeader from "@/components/common/MobileChromeHeader";
+import PageHeader from "@/components/layout/PageHeader";
+import {
+  EmptyState,
+  LoadingBlock,
+} from "@/components/common/FeedbackStates";
+import { Button } from "@/components/ui/button";
 
 // AI 知识库引用。v8 起区分 note / attachment：
 //   - note：点击跳转到笔记（onNavigateToNote）
@@ -660,91 +667,84 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
 
       {/* ===== 右侧：消息主区 ===== */}
       <div className="flex flex-col flex-1 min-w-0">
-      {/* Header */}
-      {window.innerWidth < 768 ? (
-        <div
-          className="flex items-center gap-1 px-2 py-2 border-b border-app-border bg-app-surface/50 shrink-0"
-          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 8px)" }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl text-accent-primary hover:bg-app-hover shrink-0"
-            aria-label="返回"
-            title="返回"
+      {/* Header — Page Contract */}
+      <MobileChromeHeader
+        variant="stack"
+        title={t("aiChat.title") || "AI问答"}
+        onLeadingClick={onClose}
+        leadingLabel="返回"
+      />
+      <PageHeader
+        mdOnly
+        dense
+        className="bg-app-surface/50"
+        leading={
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? t("aiChat.collapseSidebar") : t("aiChat.expandSidebar")}
+            aria-label={sidebarOpen ? t("aiChat.collapseSidebar") : t("aiChat.expandSidebar")}
           >
-            <ChevronLeft size={24} />
-          </button>
-          <span className="flex-1 text-center text-[15px] font-bold text-tx-primary truncate">
-            AI问答
-          </span>
-          <div className="w-10 h-10 shrink-0" aria-hidden />
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSidebarOpen(v => !v)}
-              title={sidebarOpen ? t("aiChat.collapseSidebar") : t("aiChat.expandSidebar")}
-              className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
-            >
-              <Menu size={14} />
-            </button>
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center">
+            <Menu size={16} />
+          </Button>
+        }
+        title={
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className="w-7 h-7 rounded-button bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shrink-0">
               <Bot size={14} className="text-white" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-tx-primary">{t("aiChat.title")}</span>
-              {stats && (
-                <span className="text-[10px] text-tx-tertiary bg-app-hover px-1.5 py-0.5 rounded-full">
-                  {t("aiChat.statsNotes", { count: stats.noteCount })}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
+            </span>
+            <span className="truncate">{t("aiChat.title")}</span>
+            {stats && (
+              <span className="text-[10px] text-tx-tertiary bg-app-hover px-1.5 py-0.5 rounded-full font-normal">
+                {t("aiChat.statsNotes", { count: stats.noteCount })}
+              </span>
+            )}
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleNewConversation}
               disabled={isLoading}
               title={t("aiChat.newConversation")}
-              className="p-1.5 rounded-md text-tx-tertiary hover:text-accent-primary hover:bg-app-hover transition-colors disabled:opacity-50"
             >
               <Plus size={14} />
-            </button>
+            </Button>
             {messages.length > 0 && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={clearChat}
-                className="p-1.5 rounded-md text-tx-tertiary hover:text-red-500 hover:bg-app-hover transition-colors"
                 title={t("aiChat.clearChat")}
+                className="hover:text-accent-danger"
               >
                 <Trash2 size={14} />
-              </button>
+              </Button>
             )}
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-colors"
-            >
+            <Button variant="ghost" size="icon" onClick={onClose} title="关闭" aria-label="关闭">
               <X size={14} />
-            </button>
+            </Button>
           </div>
-        </div>
-      )}
+        }
+      />
 
       {/* Messages */}
       <ScrollArea className="flex-1">
         <div className="px-4 py-4 space-y-4">
           {historyLoading && messages.length === 0 && (
-            <div className="flex items-center justify-center py-8 text-tx-tertiary">
-              <Loader2 size={16} className="animate-spin" />
-            </div>
+            <LoadingBlock label={t("common.loading") || "加载中…"} size="sm" className="py-8" />
           )}
           {!historyLoading && messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center mb-4">
-                <Sparkles size={28} className="text-violet-500/60" />
-              </div>
-              <p className="text-sm text-tx-secondary mb-1">{t("aiChat.empty")}</p>
-              <p className="text-xs text-tx-tertiary max-w-[240px] mb-5">{t("aiChat.emptyHint")}</p>
+              <EmptyState
+                icon={Sparkles}
+                title={t("aiChat.empty")}
+                description={t("aiChat.emptyHint")}
+                className="py-4 mb-2"
+              />
 
               {/* 知识库统计卡片 */}
               {stats && stats.noteCount > 0 && (

@@ -6,6 +6,7 @@ import {
   Trash2,
   Loader2,
   ChevronDown,
+  ChevronUp,
   Smile,
   MessageCircle,
   ImagePlus,
@@ -48,6 +49,9 @@ import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { registerPlugin } from "@capacitor/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PullToRefresh } from "@/components/PullToRefresh";
+import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
+import PageHeader from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
@@ -3760,6 +3764,44 @@ export default function DiaryCenter() {
   // PR5：说说时间线滚动隐栏
   useScrollHideBars(scrollRef, true, [loading, items.length, filterMode]);
 
+  /** 桌面端「回到顶部」：滚过阈值后显示右下角圆形按钮 */
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  const getScrollViewport = useCallback((): HTMLElement | null => {
+    const root = scrollRef.current;
+    if (!root) return null;
+    return (
+      (root.querySelector(
+        "[data-radix-scroll-area-viewport]",
+      ) as HTMLElement | null) || root
+    );
+  }, []);
+
+  const scrollDiaryToTop = useCallback(() => {
+    const viewport = getScrollViewport();
+    if (!viewport) return;
+    if (typeof viewport.scrollTo === "function") {
+      viewport.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      viewport.scrollTop = 0;
+    }
+  }, [getScrollViewport]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setShowBackToTop(false);
+      return;
+    }
+    const viewport = getScrollViewport();
+    if (!viewport) return;
+    const onScroll = () => {
+      setShowBackToTop(viewport.scrollTop > 280);
+    };
+    onScroll();
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", onScroll);
+  }, [getScrollViewport, items.length, loading, filterMode]);
+
   const [preset, setPreset] = useState<RangePreset>("all");
   const [customRange, setCustomRange] = useState<DateRange>({});
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
@@ -4084,98 +4126,146 @@ export default function DiaryCenter() {
       setNextCursor(null);
       loadTimeline(true);
       loadStats();
+      // 切换工作区后标签列表也要重拉
+      api.getTags().then(actions.setTags).catch(console.error);
     };
     window.addEventListener("super:workspace-changed", onWs);
     return () => window.removeEventListener("super:workspace-changed", onWs);
-  }, [loadTimeline, loadStats]);
+  }, [loadTimeline, loadStats, actions]);
+
+  // 说说页不挂载 Sidebar，标签不会经侧栏写入 state.tags。
+  // 刷新 / 直达 #/diary 时必须自行拉取，否则右侧「自定义标签」为空。
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getTags()
+      .then((tags) => {
+        if (!cancelled) actions.setTags(tags);
+      })
+      .catch((err) => console.error("DiaryCenter load tags failed:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [actions]);
 
   return (
-    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-app-bg dark:bg-[#121214] justify-center">
+    <div className="flex-1 flex h-full md:h-full min-h-0 overflow-hidden bg-app-bg justify-center">
       <div className="w-full max-w-5xl flex h-full min-h-0 overflow-hidden">
         {/* 主内容区 */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-        {window.innerWidth < 768 && (
-          <header
-            className="flex items-center justify-between px-4 py-3 border-b border-app-border bg-app-surface/50 shrink-0 z-40"
-            style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)', minHeight: '56px' }}
-          >
-            {!showMobileSearch ? (
-              <>
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <div className="w-8 h-8 rounded-lg bg-accent-primary flex items-center justify-center shrink-0">
+        <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
+        {/* 移动顶栏：Page Contract / MobileChromeHeader */}
+        <div className="md:hidden shrink-0">
+          {!showMobileSearch ? (
+            <MobileChromeHeader
+              variant="bare"
+              title={
+                <span className="inline-flex items-center gap-2 min-w-0">
+                  <span className="w-8 h-8 rounded-button bg-accent-primary flex items-center justify-center shrink-0">
                     <MessageCircle size={16} className="text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <h1 className="text-sm font-bold text-tx-primary leading-tight truncate">{t("diary.title") || "说说"}</h1>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-bold text-tx-primary truncate">{t("diary.title") || "说说"}</span>
                     {stats && (
-                      <p className="text-[10px] text-tx-tertiary mt-0.5 leading-none">
+                      <span className="block text-[10px] text-tx-tertiary mt-0.5 leading-none">
                         {t("diary.statsLine")
                           .replace("{{total}}", String(stats.total))
                           .replace("{{today}}", String(stats.todayCount))}
-                      </p>
+                      </span>
                     )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-0.5 shrink-0">
+                  </span>
+                </span>
+              }
+              right={
+                <div className="flex items-center gap-0.5">
                   <button
                     type="button"
                     onClick={() => {
                       haptic.light();
                       window.dispatchEvent(new CustomEvent("super:quick-new-diary"));
                     }}
-                    className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg bg-accent-primary text-white text-xs font-semibold active:scale-95 shadow-sm"
+                    className="inline-flex items-center gap-1 h-9 px-2.5 rounded-button bg-accent-primary text-white text-xs font-semibold active:scale-95 shadow-sm"
                     title="写说说"
                     aria-label="写说说"
                   >
                     <Edit2 size={14} />
                     <span>说一句</span>
                   </button>
-                  <button
-                    onClick={() => setShowMobileSearch(true)}
-                    className="p-2 rounded-lg text-tx-secondary hover:bg-app-hover active:scale-95"
-                    title="搜索"
-                  >
+                  <MobileChromeIconButton title="搜索" onClick={() => setShowMobileSearch(true)}>
                     <Search size={18} />
+                  </MobileChromeIconButton>
+                </div>
+              }
+            />
+          ) : (
+            <MobileChromeHeader
+              variant="bare"
+              center={
+                <div className="flex items-center gap-2 w-full">
+                  <div className="relative flex-1">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" />
+                    <Input
+                      autoFocus
+                      placeholder="搜索说说..."
+                      value={diarySearchQuery}
+                      onChange={handleDiarySearchChange}
+                      className="pl-8 pr-8 h-8 w-full rounded-full bg-app-hover border-none text-xs no-focus-ring"
+                    />
+                    {diarySearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setDiarySearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-tx-tertiary hover:text-tx-secondary"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMobileSearch(false);
+                      setDiarySearchQuery("");
+                    }}
+                    className="text-xs font-medium text-accent-primary px-2 py-1 active:scale-95 shrink-0"
+                  >
+                    取消
                   </button>
                 </div>
-              </>
-            ) : (
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "100%", opacity: 1 }}
-                className="flex items-center gap-2 w-full"
-              >
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-tertiary" />
-                  <Input
-                    autoFocus
-                    placeholder="搜索说说..."
-                    value={diarySearchQuery}
-                    onChange={handleDiarySearchChange}
-                    className="pl-8 pr-8 h-8 w-full rounded-full bg-app-hover border-none text-xs no-focus-ring"
-                  />
-                  {diarySearchQuery && (
-                    <button
-                      onClick={() => setDiarySearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-tx-tertiary hover:text-tx-secondary"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setShowMobileSearch(false);
-                    setDiarySearchQuery("");
-                  }}
-                  className="text-xs font-medium text-accent-primary px-2 py-1 active:scale-95"
-                >
-                  取消
-                </button>
-              </motion.div>
-            )}
-          </header>
-        )}
+              }
+            />
+          )}
+        </div>
+
+        {/* 桌面顶栏 */}
+        <PageHeader
+          mdOnly
+          title={
+            <span className="inline-flex items-center gap-2.5">
+              <span className="w-9 h-9 rounded-card bg-accent-primary flex items-center justify-center">
+                <MessageCircle size={18} className="text-white" />
+              </span>
+              <span>
+                <span className="block">{t("diary.title")}</span>
+                {stats && (
+                  <span className="block text-xs font-normal text-tx-tertiary mt-0.5">
+                    {t("diary.statsLine")
+                      .replace("{{total}}", String(stats.total))
+                      .replace("{{today}}", String(stats.todayCount))}
+                  </span>
+                )}
+              </span>
+            </span>
+          }
+          actions={
+            <Button
+              size="sm"
+              onClick={() => window.dispatchEvent(new CustomEvent("super:quick-new-diary"))}
+            >
+              <Edit2 size={14} />
+              说一句
+            </Button>
+          }
+        />
 
         <PullToRefresh onRefresh={async () => { await Promise.all([loadTimeline(true), loadStats()]); }}>
           <ScrollContainer className="flex-1" ref={scrollRef}>
@@ -4187,27 +4277,6 @@ export default function DiaryCenter() {
                 window.innerWidth < 768 ? "pt-2 pb-4" : "py-6",
               )}
             >
-              {/* 顶部标题 + 统计 (仅在桌面端展示) */}
-              {window.innerWidth >= 768 && (
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-accent-primary flex items-center justify-center">
-                      <MessageCircle size={18} className="text-white" />
-                    </div>
-                    <div>
-                      <h1 className="text-lg font-bold text-tx-primary leading-tight">{t("diary.title")}</h1>
-                      {stats && (
-                        <p className="text-[11px] text-tx-tertiary mt-0.5">
-                          {t("diary.statsLine")
-                            .replace("{{total}}", String(stats.total))
-                            .replace("{{today}}", String(stats.todayCount))}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* 发布框 — 桌面内嵌；移动用顶栏「说一句」→ CreateMenu / DiaryComposeModal */}
               {viewMode === "list" && (
                 <div className="hidden md:block">
@@ -4425,6 +4494,26 @@ export default function DiaryCenter() {
             </div>
           </ScrollContainer>
         </PullToRefresh>
+
+        {/* 桌面端：回到列表顶部 */}
+        {showBackToTop && (
+          <button
+            type="button"
+            onClick={scrollDiaryToTop}
+            title={t("diary.backToTop", { defaultValue: "回到顶部" })}
+            aria-label={t("diary.backToTop", { defaultValue: "回到顶部" })}
+            className={cn(
+              "hidden md:flex absolute bottom-6 right-6 z-rail-fab",
+              "w-12 h-12 items-center justify-center rounded-full",
+              "bg-accent-primary text-white shadow-fab",
+              "hover:brightness-105 active:scale-95",
+              "transition-all duration-fast ease-soft",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-app-bg",
+            )}
+          >
+            <ChevronUp size={26} strokeWidth={2.5} aria-hidden />
+          </button>
+        )}
       </div>
 
       {/* 右侧边栏：搜索框 + 热力图 + 标签筛选 */}

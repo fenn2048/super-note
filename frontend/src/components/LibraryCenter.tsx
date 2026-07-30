@@ -1,8 +1,8 @@
 /**
- * 资料库统一壳（P1-3 + Phase A StackChrome）
+ * 资料库统一壳（P1-3 + Page Contract）
  * ---------------------------------------------------------------------------
- * 桌面：分段 Tab（文件 | 书库 | 媒体）+ 内容
- * 移动：先进入 Hub 三行列表 → 再进对应子界面；顶栏左返回
+ * 桌面：PageHeader + 分段 Tab（文件 | 书库 | 媒体）+ 内容
+ * 移动：Hub 三行列表 / 子页 → MobileChromeHeader 左返回
  */
 import React, { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FolderOpen, Book, Film, ChevronRight } from "lucide-react";
@@ -10,7 +10,9 @@ import { cn } from "@/lib/utils";
 import { getLibraryTab, setLibraryTab, type LibraryTab } from "@/lib/navigation.config";
 import { getCurrentWorkspace } from "@/lib/api";
 import { useAppActions } from "@/store/AppContext";
-import StackChrome from "@/components/common/StackChrome";
+import MobileChromeHeader from "@/components/common/MobileChromeHeader";
+import PageHeader from "@/components/layout/PageHeader";
+import ContentCanvas from "@/components/layout/ContentCanvas";
 import { LoadingBlock } from "@/components/common/FeedbackStates";
 
 const FileManager = React.lazy(() => import("@/components/FileManager"));
@@ -55,19 +57,8 @@ const TABS: { id: LibraryTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 function Fallback({ label = "加载中…" }: { label?: string }) {
-  // 与 App 明暗对齐的占位，避免懒加载时闪成浅色条
-  const isDark =
-    typeof document !== "undefined" &&
-    (document.documentElement.classList.contains("dark") ||
-      localStorage.getItem("super-note-theme") === "dark");
   return (
-    <div
-      className="flex-1 min-h-[12rem] flex flex-col items-center justify-center gap-3"
-      style={{
-        backgroundColor: isDark ? "#151b26" : "transparent",
-        color: isDark ? "#abb2bf" : undefined,
-      }}
-    >
+    <div className="flex-1 min-h-[12rem] flex flex-col items-center justify-center bg-app-bg">
       <LoadingBlock label={label} />
     </div>
   );
@@ -107,9 +98,9 @@ export default function LibraryCenter() {
   const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
   /** 媒体内页动态标题，如「雍正王朝（108）」；null 时用默认 Tab 名 */
   const [mediaChromeTitle, setMediaChromeTitle] = useState<string | null>(null);
-  /** 桌面媒体详情打开时隐藏分段 StackChrome，改由详情顶栏接管 */
+  /** 桌面媒体详情打开时隐藏分段顶栏，改由详情顶栏接管 */
   const [mediaDetailOpen, setMediaDetailOpen] = useState(false);
-  const stackChromeRef = useRef<HTMLDivElement>(null);
+  const libraryChromeRef = useRef<HTMLDivElement>(null);
   const workspaceId = getCurrentWorkspace();
 
   /** 退出资料库：回「我的」或笔记 */
@@ -186,11 +177,11 @@ export default function LibraryCenter() {
   useLayoutEffect(() => {
     const root = document.documentElement;
     const apply = () => {
-      if (mediaDetailOpen || !stackChromeRef.current) {
+      if (mediaDetailOpen || !libraryChromeRef.current) {
         root.style.setProperty("--library-chrome-height", "0px");
         return;
       }
-      const h = stackChromeRef.current.getBoundingClientRect().height;
+      const h = libraryChromeRef.current.getBoundingClientRect().height;
       root.style.setProperty("--library-chrome-height", `${Math.ceil(h)}px`);
     };
     apply();
@@ -266,36 +257,38 @@ export default function LibraryCenter() {
   if (isMobile && tab === null) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-        <StackChrome
+        <MobileChromeHeader
+          variant="stack"
           title="资料库"
-          onClose={leaveLibrary}
-          closeLabel="返回"
-          leadingAction="back"
+          onLeadingClick={leaveLibrary}
+          leadingLabel="返回"
         />
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 pb-[calc(1.5rem+var(--safe-area-bottom))]">
-          {HUB_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => selectTab(item.id)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl border border-app-border/60 bg-app-elevated shadow-xs active:scale-[0.99] transition-all text-left"
-            >
-              <div
-                className={cn(
-                  "w-11 h-11 rounded-xl border flex items-center justify-center shrink-0",
-                  item.iconBg,
-                )}
+        <ContentCanvas className="pb-[calc(1.5rem+var(--safe-area-bottom))]">
+          <div className="space-y-2">
+            {HUB_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectTab(item.id)}
+                className="w-full flex items-center gap-3 p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs active:scale-[0.99] transition-all text-left"
               >
-                {item.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-tx-primary">{item.label}</div>
-                <div className="text-[11px] text-tx-tertiary mt-0.5">{item.desc}</div>
-              </div>
-              <ChevronRight size={18} className="text-tx-tertiary shrink-0" />
-            </button>
-          ))}
-        </div>
+                <div
+                  className={cn(
+                    "w-11 h-11 rounded-card border flex items-center justify-center shrink-0",
+                    item.iconBg,
+                  )}
+                >
+                  {item.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-tx-primary">{item.label}</div>
+                  <div className="text-[11px] text-tx-tertiary mt-0.5">{item.desc}</div>
+                </div>
+                <ChevronRight size={18} className="text-tx-tertiary shrink-0" />
+              </button>
+            ))}
+          </div>
+        </ContentCanvas>
       </div>
     );
   }
@@ -322,36 +315,45 @@ export default function LibraryCenter() {
           ? "正在加载媒体…"
           : "加载中…";
 
+  const tabSwitcher = (
+    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-card bg-app-bg border border-app-border/70 shrink-0">
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => selectTab(t.id)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-button transition-all min-h-[36px]",
+            activeTab === t.id
+              ? "bg-app-elevated text-accent-primary shadow-sm"
+              : "text-tx-tertiary hover:text-tx-primary",
+          )}
+        >
+          {t.icon}
+          <span>{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
       {showLibraryChrome && (
-        <div ref={stackChromeRef}>
-          <StackChrome
-            title={mobileTitle}
-            onClose={goBack}
-            closeLabel={isMobile && tab !== null ? "返回资料库" : "关闭资料库"}
-            leadingAction="back"
-          >
-            {/* 桌面三分段控件 */}
-            <div className="hidden md:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-app-bg border border-app-border/70 shrink-0">
-              {TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => selectTab(t.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-all min-h-[36px]",
-                    activeTab === t.id
-                      ? "bg-app-elevated text-accent-primary shadow-sm"
-                      : "text-tx-tertiary hover:text-tx-primary",
-                  )}
-                >
-                  {t.icon}
-                  <span>{t.label}</span>
-                </button>
-              ))}
-            </div>
-          </StackChrome>
+        <div ref={libraryChromeRef}>
+          {/* 移动：栈顶栏（返回 Hub / 退出） */}
+          <MobileChromeHeader
+            variant="stack"
+            title={mobileTitle || tabLabel}
+            onLeadingClick={goBack}
+            leadingLabel={isMobile && tab !== null ? "返回资料库" : "关闭资料库"}
+          />
+          {/* 桌面：标题 + 文件|书库|媒体 分段 */}
+          <PageHeader
+            mdOnly
+            dense
+            title="资料库"
+            actions={tabSwitcher}
+          />
         </div>
       )}
 

@@ -129,25 +129,77 @@ export default function CreateMenu({
   );
 }
 
-/** 主 FAB 按钮（移动端），单击打开 CreateMenu */
+/**
+ * 全局创建 FAB
+ * - 移动：默认 56px
+ * - 桌面：更大圆形 + hover 果冻弹跳（jelly）
+ */
 export function CreateFabButton({
   onClick,
   className,
+  size = "md",
+  jelly = false,
+  open = false,
 }: {
   onClick: () => void;
   className?: string;
+  /** md=56px（移动），lg=72px（桌面常驻大圆） */
+  size?: "md" | "lg";
+  /** 桌面 hover 果冻弹性 */
+  jelly?: boolean;
+  /** 菜单打开时旋转为 × 感（可选） */
+  open?: boolean;
 }) {
+  const dim = size === "lg" ? "w-[4.5rem] h-[4.5rem]" : "w-14 h-14";
+  const icon = size === "lg" ? 34 : 28;
+
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
+      aria-label="快速创建"
+      aria-expanded={open}
+      title="快速创建 (Alt+C)"
+      aria-keyshortcuts="Alt+C"
       className={cn(
-        "w-14 h-14 rounded-full bg-accent-primary text-white shadow-lg shadow-accent-primary/30 flex items-center justify-center active:scale-95 transition-transform",
+        dim,
+        "rounded-full flex items-center justify-center",
+        "btn-primary-glow text-white shadow-fab",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-app-bg",
         className,
       )}
-      aria-label="快速创建"
+      // 果冻：低阻尼弹簧 + 轻 squash/stretch，hover 时 Q 弹回弹
+      whileHover={
+        jelly
+          ? {
+              scale: 1.16,
+              transition: { type: "spring", stiffness: 360, damping: 8, mass: 0.55 },
+            }
+          : { scale: 1.05 }
+      }
+      whileTap={
+        jelly
+          ? {
+              scale: 0.88,
+              transition: { type: "spring", stiffness: 500, damping: 16 },
+            }
+          : { scale: 0.9 }
+      }
+      // 静止时也带一点弹簧回正，离开 hover 更有果冻感
+      transition={
+        jelly
+          ? { type: "spring", stiffness: 320, damping: 12, mass: 0.7 }
+          : { type: "spring", stiffness: 380, damping: 14 }
+      }
+      style={jelly ? { willChange: "transform", transformOrigin: "center" } : undefined}
     >
-      <Plus size={28} aria-hidden />
-    </button>
+      <motion.span
+        animate={{ rotate: open ? 45 : 0 }}
+        transition={{ type: "spring", stiffness: 360, damping: 18 }}
+        className="flex items-center justify-center"
+      >
+        <Plus size={icon} strokeWidth={2.5} aria-hidden />
+      </motion.span>
+    </motion.button>
   );
 }

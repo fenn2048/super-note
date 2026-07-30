@@ -31,6 +31,16 @@ import type {
   FinanceTransaction,
 } from "@/types";
 import { cn } from "@/lib/utils";
+import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
+import PageHeader from "@/components/layout/PageHeader";
+import ContentCanvas from "@/components/layout/ContentCanvas";
+import {
+  EmptyState,
+  EmptyActionButton,
+  LoadingBlock,
+  ErrorBanner,
+} from "@/components/common/FeedbackStates";
+import { Button } from "@/components/ui/button";
 
 const TX_FILTER_KEY = (ledgerId: string) => `finance.txFilter.${ledgerId}`;
 
@@ -265,79 +275,56 @@ export default function FinanceCenter() {
   if (!active) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-        {/* 移动端顶栏：左返回 · 标题绝对居中 · 右上角 + 新建（去掉 App 汉堡栏） */}
-        <header
-          className={cn(
-            "md:hidden shrink-0 select-none z-40 relative",
-            "flex items-center justify-between px-2",
-            "bg-app-elevated/70 backdrop-blur-md border-b border-app-border/60",
-            "min-h-[52px]",
-          )}
-          style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              haptic.light();
-              goBackFromFinance();
-            }}
-            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-button text-accent-primary hover:bg-app-hover active:bg-app-active transition-colors z-10"
-            title="返回"
-            aria-label="返回"
-          >
-            <ArrowLeft size={22} />
-          </button>
-          <h1 className="absolute left-0 right-0 text-center text-[15px] font-bold text-tx-primary tracking-tight pointer-events-none">
-            记账
-          </h1>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-button text-accent-primary hover:bg-app-hover transition-colors z-10"
-            title="新建账本"
-            aria-label="新建账本"
-          >
-            <Plus size={22} />
-          </button>
-        </header>
-
-        {/* 桌面端顶栏 */}
-        <header className="hidden md:flex shrink-0 px-4 py-3 border-b border-app-border items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-accent-primary" />
-            <h1 className="text-lg font-semibold text-tx-primary">记账</h1>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-primary text-white text-sm hover:opacity-90"
-          >
-            <Plus size={16} /> 新建账本
-          </button>
-        </header>
+        <MobileChromeHeader
+          variant="stack"
+          stackAction="back"
+          title="记账"
+          onLeadingClick={goBackFromFinance}
+          right={
+            <MobileChromeIconButton
+              title="新建账本"
+              onClick={() => setShowCreate(true)}
+            >
+              <Plus size={22} />
+            </MobileChromeIconButton>
+          }
+        />
+        <PageHeader
+          mdOnly
+          title={
+            <span className="inline-flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-accent-primary" />
+              记账
+            </span>
+          }
+          actions={
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus size={16} /> 新建账本
+            </Button>
+          }
+        />
 
         {error && (
-          <div className="mx-4 mt-3 text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2">{error}</div>
+          <div className="px-4 pt-3">
+            <ErrorBanner message={error} onRetry={() => void loadLedgers()} />
+          </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <ContentCanvas>
           {loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="animate-spin text-tx-tertiary" />
-            </div>
+            <LoadingBlock label="加载账本…" />
           ) : ledgers.length === 0 ? (
-            <div className="text-center py-16 text-tx-tertiary">
-              <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-40" />
-              <p>还没有账本</p>
-              <p className="text-sm mt-1">创建第一个账本开始记账与导入账单</p>
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="mt-4 px-4 py-2 rounded-lg bg-accent-primary text-white text-sm"
-              >
-                创建账本
-              </button>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="还没有账本"
+              description="创建第一个账本开始记账与导入账单"
+              action={
+                <EmptyActionButton onClick={() => setShowCreate(true)}>
+                  <Plus size={14} />
+                  创建账本
+                </EmptyActionButton>
+              }
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {ledgers.map((l) => (
@@ -345,7 +332,7 @@ export default function FinanceCenter() {
                   key={l.id}
                   type="button"
                   onClick={() => openLedger(l)}
-                  className="text-left rounded-xl border border-app-border bg-app-card p-4 hover:border-accent-primary/50 transition-colors"
+                  className="text-left rounded-card border border-app-border bg-app-card p-4 hover:border-accent-primary/50 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-2xl">{l.icon || "📒"}</div>
@@ -386,7 +373,7 @@ export default function FinanceCenter() {
               ))}
             </div>
           )}
-        </div>
+        </ContentCanvas>
 
         {showCreate && (
           <Modal title="新建账本" onClose={() => setShowCreate(false)}>
@@ -447,113 +434,142 @@ export default function FinanceCenter() {
   if (active.locked) {
     return (
       <div className="flex-1 flex flex-col min-h-0 bg-app-bg">
-        <header className="shrink-0 px-4 py-3 border-b border-app-border flex items-center gap-2">
-          <button type="button" onClick={() => setActive(null)} className="p-1.5 rounded-lg hover:bg-app-hover">
-            <ArrowLeft size={18} />
-          </button>
-          <span className="font-medium">{active.title}</span>
-        </header>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-card p-6">
+        <MobileChromeHeader
+          variant="stack"
+          title={active.title}
+          onLeadingClick={() => setActive(null)}
+        />
+        <PageHeader
+          mdOnly
+          title={active.title}
+          leading={
+            <Button variant="ghost" size="icon" onClick={() => setActive(null)} aria-label="返回">
+              <ArrowLeft size={18} />
+            </Button>
+          }
+        />
+        <ContentCanvas maxWidthClass="max-w-sm" className="flex items-center">
+          <div className="w-full rounded-window border border-app-border bg-app-card p-6">
             <div className="flex justify-center mb-4">
-              <Lock className="w-10 h-10 text-amber-500" />
+              <Lock className="w-10 h-10 text-accent-warning" />
             </div>
-            <h2 className="text-center font-semibold mb-1">账本已锁定</h2>
+            <h2 className="text-center font-semibold text-tx-primary mb-1">账本已锁定</h2>
             <p className="text-center text-sm text-tx-tertiary mb-4">输入密码以查看明细与统计</p>
-            {error && <p className="text-sm text-red-500 mb-2 text-center">{error}</p>}
+            {error && <p className="text-sm text-accent-danger mb-2 text-center">{error}</p>}
             <input
               type="password"
-              className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg"
+              className="w-full mb-3 px-3 py-2 rounded-button border border-app-border bg-app-bg"
               value={unlockPw}
               onChange={(e) => setUnlockPw(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
               placeholder="账本密码"
               autoFocus
             />
-            <button
-              type="button"
+            <Button
+              className="w-full"
               disabled={unlocking || !unlockPw}
               onClick={handleUnlock}
-              className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm disabled:opacity-50"
             >
               {unlocking ? "解锁中…" : "解锁"}
-            </button>
+            </Button>
             {bioAvailable && bioLocal && (
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                className="w-full mt-2"
                 disabled={bioBusy}
                 onClick={handleBioUnlock}
-                className="w-full mt-2 py-2 rounded-lg border border-app-border text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Fingerprint size={16} />
                 {bioBusy ? "验证中…" : "指纹 / 面容解锁"}
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        </ContentCanvas>
       </div>
     );
   }
 
   // ─── Unlocked ledger shell ───
+  const ledgerTitle = (
+    <span className="inline-flex items-center gap-2 min-w-0">
+      <span className="truncate">{active.title}</span>
+      {(active.isShared || active.workspaceId) && (
+        <span className="shrink-0 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary">
+          共享{active.workspaceName ? ` · ${active.workspaceName}` : ""}
+        </span>
+      )}
+    </span>
+  );
+
+  const ledgerActions = (
+    <>
+      <Button variant="ghost" size="icon" title="导出 CSV" onClick={() => handleExport("csv")}>
+        <Download size={16} />
+      </Button>
+      <Button variant="ghost" size="sm" title="导出 Beancount" onClick={() => handleExport("beancount")}>
+        .bean
+      </Button>
+      {active.hasPassword && isFinanceBioPlatformSupported() && bioAvailable && (
+        <Button
+          variant="ghost"
+          size="icon"
+          title={bioLocal ? "关闭生物识别" : "启用生物识别"}
+          className={bioLocal ? "text-accent-primary" : undefined}
+          disabled={bioBusy}
+          onClick={() => (bioLocal ? handleDisableBio() : handleEnableBio())}
+        >
+          <Fingerprint size={16} />
+        </Button>
+      )}
+      {active.hasPassword && (
+        <Button
+          variant="ghost"
+          size="icon"
+          title="锁定"
+          onClick={async () => {
+            await api.finance.lockLedger(active.id);
+            setFinanceUnlockToken(active.id, null);
+            setUnlockToken(null);
+            setActive({ ...active, locked: true });
+            void refreshBioState(active.id);
+          }}
+        >
+          <Lock size={16} />
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
-      <header className="shrink-0 px-3 py-2 border-b border-app-border flex items-center gap-2">
-        <button type="button" onClick={() => { setActive(null); setUnlockToken(null); }} className="p-1.5 rounded-lg hover:bg-app-hover">
-          <ArrowLeft size={18} />
-        </button>
-        <span className="font-medium truncate flex-1">
-          {active.title}
-          {(active.isShared || active.workspaceId) && (
-            <span className="ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400">
-              共享{active.workspaceName ? ` · ${active.workspaceName}` : ""}
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          title="导出 CSV"
-          className="p-1.5 rounded-lg hover:bg-app-hover text-tx-tertiary"
-          onClick={() => handleExport("csv")}
-        >
-          <Download size={16} />
-        </button>
-        <button
-          type="button"
-          title="导出 Beancount"
-          className="px-2 py-1 rounded-lg hover:bg-app-hover text-tx-tertiary text-xs"
-          onClick={() => handleExport("beancount")}
-        >
-          .bean
-        </button>
-        {active.hasPassword && isFinanceBioPlatformSupported() && bioAvailable && (
-          <button
-            type="button"
-            title={bioLocal ? "关闭生物识别" : "启用生物识别"}
-            className={cn("p-1.5 rounded-lg hover:bg-app-hover", bioLocal ? "text-accent-primary" : "text-tx-tertiary")}
-            disabled={bioBusy}
-            onClick={() => (bioLocal ? handleDisableBio() : handleEnableBio())}
-          >
-            <Fingerprint size={16} />
-          </button>
-        )}
-        {active.hasPassword && (
-          <button
-            type="button"
-            title="锁定"
-            className="p-1.5 rounded-lg hover:bg-app-hover text-tx-tertiary"
-            onClick={async () => {
-              await api.finance.lockLedger(active.id);
-              setFinanceUnlockToken(active.id, null);
+      <MobileChromeHeader
+        variant="stack"
+        title={ledgerTitle}
+        onLeadingClick={() => {
+          setActive(null);
+          setUnlockToken(null);
+        }}
+        right={<div className="flex items-center gap-0.5">{ledgerActions}</div>}
+      />
+      <PageHeader
+        mdOnly
+        dense
+        title={ledgerTitle}
+        leading={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="返回账本列表"
+            onClick={() => {
+              setActive(null);
               setUnlockToken(null);
-              setActive({ ...active, locked: true });
-              void refreshBioState(active.id);
             }}
           >
-            <Lock size={16} />
-          </button>
-        )}
-      </header>
+            <ArrowLeft size={18} />
+          </Button>
+        }
+        actions={ledgerActions}
+      />
 
       <nav className="shrink-0 flex gap-1 px-2 py-2 border-b border-app-border overflow-x-auto">
         {(
@@ -574,7 +590,7 @@ export default function FinanceCenter() {
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm",
+              "shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-button text-xs sm:text-sm",
               tab === id ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
             )}
           >
@@ -585,9 +601,8 @@ export default function FinanceCenter() {
       </nav>
 
       {error && (
-        <div className="mx-3 mt-2 text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2 flex justify-between">
-          <span>{error}</span>
-          <button type="button" onClick={() => setError(null)}><X size={14} /></button>
+        <div className="px-3 pt-2">
+          <ErrorBanner message={error} onRetry={() => setError(null)} />
         </div>
       )}
 
