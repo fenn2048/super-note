@@ -46,16 +46,21 @@ export default defineConfig({
     // "vite/modulepreload-polyfill" 误识别为 source phase import 而报错。
     // 现代浏览器（Chrome 64+、Firefox 115+、Safari 17.5+）已原生支持 modulepreload，
     // Capacitor WebView 和 Electron 同样无需 polyfill。
-    modulePreload: { polyfill: false },
-    // 降低 chunk 大小警告阈值
-    chunkSizeWarningLimit: 2000,
+    modulePreload: {
+      polyfill: false,
+      resolveDependencies: (_filename, deps) => {
+        return deps.filter(dep =>
+          !dep.includes("vendor-mermaid") &&
+          !dep.includes("vendor-tesseract") &&
+          !dep.includes("vendor-player") &&
+          !dep.includes("vendor-pdf") &&
+          !dep.includes("pdf.worker")
+        );
+      },
+    },
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
-        // 只拆「真正按需动态 import」的重型可选库。
-        // 不要把 react / i18next / tiptap / codemirror 等核心依赖硬拆成多个
-        // vendor-*：生产环境会出现 createContext / TDZ 一类运行时错误
-        // （dev 不走这套分包所以正常，Docker 生产 build 才炸）。
-        // 其余交给 Rollup 按依赖图自动分包。
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("mermaid")) return "vendor-mermaid";
@@ -64,6 +69,10 @@ export default defineConfig({
           if (id.includes("pdfjs") || id.includes("foliate-js") || id.includes("/foliate/")) {
             return "vendor-pdf";
           }
+          if (id.includes("katex")) return "vendor-katex";
+          if (id.includes("jspdf") || id.includes("html2canvas")) return "vendor-export";
+          if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+          if (id.includes("@codemirror") || id.includes("@lezer")) return "vendor-codemirror";
         },
       },
     },
