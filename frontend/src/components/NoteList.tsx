@@ -1304,6 +1304,10 @@ export default function NoteList() {
       const params: Record<string, string> = { notebookId: state.selectedNotebookId, ...sortParams };
       if (dateFilter) { params.dateFrom = dateFilter; params.dateTo = dateFilter; }
       notes = await api.getNotes(params);
+    } else if (state.viewMode === "all") {
+      const params: Record<string, string> = { ...sortParams };
+      if (dateFilter) { params.dateFrom = dateFilter; params.dateTo = dateFilter; }
+      notes = await api.getNotes(params);
     } else if (state.viewMode === "favorites") {
       const params: Record<string, string> = { isFavorite: "1", ...sortParams };
       if (dateFilter) { params.dateFrom = dateFilter; params.dateTo = dateFilter; }
@@ -2699,29 +2703,6 @@ export default function NoteList() {
           <h2 className="text-sm font-semibold text-tx-primary tracking-tight">{viewTitles[state.viewMode]}</h2>
         </div>
         <div className="flex items-center gap-1 relative">
-          {/* 折叠笔记列表面板（桌面专用；点击后中间整列隐藏，编辑器占满）。
-              与Rail上的 toggleSidebar 互不干扰，均有独立状态。 */}
-          <button
-            type="button"
-            onClick={() => {
-              if (state.viewMode === "trash") {
-                actions.setViewMode("all");
-              } else {
-                actions.setViewMode("trash");
-                actions.setSelectedNotebook(null);
-              }
-            }}
-            title={state.viewMode === "trash" ? t("sidebar.allNotes") : t("sidebar.trash")}
-            aria-label={state.viewMode === "trash" ? t("sidebar.allNotes") : t("sidebar.trash")}
-            className={cn(
-              "p-1.5 rounded-md transition-colors",
-              state.viewMode === "trash"
-                ? "text-accent-primary bg-accent-primary/10"
-                : "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary"
-            )}
-          >
-            <Trash size={15} />
-          </button>
           {/* 桌面端排序按钮 */}
           {state.viewMode !== "trash" && state.viewMode !== "search" && (
             <button

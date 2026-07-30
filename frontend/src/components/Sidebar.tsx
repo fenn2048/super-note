@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import TagColorPopover from "@/components/TagColorPopover";
+import TrashModal from "@/components/TrashModal";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -1250,6 +1251,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     }
   });
 
+  const [trashModalOpen, setTrashModalOpen] = useState(false);
   const [favoriteNotes, setFavoriteNotes] = useState<NoteListItem[]>([]);
   const [favoritesExpanded, setFavoritesExpanded] = useState(() => {
     try {
@@ -2419,6 +2421,17 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             )}
           </AnimatePresence>
 
+          {/* 回收站入口 */}
+          <div className="border-t border-app-border shrink-0 px-2 py-1.5">
+            <button
+              onClick={() => setTrashModalOpen(true)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-tx-secondary hover:bg-app-hover hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={14} className="text-red-500 shrink-0" />
+              <span className="truncate">{t('sidebar.trash') || "回收站"}</span>
+            </button>
+          </div>
+
           {/* 我的收藏 (My Favorites) */}
           <div className="border-t border-app-border shrink-0">
             <button
@@ -2908,6 +2921,12 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
           onClose={() => setTagColorPopover(null)}
         />
       )}
+
+      {/* 回收站弹窗 */}
+      <TrashModal
+        isOpen={trashModalOpen}
+        onClose={() => setTrashModalOpen(false)}
+      />
     </div>
   );
 }
