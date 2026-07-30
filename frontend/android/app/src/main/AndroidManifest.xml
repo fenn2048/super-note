@@ -105,12 +105,22 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- 音频播放前台服务（通知栏控件） -->
+        <!-- 音频播放前台服务（通知栏控件 + MediaSession） -->
         <service
             android:name=".MediaPlaybackService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- 车载 / 系统媒体浏览器：蓝牙 AVRCP 队列 + MediaBrowser 浏览合集 -->
+        <service
+            android:name=".SuperNoteMediaBrowserService"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
     </application>
 
     <!-- Permissions -->

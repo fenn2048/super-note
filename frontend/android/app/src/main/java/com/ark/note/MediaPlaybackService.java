@@ -59,7 +59,9 @@ public class MediaPlaybackService extends Service {
                     | PlaybackStateCompat.ACTION_STOP
                     | PlaybackStateCompat.ACTION_SEEK_TO
                     | PlaybackStateCompat.ACTION_SET_REPEAT_MODE
-                    | PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE;
+                    | PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE
+                    | PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID
+                    | PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM;
 
     private MediaSessionCompat mediaSession;
     private String title = "蜉蝣 · 正在播放";
@@ -81,6 +83,12 @@ public class MediaPlaybackService extends Service {
     private static volatile boolean sPlaying = false;
     /** 运行中实例：进度更新走实例，避免频繁 startForegroundService */
     private static volatile MediaPlaybackService sInstance = null;
+    /**
+     * 车机点播后一段时间内强制 WebView 保活（即使尚未真正 isPlaying）。
+     * 过期后回落到 isActive() 逻辑。
+     */
+    private static volatile long sCarBrowseKeepAliveUntil = 0L;
+    private static final long CAR_BROWSE_KEEPALIVE_MS = 90_000L;
 
     public static boolean isActive() {
         return sActive;
@@ -88,6 +96,39 @@ public class MediaPlaybackService extends Service {
 
     public static boolean isPlaybackActive() {
         return sActive && sPlaying;
+    }
+
+    /** 车机点播：标记保活窗口 + 可选已有实例续期 */
+    public static void markCarBrowseKeepAlive() {
+        sCarBrowseKeepAliveUntil = SystemClock.elapsedRealtime() + CAR_BROWSE_KEEPALIVE_MS;
+    }
+
+    /** MainActivity：是否应强制维持 WebView 媒体管线（含车机点播宽限期） */
+    public static boolean shouldKeepWebViewMediaAlive() {
+        if (sActive) return true;
+        return SystemClock.elapsedRealtime() < sCarBrowseKeepAliveUntil;
+    }
+
+    /** 供 MediaBrowserService 复用同一 Session Token */
+    public static android.support.v4.media.session.MediaSessionCompat.Token getSessionToken() {
+        MediaPlaybackService inst = sInstance;
+        if (inst != null && inst.mediaSession != null) {
+            return inst.mediaSession.getSessionToken();
+        }
+        return null;
+    }
+
+    /** 目录/队列变更时同步到正在运行的 Session */
+    public static void syncQueueFromCatalog() {
+        MediaPlaybackService inst = sInstance;
+        if (inst == null || inst.mediaSession == null) return;
+        try {
+            java.util.List<MediaSessionCompat.QueueItem> q = MediaCarCatalog.buildSessionQueue();
+            inst.mediaSession.setQueue(q);
+            inst.mediaSession.setQueueTitle("当前队列");
+        } catch (Exception e) {
+            Log.w(TAG, "syncQueueFromCatalog", e);
+        }
     }
 
     /**
@@ -247,8 +288,51 @@ public class MediaPlaybackService extends Service {
             public void onSetShuffleMode(int shuffleMode) {
                 togglePlayMode();
             }
+
+            @Override
+            public void onPlayFromMediaId(String mediaId, Bundle extras) {
+                String raw = MediaCarCatalog.rawIdFromMediaId(mediaId);
+                if (raw == null || raw.isEmpty()) return;
+                MediaCarCatalog.Track t = MediaCarCatalog.findTrackByMediaId(mediaId);
+                // 本服务已在 FGS 中；立刻刷新元数据并标记车机保活
+                if (t != null) {
+                    title = t.title;
+                    artist = t.artist != null ? t.artist : "";
+                    playing = true;
+                    sPlaying = true;
+                    markCarBrowseKeepAlive();
+                    if (t.coverUrl != null) loadCoverBitmap(t.coverUrl);
+                    refreshSessionAndNotification();
+                } else {
+                    markCarBrowseKeepAlive();
+                }
+                MediaPlaybackPlugin.emitBrowsePlay(
+                        raw,
+                        t != null ? t.title : null,
+                        t != null ? t.artist : null,
+                        t != null ? t.coverUrl : null
+                );
+            }
+
+            @Override
+            public void onSkipToQueueItem(long id) {
+                java.util.List<MediaCarCatalog.Track> q = MediaCarCatalog.getQueueSnapshot();
+                if (id >= 0 && id < q.size()) {
+                    MediaCarCatalog.Track t = q.get((int) id);
+                    title = t.title;
+                    artist = t.artist != null ? t.artist : "";
+                    playing = true;
+                    sPlaying = true;
+                    markCarBrowseKeepAlive();
+                    if (t.coverUrl != null) loadCoverBitmap(t.coverUrl);
+                    refreshSessionAndNotification();
+                    MediaPlaybackPlugin.emitBrowsePlay(t.id, t.title, t.artist, t.coverUrl);
+                }
+            }
         });
         mediaSession.setActive(true);
+        syncQueueFromCatalog();
+        SuperNoteMediaBrowserService.onPlaybackSessionReady();
     }
 
     private void togglePlayMode() {

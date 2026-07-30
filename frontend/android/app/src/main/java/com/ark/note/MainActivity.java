@@ -230,13 +230,15 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void scheduleWebViewMediaKeepAlive() {
-        if (!MediaPlaybackService.isActive()) return;
+        if (!MediaPlaybackService.shouldKeepWebViewMediaAlive()) return;
         try {
             if (this.bridge == null) return;
             WebView wv = this.bridge.getWebView();
             if (wv == null) return;
-            // 覆盖 onPause→onStop→部分 ROM 二次挂起窗口
-            long[] delays = new long[] { 50L, 150L, 400L, 1000L, 2000L };
+            // 覆盖 onPause→onStop→部分 ROM 二次挂起；车机点播时额外拉长补唤醒
+            long[] delays = MediaPlaybackService.isActive()
+                    ? new long[] { 50L, 150L, 400L, 1000L, 2000L, 5000L, 12000L }
+                    : new long[] { 50L, 200L, 500L, 1500L, 3000L, 8000L };
             for (long d : delays) {
                 wv.postDelayed(this::keepWebViewMediaAliveIfNeeded, d);
             }
@@ -246,7 +248,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void keepWebViewMediaAliveIfNeeded() {
-        if (!MediaPlaybackService.isActive()) return;
+        if (!MediaPlaybackService.shouldKeepWebViewMediaAlive()) return;
         try {
             if (this.bridge == null) return;
             WebView wv = this.bridge.getWebView();
@@ -271,6 +273,14 @@ public class MainActivity extends BridgeActivity {
 
     private void handleIncomingIntent(Intent intent) {
         if (intent == null) return;
+        // 车机 MediaBrowser 点播拉起：立刻保活 WebView + 续期 FGS 窗口
+        if (intent.getBooleanExtra("media_browse_wake", false)) {
+            Log.i(TAG, "media_browse_wake — force WebView media keep-alive");
+            MediaPlaybackService.markCarBrowseKeepAlive();
+            keepWebViewMediaAliveIfNeeded();
+            scheduleWebViewMediaKeepAlive();
+            intent.removeExtra("media_browse_wake");
+        }
         String action = intent.getAction();
         if (Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action)) {
             ShareReceivePlugin.queueFromIntent(this, intent);
