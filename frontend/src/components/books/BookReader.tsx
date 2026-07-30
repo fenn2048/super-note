@@ -280,6 +280,47 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     return () => clearInterval(interval);
   }, []);
 
+  // 今日阅读时长累计（页签可见时；供书库「阅读中」仪表盘）
+  // v1 不按 userId 分 key，避免 book 加载前后 key 不一致丢时长
+  useEffect(() => {
+    let lastTick = Date.now();
+
+    const flush = () => {
+      if (document.visibilityState !== "visible") {
+        lastTick = Date.now();
+        return;
+      }
+      const now = Date.now();
+      const elapsedSec = (now - lastTick) / 1000;
+      lastTick = now;
+      // 单次 tick 上限，避免休眠后一口气加太多
+      const add = Math.min(60, Math.max(0, elapsedSec));
+      if (add < 0.5) return;
+      void import("@/lib/readingGoal").then(({ addTodayReadingSeconds }) => {
+        addTodayReadingSeconds(add);
+        window.dispatchEvent(new CustomEvent("super:reading-minutes-changed"));
+      });
+    };
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        lastTick = Date.now();
+      } else {
+        flush();
+      }
+    };
+
+    const interval = window.setInterval(flush, 15000);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      flush();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [bookHash]);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
