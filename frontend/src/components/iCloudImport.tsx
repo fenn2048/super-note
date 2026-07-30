@@ -2,9 +2,8 @@ import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, CheckCircle, AlertCircle, CloudDownload,
-  FileText, Trash2, ExternalLink, Copy, ClipboardPaste
+  FileText, Trash2, ExternalLink, Copy, ClipboardPaste, Apple
 } from "lucide-react";
-import { SiApple } from "react-icons/si";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
@@ -256,7 +255,7 @@ export default function ICloudImport() {
   return (
     <section>
       <div className="flex items-center gap-2 mb-3">
-        <SiApple size={18} className="text-zinc-800 dark:text-zinc-200" />
+        <Apple size={18} className="text-zinc-800 dark:text-zinc-200" />
         <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
           {t("iCloud.title")}
         </h4>
