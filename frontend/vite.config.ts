@@ -49,30 +49,58 @@ export default defineConfig({
     modulePreload: {
       polyfill: false,
       resolveDependencies: (_filename, deps) => {
+        // 大体积/按需库不要 modulepreload，避免首屏拉取
         return deps.filter(dep =>
-          !dep.includes("vendor-mermaid") &&
-          !dep.includes("vendor-tesseract") &&
+          !dep.includes("mermaid") &&
+          !dep.includes("tesseract") &&
+          !dep.includes("artplayer") &&
+          !dep.includes("hls") &&
           !dep.includes("vendor-player") &&
           !dep.includes("vendor-pdf") &&
-          !dep.includes("pdf.worker")
+          !dep.includes("pdfjs") &&
+          !dep.includes("pdf.worker") &&
+          !dep.includes("jspdf") &&
+          !dep.includes("html2canvas") &&
+          !dep.includes("recharts") &&
+          !dep.includes("codemirror") &&
+          !dep.includes("@lezer") &&
+          !dep.includes("katex")
         );
       },
     },
     chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
+        /**
+         * manualChunks 只拆「真正叶子、且业务侧已动态 import / lazy route」的库。
+         *
+         * 历史教训（LoginPage 体积 / mermaid TDZ）：
+         *   把 jspdf / recharts / codemirror / mermaid 强行打成 vendor-* 后，
+         *   Rollup 会把共享 helper（含 __vitePreload）和公共依赖吸进这些 chunk，
+         *   导致 LoginPage 静态 import 整包 recharts/jspdf/codemirror（数百 KB～MB），
+         *   甚至 mermaid 循环初始化白屏。
+         *
+         * 策略：源码里已有 dynamic import / React.lazy 的库交给 Rollup 自然拆；
+         * 这里只保留 foliate/pdf、播放器、OCR 这类与主应用图几乎无共享的叶子。
+         */
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("mermaid")) return "vendor-mermaid";
-          if (id.includes("tesseract")) return "vendor-tesseract";
-          if (id.includes("artplayer") || id.includes("hls.js")) return "vendor-player";
-          if (id.includes("pdfjs") || id.includes("foliate-js") || id.includes("/foliate/")) {
+          // 媒体播放 — MediaPlayer 动态 import artplayer
+          // （tesseract / jspdf / recharts / codemirror / mermaid / katex 一律不强制分包：
+          //  源码已 dynamic import 或挂在 lazy route 上；强制 vendor-* 会把共享 helper
+          //  吸进大 chunk，LoginPage 首屏被静态拖入。）
+          if (id.includes("artplayer") || id.includes("hls.js") || id.includes("/hls.js/")) {
+            return "vendor-player";
+          }
+          // 阅读器 PDF 栈 — BookReader / foliate 路径，与主应用几乎无共享
+          if (
+            id.includes("pdfjs-dist") ||
+            id.includes("/pdfjs/") ||
+            id.includes("foliate-js") ||
+            id.includes("/foliate/")
+          ) {
             return "vendor-pdf";
           }
-          if (id.includes("katex")) return "vendor-katex";
-          if (id.includes("jspdf") || id.includes("html2canvas")) return "vendor-export";
-          if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
-          if (id.includes("@codemirror") || id.includes("@lezer")) return "vendor-codemirror";
         },
       },
     },
