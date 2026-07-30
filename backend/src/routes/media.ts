@@ -41,6 +41,27 @@ function canUserManageMedia(workspaceId: string | null, userId: string): boolean
   return role === "owner" || role === "admin";
 }
 
+/** 将单品挂入合集（多对多）；幂等。可选同步 media_items.collection_id 为首选。 */
+function linkMediaToCollection(
+  db: ReturnType<typeof getDb>,
+  mediaId: string,
+  collectionId: string | null | undefined,
+  opts?: { setPrimaryIfEmpty?: boolean },
+): void {
+  if (!collectionId) return;
+  db.prepare(
+    `INSERT OR IGNORE INTO media_item_collections (media_id, collection_id) VALUES (?, ?)`,
+  ).run(mediaId, collectionId);
+  if (opts?.setPrimaryIfEmpty !== false) {
+    const row = db
+      .prepare("SELECT collection_id FROM media_items WHERE id = ?")
+      .get(mediaId) as { collection_id: string | null } | undefined;
+    if (row && !row.collection_id) {
+      db.prepare("UPDATE media_items SET collection_id = ? WHERE id = ?").run(collectionId, mediaId);
+    }
+  }
+}
+
 // Get storage backend config (OpenList/Alist compatible)
 function getAlistConfig() {
   const db = getDb();
@@ -250,7 +271,7 @@ media.get("/collections", requireWorkspaceFeature("media"), async (c) => {
 
   const db = getDb();
   let sql = `SELECT c.*, u.username as creator_name,
-             (SELECT COUNT(*) FROM media_items WHERE collection_id = c.id) as item_count
+             (SELECT COUNT(DISTINCT mic.media_id) FROM media_item_collections mic WHERE mic.collection_id = c.id) as item_count
              FROM media_collections c
              LEFT JOIN users u ON c.created_by = u.id
              WHERE 1=1`;
@@ -394,7 +415,17 @@ media.get("/collections/:id", requireWorkspaceFeature("media"), async (c) => {
     if (!role) return c.json({ error: "无权访问该合集" }, 403);
   }
 
-  const items = db.prepare("SELECT * FROM media_items WHERE collection_id = ? ORDER BY sort_order ASC, title ASC").all(id);
+  const items = db
+    .prepare(
+      `SELECT i.* FROM media_items i
+       WHERE i.collection_id = ?
+          OR EXISTS (
+            SELECT 1 FROM media_item_collections mic
+            WHERE mic.media_id = i.id AND mic.collection_id = ?
+          )
+       ORDER BY i.sort_order ASC, i.title ASC`,
+    )
+    .all(id, id);
   return c.json({ ...col, items });
 });
 
@@ -440,8 +471,9 @@ media.delete("/collections/:id", requireWorkspaceFeature("media"), async (c) => 
   }
 
   db.transaction(() => {
-    // Dissociate items instead of cascading delete
+    // 解除首选字段 + 多对多关系（junction CASCADE 也会删，显式更清晰）
     db.prepare("UPDATE media_items SET collection_id = NULL WHERE collection_id = ?").run(id);
+    db.prepare("DELETE FROM media_item_collections WHERE collection_id = ?").run(id);
     db.prepare("DELETE FROM media_collections WHERE id = ?").run(id);
   })();
 
@@ -476,6 +508,10 @@ media.post("/items", requireWorkspaceFeature("media"), async (c) => {
       INSERT INTO media_items (id, collection_id, workspace_id, title, type, cover_url, description, alist_path, artist, duration, year, genre, sort_order, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, collection_id || null, workspaceId, title, type, cover_url || null, description || null, alist_path, artist || null, duration || null, year || null, JSON.stringify(genre || []), sort_order || 0, userId);
+
+    if (collection_id) {
+      linkMediaToCollection(db, id, collection_id, { setPrimaryIfEmpty: false });
+    }
 
     // Save tags if any
     if (tags && Array.isArray(tags)) {
@@ -535,8 +571,15 @@ media.get("/items", requireWorkspaceFeature("media"), async (c) => {
   }
 
   if (collectionId) {
-    sql += " AND i.collection_id = ?";
-    params.push(collectionId);
+    // 多对多：在 junction 中，或兼容旧的主 collection_id
+    sql += ` AND (
+      i.collection_id = ?
+      OR EXISTS (
+        SELECT 1 FROM media_item_collections mic
+        WHERE mic.media_id = i.id AND mic.collection_id = ?
+      )
+    )`;
+    params.push(collectionId, collectionId);
   }
 
   if (year) {
@@ -689,6 +732,11 @@ media.put("/items/:id", requireWorkspaceFeature("media"), async (c) => {
       SET collection_id = ?, title = ?, cover_url = ?, description = ?, alist_path = ?, artist = ?, album = ?, duration = ?, year = ?, genre = ?, sort_order = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(collection_id || null, title, cover_url || null, description || null, alist_path, artist || null, album || null, duration || null, year || null, JSON.stringify(genre || []), sort_order || 0, id);
+
+    // 主合集变更：同步写入 junction（不删除其它合入关系）
+    if (collection_id) {
+      linkMediaToCollection(db, id, collection_id, { setPrimaryIfEmpty: false });
+    }
 
     // Sync tags
     db.prepare("DELETE FROM media_tags WHERE media_id = ?").run(id);
@@ -992,6 +1040,68 @@ media.post("/items/batch-delete", requireWorkspaceFeature("media"), async (c) =>
   return c.json({ success: true, message: `成功删除 ${items.length} 个单品` });
 });
 
+/**
+ * 合入合集：同一单品可属于多个合集（不移出原合集）
+ * body: { ids: string[], collection_ids: string[] }
+ */
+media.post("/items/assign-collections", requireWorkspaceFeature("media"), async (c) => {
+  const userId = getAuthUserId(c);
+  if (!userId) return c.json({ error: "未授权" }, 401);
+
+  const { ids, collection_ids } = (await c.req.json()) as {
+    ids?: string[];
+    collection_ids?: string[];
+  };
+  if (!ids?.length || !collection_ids?.length) {
+    return c.json({ error: "请选择单品与目标合集", code: "BAD_REQUEST" }, 400);
+  }
+
+  const db = getDb();
+  const idPh = ids.map(() => "?").join(",");
+  const colPh = collection_ids.map(() => "?").join(",");
+
+  const items = db
+    .prepare(`SELECT * FROM media_items WHERE id IN (${idPh})`)
+    .all(...ids) as Array<{ id: string; type: string; workspace_id: string | null; collection_id: string | null }>;
+  if (items.length === 0) {
+    return c.json({ error: "未找到单品", code: "NOT_FOUND" }, 404);
+  }
+  for (const item of items) {
+    if (!canUserManageMedia(item.workspace_id, userId)) {
+      return c.json({ error: "权限不足，包含无法操作的单品", code: "FORBIDDEN" }, 403);
+    }
+  }
+
+  const cols = db
+    .prepare(`SELECT id, type, workspace_id FROM media_collections WHERE id IN (${colPh})`)
+    .all(...collection_ids) as Array<{ id: string; type: string; workspace_id: string | null }>;
+  if (cols.length === 0) {
+    return c.json({ error: "未找到目标合集", code: "NOT_FOUND" }, 404);
+  }
+  for (const col of cols) {
+    if (!canUserManageMedia(col.workspace_id, userId)) {
+      return c.json({ error: "权限不足，包含无法操作的合集", code: "FORBIDDEN" }, 403);
+    }
+  }
+
+  let linked = 0;
+  db.transaction(() => {
+    for (const item of items) {
+      for (const col of cols) {
+        if (col.type !== item.type) continue; // 跨类型跳过
+        linkMediaToCollection(db, item.id, col.id, { setPrimaryIfEmpty: true });
+        linked++;
+      }
+    }
+  })();
+
+  return c.json({
+    success: true,
+    message: `已合入 ${cols.length} 个合集（共写入 ${linked} 条关联）`,
+    linked,
+  });
+});
+
 
 
 // Update play progress & increment play count
@@ -1056,6 +1166,9 @@ media.post("/import", requireWorkspaceFeature("media"), async (c) => {
         INSERT INTO media_items (id, collection_id, workspace_id, title, type, cover_url, description, alist_path, artist, duration, year, genre, created_by)
         VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, NULL, NULL, NULL, '[]', ?)
       `).run(id, collection_id || null, workspaceId, title, type, f.path, userId);
+      if (collection_id) {
+        linkMediaToCollection(db, id, collection_id, { setPrimaryIfEmpty: false });
+      }
       count++;
     }
   })();
@@ -1112,6 +1225,9 @@ media.post("/import/json", requireWorkspaceFeature("media"), async (c) => {
         item.year || null,
         userId
       );
+      if (collectionId) {
+        linkMediaToCollection(db, id, collectionId, { setPrimaryIfEmpty: false });
+      }
       itemsCount++;
     }
   })();

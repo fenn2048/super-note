@@ -9,11 +9,13 @@ import { TimestampExtension } from "../extensions/TimestampExtension";
 import MediaPlayer from "./MediaPlayer";
 import MusicPlayer from "./MusicPlayer";
 import AlistBrowser from "./AlistBrowser";
+import AssignCollectionModal from "./AssignCollectionModal";
+import ContextMenu, { type ContextMenuItem } from "@/components/ContextMenu";
 import {
   Film, Music, Plus, Search, Grid, List as ListIcon, Trash2, Edit3, Play, Pause, Info,
   Settings, ChevronRight, Download, Upload, CheckCircle, MessageSquare, Clock,
   User, Tag, ChevronLeft, PlusCircle, Globe, Lock, ShieldAlert, SlidersHorizontal,
-  X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal
+  X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal, FolderInput
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
@@ -130,6 +132,74 @@ export default function MediaCenter() {
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [fetchingMetadata, setFetchingMetadata] = useState<boolean>(false);
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
+
+  // 合入合集
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignMediaIds, setAssignMediaIds] = useState<string[]>([]);
+
+  // 右键菜单
+  const [ctxMenu, setCtxMenu] = useState<{
+    open: boolean;
+    x: number;
+    y: number;
+    item: MediaItem | null;
+  }>({ open: false, x: 0, y: 0, item: null });
+  const ctxMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const openAssignForIds = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setAssignMediaIds(ids);
+    setAssignOpen(true);
+  };
+
+  const openItemContextMenu = (e: React.MouseEvent, item: MediaItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ open: true, x: e.clientX, y: e.clientY, item });
+  };
+
+  const closeItemContextMenu = () => {
+    setCtxMenu((s) => ({ ...s, open: false, item: null }));
+  };
+
+  useEffect(() => {
+    if (!ctxMenu.open) return;
+    const onDown = (ev: MouseEvent) => {
+      const el = ctxMenuRef.current;
+      if (el && el.contains(ev.target as Node)) return;
+      closeItemContextMenu();
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") closeItemContextMenu();
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctxMenu.open]);
+
+  const handleCtxMenuAction = async (actionId: string) => {
+    const item = ctxMenu.item;
+    closeItemContextMenu();
+    if (!item) return;
+    if (actionId === "detail") {
+      setSelectedItem(item);
+    } else if (actionId === "assign") {
+      openAssignForIds([item.id]);
+    } else if (actionId === "delete") {
+      if (!isAdmin) return;
+      if (!window.confirm(`确认删除「${item.title}」吗？`)) return;
+      try {
+        await api.request(`/media/items/${item.id}`, { method: "DELETE" });
+        fetchData();
+      } catch (err) {
+        console.error("Delete failed:", err);
+        alert("删除失败");
+      }
+    }
+  };
 
   const selectedItemRef = React.useRef<MediaItem | null>(null);
   useEffect(() => {
@@ -1795,6 +1865,7 @@ export default function MediaCenter() {
                       {items.map((item) => (
                         <div
                           key={item.id}
+                          onContextMenu={(e) => openItemContextMenu(e, item)}
                           onClick={() => {
                             if (isBatchMode) {
                               const newSelected = new Set(selectedItemIds);
@@ -1868,6 +1939,7 @@ export default function MediaCenter() {
                           {items.map((item) => (
                             <tr
                               key={item.id}
+                              onContextMenu={(e) => openItemContextMenu(e, item)}
                               onClick={() => {
                                 if (isBatchMode) {
                                   const newSelected = new Set(selectedItemIds);
@@ -1924,11 +1996,6 @@ export default function MediaCenter() {
                               <td className="p-3 text-tx-secondary">{formatDuration(item.duration)}</td>
                               <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-center gap-1.5">
-                                  {item.type === "audio" && (
-                                    <button onClick={() => setSelectedItem(item)} className="text-tx-secondary hover:text-accent-primary p-1.5 rounded" title="详情">
-                                      <Info size={14} />
-                                    </button>
-                                  )}
                                   {isAdmin && (
                                     <button
                                       onClick={async () => {
@@ -1962,6 +2029,7 @@ export default function MediaCenter() {
                     {items.map(item => (
                       <div
                         key={item.id}
+                        onContextMenu={(e) => openItemContextMenu(e, item)}
                         onClick={() => {
                           if (isBatchMode) {
                             const newSelected = new Set(selectedItemIds);
@@ -2028,27 +2096,6 @@ export default function MediaCenter() {
                             />
                           )}
 
-                          {item.type === "audio" && !isBatchMode && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedItem(item);
-                              }}
-                              className={cn(
-                                "absolute top-1.5 right-1.5 z-10 rounded-full p-1 shadow-sm transition-all",
-                                "bg-white/85 dark:bg-zinc-900/80 backdrop-blur-sm",
-                                "text-tx-tertiary hover:text-accent-primary hover:bg-white dark:hover:bg-zinc-800",
-                                "border border-black/5 dark:border-white/10",
-                                // 桌面悬停才显眼，移动端轻量常显
-                                "opacity-70 md:opacity-0 md:group-hover:opacity-100",
-                              )}
-                              title="详情介绍"
-                              aria-label="详情介绍"
-                            >
-                              <Info size={12} strokeWidth={2} />
-                            </button>
-                          )}
-
                           {!isBatchMode && (
                             <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                               <div className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg">
@@ -2102,6 +2149,8 @@ export default function MediaCenter() {
             <AlistBrowser
               workspaceId={workspaceId}
               collections={collections}
+              defaultCollectionId={selectedCollection?.id ?? null}
+              defaultImportType={selectedCollection?.type ?? mediaType}
               onImportSuccess={(msg) => {
                 setShowAlistBrowser(false);
                 setTimeout(() => alert(msg), 10);
@@ -2112,6 +2161,45 @@ export default function MediaCenter() {
           </AlistImportModalShell>,
           document.body,
         )}
+
+      <AssignCollectionModal
+        open={assignOpen}
+        mediaIds={assignMediaIds}
+        mediaType={mediaType}
+        collections={collections}
+        workspaceId={workspaceId}
+        onClose={() => setAssignOpen(false)}
+        onSuccess={() => {
+          fetchData();
+          alert("合入成功");
+        }}
+      />
+
+      <ContextMenu
+        isOpen={ctxMenu.open}
+        x={ctxMenu.x}
+        y={ctxMenu.y}
+        menuRef={ctxMenuRef}
+        header={ctxMenu.item?.title}
+        onAction={(id) => void handleCtxMenuAction(id)}
+        items={
+          [
+            { id: "detail", label: "详情", icon: <Info size={14} /> },
+            ...(isAdmin
+              ? ([
+                  { id: "assign", label: "合入", icon: <FolderInput size={14} /> },
+                  { id: "sep1", label: "", separator: true },
+                  {
+                    id: "delete",
+                    label: "删除",
+                    icon: <Trash2 size={14} />,
+                    danger: true,
+                  },
+                ] as ContextMenuItem[])
+              : []),
+          ] as ContextMenuItem[]
+        }
+      />
 
       {/* Modal: Alist settings */}
       <AnimatePresence>
@@ -2367,6 +2455,22 @@ export default function MediaCenter() {
                     className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all whitespace-nowrap"
                   >
                     {selectedItemIds.size === items.length ? "取消全选" : "全选"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openAssignForIds(Array.from(selectedItemIds))}
+                    disabled={selectedItemIds.size === 0}
+                    className={cn(
+                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 shadow whitespace-nowrap",
+                      selectedItemIds.size > 0
+                        ? "bg-accent-primary hover:bg-accent-primary-hover text-white"
+                        : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
+                    )}
+                    title="合入到其它合集（不移出原合集）"
+                  >
+                    <FolderInput size={13} />
+                    合入
                   </button>
 
                   <button

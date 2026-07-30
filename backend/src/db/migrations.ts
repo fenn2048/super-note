@@ -2366,6 +2366,30 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  // v41：媒体单品 ↔ 合集多对多（合入，同一文件可属多个合集）
+  {
+    version: 41,
+    name: "media-item-collections-m2m",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS media_item_collections (
+          media_id      TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+          collection_id TEXT NOT NULL REFERENCES media_collections(id) ON DELETE CASCADE,
+          created_at    TEXT DEFAULT (datetime('now')),
+          PRIMARY KEY (media_id, collection_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_mic_collection ON media_item_collections(collection_id);
+        CREATE INDEX IF NOT EXISTS idx_mic_media ON media_item_collections(media_id);
+      `);
+      // 回填历史单归属
+      db.exec(`
+        INSERT OR IGNORE INTO media_item_collections (media_id, collection_id)
+        SELECT id, collection_id FROM media_items
+        WHERE collection_id IS NOT NULL AND collection_id != '';
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

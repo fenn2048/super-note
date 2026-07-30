@@ -10,23 +10,78 @@ interface AlistFile {
   modified: string;
 }
 
+const AUDIO_EXT = /\.(mp3|wav|ogg|flac|aac|m4a|opus|wma)$/i;
+const VIDEO_EXT = /\.(mp4|mkv|avi|mov|webm|m4v|ts|flv|wmv|mpg|mpeg)$/i;
+
+function detectMediaKind(name: string): "audio" | "video" | null {
+  if (AUDIO_EXT.test(name)) return "audio";
+  if (VIDEO_EXT.test(name)) return "video";
+  return null;
+}
+
+/** 根据已选文件名多数票推断导入类型 */
+function inferImportTypeFromNames(names: string[], fallback: "video" | "audio"): "video" | "audio" {
+  let audio = 0;
+  let video = 0;
+  for (const n of names) {
+    const k = detectMediaKind(n);
+    if (k === "audio") audio++;
+    else if (k === "video") video++;
+  }
+  if (audio === 0 && video === 0) return fallback;
+  if (audio > video) return "audio";
+  if (video > audio) return "video";
+  return fallback;
+}
+
 interface AlistBrowserProps {
   workspaceId: string | null;
   onImportSuccess: (message: string) => void;
   onClose: () => void;
   collections: Array<{ id: string; title: string; type: "video" | "audio" }>;
+  /** 打开时默认关联合集（侧栏当前合集） */
+  defaultCollectionId?: string | null;
+  /** 打开时默认导入类型（当前合集 type 或当前媒体库 tab） */
+  defaultImportType?: "video" | "audio";
 }
 
-export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, collections }: AlistBrowserProps) {
+export default function AlistBrowser({
+  workspaceId,
+  onImportSuccess,
+  onClose,
+  collections,
+  defaultCollectionId = null,
+  defaultImportType = "video",
+}: AlistBrowserProps) {
   const [currentPath, setCurrentPath] = useState<string>("/");
   const [files, setFiles] = useState<AlistFile[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; path: string }>>([]);
-  const [importType, setImportType] = useState<"video" | "audio">("video");
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>("");
+  const [importType, setImportType] = useState<"video" | "audio">(defaultImportType);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(
+    defaultCollectionId || "",
+  );
   const [importing, setImporting] = useState<boolean>(false);
+
+  // 父级切换默认合集/类型时同步（例如从不同合集再次打开）
+  useEffect(() => {
+    setImportType(defaultImportType);
+    const id = defaultCollectionId || "";
+    if (id) {
+      const col = collections.find((c) => c.id === id);
+      if (col && col.type === defaultImportType) {
+        setSelectedCollectionId(id);
+        return;
+      }
+    }
+    setSelectedCollectionId((prev) => {
+      if (!prev) return "";
+      const col = collections.find((c) => c.id === prev);
+      return col && col.type === defaultImportType ? prev : "";
+    });
+  }, [defaultCollectionId, defaultImportType, collections]);
 
   // 1. Fetch directory files on path change
   useEffect(() => {
@@ -84,29 +139,47 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
     setCurrentPath(parent);
   };
 
+  const applyTypeFromSelection = (fileList: Array<{ name: string; path: string }>) => {
+    const nextType = inferImportTypeFromNames(
+      fileList.map((f) => f.name),
+      defaultImportType,
+    );
+    setImportType(nextType);
+    // 类型变化时，若当前合集类型不符则回退到默认合集（同 type）或清空
+    setSelectedCollectionId((prev) => {
+      const prefer = defaultCollectionId || prev;
+      if (prefer) {
+        const col = collections.find((c) => c.id === prefer);
+        if (col && col.type === nextType) return prefer;
+      }
+      if (prev) {
+        const col = collections.find((c) => c.id === prev);
+        if (col && col.type === nextType) return prev;
+      }
+      return "";
+    });
+  };
+
   const toggleSelectFile = (file: AlistFile) => {
     const fullPath = currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
     const newPaths = new Set(selectedPaths);
-    
+    let nextFiles: Array<{ name: string; path: string }>;
+
     if (newPaths.has(fullPath)) {
       newPaths.delete(fullPath);
-      setSelectedFiles(selectedFiles.filter(f => f.path !== fullPath));
+      nextFiles = selectedFiles.filter((f) => f.path !== fullPath);
     } else {
       newPaths.add(fullPath);
-      setSelectedFiles([...selectedFiles, { name: file.name, path: fullPath }]);
-      
-      // Auto-detect audio file to switch import type
-      const isAudio = /\.(mp3|wav|ogg|flac|aac|m4a)$/i.test(file.name);
-      if (isAudio && importType !== "audio") {
-        setImportType("audio");
-      }
+      nextFiles = [...selectedFiles, { name: file.name, path: fullPath }];
     }
     setSelectedPaths(newPaths);
+    setSelectedFiles(nextFiles);
+    if (nextFiles.length > 0) applyTypeFromSelection(nextFiles);
   };
 
   const handleSelectAllInDir = () => {
     const newPaths = new Set(selectedPaths);
-    const newFiles = [...selectedFiles];
+    let newFiles = [...selectedFiles];
     
     const onlyFiles = files.filter(f => !f.is_dir);
     const allSelected = onlyFiles.every(f => {
@@ -121,7 +194,7 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
         newPaths.delete(fullPath);
       });
       const currentPaths = onlyFiles.map(f => currentPath === "/" ? `/${f.name}` : `${currentPath}/${f.name}`);
-      setSelectedFiles(newFiles.filter(f => !currentPaths.includes(f.path)));
+      newFiles = newFiles.filter(f => !currentPaths.includes(f.path));
     } else {
       // Select all in current directory
       onlyFiles.forEach(f => {
@@ -131,9 +204,10 @@ export default function AlistBrowser({ workspaceId, onImportSuccess, onClose, co
           newFiles.push({ name: f.name, path: fullPath });
         }
       });
-      setSelectedFiles(newFiles);
     }
     setSelectedPaths(newPaths);
+    setSelectedFiles(newFiles);
+    if (newFiles.length > 0) applyTypeFromSelection(newFiles);
   };
 
   // Perform import

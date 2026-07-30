@@ -1467,5 +1467,15 @@ function initSchema(db: Database.Database) {
       tag_id         INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
       PRIMARY KEY (collection_id, tag_id)
     );
+
+    -- 单品可属于多个合集（合入）；media_items.collection_id 仍作首选展示字段
+    CREATE TABLE IF NOT EXISTS media_item_collections (
+      media_id      TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+      collection_id TEXT NOT NULL REFERENCES media_collections(id) ON DELETE CASCADE,
+      created_at    TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (media_id, collection_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_mic_collection ON media_item_collections(collection_id);
+    CREATE INDEX IF NOT EXISTS idx_mic_media ON media_item_collections(media_id);
   `);
 }
