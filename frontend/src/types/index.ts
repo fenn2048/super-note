@@ -98,7 +98,6 @@ export interface WorkspaceFeatures {
   notes: boolean;
   diaries: boolean;
   tasks: boolean;
-  mindmaps: boolean;
   files: boolean;
   favorites: boolean;
   projects: boolean;
@@ -270,7 +269,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "mindmaps" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance" | "settings";
 
 export type MobileView = "list" | "editor";
 
@@ -464,43 +463,6 @@ export interface CustomFont {
   format: string;
   fileSize?: number;
   createdAt: string;
-}
-
-export interface MindMapNode {
-  id: string;
-  text: string;
-  children: MindMapNode[];
-  collapsed?: boolean;
-}
-
-export interface MindMapData {
-  root: MindMapNode;
-  structure?: string;
-}
-
-export interface MindMap {
-  id: string;
-  userId: string;
-  /** Y4: 思维导图归属的工作区 id；null = 个人空间。 */
-  workspaceId: string | null;
-  title: string;
-  data: string; // JSON string of MindMapData
-  createdAt: string;
-  updatedAt: string;
-  visibility?: "PRIVATE" | "WORKSPACE";
-}
-
-export interface MindMapListItem {
-  id: string;
-  userId: string;
-  /** Y4: 同 MindMap.workspaceId。 */
-  workspaceId: string | null;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  /** 创建者用户名；仅 list 接口返回。 */
-  creatorName?: string | null;
-  visibility?: "PRIVATE" | "WORKSPACE";
 }
 
 export interface Diary {

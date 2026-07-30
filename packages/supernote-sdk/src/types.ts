@@ -170,28 +170,6 @@ export interface UpdateTaskParams {
   sortOrder?: number;
 }
 
-// ===== 思维导图 =====
-export interface MindMap {
-  id: string;
-  userId: string;
-  noteId: string | null;
-  title: string;
-  data: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateMindMapParams {
-  title: string;
-  noteId?: string;
-  data?: string;
-}
-
-export interface UpdateMindMapParams {
-  title?: string;
-  data?: string;
-}
-
 // ===== 日记 =====
 export interface DiaryEntry {
   id: string;

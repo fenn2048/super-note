@@ -430,7 +430,6 @@ const FEATURE_KEYS: WorkspaceFeature[] = [
   "notes",
   "diaries",
   "tasks",
-  "mindmaps",
   "files",
   "favorites",
   "media",

@@ -44,7 +44,7 @@ With that idea, the prototype of `super-note` was officially born.
 I stitched and refactored every habit I had picked up over the years into this single system:
 
 1. **A leftover obsession with Youdao Notes**: Since I'd also used Youdao Notes for a long time in high school, I built a dedicated Youdao backup importer to bring those memories home as well.
-2. **Inline mind maps**: I rely heavily on mind maps in daily work, so I integrated a lightweight mind-map component directly into the editor.
+2. **Mermaid diagrams**: Mermaid code blocks render as diagrams right in the editor — handy for flows and architecture sketches.
 3. **"Moments" feed**: I'm in the habit of muttering to myself in writing — a habit dating back to my school days. So instead of treating this as pure document management, I built a Moments-style stream (think WeChat Moments / Memos) for those incoherent sparks of thought.
 
 Most importantly, as a NAS hobbyist with a strong urge to share, I knew exactly what people like us actually need: **absolute privacy, modern visual interactions, and seamless cross-device collaboration.**

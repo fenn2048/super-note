@@ -2,7 +2,7 @@
  * Super Note SDK 客户端
  *
  * 完整封装 Super Note 后端所有 REST API，支持：
- * - 笔记本/笔记/标签/任务/思维导图/日记 CRUD
+ * - 笔记本/笔记/标签/任务/日记 CRUD
  * - AI 写作助手 + 知识库问答
  * - 全文搜索
  * - 分享管理
@@ -15,7 +15,6 @@ import type {
   Note, NoteSummary, ListNotesParams, CreateNoteParams, UpdateNoteParams,
   Tag, CreateTagParams,
   Task, TaskStats, ListTasksParams, CreateTaskParams, UpdateTaskParams,
-  MindMap, CreateMindMapParams, UpdateMindMapParams,
   AIChatParams, AIAskResult, AISettings, KnowledgeStats,
   SearchResult, SystemSettings, ExportFormat,
 } from "./types.js";
@@ -297,33 +296,6 @@ export class SuperClient {
   /** 删除任务 */
   async deleteTask(id: string): Promise<void> {
     return this.request(`/api/tasks/${id}`, { method: "DELETE" });
-  }
-
-  // ==================== 思维导图 ====================
-
-  /** 获取思维导图列表 */
-  async listMindMaps(): Promise<MindMap[]> {
-    return this.request("/api/mindmaps");
-  }
-
-  /** 获取单个思维导图 */
-  async getMindMap(id: string): Promise<MindMap> {
-    return this.request(`/api/mindmaps/${id}`);
-  }
-
-  /** 创建思维导图 */
-  async createMindMap(params: CreateMindMapParams): Promise<MindMap> {
-    return this.request("/api/mindmaps", { method: "POST", body: params });
-  }
-
-  /** 更新思维导图 */
-  async updateMindMap(id: string, params: UpdateMindMapParams): Promise<MindMap> {
-    return this.request(`/api/mindmaps/${id}`, { method: "PUT", body: params });
-  }
-
-  /** 删除思维导图 */
-  async deleteMindMap(id: string): Promise<void> {
-    return this.request(`/api/mindmaps/${id}`, { method: "DELETE" });
   }
 
   // ==================== 日记 ====================

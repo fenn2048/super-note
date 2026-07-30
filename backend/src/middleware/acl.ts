@@ -195,7 +195,7 @@ export function buildVisibilityWhere(
  * 用户只能看到：
  *   1. visibility = 'WORKSPACE' 的记录（全部可见）
  *   2. visibility = 'PRIVATE' 且自己为创建者的记录
- * 适用于 notes / notebooks / mindmaps 表的工作区场景。
+ * 适用于 notes / notebooks 表的工作区场景。
  * 个人空间（workspaceId IS NULL）不应用此过滤。
  */
 export function buildVisibilityFilter(
@@ -310,7 +310,7 @@ export async function requireAdmin(c: Context, next: Next) {
 // 工作区数据隔离 Phase 1：共享资源权限 & 功能开关
 // ----------------------------------------------------------------------------
 // 设计原则：
-//   1. 共享资源（diaries / tasks / mindmaps / attachments 等）"成员可读全部、
+//   1. 共享资源（diaries / tasks / attachments 等）"成员可读全部、
 //      成员只能改/删自己创建的、admin+owner 可管全部"。这是 Linear / Notion /
 //      Figma 的默认协作模型。
 //   2. 功能开关（enabledFeatures）是 per-workspace 的 owner/admin 配置，
@@ -327,7 +327,6 @@ export type WorkspaceFeature =
   | "notes"
   | "diaries"
   | "tasks"
-  | "mindmaps"
   | "files"
   | "favorites"
   | "media"
@@ -347,7 +346,6 @@ export interface EnabledFeaturesConfig {
   notes?: boolean;
   diaries?: boolean;
   tasks?: boolean;
-  mindmaps?: boolean;
   files?: boolean;
   favorites?: boolean;
   media?: boolean;
@@ -399,7 +397,7 @@ export function isFeatureEnabled(
 /**
  * 共享资源写权限判定：是创建者本人 OR 是工作区 admin/owner。
  *
- * 适用于 diaries / tasks / mindmaps / attachments 等"工作区共享但
+ * 适用于 diaries / tasks / attachments 等"工作区共享但
  * 成员级编辑"的资源。笔记/笔记本有独立的 note_acl / notebook 权限模型，
  * 不走这个函数。
  *

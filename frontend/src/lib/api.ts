@@ -1,4 +1,4 @@
-import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, MindMap, MindMapListItem, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion, Plan, Milestone, AuditLog, BookGroup, Book, BookConfig, BookNote } from "@/types";
+import { Notebook, Note, NoteListItem, Tag, SearchResult, User, UserPublicInfo, Task, TaskStats, TaskFilter, CustomFont, Diary, DiaryComment, DiaryTimeline, DiaryStats, Share, ShareInfo, SharedNoteContent, NoteVersion, ShareComment, Workspace, WorkspaceAdminItem, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceFeatures, FileItem, FileDetail, FileListResponse, FileStats, FileSortKey, FileCategory, FileFilter, FileMyUploadsRef, Project, ProjectGroup, ProjectStage, ProjectTask, ProjectDiscussion, Plan, Milestone, AuditLog, BookGroup, Book, BookConfig, BookNote } from "@/types";
 import {
   shouldEnqueue as _shouldEnqueue,
   enqueue as _enqueue,
@@ -1806,24 +1806,6 @@ export const api = {
       body: JSON.stringify({ url, notebookId }),
     });
   },
-
-  // Mind Maps
-  // Y4: 与 tasks/diary 一致——"集合"接口自动带当前 workspaceId（空字符串不带），
-  //   "按 id"接口（get/update/delete）不带，后端按行自带的 workspaceId 做 ACL。
-  getMindMaps: () => {
-    const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
-    return request<MindMapListItem[]>(`/mindmaps${qs}`);
-  },
-  getMindMap: (id: string) => request<MindMap>(`/mindmaps/${id}`),
-  createMindMap: (data: { title?: string; data?: string }) => {
-    const ws = getCurrentWorkspace();
-    const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
-    return request<MindMap>(`/mindmaps${qs}`, { method: "POST", body: JSON.stringify(data) });
-  },
-  updateMindMap: (id: string, data: { title?: string; data?: string }) =>
-    request<MindMap>(`/mindmaps/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteMindMap: (id: string) => request(`/mindmaps/${id}`, { method: "DELETE" }),
 
   // Diary (说说/动态)
   // Y2: 自动注入当前工作区。后端按 workspaceId 隔离数据：
