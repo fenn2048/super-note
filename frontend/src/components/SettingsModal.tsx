@@ -30,6 +30,10 @@ import BrandMark from "@/components/BrandMark";
 import SplashOverlay from "@/components/SplashOverlay";
 import { MODULE_PACK_META, getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
 import { api, getCurrentWorkspace, getServerUrl } from "@/lib/api";
+import {
+  BACKGROUND_RESUME_MINUTE_OPTIONS,
+  DEFAULT_BACKGROUND_RESUME_MINUTES,
+} from "@/lib/appResume";
 import { downloadApkFromUrl, downloadAttachment } from "@/lib/downloadFile";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
@@ -946,6 +950,39 @@ function SwitchesPanel() {
             <option value={60}>1 小时</option>
             <option value={90}>1.5 小时</option>
             <option value={120}>2 小时</option>
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between px-3 py-2.5 hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors">
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="text-xs font-medium text-tx-primary leading-none">
+              {t("settings.backgroundResumeThreshold", {
+                defaultValue: "后台恢复间隔",
+              })}
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-snug">
+              {t("settings.backgroundResumeThresholdDesc", {
+                defaultValue:
+                  "退到后台超过该时间再回到前台时，先展示闪屏；若已启用指纹快速登录，闪屏结束后再锁屏。闪屏与指纹共用此间隔。",
+              })}
+            </p>
+          </div>
+          <select
+            value={userPrefs.backgroundResumeMinutes}
+            onChange={(e) =>
+              setUserPref("backgroundResumeMinutes", Number(e.target.value))
+            }
+            className="text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-tx-primary px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+          >
+            {BACKGROUND_RESUME_MINUTE_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m === DEFAULT_BACKGROUND_RESUME_MINUTES
+                  ? `${m} 分钟 (默认)`
+                  : m < 60
+                    ? `${m} 分钟`
+                    : `${m / 60} 小时`}
+              </option>
+            ))}
           </select>
         </div>
 

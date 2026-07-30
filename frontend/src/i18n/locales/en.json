@@ -211,6 +211,7 @@
     "moveButton": "Move",
     "noNotebooks": "No notebooks",
     "restoreNote": "Restore Note",
+    "restore": "Restore",
     "permanentDelete": "Permanent Delete",
     "unpin": "Unpin",
     "pin": "Pin",
@@ -607,7 +608,9 @@
     "customSplashPreview": "Preview",
     "healthReminder": "Health break reminder",
     "healthReminderDesc": "Shows a full-screen screensaver after continuous browsing, prompting rest. Off by default.",
-    "healthReminderInterval": "Interval (minutes)"
+    "healthReminderInterval": "Interval (minutes)",
+    "backgroundResumeThreshold": "Background resume interval",
+    "backgroundResumeThresholdDesc": "After staying in the background longer than this, returning to the app shows the splash first; if quick login is enabled, the fingerprint lock follows after the splash. Splash and lock share this interval."
   },
   "securitySettings": {
     "title": "Account & Security",

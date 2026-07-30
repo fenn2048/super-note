@@ -6,11 +6,11 @@ import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
 import NavRail from "@/components/NavRail";
 import { useRailMode } from "@/hooks/useRailMode";
-import NoteList from "@/components/NoteList";
-import Dashboard from "@/components/Dashboard";
 import type { TabId } from "@/components/SettingsModal";
 
 // 延时加载的重型组件
+const NoteList = React.lazy(() => import("@/components/NoteList"));
+const Dashboard = React.lazy(() => import("@/components/Dashboard"));
 const DiaryCenter = React.lazy(() => import("@/components/DiaryCenter"));
 const MentionList = React.lazy(() => import("@/components/MentionList"));
 const SharedNoteView = React.lazy(() => import("@/components/SharedNoteView"));
@@ -29,10 +29,12 @@ const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 const LibraryCenter = React.lazy(() => import("@/components/LibraryCenter"));
 const FinanceCenter = React.lazy(() => import("@/components/finance/FinanceCenter"));
-import MobileCameraModal from "@/components/MobileCameraModal";
+const MobileCameraModal = React.lazy(() => import("@/components/MobileCameraModal"));
+const MobileTaskCreateModal = React.lazy(() => import("@/components/MobileTaskCreateModal"));
+const FirstRunWizard = React.lazy(() => import("@/components/FirstRunWizard"));
+const CommandPalette = React.lazy(() => import("@/components/common/CommandPalette"));
+const CreateMenu = React.lazy(() => import("@/components/common/CreateMenu").then((m) => ({ default: m.default })));
 import GlobalMusicPlayer from "@/components/media/GlobalMusicPlayer";
-import MobileTaskCreateModal from "@/components/MobileTaskCreateModal";
-import FirstRunWizard from "@/components/FirstRunWizard";
 import { AppProvider, useApp, useAppActions, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from "@/store/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SiteSettingsProvider, useSiteSettings } from "@/hooks/useSiteSettings";
@@ -58,7 +60,6 @@ import { useEditorSwipeBack } from "@/hooks/useEditorSwipeBack";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { resetScrollHideBars } from "@/hooks/useScrollHideBars";
-import CommandPalette from "@/components/common/CommandPalette";
 import OfflineIndicator from "@/components/common/OfflineIndicator";
 import UpdateNotifier from "@/components/common/UpdateNotifier";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
@@ -73,10 +74,33 @@ import {
   syncMobileShellCssVars,
 } from "@/lib/navigation.config";
 import AppSplashGate from "@/components/AppSplashGate";
-import CreateMenu, { CreateFabButton } from "@/components/common/CreateMenu";
+import { CreateFabButton } from "@/components/common/CreateMenu";
 import { syncWorkspaceSplash } from "@/lib/splashSync";
+import { getBackgroundResumeThresholdMs } from "@/lib/appResume";
 
 import { App as CapApp } from "@capacitor/app";
+
+/** 闪屏未结束时底层占位：纯色，避免「正在验证」等文案露出来 */
+function SplashUnderlay() {
+  return (
+    <div
+      className="min-h-screen w-full"
+      style={{ backgroundColor: "#F5F3EE" }}
+      aria-hidden
+    />
+  );
+}
+
+function AuthVerifyingSpinner({ label }: { label: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-zinc-400 dark:text-zinc-500">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 /** 遗留 viewMode=tasks → 项目「我的任务」（任务模型方案 A） */
 function TasksToProjectsRedirect() {
@@ -1273,7 +1297,11 @@ function AppLayout() {
 
   // 工作区检测门控
   if (hasFamilySpace === false) {
-    return <FirstRunWizard onComplete={() => setHasFamilySpace(true)} />;
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-app-bg"><Loader2 size={32} className="animate-spin text-tx-tertiary" /></div>}>
+        <FirstRunWizard onComplete={() => setHasFamilySpace(true)} />
+      </Suspense>
+    );
   }
   if (hasFamilySpace === null) {
     return (
@@ -1417,7 +1445,9 @@ function AppLayout() {
                 <MobileMorePage />
               </Suspense>
             ) : isHomeView ? (
-              <Dashboard />
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                <Dashboard />
+              </Suspense>
             ) : isMentionsView ? (
               <div className="flex-1 flex flex-col">
                 <MobileTopBar />
@@ -1441,12 +1471,14 @@ function AppLayout() {
                     style={{
                       "--note-list-width": `${state.noteListWidth}px`,
                     } as React.CSSProperties}
-                    {...(state.mobileView === "editor"
+                    {...(window.innerWidth < 768 && state.mobileView === "editor"
                       ? ({ inert: "" } as React.HTMLAttributes<HTMLDivElement>)
                       : {})}
-                    aria-hidden={state.mobileView === "editor"}
+                    aria-hidden={window.innerWidth < 768 && state.mobileView === "editor"}
                   >
-                    <NoteList />
+                    <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 size={20} className="animate-spin text-accent-primary" /></div>}>
+                      <NoteList />
+                    </Suspense>
                   </div>
                 )}
 
@@ -1507,48 +1539,60 @@ function AppLayout() {
           >
             <CreateFabButton onClick={() => setCreateMenuOpen(true)} />
           </div>
-          <CreateMenu
-            open={createMenuOpen && barsVisuallyVisible}
-            onClose={() => setCreateMenuOpen(false)}
-            className="right-4 bottom-[calc(5.5rem+var(--safe-area-bottom))] md:hidden"
-            showCamera={isNativePlatform()}
-            onAction={(action) => {
-              if (action === "note") void quickCreateNote();
-              else if (action === "diary") {
-                setComposerInitialImages([]);
-                setShowDiaryComposer(true);
-              } else if (action === "task") {
-                setShowTaskComposer(true);
-              } else if (action === "camera") {
-                setShowCameraModal(true);
-              }
-            }}
-          />
+          {createMenuOpen && (
+            <Suspense fallback={null}>
+              <CreateMenu
+                open={createMenuOpen && barsVisuallyVisible}
+                onClose={() => setCreateMenuOpen(false)}
+                className="right-4 bottom-[calc(5.5rem+var(--safe-area-bottom))] md:hidden"
+                showCamera={isNativePlatform()}
+                onAction={(action) => {
+                  if (action === "note") void quickCreateNote();
+                  else if (action === "diary") {
+                    setComposerInitialImages([]);
+                    setShowDiaryComposer(true);
+                  } else if (action === "task") {
+                    setShowTaskComposer(true);
+                  } else if (action === "camera") {
+                    setShowCameraModal(true);
+                  }
+                }}
+              />
+            </Suspense>
+          )}
         </>
       )}
 
-      <MobileCameraModal
-        isOpen={showCameraModal}
-        onClose={() => setShowCameraModal(false)}
-        onCapture={async (file) => {
-          const toastId = toast.info("正在处理并上传照片...", 0);
-          try {
-            const res = await api.diaryImages.upload(file);
-            setComposerInitialImages([{ id: res.id, url: api.diaryImages.urlFor(res.id) }]);
-            setShowDiaryComposer(true);
-            toast.dismiss(toastId);
-            toast.success("照片已添加至说说");
-          } catch (err: any) {
-            toast.dismiss(toastId);
-            toast.error(err?.message || "照片上传失败");
-          }
-        }}
-      />
+      {showCameraModal && (
+        <Suspense fallback={null}>
+          <MobileCameraModal
+            isOpen={showCameraModal}
+            onClose={() => setShowCameraModal(false)}
+            onCapture={async (file) => {
+              const toastId = toast.info("正在处理并上传照片...", 0);
+              try {
+                const res = await api.diaryImages.upload(file);
+                setComposerInitialImages([{ id: res.id, url: api.diaryImages.urlFor(res.id) }]);
+                setShowDiaryComposer(true);
+                toast.dismiss(toastId);
+                toast.success("照片已添加至说说");
+              } catch (err: any) {
+                toast.dismiss(toastId);
+                toast.error(err?.message || "照片上传失败");
+              }
+            }}
+          />
+        </Suspense>
+      )}
 
-      <MobileTaskCreateModal
-        isOpen={showTaskComposer}
-        onClose={() => setShowTaskComposer(false)}
-      />
+      {showTaskComposer && (
+        <Suspense fallback={null}>
+          <MobileTaskCreateModal
+            isOpen={showTaskComposer}
+            onClose={() => setShowTaskComposer(false)}
+          />
+        </Suspense>
+      )}
 
       <Suspense fallback={null}>
         <AnimatePresence>
@@ -1570,10 +1614,14 @@ function AppLayout() {
       </Suspense>
 
       {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-      />
+      {commandPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            open={commandPaletteOpen}
+            onClose={() => setCommandPaletteOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* 离线状态 + 待同步指示器 */}
       <OfflineIndicator />
@@ -2061,13 +2109,20 @@ function AuthGate() {
   /**
    * 热恢复锁屏：已登录态下回到前台时叠一层生物识别遮罩，
    * 不 setIsAuthenticated(false)，避免卸载 GlobalMusicPlayer 导致音频中断。
+   * 仅在「热恢复闪屏」结束后再 mount（避免指纹系统层盖在闪屏上）。
    */
   const [appLocked, setAppLocked] = useState(false);
-  /** 应用内启动门：auth 判定完成即可 ready；淡出后再真正卸门 */
-  const [splashDismissed, setSplashDismissed] = useState(false);
+  /**
+   * 冷启动应用内闪屏是否已结束。
+   * 原生：false 起，结束后 true；Web/桌面：直接 true（无应用内闪屏门）。
+   */
+  const [splashDismissed, setSplashDismissed] = useState(() => !isNativePlatform());
+  /** 热恢复闪屏会话 id；>0 时挂载二次闪屏 */
+  const [resumeSplashSession, setResumeSplashSession] = useState(0);
+  /** 闪屏结束前异步探测是否需要指纹锁（避免短闪屏早于 isQuickLoginEnabled 返回） */
+  const resumeLockProbeRef = useRef<Promise<boolean> | null>(null);
   const { t } = useTranslation();
 
-  // Warm Resume Lock: Lock the app when returning from the background
   const authRef = useRef(isAuthenticated);
   useEffect(() => {
     authRef.current = isAuthenticated;
@@ -2077,7 +2132,6 @@ function AuthGate() {
   useEffect(() => {
     if (!isNativePlatform()) return;
     return subscribeShareReceive((payload) => {
-      // true = 已登录，AppLayout 会处理；null = auth 判定中，只 stash 不 toast
       if (authRef.current === true) return;
       stashSharePayload(payload);
       if (authRef.current === false) {
@@ -2086,6 +2140,8 @@ function AuthGate() {
     });
   }, []);
 
+  // 热恢复：退后台记时 → 回前台超过用户配置阈值 → 先闪屏，再指纹锁
+  // 阈值与指纹共用 getBackgroundResumeThresholdMs()（默认 5 分钟，设置可改）
   const lastBackgroundTimeRef = useRef<number | null>(null);
   useEffect(() => {
     if (!isNativePlatform()) return;
@@ -2095,28 +2151,26 @@ function AuthGate() {
       if (!active) return;
       if (!isActive) {
         lastBackgroundTimeRef.current = Date.now();
-      } else {
-        if (lastBackgroundTimeRef.current) {
-          const elapsed = Date.now() - lastBackgroundTimeRef.current;
-          lastBackgroundTimeRef.current = null;
-          // Only lock if backgrounded for more than 5 seconds
-          if (elapsed > 5000) {
-            const checkAndLock = async () => {
-              try {
-                const { isQuickLoginEnabled } = await import("@/lib/quickLogin");
-                const enabled = await isQuickLoginEnabled();
-                // 已登录 + 已启用快速登录 → 叠遮罩，不卸载主界面（音频继续播）
-                if (enabled && authRef.current) {
-                  setAppLocked(true);
-                }
-              } catch (err) {
-                console.error("Failed to check quick login status on resume:", err);
-              }
-            };
-            void checkAndLock();
-          }
-        }
+        return;
       }
+      if (!lastBackgroundTimeRef.current) return;
+      const elapsed = Date.now() - lastBackgroundTimeRef.current;
+      lastBackgroundTimeRef.current = null;
+      const thresholdMs = getBackgroundResumeThresholdMs();
+      if (elapsed <= thresholdMs) return;
+
+      // 先展示热恢复闪屏；指纹锁延后到闪屏 onHidden（probe 与闪屏并行）
+      resumeLockProbeRef.current = (async () => {
+        try {
+          const { isQuickLoginEnabled } = await import("@/lib/quickLogin");
+          const enabled = await isQuickLoginEnabled();
+          return !!(enabled && authRef.current === true);
+        } catch (err) {
+          console.error("Failed to check quick login status on resume:", err);
+          return false;
+        }
+      })();
+      setResumeSplashSession((n) => n + 1);
     });
 
     return () => {
@@ -2125,12 +2179,28 @@ function AuthGate() {
     };
   }, []);
 
-  // P1: Splash Screen — 应用就绪后隐藏启动屏（必须在条件返回之前调用）
+  // 兜底：冷启动闪屏异常未回调时，鉴权结束后仍 hide 原生 Splash
   useEffect(() => {
-    if (isAuthenticated !== null) {
+    if (isAuthenticated !== null && splashDismissed) {
       hideSplashScreen();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, splashDismissed]);
+
+  const handleColdSplashHidden = useCallback(() => {
+    setSplashDismissed(true);
+  }, []);
+
+  const handleResumeSplashHidden = useCallback(() => {
+    setResumeSplashSession(0);
+    const probe = resumeLockProbeRef.current;
+    resumeLockProbeRef.current = null;
+    void (async () => {
+      const shouldLock = probe ? await probe : false;
+      if (shouldLock && authRef.current === true) {
+        setAppLocked(true);
+      }
+    })();
+  }, []);
 
   // 判断是否为客户端模式（Electron / Android / 曾配置过服务器地址）
   //
@@ -2475,52 +2545,48 @@ function AuthGate() {
     handleLogin(token, userData);
   };
 
-  // 应用内闪屏门：仅原生 APP；Web / Electron 不挂载
-  const splashGate =
+  // 冷启动闪屏：仅原生；ready=true 不等鉴权；结束后再展示验证/指纹
+  const coldSplashGate =
     isNativePlatform() && !splashDismissed ? (
+      <AppSplashGate ready onHidden={handleColdSplashHidden} />
+    ) : null;
+
+  // 热恢复闪屏：超时回前台时挂载；结束后再可能 setAppLocked
+  const resumeSplashGate =
+    isNativePlatform() && resumeSplashSession > 0 ? (
       <AppSplashGate
-        ready={isAuthenticated !== null}
-        onHidden={() => setSplashDismissed(true)}
+        key={`resume-splash-${resumeSplashSession}`}
+        ready
+        onHidden={handleResumeSplashHidden}
       />
     ) : null;
 
   if (isAuthenticated === null) {
     return (
       <>
-        {splashGate}
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
-          </div>
-        </div>
+        {coldSplashGate}
+        {resumeSplashGate}
+        {/* 闪屏未结束：不展示「正在验证」，避免压在闪屏下露底 */}
+        {splashDismissed ? (
+          <AuthVerifyingSpinner label={t("auth.verifying")} />
+        ) : (
+          <SplashUnderlay />
+        )}
       </>
     );
   }
 
   // 未登录 → 一体化登录页
   if (!isAuthenticated) {
-    // Phase 7: 先让 QuickLoginGate 看看是否能用生物识别一键登录
-    //   - 不支持 / 未启用 / 用户取消：onSettled(false) 会把 quickLoginState
-    //     置为 "skipped"，下面继续渲染 LoginPage
-    //   - 成功：onSettled(true, payload) 直接走 handleLogin 进主界面
     if (isClientMode && quickLoginState === "pending") {
-      // 原生 APP：等应用内闪屏淡出后再挂载 QuickLoginGate，
-      // 避免系统指纹/人脸浮层盖在闪屏图上。
+      // 原生：等冷启动闪屏结束后再挂 QuickLoginGate，避免指纹盖在闪屏上
       const canStartQuickLogin = !isNativePlatform() || splashDismissed;
-      const verifyingFallback = (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
-          </div>
-        </div>
-      );
       return (
         <>
-          {splashGate}
+          {coldSplashGate}
+          {resumeSplashGate}
           {canStartQuickLogin ? (
-            <Suspense fallback={verifyingFallback}>
+            <Suspense fallback={<AuthVerifyingSpinner label={t("auth.verifying")} />}>
               <QuickLoginGate
                 isClientMode={isClientMode}
                 onSettled={(used, payload) => {
@@ -2533,7 +2599,7 @@ function AuthGate() {
               />
             </Suspense>
           ) : (
-            verifyingFallback
+            <SplashUnderlay />
           )}
         </>
       );
@@ -2541,21 +2607,19 @@ function AuthGate() {
 
     return (
       <>
-        {splashGate}
-        <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
-          </div>
-        </div>
-      }>
-        <LoginPage
-          onLogin={handlePasswordLogin}
-          isClientMode={isClientMode}
-          onDisconnect={isClientMode ? handleDisconnect : undefined}
-        />
-      </Suspense>
+        {coldSplashGate}
+        {resumeSplashGate}
+        {splashDismissed ? (
+          <Suspense fallback={<AuthVerifyingSpinner label={t("auth.verifying")} />}>
+            <LoginPage
+              onLogin={handlePasswordLogin}
+              isClientMode={isClientMode}
+              onDisconnect={isClientMode ? handleDisconnect : undefined}
+            />
+          </Suspense>
+        ) : (
+          <SplashUnderlay />
+        )}
       </>
     );
   }
@@ -2563,14 +2627,12 @@ function AuthGate() {
   // 已登录
   return (
     <>
-      {splashGate}
+      {coldSplashGate}
+      {resumeSplashGate}
       <AppProvider>
       <TooltipProvider>
         <AppLayout />
         <Suspense fallback={null}>
-          {/* Phase 7: 客户端模式下，密码登录成功后引导启用快速登录。
-              QuickLoginEnrollDialog 内部会判断"是否已问过 / 设备是否支持"，
-              不需要展示时会立即调 onClose 自我隐身。 */}
           {justPasswordLogin && isClientMode && user && activeToken && (
             <QuickLoginEnrollDialog
               username={user.username}
@@ -2578,9 +2640,6 @@ function AuthGate() {
               onClose={() => setJustPasswordLogin(false)}
             />
           )}
-          {/* 首次升级到新版本自动弹「更新日志」。
-              useWhatsNew 决定是否该弹；onClose 调 markSeen 写回 localStorage，
-              下一次升版前都不会再弹。 */}
           {showWhatsNew && (
             <WhatsNewModal
               open={showWhatsNew}
@@ -2588,20 +2647,17 @@ function AuthGate() {
               highlightVersion={__APP_VERSION__}
             />
           )}
-          {/* 热恢复锁屏：叠在主界面上，不卸载播放器，音频可继续播 */}
-          {appLocked && (
+          {/* 热恢复锁屏：仅在闪屏结束后 mount，避免指纹系统层盖在闪屏上 */}
+          {appLocked && resumeSplashSession === 0 && (
             <AppLockOverlay
               onUnlocked={() => setAppLocked(false)}
               onFallbackToPassword={() => {
-                // 用户主动选「使用密码」：清本地会话进登录页，但保留 Keystore 指纹配置
-                // （broadcastLogout verify 类不会清指纹；这里只清 LS token）
                 setAppLocked(false);
                 try {
                   localStorage.removeItem("super-token");
                 } catch {
                   /* ignore */
                 }
-                // 允许登录页路径再走一次 QuickLoginGate（用户可改主意点指纹）
                 setQuickLoginState("pending");
                 setIsAuthenticated(false);
                 setUser(null);

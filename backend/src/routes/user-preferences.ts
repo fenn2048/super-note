@@ -19,6 +19,8 @@ const ALLOWED_KEYS = new Set([
   "lockOnOpen",
   "healthReminderEnabled",
   "reminderInterval",
+  /** 退后台超过该分钟数再回前台：触发闪屏 + 指纹锁（默认 5） */
+  "backgroundResumeMinutes",
 ]);
 
 function parseJson(raw: string | undefined | null): Record<string, unknown> {

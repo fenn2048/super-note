@@ -9,6 +9,10 @@ import React, {
 } from "react";
 import { api, getToken } from "@/lib/api";
 import { getModulePack, setModulePack, type ModulePackId } from "@/lib/modulePack";
+import {
+  clampBackgroundResumeMinutes,
+  DEFAULT_BACKGROUND_RESUME_MINUTES,
+} from "@/lib/appResume";
 
 /**
  * 用户级 UI 偏好
@@ -33,6 +37,11 @@ export interface UserPreferences {
   healthReminderEnabled: boolean;
   reminderInterval: number;
   startupLanding: StartupLanding;
+  /**
+   * 退后台超过该分钟数再回前台：展示闪屏 + 指纹锁屏（与 appResume 共用）。
+   * 默认 5 分钟。
+   */
+  backgroundResumeMinutes: number;
 }
 
 const DEFAULT_PREFS: UserPreferences = {
@@ -44,6 +53,7 @@ const DEFAULT_PREFS: UserPreferences = {
   healthReminderEnabled: false,
   reminderInterval: 30,
   startupLanding: "last",
+  backgroundResumeMinutes: DEFAULT_BACKGROUND_RESUME_MINUTES,
 };
 
 function normalizePrefs(parsed: Partial<UserPreferences> & Record<string, unknown>): UserPreferences {
@@ -83,6 +93,10 @@ function normalizePrefs(parsed: Partial<UserPreferences> & Record<string, unknow
       parsed.startupLanding === "tasks"
         ? parsed.startupLanding
         : DEFAULT_PREFS.startupLanding,
+    backgroundResumeMinutes:
+      parsed.backgroundResumeMinutes != null
+        ? clampBackgroundResumeMinutes(parsed.backgroundResumeMinutes)
+        : DEFAULT_PREFS.backgroundResumeMinutes,
   };
 }
 

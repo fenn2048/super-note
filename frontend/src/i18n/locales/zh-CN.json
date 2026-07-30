@@ -219,6 +219,7 @@
     "moveButton": "移动",
     "noNotebooks": "暂无笔记本",
     "restoreNote": "恢复笔记",
+    "restore": "恢复",
     "permanentDelete": "永久删除",
     "unpin": "取消置顶",
     "pin": "置顶",
@@ -615,7 +616,9 @@
     "customSplashPreview": "预览",
     "healthReminder": "健康休息提醒",
     "healthReminderDesc": "定时弹出全屏屏保，提醒休息眼睛与活动身体。默认关闭。",
-    "healthReminderInterval": "提醒间隔（分钟）"
+    "healthReminderInterval": "提醒间隔（分钟）",
+    "backgroundResumeThreshold": "后台恢复间隔",
+    "backgroundResumeThresholdDesc": "退到后台超过该时间再回到前台时，先展示闪屏；若已启用指纹快速登录，闪屏结束后再锁屏。闪屏与指纹共用此间隔。"
   },
   "securitySettings": {
     "title": "账号与安全",
