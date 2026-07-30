@@ -1,5 +1,12 @@
 # Super Note (方舟笔记) - UI/UX 交互与设计系统实现方案
 
+> ⚠️ **DEPRECATED（以 `frontend/DESIGN.md` v2 为准）**  
+> 本文保留历史讨论。当前实装：
+> - 皮肤：`obsidian`（默认）/ `eink` / `claude` / `mono`（非文中五皮肤）
+> - 移动底栏：**4 Tab**（笔记 · 任务 · 说说 · 我的）
+> - 设置：独立路由 `#/settings`
+> - z-index / Token / Page Contract：见 `frontend/DESIGN.md`
+
 > **项目定位**：轻量、安静、无压力的私有个人/家庭协作笔记工具。
 > **设计目标**：通过高度定制化的主题皮肤（Skins）与柔和动效，降低用户高频记录的心理门槛，同时适配多端（Web/桌面端/移动端）响应式要求。
 > **技术栈支撑**：Tailwind CSS (CSS 变量换肤) + Lucide Icons + Framer Motion (微动效)
