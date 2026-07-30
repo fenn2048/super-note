@@ -15,12 +15,14 @@ import {
   Film, Music, Plus, Search, Grid, List as ListIcon, Trash2, Edit3, Play, Pause, Info,
   Settings, ChevronRight, Download, Upload, CheckCircle, MessageSquare, Clock,
   User, Tag, ChevronLeft, PlusCircle, Globe, Lock, ShieldAlert, SlidersHorizontal,
-  X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal, FolderInput
+  X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal, FolderInput, Car
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover } from "@/lib/id3";
 import { EmptyState, LoadingBlock } from "@/components/common/FeedbackStates";
+import { pushNativeMediaCatalog, type NativeMediaTrack } from "@/lib/nativeMedia";
+import { isNativePlatform } from "@/hooks/useCapacitor";
 
 interface Collection {
   id: string;
@@ -232,6 +234,8 @@ export default function MediaCenter() {
     }).catch(() => setIsAdmin(false));
   }, []);
 
+  const [showCarMode, setShowCarMode] = useState(false);
+
   // Fetch Collections & Items
   const fetchData = async () => {
     setLoading(true);
@@ -253,10 +257,72 @@ export default function MediaCenter() {
 
       const resItems = await api.request<MediaItem[]>(`/media/items?${q.toString()}`);
       setItems(resItems || []);
+
+      // Android 车载：同步音频库快照（合集树 + 最近）
+      if (isNativePlatform() && mediaType === "audio") {
+        void syncCarCatalog(cols || [], resItems || []);
+      }
     } catch (err) {
       console.error("Failed to fetch media data:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toNativeTrack = (it: MediaItem): NativeMediaTrack => {
+    const cover = it.cover_url
+      ? it.cover_url.startsWith("/") && !it.cover_url.startsWith("/api")
+        ? `${window.location.origin}${it.cover_url}`
+        : resolveAttachmentUrl(it.cover_url)
+      : undefined;
+    return {
+      id: it.id,
+      title: it.title || "未知曲目",
+      artist: it.artist || "",
+      album: it.album || "",
+      duration: it.duration || 0,
+      coverUrl: cover,
+    };
+  };
+
+  /** 推送合集树：为每个合集再拉一次 items（限流） */
+  const syncCarCatalog = async (cols: Collection[], allItems: MediaItem[]) => {
+    try {
+      const recent = [...allItems]
+        .sort((a, b) => (b.last_played_at || b.created_at || "").localeCompare(a.last_played_at || a.created_at || ""))
+        .slice(0, 40)
+        .map(toNativeTrack);
+
+      const collectionsPayload: { id: string; title: string; tracks: NativeMediaTrack[] }[] = [];
+      const audioCols = cols.filter((c) => c.type === "audio").slice(0, 30);
+      for (const col of audioCols) {
+        try {
+          const q = new URLSearchParams();
+          if (workspaceId) q.set("workspaceId", workspaceId);
+          q.set("type", "audio");
+          q.set("collection_id", col.id);
+          q.set("sort", "sort_order");
+          const tracks = await api.request<MediaItem[]>(`/media/items?${q.toString()}`);
+          collectionsPayload.push({
+            id: col.id,
+            title: col.title,
+            tracks: (tracks || []).slice(0, 80).map(toNativeTrack),
+          });
+        } catch {
+          /* skip one collection */
+        }
+      }
+      // 若当前是「全部」且无合集明细，至少推 recent
+      if (collectionsPayload.length === 0 && allItems.length > 0) {
+        collectionsPayload.push({
+          id: "_all",
+          title: "全部音频",
+          tracks: allItems.slice(0, 80).map(toNativeTrack),
+        });
+      }
+      await pushNativeMediaCatalog({ recent, collections: collectionsPayload });
+    } catch (e) {
+      console.warn("[car] push catalog failed", e);
     }
   };
 
@@ -1683,9 +1749,19 @@ export default function MediaCenter() {
                 </div>
               </div>
 
-              {/* Settings */}
-              {isAdmin && (
-                <div className="border-t border-app-border/40 pt-3 select-none shrink-0">
+              {/* Settings + 车载 */}
+              <div className="border-t border-app-border/40 pt-3 select-none shrink-0 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCarMode(true)}
+                  className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                  title="车载 / CarLife"
+                  aria-label="车载 / CarLife"
+                >
+                  <Car size={15} />
+                  <span>车载 / CarLife</span>
+                </button>
+                {isAdmin && (
                   <button
                     onClick={() => void openAlistSettings()}
                     className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
@@ -1695,8 +1771,8 @@ export default function MediaCenter() {
                     <Settings size={15} />
                     <span>Alist 挂载配置</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
             </div>
 
@@ -2174,6 +2250,101 @@ export default function MediaCenter() {
           alert("合入成功");
         }}
       />
+
+      {/* 车载 / CarLife 说明 */}
+      <AnimatePresence>
+        {showCarMode && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4"
+            onClick={() => setShowCarMode(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl border border-app-border bg-app-elevated shadow-xl p-5 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Car size={18} className="text-accent-primary" />
+                  <h3 className="text-base font-bold text-tx-primary">车载 / CarLife</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCarMode(false)}
+                  className="p-1 rounded-md text-tx-tertiary hover:bg-app-hover"
+                  aria-label="关闭"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="text-xs text-tx-secondary space-y-2 leading-relaxed">
+                <p>
+                  Super Note 通过 Android 标准媒体会话（MediaSession + MediaBrowser）对接蓝牙车机与
+                  CarLife 音频通道，无需百度官方 SDK 合作。
+                </p>
+                <ul className="list-disc pl-4 space-y-1.5">
+                  <li>
+                    <strong className="text-tx-primary">蓝牙</strong>
+                    ：连接车机后播放音乐库音频，方向盘可暂停/上下曲，仪表显示曲名。
+                  </li>
+                  <li>
+                    <strong className="text-tx-primary">CarLife</strong>
+                    ：手机用 CarLife 连车后，在本 App 播放音频；车机侧通常可控制正在播放的曲目（不会自动出现在
+                    CarLife 官方「合作音乐 App」侧栏 Logo，那需百度审核）。
+                  </li>
+                  <li>
+                    <strong className="text-tx-primary">浏览</strong>
+                    ：支持媒体浏览器中的「当前队列 / 最近播放 / 音频合集」。请先在本页打开
+                    <strong className="text-tx-primary"> 音乐库 </strong>
+                    以同步目录。
+                  </li>
+                  <li>请允许通知与后台播放；锁屏后保持 App 可被系统拉起。</li>
+                </ul>
+                <p className="text-tx-tertiary">
+                  提示：仅音频与「视频仅听」进入车载队列；先在手机上点播一首，再切到车机控制更稳。
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMediaType("audio");
+                    setSelectedCollection(null);
+                    setShowCarMode(false);
+                    void fetchData();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-accent-primary text-white hover:opacity-90"
+                >
+                  打开音乐库并同步
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // 尝试打开百度 CarLife（常见包名）
+                    try {
+                      const schemes = [
+                        "baiducarlife://",
+                        "carlife://",
+                      ];
+                      for (const s of schemes) {
+                        window.location.href = s;
+                        break;
+                      }
+                    } catch {
+                      alert("未检测到 CarLife，请从应用商店安装百度 CarLife 后连接车机。");
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-app-border bg-app-surface text-tx-primary hover:bg-app-hover"
+                >
+                  尝试打开 CarLife
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <ContextMenu
         isOpen={ctxMenu.open}

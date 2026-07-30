@@ -20,9 +20,12 @@ import MediaLyrics from "@/components/media/MediaLyrics";
 import {
   stopNativeMediaSession,
   subscribeNativeMediaActions,
+  subscribeNativeMediaBrowsePlay,
   subscribeNativeMediaSeek,
+  pushNativeMediaQueue,
   updateNativeMediaPosition,
   updateNativeMediaSession,
+  type NativeMediaTrack,
 } from "@/lib/nativeMedia";
 import { isNativePlatform } from "@/hooks/useCapacitor";
 import { useApp } from "@/store/AppContext";
@@ -729,6 +732,84 @@ export default function GlobalMusicPlayer() {
       }
     });
   }, [setCurrentTime]);
+
+  // 车载 / MediaSession 队列：playlist 变更时推送
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    const audioItems = playlist.filter(
+      (it) => it.type === "audio" || !!it.audioOnly,
+    );
+    if (audioItems.length === 0) {
+      void pushNativeMediaQueue([], 0);
+      return;
+    }
+    const tracks: NativeMediaTrack[] = audioItems.map((it) => {
+      const cover = it.cover_url
+        ? it.cover_url.startsWith("/") && !it.cover_url.startsWith("/api")
+          ? `${window.location.origin}${it.cover_url}`
+          : resolveAttachmentUrl(it.cover_url)
+        : undefined;
+      return {
+        id: it.id,
+        title: it.title || "未知曲目",
+        artist: it.artist || "",
+        album: it.album || "",
+        duration: it.duration || 0,
+        coverUrl: cover,
+      };
+    });
+    const idx = Math.max(
+      0,
+      audioItems.findIndex((it) => it.id === currentMedia?.id),
+    );
+    void pushNativeMediaQueue(tracks, idx >= 0 ? idx : 0);
+  }, [playlist, currentMedia?.id]);
+
+  // 车机 MediaBrowser 点播（原生侧已先起 FGS；此处立刻刷新 Session 并起播）
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    return subscribeNativeMediaBrowsePlay((ev) => {
+      // 先占住 FGS，避免拉详情期间服务被系统回收
+      void updateNativeMediaSession({
+        title: ev.title || "正在连接…",
+        artist: ev.artist || "车载点播",
+        isPlaying: true,
+        position: 0,
+      });
+
+      const st = useMediaStore.getState();
+      const fromPlaylist = st.playlist.find((x) => x.id === ev.id);
+      if (fromPlaylist) {
+        playMedia(fromPlaylist, st.playlist);
+        return;
+      }
+      // 合集树点播：拉详情后播放
+      void (async () => {
+        try {
+          const item = await api.request<MediaPlayItem>(`/media/items/${ev.id}`);
+          if (!item) return;
+          const playItem: MediaPlayItem = {
+            id: item.id,
+            title: item.title || ev.title || "未知曲目",
+            type: (item as any).type === "video" ? "video" : "audio",
+            artist: (item as any).artist || ev.artist,
+            album: (item as any).album,
+            cover_url: (item as any).cover_url,
+            duration: (item as any).duration,
+            alist_path: (item as any).alist_path || "",
+          };
+          if (playItem.type === "video") {
+            // 车载默认仅听视频音轨
+            useMediaStore.getState().playAsAudioOnly(playItem);
+          } else {
+            playMedia(playItem, [playItem, ...st.playlist.filter((x) => x.id !== playItem.id)]);
+          }
+        } catch (e) {
+          console.warn("[car] browse play failed", e);
+        }
+      })();
+    });
+  }, [playMedia]);
 
   // 同步 Web mediaSession + Android 锁屏进度（约 1s 节流）
   useEffect(() => {

@@ -3,33 +3,53 @@
  * 与 GlobalMusicPlayer 的 HTMLAudio + mediaSession 互补：
  *   - Web mediaSession：部分机型锁屏可用
  *   - 本插件：FGS mediaPlayback + 通知栏按钮 + MediaSession 进度
+ *   - 车载：pushQueue / pushCatalog + MediaBrowser 浏览点播
  */
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { isNativePlatform } from "@/hooks/useCapacitor";
 
 export type MediaAction = "play" | "pause" | "next" | "prev" | "stop" | "mode";
 
+export interface NativeMediaTrack {
+  id: string;
+  title: string;
+  artist?: string;
+  album?: string;
+  /** 秒 */
+  duration?: number;
+  coverUrl?: string;
+}
+
+export interface NativeMediaCollection {
+  id: string;
+  title: string;
+  tracks: NativeMediaTrack[];
+}
+
 interface MediaPlaybackPlugin {
   update(opts: {
     title: string;
     artist?: string;
     isPlaying: boolean;
-    /** 当前进度（秒） */
     position?: number;
-    /** 总时长（秒） */
     duration?: number;
-    /** 播放模式: sequence | random | loop */
     playMode?: string;
-    /** 音频封面图片地址 */
     coverUrl?: string;
   }): Promise<{ ok: boolean }>;
-  /** 高频进度刷新（秒） */
   updatePosition(opts: {
     position?: number;
     duration?: number;
     isPlaying?: boolean;
   }): Promise<{ ok: boolean }>;
   stop(): Promise<{ ok: boolean }>;
+  pushQueue(opts: {
+    items: NativeMediaTrack[];
+    currentIndex?: number;
+  }): Promise<{ ok: boolean; count?: number }>;
+  pushCatalog(opts: {
+    recent: NativeMediaTrack[];
+    collections: NativeMediaCollection[];
+  }): Promise<{ ok: boolean }>;
   addListener(
     eventName: "mediaAction",
     listener: (ev: { action: MediaAction }) => void,
@@ -37,6 +57,10 @@ interface MediaPlaybackPlugin {
   addListener(
     eventName: "mediaSeek",
     listener: (ev: { position: number }) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "mediaBrowsePlay",
+    listener: (ev: { id: string; title?: string; artist?: string }) => void,
   ): Promise<PluginListenerHandle>;
 }
 
@@ -76,7 +100,6 @@ export async function updateNativeMediaSession(opts: {
   }
 }
 
-/** 锁屏进度条：节流调用，仅推送 position/duration */
 export async function updateNativeMediaPosition(opts: {
   position?: number;
   duration?: number;
@@ -105,6 +128,58 @@ export async function stopNativeMediaSession(): Promise<void> {
   }
 }
 
+/** 同步当前播放队列到车机 MediaSession / MediaBrowser */
+export async function pushNativeMediaQueue(
+  items: NativeMediaTrack[],
+  currentIndex = 0,
+): Promise<void> {
+  const p = getPlugin();
+  if (!p) return;
+  try {
+    await p.pushQueue({
+      items: items.slice(0, 200).map((t) => ({
+        id: t.id,
+        title: t.title || "未知曲目",
+        artist: t.artist || "",
+        album: t.album || "",
+        duration: t.duration,
+        coverUrl: t.coverUrl,
+      })),
+      currentIndex,
+    });
+  } catch (e) {
+    console.warn("[nativeMedia] pushQueue failed", e);
+  }
+}
+
+/** 同步音频库快照（合集树 + 最近）供车机浏览 */
+export async function pushNativeMediaCatalog(opts: {
+  recent: NativeMediaTrack[];
+  collections: NativeMediaCollection[];
+}): Promise<void> {
+  const p = getPlugin();
+  if (!p) return;
+  try {
+    await p.pushCatalog({
+      recent: opts.recent.slice(0, 50),
+      collections: opts.collections.slice(0, 40).map((c) => ({
+        id: c.id,
+        title: c.title,
+        tracks: (c.tracks || []).slice(0, 80).map((t) => ({
+          id: t.id,
+          title: t.title || "未知曲目",
+          artist: t.artist || "",
+          album: t.album || "",
+          duration: t.duration,
+          coverUrl: t.coverUrl,
+        })),
+      })),
+    });
+  } catch (e) {
+    console.warn("[nativeMedia] pushCatalog failed", e);
+  }
+}
+
 export function subscribeNativeMediaActions(
   onAction: (action: MediaAction) => void,
 ): () => void {
@@ -124,7 +199,6 @@ export function subscribeNativeMediaActions(
   };
 }
 
-/** 锁屏拖动进度（秒） */
 export function subscribeNativeMediaSeek(
   onSeek: (positionSec: number) => void,
 ): () => void {
@@ -136,6 +210,26 @@ export function subscribeNativeMediaSeek(
       if (ev && typeof ev.position === "number" && Number.isFinite(ev.position)) {
         onSeek(ev.position);
       }
+    })
+    .then((h) => {
+      handle = h;
+    })
+    .catch(() => {});
+  return () => {
+    void handle?.remove();
+  };
+}
+
+/** 车机 MediaBrowser 点播 */
+export function subscribeNativeMediaBrowsePlay(
+  onPlay: (ev: { id: string; title?: string; artist?: string }) => void,
+): () => void {
+  const p = getPlugin();
+  if (!p) return () => {};
+  let handle: PluginListenerHandle | null = null;
+  void p
+    .addListener("mediaBrowsePlay", (ev) => {
+      if (ev?.id) onPlay(ev);
     })
     .then((h) => {
       handle = h;
