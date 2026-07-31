@@ -33,7 +33,9 @@ import {
   collectBookFilesFromDataTransfer,
   epubPackageAccessHint,
 } from "@/lib/epubPackage";
-import ReadingDashboard from "@/components/books/ReadingDashboard";
+import ReadingDashboard, {
+  BOOK_COVER_WIDTH_CLASS,
+} from "@/components/books/ReadingDashboard";
 
 interface BookCenterProps {
   onOpenBook: (bookHash: string) => void;
@@ -45,7 +47,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
   const [groups, setGroups] = useState<BookGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  // 默认进入「阅读中」仪表盘（桌面）/ 列表（移动）
+  // 默认进入「阅读中」仪表盘（桌面 / 移动同一套 UI）
   const [selectedFilter, setSelectedFilter] = useState<string>("reading"); // "all", "uncategorized", "reading", "finished", or groupId
   const [newGroupName, setNewGroupName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -603,83 +605,15 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
           />
         </div>
 
-        {/* 桌面「阅读中」：仪表盘；其它 filter / 移动端：封面网格 */}
+        {/* 「阅读中」：桌面 / 移动共用 ReadingDashboard 仪表盘 */}
         {selectedFilter === "reading" && !searchQuery ? (
-          <>
-            <div className="hidden md:flex flex-1 flex-col min-h-0">
-              {loading ? (
-                <LoadingBlock label="加载书库中…" className="h-64" />
-              ) : (
-                <ReadingDashboard books={filteredBooks} onOpenBook={onOpenBook} />
-              )}
-            </div>
-            <div className="md:hidden flex-1 overflow-y-auto p-3 sm:p-4 pb-[calc(1.25rem+var(--safe-area-bottom,0px))]">
-              {loading ? (
-                <LoadingBlock label="加载书库中…" className="h-64" />
-              ) : filteredBooks.length === 0 ? (
-                <EmptyState
-                  icon={BookOpen}
-                  title="还没有在读的书"
-                  description="打开一本书开始阅读后，会显示在这里"
-                  action={
-                    <EmptyActionButton onClick={() => setSelectedFilter("all")}>
-                      浏览全部书籍
-                    </EmptyActionButton>
-                  }
-                  className="h-64"
-                />
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                  {filteredBooks.map((book) => {
-                    const coverBg = getHashColor(book.title);
-                    let coverUrl: string | null = null;
-                    if (book.metadata) {
-                      try {
-                        const meta = JSON.parse(book.metadata);
-                        if (meta.coverAttachmentId) {
-                          coverUrl = resolveAttachmentUrl(`/api/attachments/${meta.coverAttachmentId}`);
-                        }
-                      } catch {}
-                    }
-                    return (
-                      <div
-                        key={book.bookHash}
-                        onClick={() => onOpenBook(book.bookHash)}
-                        className="group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all"
-                      >
-                        <div
-                          className="aspect-[3/4] w-full relative overflow-hidden rounded-md shadow-sm border border-app-border/30 select-none"
-                          style={{ backgroundColor: coverBg }}
-                        >
-                          <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-2 text-center pointer-events-none">
-                            <h3 className="text-[11px] font-bold text-white leading-tight font-serif line-clamp-4 drop-shadow">
-                              {book.title}
-                            </h3>
-                          </div>
-                          {coverUrl ? (
-                            <img
-                              src={coverUrl}
-                              alt={book.title}
-                              className="absolute inset-0 z-[2] w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
-                          ) : null}
-                        </div>
-                        <div className="mt-2 px-0.5">
-                          <div className="text-[12px] font-medium text-tx-primary line-clamp-2 leading-snug">
-                            {book.title}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </>
+          <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+            {loading ? (
+              <LoadingBlock label="加载书库中…" className="h-64" />
+            ) : (
+              <ReadingDashboard books={filteredBooks} onOpenBook={onOpenBook} />
+            )}
+          </div>
         ) : (
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(1.25rem+var(--safe-area-bottom,0px))]">
           {loading ? (
@@ -697,7 +631,8 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               className="h-64"
             />
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2.5 sm:gap-3 md:gap-4">
+            // 固定封面宽高，与「阅读中」仪表盘封面一致（不随栅格列数被拉大/压小）
+            <div className="flex flex-wrap gap-2.5 sm:gap-3 md:gap-4">
               {filteredBooks.map((book) => {
                 const coverBg = getHashColor(book.title);
                 let coverUrl: string | null = null;
@@ -713,7 +648,10 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                   <div
                     key={book.bookHash}
                     onClick={() => onOpenBook(book.bookHash)}
-                    className="group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all"
+                    className={cn(
+                      "group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all shrink-0",
+                      BOOK_COVER_WIDTH_CLASS,
+                    )}
                   >
                     {/*
                       封面层：底色 + 书名始终铺在底层；有 coverUrl 时 img 盖在上面。
@@ -783,7 +721,10 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                 disabled={isUploading}
                 title="导入书籍"
                 aria-label="导入书籍"
-                className="group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all text-left disabled:opacity-60 disabled:cursor-wait"
+                className={cn(
+                  "group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all text-left disabled:opacity-60 disabled:cursor-wait shrink-0",
+                  BOOK_COVER_WIDTH_CLASS,
+                )}
               >
                 <div className="aspect-[3/4] w-full relative overflow-hidden rounded-md shadow-sm border border-app-border/40 bg-white dark:bg-app-surface flex items-center justify-center hover:border-accent-primary/40 hover:bg-app-hover/40 transition-colors">
                   {isUploading ? (

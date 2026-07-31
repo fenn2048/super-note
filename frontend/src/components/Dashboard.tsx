@@ -22,7 +22,7 @@ import { api, setCurrentWorkspace, getServerUrl, getCurrentWorkspace } from "@/l
 import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import type { Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from "@/types";
+import type { Book, Diary, Task, NoteListItem, Workspace, WorkspaceInvite, User } from "@/types";
 import { haptic, syncTaskNotification } from "@/hooks/useCapacitor";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
@@ -33,6 +33,8 @@ import { isModuleAllowedByPack } from "@/lib/modulePack";
 import { LoadingBlock, EmptyState, EmptyActionButton } from "@/components/common/FeedbackStates";
 import PageHeader from "@/components/layout/PageHeader";
 import ContentCanvas from "@/components/layout/ContentCanvas";
+import ReadingDashboard from "@/components/books/ReadingDashboard";
+import { setLibraryTab } from "@/lib/navigation.config";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -392,6 +394,7 @@ export default function Dashboard() {
   const [diaries, setDiaries] = useState<Diary[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [notes, setNotes] = useState<NoteListItem[]>([]);
+  const [readingBooks, setReadingBooks] = useState<Book[]>([]);
   const [stats, setStats] = useState({ diaryCount: 0, taskPending: 0, noteCount: 0 });
   const [financeOverview, setFinanceOverview] = useState<{
     year: string;
@@ -489,13 +492,17 @@ export default function Dashboard() {
     setLoading(true);
     try {
       // P1 收尾：/api/tasks 已代理到 project_tasks，统一用 getTasks 即可，避免双重计数
-      const [diaryData, tasksData, notesData, fin] = await Promise.all([
+      const [diaryData, tasksData, notesData, fin, booksData] = await Promise.all([
         api.getDiaryTimeline(undefined, 5).catch(() => ({ items: [] as Diary[], hasMore: false, nextCursor: null })),
         api.getTasks("all").catch(() => [] as Task[]),
         api.getNotes({ sortBy: "updatedAt", sortOrder: "desc", limit: "5", isTrashed: "0" }).catch(() => [] as NoteListItem[]),
         isModuleAllowedByPack("finance")
           ? api.finance.financeOverview().catch(() => null)
           : Promise.resolve(null),
+        // 首页「阅读中」：拉书库列表（ReadingDashboard 内按最近更新排序）
+        isModuleAllowedByPack("books") || isModuleAllowedByPack("library")
+          ? api.books.list({}).catch(() => [] as Book[])
+          : Promise.resolve([] as Book[]),
       ]);
 
       const diaryItems = diaryData.items || [];
@@ -503,6 +510,7 @@ export default function Dashboard() {
       setTasks(tasksData || []);
       setNotes(notesData || []);
       setFinanceOverview(fin);
+      setReadingBooks(Array.isArray(booksData) ? booksData : []);
 
       const pendingSoon = (tasksData || []).filter(
         (t: Task) =>
@@ -522,6 +530,18 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, []);
+
+  /** 从首页打开某本书：进资料库书库 Tab 并触发全局打开事件 */
+  const handleOpenBookFromHome = useCallback(
+    (bookHash: string) => {
+      haptic.light();
+      setLibraryTab("books");
+      actions.setViewMode("library");
+      actions.setMobileView("list");
+      window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+    },
+    [actions],
+  );
 
   useEffect(() => {
     loadDashboard();
@@ -744,6 +764,22 @@ export default function Dashboard() {
                 onCreateNote={handleQuickCreateNote}
                 onWriteSays={handleQuickWriteSays}
                 onAddTask={handleQuickAddTask}
+              />
+            </motion.div>
+          )}
+
+          {/* ===== 书籍「阅读中」仪表盘（桌面 + 移动首页共用） ===== */}
+          {(isModuleAllowedByPack("books") || isModuleAllowedByPack("library")) && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.06 }}
+              className="rounded-window border border-app-border/60 bg-app-elevated shadow-sm p-4 sm:p-5"
+            >
+              <ReadingDashboard
+                books={readingBooks}
+                onOpenBook={handleOpenBookFromHome}
+                variant="section"
               />
             </motion.div>
           )}
