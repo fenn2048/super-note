@@ -29,7 +29,7 @@
  */
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film,
+  BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film, Smile,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
   Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Wallet,
 } from "lucide-react";
@@ -58,11 +58,12 @@ const RAIL_ICON_SIZE = 18;
 
 const RAIL_ICONS: Record<string, React.ReactNode> = {
   home: <Home size={RAIL_ICON_SIZE} />,
-  notes: <BookOpen size={RAIL_ICON_SIZE} />,
+  // 笔记 ← 原说说 NotebookPen；说说 ← 笑脸轮廓；资料库 ← 原笔记 BookOpen
+  notes: <NotebookPen size={RAIL_ICON_SIZE} />,
   tasks: <ListTodo size={RAIL_ICON_SIZE} />,
-  diary: <NotebookPen size={RAIL_ICON_SIZE} />,
+  diary: <Smile size={RAIL_ICON_SIZE} />,
   ai: <Sparkles size={RAIL_ICON_SIZE} />,
-  library: <FolderOpen size={RAIL_ICON_SIZE} />,
+  library: <BookOpen size={RAIL_ICON_SIZE} />,
   files: <FolderOpen size={RAIL_ICON_SIZE} />,
   books: <Book size={RAIL_ICON_SIZE} />,
   media: <Film size={RAIL_ICON_SIZE} />,

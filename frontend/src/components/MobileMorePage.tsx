@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import {
-  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine, Wallet,
+  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine, Wallet, NotebookPen,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
@@ -14,8 +14,9 @@ import { isNativePlatform } from "@/hooks/useCapacitor";
 import QrScanPage from "@/components/QrScanPage";
 
 const MORE_ICONS: Record<string, React.ReactNode> = {
-  notes: <BookOpen className="w-6 h-6 text-indigo-500" />,
-  library: <FolderOpen className="w-6 h-6 text-teal-500" />,
+  // 与桌面 Rail 一致：笔记 NotebookPen，资料库 BookOpen
+  notes: <NotebookPen className="w-6 h-6 text-indigo-500" />,
+  library: <BookOpen className="w-6 h-6 text-teal-500" />,
   media: <Film className="w-6 h-6 text-sky-500" />,
   trash: <Trash2 className="w-6 h-6 text-red-500" />,
   favorites: <Heart className="w-6 h-6 text-red-500" fill="currentColor" />,

@@ -108,16 +108,6 @@ export const NAV_MODULES: NavModule[] = [
     placements: ["desktopRail", "mobileTab", "cmdk"],
     group: "primary",
   },
-  {
-    id: "ai",
-    mode: "ai-chat",
-    labelKey: "sidebar.aiChat",
-    labelFallback: "AI",
-    tier: 1,
-    placements: ["desktopRail", "mobileMore", "cmdk"],
-    group: "secondary",
-    moreDesc: "智能问答与写作辅助",
-  },
 
   // ── 侧栏/我的：笔记派生视图 ──
   {
@@ -161,6 +151,17 @@ export const NAV_MODULES: NavModule[] = [
     placements: ["desktopRail", "mobileMore", "cmdk"],
     group: "secondary",
     moreDesc: "个人账本、账单导入与收支统计",
+  },
+  // AI 放在桌面 Rail 次要区最后（记账之后）
+  {
+    id: "ai",
+    mode: "ai-chat",
+    labelKey: "sidebar.aiChat",
+    labelFallback: "AI",
+    tier: 1,
+    placements: ["desktopRail", "mobileMore", "cmdk"],
+    group: "secondary",
+    moreDesc: "智能问答与写作辅助",
   },
   // 移动快捷：仍保留分项，进入 library + 对应 tab
   {

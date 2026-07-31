@@ -3,7 +3,7 @@
  * 笔记入口改到「我的」宫格。
  */
 import React, { useMemo } from "react";
-import { Home, ListTodo, NotebookPen, User as UserIcon } from "lucide-react";
+import { Home, ListTodo, Smile, User as UserIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,8 @@ import type { ViewMode } from "@/types";
 const TAB_ICONS: Record<string, React.ReactNode> = {
   home: <Home size={20} />,
   tasks: <ListTodo size={20} />,
-  diary: <NotebookPen size={20} />,
+  // 说说：笑脸轮廓（原 NotebookPen 已给笔记）
+  diary: <Smile size={20} />,
 };
 
 export default function MobileTabBar({ visible }: { visible: boolean }) {
