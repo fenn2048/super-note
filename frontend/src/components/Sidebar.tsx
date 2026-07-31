@@ -2421,14 +2421,17 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             )}
           </AnimatePresence>
 
-          {/* 回收站入口 */}
-          <div className="border-t border-app-border shrink-0 px-2 py-1.5">
+          {/* 回收站入口：样式与下方「收藏」一致——无左侧 icon，右侧向右箭头 */}
+          <div className="border-t border-app-border shrink-0">
             <button
+              type="button"
               onClick={() => setTrashModalOpen(true)}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-tx-secondary hover:bg-app-hover hover:text-red-500 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-app-hover transition-colors"
             >
-              <Trash2 size={14} className="text-red-500 shrink-0" />
-              <span className="truncate">{t('sidebar.trash') || "回收站"}</span>
+              <span className="text-xs font-semibold text-tx-tertiary uppercase tracking-wider">
+                {t('sidebar.trash') || "回收站"}
+              </span>
+              <ChevronRight size={14} className="text-tx-tertiary shrink-0" />
             </button>
           </div>
 
