@@ -242,7 +242,7 @@ export interface NoteListItem {
   createdAt: string;
   updatedAt: string;
   /**
-   * 创建者用户名（后端 LEFT JOIN users.username）。
+   * 创建者显示名（后端 COALESCE(users.displayName, users.username)）。
    * 仅 list 接口返回；个人空间下也会有值（恒为自己），前端通常仅在工作区视图展示。
    * null/undefined 表示用户已被删除或后端老版本未带该字段。
    */

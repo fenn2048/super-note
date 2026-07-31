@@ -56,17 +56,18 @@ app.get("/", (c) => {
   // 动态计算（EXISTS 子查询，结果仍是 0/1，前端契约 Note.isFavorite: number 不变）。
   // 这样同一条工作区笔记在不同成员视角下的收藏状态互不影响。
   //
-  // creatorName: LEFT JOIN users 取创建者用户名。
+  // creatorName: LEFT JOIN users 取创建者昵称（优先 displayName，回退 username）。
   //   - 工作区下笔记可由不同成员创建，前端列表需要标注"谁建的"，避免每个客户端再
   //     按 userId 反查成员表；
   //   - LEFT JOIN（而非 INNER JOIN）兜底"用户已被删除但 ON DELETE CASCADE 还没跑完"
   //     的极端窗口期 → 名字给 null，前端按"未知用户"渲染；
-  //   - users.username 已有 UNIQUE 索引，单行 join 代价可忽略。
+  //   - 与 diaries / books 等列表契约对齐：COALESCE(displayName, username)。
   let query = `SELECT notes.id, notes.userId, notes.notebookId, notes.workspaceId, notes.title,
     notes.contentText, notes.isPinned,
     CASE WHEN EXISTS(SELECT 1 FROM favorites f WHERE f.noteId = notes.id AND f.userId = ?) THEN 1 ELSE 0 END AS isFavorite,
     notes.isLocked, notes.isArchived, notes.isTrashed, notes.version, notes.createdAt, notes.updatedAt,
-    users.username AS creatorName
+    notes.visibility,
+    COALESCE(users.displayName, users.username) AS creatorName
     FROM notes
     LEFT JOIN users ON users.id = notes.userId
     WHERE 1=1`;
@@ -329,9 +330,9 @@ app.get("/:id", (c) => {
   const favExpr = `CASE WHEN EXISTS(SELECT 1 FROM favorites f WHERE f.noteId = notes.id AND f.userId = ?) THEN 1 ELSE 0 END AS isFavorite`;
   const selectCols = slim
     ? `id, userId, notebookId, workspaceId, title, isPinned, ${favExpr}, isLocked,
-       isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt`
+       isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt, visibility`
     : `id, userId, notebookId, workspaceId, title, content, contentText, isPinned, ${favExpr},
-       isLocked, isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt`;
+       isLocked, isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt, visibility`;
   const note = db.prepare(`SELECT ${selectCols} FROM notes WHERE id = ?`).get(userId, id);
   if (!note) return c.json({ error: "Note not found" }, 404);
 
@@ -432,7 +433,7 @@ app.post("/", async (c) => {
   const note = db.prepare(`
     SELECT id, userId, notebookId, workspaceId, title, content, contentText, isPinned,
       CASE WHEN EXISTS(SELECT 1 FROM favorites f WHERE f.noteId = notes.id AND f.userId = ?) THEN 1 ELSE 0 END AS isFavorite,
-      isLocked, isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt
+      isLocked, isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt, visibility
     FROM notes WHERE id = ?
   `).get(userId, id);
   logAudit(userId, "note", "create", { noteId: id, title: body.title }, { targetType: "note", targetId: id });
@@ -724,6 +725,13 @@ app.put("/:id", async (c) => {
     if (body.isTrashed) { fields.push("trashedAt = datetime('now')"); }
   }
   if (body.sortOrder !== undefined) { fields.push("sortOrder = ?"); params.push(body.sortOrder); }
+  // 可见性：PRIVATE | WORKSPACE（与 notebooks 对齐）。此前只在 writeFields 里做权限校验，
+  // 未真正写入 DB，导致前端 toast 成功但 UI 仍显示「私有」。
+  if (body.visibility !== undefined) {
+    const vis = body.visibility === "WORKSPACE" ? "WORKSPACE" : "PRIVATE";
+    fields.push("visibility = ?");
+    params.push(vis);
+  }
 
   const contentFieldNames = ["title", "content", "contentText", "notebookId"];
   const hasContentFieldChange = contentFieldNames.some((f) => body[f] !== undefined);
@@ -757,7 +765,7 @@ app.put("/:id", async (c) => {
   const note = db.prepare(`
     SELECT id, userId, notebookId, workspaceId, title, content, contentText, isPinned,
       CASE WHEN EXISTS(SELECT 1 FROM favorites f WHERE f.noteId = notes.id AND f.userId = ?) THEN 1 ELSE 0 END AS isFavorite,
-      isLocked, isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt
+      isLocked, isArchived, isTrashed, version, sortOrder, createdAt, updatedAt, trashedAt, visibility
     FROM notes WHERE id = ?
   `).get(userId, id);
 
