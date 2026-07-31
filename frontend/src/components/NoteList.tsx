@@ -911,16 +911,26 @@ const NoteCard = React.memo(function NoteCard({
   onTouchEnd?: () => void;
   cardRef?: (el: HTMLDivElement | null) => void;
 }) {
-  // 预览文本：取正文前 100 字，并把所有空白序列（含 \n、\r、\t、连续空格）
-  // 压成单个空格。否则 markdown 多段落正文里的换行会被 <p> 当作空白渲染，
-  // 配合 line-clamp-2 + break-words 出现"每句被切到独立一行"的错觉
-  // （短标题时不明显，因为预览整体行数少；长标题挤占空间后尤为严重）。
-  const preview = (note.contentText?.slice(0, 100) || "").replace(/\s+/g, " ").trim();
+  // 预览文本：清洗附件/链接噪声后取前 160 字，并把所有空白序列压成单个空格。
+  // 否则 markdown 多段落换行 + 附件文件名会挤占 line-clamp-2，看起来像「被截断」。
+  const preview = (() => {
+    const raw = note.contentText || "";
+    const cleaned = raw
+      // 常见附件/链接 markdown 噪声
+      .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
+      .replace(/\[[^\]]*]\([^)]*\)/g, " ")
+      .replace(/https?:\/\/\S+/gi, " ")
+      .replace(/\b[\w.-]+\.(pdf|docx?|xlsx?|pptx?|zip|rar|epub|png|jpe?g|gif|webp)\b/gi, " ")
+      .replace(/[📎🔗📄]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return cleaned.slice(0, 160);
+  })();
   const { t } = useTranslation();
   const wordCount = note.contentText?.length || 0;
   // 工作区视图下笔记可能由不同成员创建，需要在卡片底部展示创建者；
   // 个人空间下创建者一定是当前用户，留白即可。creatorName 由后端 list 接口
-  // LEFT JOIN users 注入，老后端无该字段时退化为不展示。
+  // COALESCE(displayName, username) 注入（昵称优先），老后端无该字段时退化为不展示。
   const showCreator =
     !!note.creatorName && getCurrentWorkspace() !== "personal";
 
@@ -1007,7 +1017,12 @@ const NoteCard = React.memo(function NoteCard({
               "整行装不下的长不可断词"时才强制打破，对中英混排最友好。
             - overflow-wrap-anywhere 避免极长 URL 撑破容器。 */}
         {preview && (
-          <p className="note-list-preview text-xs text-tx-tertiary mt-1.5 line-clamp-2 leading-relaxed break-words [overflow-wrap:anywhere]">{preview}</p>
+          <p
+            className="note-list-preview text-xs text-tx-tertiary mt-1.5 line-clamp-2 leading-relaxed break-words [overflow-wrap:anywhere]"
+            title={preview}
+          >
+            {preview}
+          </p>
         )}
 
         {/* 底部元信息行
@@ -2599,7 +2614,7 @@ export default function NoteList() {
 
   return (
     <div className="w-full h-full bg-app-surface border-r border-app-border/80 flex flex-col transition-colors relative">
-      {/* Mobile Header — 统一 MobileChromeHeader（含汉堡入口） */}
+      {/* Mobile Header：笔记从「我的」进入 → 左上角返回（非汉堡/面包屑），回「我的」 */}
       {mobileSearchOpen ? (
         <MobileChromeHeader
           variant="stack"
@@ -2629,66 +2644,66 @@ export default function NoteList() {
             </div>
           }
         />
-      ) : state.viewMode === "favorites" || state.viewMode === "trash" ? (
+      ) : (
         <MobileChromeHeader
           variant="stack"
           stackAction="back"
           title={viewTitles[state.viewMode]}
+          leadingLabel="返回"
           onLeadingClick={() => {
+            // 笔记入口在「我的」宫格：返回上一级为「我的」
             actions.setViewMode("more");
             actions.setMobileView("list");
+            actions.setSelectedNotebook(null);
+            actions.setSelectedTag(null);
+            actions.setSearchQuery("");
           }}
           right={
-            state.viewMode === "trash" ? (
-              <MobileChromeIconButton
-                title={t("sidebar.emptyTrash")}
-                className="text-accent-danger hover:bg-accent-danger/10"
-                onClick={() => {
-                  try {
-                    window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
-                  } catch { /* ignore */ }
-                }}
-              >
-                <Trash2 size={18} />
-              </MobileChromeIconButton>
-            ) : undefined
-          }
-        />
-      ) : (
-        <MobileChromeHeader
-          variant="root"
-          title={viewTitles[state.viewMode]}
-          right={
             <div className="flex items-center gap-0.5 relative">
-              {state.viewMode !== "search" && (
+              {state.viewMode === "trash" ? (
+                <MobileChromeIconButton
+                  title={t("sidebar.emptyTrash")}
+                  className="text-accent-danger hover:bg-accent-danger/10"
+                  onClick={() => {
+                    try {
+                      window.dispatchEvent(new CustomEvent("super:open-empty-trash"));
+                    } catch { /* ignore */ }
+                  }}
+                >
+                  <Trash2 size={18} />
+                </MobileChromeIconButton>
+              ) : (
                 <>
+                  {state.viewMode !== "search" && (
+                    <>
+                      <MobileChromeIconButton
+                        ref={sortBtnMobileRef}
+                        title={t("noteList.sortBy")}
+                        active={sortPref.by !== "manual"}
+                        onClick={() => setShowSortMenu((v) => !v)}
+                      >
+                        <ArrowUpDown size={18} />
+                      </MobileChromeIconButton>
+                      <MobileChromeIconButton
+                        title={t("noteList.dateFilter")}
+                        active={!!(showCalendar || dateFilter)}
+                        onClick={() => setShowCalendar(!showCalendar)}
+                      >
+                        <CalendarDays size={18} />
+                        {dateFilter && (
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent-primary" />
+                        )}
+                      </MobileChromeIconButton>
+                    </>
+                  )}
                   <MobileChromeIconButton
-                    ref={sortBtnMobileRef}
-                    title={t("noteList.sortBy")}
-                    active={sortPref.by !== "manual"}
-                    onClick={() => setShowSortMenu((v) => !v)}
+                    title="搜索"
+                    onClick={() => setMobileSearchOpen(true)}
                   >
-                    <ArrowUpDown size={18} />
-                  </MobileChromeIconButton>
-                  <MobileChromeIconButton
-                    title={t("noteList.dateFilter")}
-                    active={!!(showCalendar || dateFilter)}
-                    onClick={() => setShowCalendar(!showCalendar)}
-                  >
-                    <CalendarDays size={18} />
-                    {dateFilter && (
-                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent-primary" />
-                    )}
+                    <Search size={18} />
                   </MobileChromeIconButton>
                 </>
               )}
-              {/* 新建交给全局 FAB / CreateMenu，顶栏只保留检索与筛选 */}
-              <MobileChromeIconButton
-                title="搜索"
-                onClick={() => setMobileSearchOpen(true)}
-              >
-                <Search size={18} />
-              </MobileChromeIconButton>
             </div>
           }
         />
