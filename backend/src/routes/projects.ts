@@ -6,6 +6,11 @@ import { getUserWorkspaceRole } from "../middleware/acl.js";
 import { propagateProjectStatusUp, syncMilestoneStatusDirect, propagateStatusDown } from "../lib/planStatusSync.js";
 import { handleRecurringTask, getNextOccurrenceString } from "../lib/recurrence.js";
 import { calculateRemindAt } from "../lib/reminders.js";
+import {
+  ensureDefaultTodoProject,
+  ensurePersonalTodoProject,
+  PERSONAL_TODO,
+} from "../lib/defaultTodoProject.js";
 
 const projectsRouter = new Hono();
 
@@ -38,24 +43,55 @@ projectsRouter.get("/", (c) => {
   const userId = c.req.header("X-User-Id")!;
   const workspaceId = c.req.query("workspaceId");
 
+  // 列表时幂等补齐：
+  // - 任何场景都保证「个人TODO」存在（仅自己可见）
+  // - 工作区场景额外保证「家庭TODO」
+  try {
+    const ws =
+      workspaceId && workspaceId !== "" && workspaceId !== "personal"
+        ? workspaceId
+        : null;
+    ensureDefaultTodoProject(db, userId, ws);
+  } catch (e) {
+    console.warn("[projects.list] ensureDefaultTodoProject:", e);
+  }
+
+  // 列表只展示：自己是 owner，或在 project_members 里的项目。
+  // 不再因 PUBLIC / 同工作区而露出他人项目。
+  // 工作区场景额外并入「自己的个人TODO」（owner=自己、无 workspace）。
+  const membership =
+    "(p.ownerId = ? OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.projectId = p.id AND pm.userId = ?))";
+
   let query = `
     SELECT p.*, u.username as ownerName, u.displayName as ownerDisplayName
     FROM projects p
     LEFT JOIN users u ON p.ownerId = u.id
     WHERE p.isDeleted = 0
+      AND ${membership}
   `;
-  const params: any[] = [];
+  const params: any[] = [userId, userId];
 
-  if (workspaceId) {
-    query += " AND p.workspaceId = ?";
-    params.push(workspaceId);
+  if (workspaceId && workspaceId !== "" && workspaceId !== "personal") {
+    // 工作区内我参与的项目 + 我的个人TODO
+    query += ` AND (
+      p.workspaceId = ?
+      OR (
+        p.name = ?
+        AND p.ownerId = ?
+        AND (p.workspaceId IS NULL OR p.workspaceId = '')
+      )
+    )`;
+    params.push(workspaceId, PERSONAL_TODO, userId);
   } else {
-    query += " AND (p.visibility = 'PUBLIC' OR p.ownerId = ? OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.projectId = p.id AND pm.userId = ?))";
-    params.push(userId, userId);
+    // 个人空间：仅无 workspace 的、自己参与的项目（含个人TODO）
+    query += " AND (p.workspaceId IS NULL OR p.workspaceId = '')";
   }
 
-  query += " ORDER BY p.createdAt DESC";
-  const projects = db.prepare(query).all(params);
+  // 个人TODO 置顶，其余按创建时间
+  query += " ORDER BY CASE WHEN p.name = ? AND p.ownerId = ? THEN 0 ELSE 1 END, p.createdAt DESC";
+  params.push(PERSONAL_TODO, userId);
+
+  const projects = db.prepare(query).all(...params);
 
   return c.json(projects);
 });
@@ -81,24 +117,65 @@ projectsRouter.get("/groups", (c) => {
   return c.json(groups);
 });
 
-// 获取分配给当前用户的项目任务
+// 获取当前用户相关的项目任务（我的任务）
+// filter: assigned | created | participating | all（默认 assigned）
+// workspaceId 有值时：该工作区任务 + 自己的个人TODO 任务（不丢个人待办）
 projectsRouter.get("/my-tasks", (c) => {
   const db = getDb();
   const userId = c.req.header("X-User-Id")!;
   const workspaceId = c.req.query("workspaceId");
+  const filter = (c.req.query("filter") || "assigned").toLowerCase();
+
+  let roleClause = "";
+  const params: any[] = [];
+
+  if (filter === "created") {
+    roleClause = "pt.creatorId = ?";
+    params.push(userId);
+  } else if (filter === "participating") {
+    roleClause = `EXISTS (
+      SELECT 1 FROM project_task_members ptm
+      WHERE ptm.taskId = pt.id AND ptm.userId = ?
+    )`;
+    params.push(userId);
+  } else if (filter === "all") {
+    roleClause = `(
+      pt.assigneeId = ?
+      OR pt.creatorId = ?
+      OR EXISTS (
+        SELECT 1 FROM project_task_members ptm
+        WHERE ptm.taskId = pt.id AND ptm.userId = ?
+      )
+    )`;
+    params.push(userId, userId, userId);
+  } else {
+    // assigned（默认）：指派给我；兼容未指派但自己创建的（历史脏数据）
+    roleClause = `(pt.assigneeId = ? OR (pt.assigneeId IS NULL AND pt.creatorId = ?))`;
+    params.push(userId, userId);
+  }
 
   let query = `
     SELECT pt.*, p.name as projectName, p.workspaceId as projectWorkspaceId, ps.name as stageName
     FROM project_tasks pt
     JOIN projects p ON pt.projectId = p.id
     LEFT JOIN project_stages ps ON pt.stageId = ps.id
-    WHERE p.isDeleted = 0 AND pt.assigneeId = ?
+    WHERE p.isDeleted = 0 AND ${roleClause}
   `;
-  const params: any[] = [userId];
 
-  if (workspaceId) {
-    query += " AND p.workspaceId = ?";
-    params.push(workspaceId);
+  if (workspaceId && workspaceId !== "" && workspaceId !== "personal") {
+    // 工作区任务 + 我的个人TODO（避免在协作空间看不到个人快速创建）
+    query += ` AND (
+      p.workspaceId = ?
+      OR (
+        p.name = ?
+        AND p.ownerId = ?
+        AND (p.workspaceId IS NULL OR p.workspaceId = '')
+      )
+    )`;
+    params.push(workspaceId, PERSONAL_TODO, userId);
+  } else if (!workspaceId || workspaceId === "" || workspaceId === "personal") {
+    // 个人空间：仅个人侧项目任务
+    query += " AND (p.workspaceId IS NULL OR p.workspaceId = '')";
   }
 
   query += " ORDER BY pt.isCompleted ASC, pt.endDate ASC, pt.createdAt DESC LIMIT 200";
@@ -106,19 +183,27 @@ projectsRouter.get("/my-tasks", (c) => {
 
   // 补充参与者和标签信息
   for (const t of tasks) {
-    t.participants = db.prepare(`
+    t.participants = db
+      .prepare(
+        `
       SELECT u.id, u.username, u.displayName, u.avatarUrl
       FROM project_task_members ptm
       JOIN users u ON ptm.userId = u.id
       WHERE ptm.taskId = ?
-    `).all(t.id);
+    `,
+      )
+      .all(t.id);
 
-    t.tags = db.prepare(`
+    t.tags = db
+      .prepare(
+        `
       SELECT tg.*
       FROM project_task_tags ptt
       JOIN tags tg ON ptt.tagId = tg.id
       WHERE ptt.taskId = ?
-    `).all(t.id);
+    `,
+      )
+      .all(t.id);
   }
 
   return c.json(tasks);
@@ -131,23 +216,48 @@ projectsRouter.post("/", async (c) => {
   const userId = c.req.header("X-User-Id")!;
   const body = await c.req.json();
 
-  const { name, description = "", cover = "", startDate = null, endDate = null, visibility = "PRIVATE", workspaceId = null, groupId = null, status = "pending", milestoneId = null } = body;
+  let {
+    name,
+    description = "",
+    cover = "",
+    startDate = null,
+    endDate = null,
+    visibility = "PRIVATE",
+    workspaceId = null,
+    groupId = null,
+    status = "pending",
+    milestoneId = null,
+  } = body;
   if (!name) return c.json({ error: "项目名称不能为空" }, 400);
 
-  if (name === "家庭TODO" || name === "个人TODO") {
+  // 个人TODO：强制仅自己可见，不挂任何工作区（无论请求来自哪个工作区）
+  if (name === PERSONAL_TODO) {
+    workspaceId = null;
+    visibility = "PRIVATE";
+    groupId = null;
+    const existing = ensurePersonalTodoProject(db, userId);
+    const full = db
+      .prepare(
+        `SELECT p.*, u.username as ownerName, u.displayName as ownerDisplayName
+         FROM projects p LEFT JOIN users u ON p.ownerId = u.id
+         WHERE p.id = ?`,
+      )
+      .get(existing.id);
+    return c.json(full);
+  }
+
+  if (name === "家庭TODO") {
+    // 工作区级唯一：任意成员创建过则直接复用
     let existingProject: any = null;
     if (workspaceId) {
-      existingProject = db.prepare(`
-        SELECT * FROM projects 
-        WHERE name = ? AND workspaceId = ? AND isDeleted = 0
-      `).get(name, workspaceId);
-    } else {
-      existingProject = db.prepare(`
-        SELECT * FROM projects 
-        WHERE name = ? AND ownerId = ? AND (workspaceId IS NULL OR workspaceId = '') AND isDeleted = 0
-      `).get(name, userId);
+      existingProject = db
+        .prepare(
+          `SELECT * FROM projects
+           WHERE name = ? AND workspaceId = ? AND isDeleted = 0
+           LIMIT 1`,
+        )
+        .get(name, workspaceId);
     }
-
     if (existingProject) {
       return c.json(existingProject);
     }
@@ -203,12 +313,37 @@ projectsRouter.get("/:id", (c) => {
     return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
   }
 
-  const members = db.prepare(`
+  let members = db
+    .prepare(
+      `
     SELECT pm.userId, pm.role, u.username, u.displayName, u.avatarUrl
     FROM project_members pm
     JOIN users u ON pm.userId = u.id
     WHERE pm.projectId = ?
-  `).all(id);
+  `,
+    )
+    .all(id) as any[];
+
+  // 兜底：owner 不在 project_members 时补上，保证前端可判断权限与展示
+  const ownerId = (projectWithUserInfo as any).ownerId as string | undefined;
+  if (ownerId && !members.some((m) => m.userId === ownerId)) {
+    const ownerUser = db
+      .prepare(
+        "SELECT id as userId, username, displayName, avatarUrl FROM users WHERE id = ?",
+      )
+      .get(ownerId) as any;
+    if (ownerUser) {
+      members = [{ ...ownerUser, role: "owner" }, ...members];
+      // 写回 members 表，避免下次再缺
+      try {
+        db.prepare(
+          "INSERT OR IGNORE INTO project_members (projectId, userId, role) VALUES (?, ?, 'owner')",
+        ).run(id, ownerId);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   (projectWithUserInfo as any).members = members;
 
@@ -225,9 +360,32 @@ projectsRouter.put("/:id", async (c) => {
   const { isOwner, canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目", code: "FORBIDDEN" }, 403);
 
-  const { name, description, cover, startDate, endDate, visibility, groupId, isArchived, isDeleted, status, milestoneId } = body;
+  let { name, description, cover, startDate, endDate, visibility, groupId, isArchived, isDeleted, status, milestoneId } = body;
 
-  const oldProject = db.prepare("SELECT name, milestoneId, status FROM projects WHERE id = ?").get(id) as { name: string; milestoneId: string | null; status: string };
+  const oldProject = db.prepare("SELECT name, milestoneId, status, ownerId, workspaceId FROM projects WHERE id = ?").get(id) as {
+    name: string;
+    milestoneId: string | null;
+    status: string;
+    ownerId: string;
+    workspaceId: string | null;
+  };
+
+  // 个人TODO：禁止改可见性 / 工作区 / 名称（保持 owner 私有）
+  const isPersonalTodo =
+    oldProject.name === PERSONAL_TODO &&
+    oldProject.ownerId === userId &&
+    (!oldProject.workspaceId || oldProject.workspaceId === "");
+  if (isPersonalTodo) {
+    if (visibility !== undefined && visibility !== "PRIVATE") {
+      return c.json({ error: "个人TODO 仅自己可见，不可修改可见性", code: "FORBIDDEN" }, 403);
+    }
+    if (name !== undefined && name !== PERSONAL_TODO) {
+      return c.json({ error: "个人TODO 名称不可修改", code: "FORBIDDEN" }, 403);
+    }
+    visibility = "PRIVATE";
+    // 忽略任何试图挂到工作区的更新
+    groupId = groupId === undefined ? undefined : null;
+  }
 
   const updates: string[] = [];
   const params: any[] = [];
@@ -237,7 +395,13 @@ projectsRouter.put("/:id", async (c) => {
   if (cover !== undefined) { updates.push("cover = ?"); params.push(cover); }
   if (startDate !== undefined) { updates.push("startDate = ?"); params.push(startDate); }
   if (endDate !== undefined) { updates.push("endDate = ?"); params.push(endDate); }
-  if (visibility !== undefined) { updates.push("visibility = ?"); params.push(visibility); }
+  if (isPersonalTodo) {
+    updates.push("workspaceId = NULL");
+    updates.push("visibility = 'PRIVATE'");
+  } else if (visibility !== undefined) {
+    updates.push("visibility = ?");
+    params.push(visibility);
+  }
   if (groupId !== undefined) { updates.push("groupId = ?"); params.push(groupId); }
   if (isArchived !== undefined) { updates.push("isArchived = ?"); params.push(isArchived); }
   if (isDeleted !== undefined) { updates.push("isDeleted = ?"); params.push(isDeleted); }
@@ -522,9 +686,36 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const { canWrite } = getProjectPermission(id, userId);
   if (!canWrite) return c.json({ error: "无权在此项目内创建任务", code: "FORBIDDEN" }, 403);
 
-  const { stageId, title, description = "", assigneeId = null, startDate = null, endDate = null, cover = "", participants = [], tags = [], priority = 2, remindAt = null, titleColor = null, progress = 0, isRecurring = 0, recurrenceRule = null, dependencies = [], status = 'pending', reminderOffsetValue = 1, reminderOffsetUnit = 'day', recurrenceEndDate = null } = body;
+  const {
+    stageId,
+    title,
+    description = "",
+    assigneeId: rawAssigneeId = null,
+    startDate = null,
+    endDate = null,
+    cover = "",
+    participants = [],
+    tags = [],
+    priority = 2,
+    remindAt = null,
+    titleColor = null,
+    progress = 0,
+    isRecurring = 0,
+    recurrenceRule = null,
+    dependencies = [],
+    status = "pending",
+    reminderOffsetValue = 1,
+    reminderOffsetUnit = "day",
+    recurrenceEndDate = null,
+  } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
+
+  // 未指定负责人时默认指派给创建者，保证出现在「我的任务 / 我负责的」
+  const assigneeId =
+    rawAssigneeId === undefined || rawAssigneeId === null || rawAssigneeId === ""
+      ? userId
+      : rawAssigneeId;
 
   const taskId = uuid();
   const maxSort = db.prepare("SELECT MAX(sortOrder) as max FROM project_tasks WHERE stageId = ?").get(stageId) as { max: number | null };
@@ -894,6 +1085,14 @@ projectsRouter.post("/:id/members", async (c) => {
   if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
   if (!isOwner) return c.json({ error: "仅项目创建者能添加成员", code: "FORBIDDEN" }, 403);
 
+  // 个人TODO 禁止添加其他成员
+  if (
+    project.name === PERSONAL_TODO &&
+    (!project.workspaceId || project.workspaceId === "")
+  ) {
+    return c.json({ error: "个人TODO 仅自己可见，不可添加成员", code: "FORBIDDEN" }, 403);
+  }
+
   db.prepare("INSERT OR IGNORE INTO project_members (projectId, userId, role) VALUES (?, ?, ?)")
     .run(id, memberUserId, role);
 
@@ -911,6 +1110,11 @@ projectsRouter.delete("/:id/members/:memberUserId", (c) => {
   if (!project) return c.json({ error: "项目不存在", code: "NOT_FOUND" }, 404);
   if (!isOwner && userId !== memberUserId) {
     return c.json({ error: "无权移除该成员", code: "FORBIDDEN" }, 403);
+  }
+
+  // 不可移除项目所有者
+  if (project.ownerId === memberUserId) {
+    return c.json({ error: "不能移除项目所有者", code: "FORBIDDEN" }, 403);
   }
 
   db.prepare("DELETE FROM project_members WHERE projectId = ? AND userId = ?")

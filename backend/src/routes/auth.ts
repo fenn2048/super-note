@@ -240,6 +240,14 @@ auth.post("/register", async (c) => {
     )
     .get(id);
 
+  // 每个用户默认拥有个人TODO 项目（PRIVATE / 仅自己）
+  try {
+    const { ensurePersonalTodoProject } = await import("../lib/defaultTodoProject.js");
+    ensurePersonalTodoProject(db, id);
+  } catch (e) {
+    console.warn("[auth.register] ensurePersonalTodoProject:", e);
+  }
+
   return c.json({ token, user }, 201);
 });
 
@@ -377,6 +385,14 @@ auth.post("/login", async (c) => {
     tokenVersion: user.tokenVersion ?? 0,
     jti: sessionId,
   });
+
+  // 存量用户登录时补齐个人TODO（幂等，与当前工作区无关）
+  try {
+    const { ensurePersonalTodoProject } = await import("../lib/defaultTodoProject.js");
+    ensurePersonalTodoProject(db, user.id);
+  } catch (e) {
+    console.warn("[auth.login] ensurePersonalTodoProject:", e);
+  }
 
   return c.json({
     token,

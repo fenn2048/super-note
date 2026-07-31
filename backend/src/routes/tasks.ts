@@ -8,6 +8,7 @@ import { broadcastToWorkspace } from "../lib/mentions.js";
 import { createMentions } from "../lib/mentions.js";
 import { calculateRemindAt } from "../lib/reminders.js";
 import { getNextOccurrenceString } from "../lib/recurrence.js";
+import { ensureDefaultTodoProject } from "../lib/defaultTodoProject.js";
 
 const tasks = new Hono();
 
@@ -17,60 +18,6 @@ const tasks = new Hono();
  * 产品任务模型已统一到 project_tasks（个人TODO/家庭TODO）。
  * 本路由对旧客户端保持 URL 与大致字段形状，读写优先走 project_tasks。
  */
-
-function ensureDefaultTodoProject(
-  db: any,
-  userId: string,
-  workspaceId: string | null,
-): { id: string } {
-  const name = workspaceId ? "家庭TODO" : "个人TODO";
-  let row = workspaceId
-    ? (db
-        .prepare(
-          "SELECT id FROM projects WHERE ownerId = ? AND name = ? AND workspaceId = ? AND isDeleted = 0",
-        )
-        .get(userId, name, workspaceId) as { id: string } | undefined)
-    : (db
-        .prepare(
-          "SELECT id FROM projects WHERE ownerId = ? AND name = ? AND (workspaceId IS NULL OR workspaceId = '') AND isDeleted = 0",
-        )
-        .get(userId, name) as { id: string } | undefined);
-
-  if (!row) {
-    const id = uuid();
-    db.prepare(
-      `INSERT INTO projects (id, name, description, cover, ownerId, workspaceId, visibility, isArchived, isDeleted, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, 'PRIVATE', 0, 0, datetime('now'), datetime('now'))`,
-    ).run(
-      id,
-      name,
-      name === "家庭TODO" ? "家庭共享待办" : "个人待办事项项目",
-      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      userId,
-      workspaceId,
-    );
-    // 默认两列
-    for (const [i, stageName] of ["进行中", "已完成"].entries()) {
-      db.prepare(
-        `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
-         VALUES (?, ?, ?, ?, datetime('now'))`,
-      ).run(uuid(), id, stageName, i);
-    }
-    row = { id };
-  }
-
-  const stageCount = db
-    .prepare("SELECT COUNT(*) as c FROM project_stages WHERE projectId = ?")
-    .get(row.id) as { c: number };
-  if (!stageCount?.c) {
-    db.prepare(
-      `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
-       VALUES (?, ?, '进行中', 0, datetime('now'))`,
-    ).run(uuid(), row.id);
-  }
-
-  return row;
-}
 
 function firstStageId(db: any, projectId: string): string {
   const s = db

@@ -3,6 +3,9 @@
  * ---------------------------------------------------------------------------
  * 产品路径：一律落到 Project 体系（个人TODO / 家庭TODO）。
  * 不再写入 legacy `tasks` 表（v20 已迁移；旧 API 仅兼容读）。
+ *
+ * 个人TODO：任何工作区下每个用户都有一份，owner=自己、PRIVATE、仅自己可见。
+ * 家庭TODO：工作区内共享待办。
  */
 import { api, getCurrentWorkspace } from "@/lib/api";
 import type { Project, ProjectTask } from "@/types";
@@ -10,35 +13,61 @@ import type { Project, ProjectTask } from "@/types";
 const PERSONAL_TODO = "个人TODO";
 const FAMILY_TODO = "家庭TODO";
 
+function isPersonalTodo(p: Project): boolean {
+  return (
+    p.name === PERSONAL_TODO && (!p.workspaceId || p.workspaceId === "")
+  );
+}
+
+/**
+ * 确保当前用户有「个人TODO」（不依赖当前工作区）。
+ */
+export async function ensurePersonalTodoProject(): Promise<Project> {
+  // 不带 workspaceId 拉列表 → 后端 ensure 个人TODO，且返回 owner 自己的项目
+  const personalList = await api.getProjects(undefined, "active");
+  let project = personalList.find(isPersonalTodo);
+  if (!project) {
+    project = await api.createProject({
+      name: PERSONAL_TODO,
+      description: "个人待办事项项目",
+      cover: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      workspaceId: null,
+      visibility: "PRIVATE",
+    } as Partial<Project>);
+  }
+  return project;
+}
+
 /**
  * 确保当前空间下有默认 TODO 项目，返回 projectId。
+ * - 个人空间 → 个人TODO
+ * - 工作区 → 家庭TODO（同时保证个人TODO 也已存在）
  */
 export async function ensureDefaultTodoProject(): Promise<Project> {
   const workspaceId = getCurrentWorkspace();
-  const projects = await api.getProjects(
-    workspaceId && workspaceId !== "" ? workspaceId : undefined,
-    "active",
-  );
+  const inWorkspace =
+    !!workspaceId && workspaceId !== "" && workspaceId !== "personal";
 
-  const preferName =
-    workspaceId && workspaceId !== "" && workspaceId !== "personal"
-      ? FAMILY_TODO
-      : PERSONAL_TODO;
+  // 任何场景都先保证个人TODO
+  const personal = await ensurePersonalTodoProject();
+  if (!inWorkspace) return personal;
 
-  let project =
-    projects.find((p) => p.name === preferName) ||
-    projects.find((p) => p.name === PERSONAL_TODO || p.name === FAMILY_TODO);
+  const projects = await api.getProjects(workspaceId, "active");
+  let family =
+    projects.find(
+      (p) => p.name === FAMILY_TODO && p.workspaceId === workspaceId,
+    ) || projects.find((p) => p.name === FAMILY_TODO);
 
-  if (!project) {
-    project = await api.createProject({
-      name: preferName,
-      description:
-        preferName === FAMILY_TODO ? "家庭共享待办" : "个人待办事项项目",
+  if (!family) {
+    family = await api.createProject({
+      name: FAMILY_TODO,
+      description: "家庭共享待办",
       cover: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    });
+      workspaceId,
+    } as Partial<Project>);
   }
 
-  return project;
+  return family;
 }
 
 async function firstStageId(projectId: string): Promise<string> {
