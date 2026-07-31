@@ -64,6 +64,9 @@ export default function AlistBrowser({
     defaultCollectionId || "",
   );
   const [importing, setImporting] = useState<boolean>(false);
+  /** 各路径滚动位置：进入子目录前记下，返回时恢复 */
+  const pathScrollMapRef = useRef<Record<string, number>>({});
+  const listScrollRef = useRef<HTMLDivElement>(null);
 
   // 父级切换默认合集/类型时同步（例如从不同合集再次打开）
   useEffect(() => {
@@ -82,6 +85,16 @@ export default function AlistBrowser({
       return col && col.type === defaultImportType ? prev : "";
     });
   }, [defaultCollectionId, defaultImportType, collections]);
+
+  const rememberScroll = (path: string) => {
+    const el = listScrollRef.current;
+    if (el) pathScrollMapRef.current[path] = el.scrollTop;
+  };
+
+  const navigateToPath = (nextPath: string) => {
+    rememberScroll(currentPath);
+    setCurrentPath(nextPath);
+  };
 
   // 1. Fetch directory files on path change
   useEffect(() => {
@@ -128,7 +141,7 @@ export default function AlistBrowser({
   // Handle double clicking folders or clicking link to navigate
   const handleFolderClick = (folderName: string) => {
     const nextPath = currentPath === "/" ? `/${folderName}` : `${currentPath}/${folderName}`;
-    setCurrentPath(nextPath);
+    navigateToPath(nextPath);
   };
 
   const handleGoUp = () => {
@@ -136,7 +149,7 @@ export default function AlistBrowser({
     const segments = currentPath.split("/");
     segments.pop();
     const parent = segments.join("/") || "/";
-    setCurrentPath(parent);
+    navigateToPath(parent);
   };
 
   const applyTypeFromSelection = (fileList: Array<{ name: string; path: string }>) => {
@@ -249,13 +262,17 @@ export default function AlistBrowser({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const listScrollRef = useRef<HTMLDivElement>(null);
-
-  // 切目录后滚回顶部
+  // 列表加载完成后恢复该路径的滚动位置（首次进入为 0）
   useEffect(() => {
+    if (loading) return;
     const el = listScrollRef.current;
-    if (el) el.scrollTop = 0;
-  }, [currentPath]);
+    if (!el) return;
+    const y = pathScrollMapRef.current[currentPath] ?? 0;
+    // 等 DOM 绘制完再恢复，避免内容高度为 0 时 scrollTop 无效
+    requestAnimationFrame(() => {
+      el.scrollTop = y;
+    });
+  }, [currentPath, loading, files]);
 
   return (
     <div
@@ -300,7 +317,7 @@ export default function AlistBrowser({
             <span className="text-xs text-tx-tertiary font-semibold select-none shrink-0">路径:</span>
             <div className="flex items-center text-xs font-mono text-tx-secondary min-w-0">
               <span
-                onClick={() => setCurrentPath("/")}
+                onClick={() => navigateToPath("/")}
                 className="cursor-pointer hover:text-accent-primary hover:underline shrink-0"
               >
                 root
@@ -311,7 +328,7 @@ export default function AlistBrowser({
                   <span
                     onClick={() => {
                       const target = "/" + arr.slice(0, index + 1).join("/");
-                      setCurrentPath(target);
+                      navigateToPath(target);
                     }}
                     className="cursor-pointer hover:text-accent-primary hover:underline truncate max-w-[120px]"
                   >

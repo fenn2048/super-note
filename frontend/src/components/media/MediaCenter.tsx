@@ -1054,62 +1054,17 @@ export default function MediaCenter() {
                     )}
                   </div>
 
-                  {/* Quick Editor Box */}
-                  {!showReviewInput ? (
-                    <div className="flex justify-center mt-4">
-                      <button
-                        onClick={() => setShowReviewInput(true)}
-                        className="px-6 py-2.5 bg-app-sidebar border border-app-border hover:bg-app-hover hover:border-accent-primary/50 text-tx-secondary hover:text-accent-primary font-bold text-sm rounded-xl shadow-sm flex items-center gap-2 transition-all group"
-                      >
-                        <MessageSquare size={16} className="group-hover:scale-110 transition-transform" />
-                        写评论 / 影评
-                      </button>
-                    </div>
-                  ) : reviewEditor && (
-                    <div className="flex flex-col gap-3 border-t border-app-border/30 pt-4 mt-2 animate-fade-in">
-                      <div className="flex items-center justify-between gap-3">
-                        <select 
-                          value={reviewType}
-                          onChange={(e) => setReviewType(e.target.value as any)}
-                          className="bg-app-bg border border-app-border text-xs rounded-lg p-1.5 text-tx-secondary outline-none"
-                        >
-                          <option value="short_comment">短评</option>
-                          <option value="long_review">影评 / 乐评</option>
-                          <option value="recommendation">推荐语</option>
-                        </select>
-                        {reviewType === "long_review" && (
-                          <input 
-                            type="text"
-                            placeholder="影评标题..."
-                            value={reviewTitle}
-                            onChange={(e) => setReviewTitle(e.target.value)}
-                            className="flex-1 bg-app-bg border border-app-border text-xs rounded-lg p-1.5 text-tx-primary outline-none focus:border-accent-primary"
-                          />
-                        )}
-                      </div>
-
-                      <EditorContent editor={reviewEditor} />
-
-                      <div className="flex items-center justify-end gap-3 mt-1">
-                        <button
-                          onClick={() => {
-                            setShowReviewInput(false);
-                            reviewEditor.commands.setContent("");
-                            setReviewTitle("");
-                          }}
-                          className="px-5 py-2 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl transition-all"
-                        >
-                          取消
-                        </button>
-                        <button
-                          onClick={handlePostReview}
-                          className="px-6 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow transition-all"
-                        >
-                          发布互动
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {/* 写评论入口：编辑区以弹窗形式出现（移动/桌面一致） */}
+                  <div className="flex justify-center mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewInput(true)}
+                      className="px-6 py-2.5 bg-app-sidebar border border-app-border hover:bg-app-hover hover:border-accent-primary/50 text-tx-secondary hover:text-accent-primary font-bold text-sm rounded-xl shadow-sm flex items-center gap-2 transition-all group"
+                    >
+                      <MessageSquare size={16} className="group-hover:scale-110 transition-transform" />
+                      写评论 / 影评
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2247,9 +2202,114 @@ export default function MediaCenter() {
         onClose={() => setAssignOpen(false)}
         onSuccess={() => {
           fetchData();
+          // 合入/合并完成后退出批量编辑态
+          setSelectedItemIds(new Set());
+          setIsBatchMode(false);
           alert("合入成功");
         }}
       />
+
+      {/* 写评论 / 影评：移动与桌面均以居中弹窗呈现 */}
+      {typeof document !== "undefined" &&
+        showReviewInput &&
+        reviewEditor &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[2px] p-0 sm:p-4"
+            onClick={() => {
+              setShowReviewInput(false);
+              reviewEditor.commands.setContent("");
+              setReviewTitle("");
+            }}
+            role="presentation"
+          >
+            <div
+              role="dialog"
+              aria-modal
+              aria-labelledby="media-review-dialog-title"
+              className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-app-border bg-app-elevated shadow-2xl overflow-hidden flex flex-col max-h-[min(90dvh,640px)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-3 border-b border-app-border flex items-center justify-between shrink-0">
+                <h3
+                  id="media-review-dialog-title"
+                  className="text-sm font-bold text-tx-primary flex items-center gap-2"
+                >
+                  <MessageSquare size={16} className="text-accent-primary" />
+                  写评论 / 影评
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReviewInput(false);
+                    reviewEditor.commands.setContent("");
+                    setReviewTitle("");
+                  }}
+                  className="p-2 rounded-md text-tx-tertiary hover:bg-app-hover min-w-[40px] min-h-[40px] flex items-center justify-center"
+                  aria-label="关闭"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={reviewType}
+                    onChange={(e) => setReviewType(e.target.value as any)}
+                    className="bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-secondary outline-none min-h-[36px]"
+                  >
+                    <option value="short_comment">短评</option>
+                    <option value="long_review">影评 / 乐评</option>
+                    <option value="recommendation">推荐语</option>
+                  </select>
+                  {reviewType === "long_review" && (
+                    <input
+                      type="text"
+                      placeholder="影评标题..."
+                      value={reviewTitle}
+                      onChange={(e) => setReviewTitle(e.target.value)}
+                      className="flex-1 min-w-[8rem] bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-primary outline-none focus:border-accent-primary min-h-[36px]"
+                    />
+                  )}
+                  {selectedItem?.type === "video" && isPlaying && (
+                    <button
+                      type="button"
+                      onClick={handleInsertTimestamp}
+                      className="text-xs font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-1.5 rounded-lg transition-colors ml-auto"
+                    >
+                      打点 {formatDuration(currentTime)}
+                    </button>
+                  )}
+                </div>
+
+                <EditorContent editor={reviewEditor} />
+              </div>
+
+              <div className="px-4 py-3 border-t border-app-border flex items-center justify-end gap-2 shrink-0 pb-[max(0.75rem,var(--safe-area-bottom,0px))]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReviewInput(false);
+                    reviewEditor.commands.setContent("");
+                    setReviewTitle("");
+                  }}
+                  className="px-5 py-2.5 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl transition-all min-h-[40px]"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePostReview}
+                  className="px-6 py-2.5 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow transition-all min-h-[40px]"
+                >
+                  发布互动
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* 车载 / CarLife 说明 */}
       <AnimatePresence>
