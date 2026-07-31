@@ -1814,7 +1814,8 @@ export default function ProjectCenter() {
                           <div className="w-6 h-6 rounded-full border border-app-border flex items-center justify-center shrink-0">
                             <Plus size={14} className="text-tx-tertiary" />
                           </div>
-                          <Input
+                          {/* 原生 input，避免 ui/Input 默认 border/shadow/bg 叠出第二层「遮罩框」 */}
+                          <input
                             type="text"
                             value={quickAddTitle}
                             onChange={(e) => {
@@ -1824,7 +1825,7 @@ export default function ProjectCenter() {
                             onKeyUp={(e) => setQuickAddCursorPos(e.currentTarget.selectionStart || 0)}
                             onClick={(e) => setQuickAddCursorPos(e.currentTarget.selectionStart || 0)}
                             placeholder={t("projects.quickAddTaskPlaceholder") || "快速添加任务（输入标题后按回车或点击右侧添加）..."}
-                            className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 text-sm placeholder:text-tx-tertiary text-tx-primary h-8 pr-8"
+                            className="flex-1 min-w-0 bg-transparent border-0 outline-none shadow-none ring-0 focus:ring-0 focus:outline-none px-0 pr-8 text-sm placeholder:text-tx-tertiary text-tx-primary h-8"
                           />
                           <button
                             type="button"
