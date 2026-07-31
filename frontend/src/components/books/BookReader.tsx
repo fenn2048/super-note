@@ -22,6 +22,7 @@ import {
 } from "@/lib/localStore";
 import {
   applyNativeStatusBar,
+  haptic,
   isAppDarkMode,
   syncStatusBarToAppTheme,
 } from "@/hooks/useCapacitor";
@@ -675,7 +676,6 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       view.addEventListener("draw-annotation", (e: any) => {
         const { draw, annotation, doc } = e.detail;
         const { color, style, note } = annotation;
-        console.log("[BookReader debug] draw-annotation event details:", { color, style, note, value: annotation.value });
         const writingMode = doc ? (doc.body.style.writingMode || window.getComputedStyle(doc.body).writingMode) : 'horizontal';
         
         if (style === "underline") {
@@ -692,6 +692,18 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
       // Open bookDoc
       await view.open(bookDoc);
+
+      // 启用 foliate 跟手翻页 + snap 动画（paginator #onTouchMove 依赖 animated 属性）
+      // 移动端不设 no-continuous-scroll，保留邻接章预载以降低跨章白屏
+      try {
+        view.renderer?.setAttribute?.("animated", "");
+        view.renderer?.removeAttribute?.("no-continuous-scroll");
+      } catch {
+        /* ignore */
+      }
+      drawnAnnotationSigRef.current.clear();
+      lastRelocateSectionIndexRef.current = null;
+      lastStylesKeyRef.current = "";
 
       // Target book note redirection
       const targetNoteId = localStorage.getItem("super-target-book-note-id");
@@ -896,6 +908,15 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     }
   }, []);
 
+  /** 最近一次判定为「滑动跟手」的时间戳，用于抑制合成 click 再翻页 */
+  const lastTouchPanAtRef = useRef(0);
+
+  /**
+   * 点击热区（仅应用层产品语义）：
+   * - 滑动翻页交给 foliate paginator（需 animated），应用层不再 prev/next
+   * - 移动：左右缘点翻立即执行；中心区延迟仅用于双击沉浸
+   * - 桌面：单击空白切换沉浸
+   */
   const handleClickListener = useCallback((e: MouseEvent) => {
     const iframe = getActiveIframe();
     const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
@@ -913,63 +934,84 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       return;
     }
 
-    // 3. Skip if clicking a text area containing thought to let show-annotation event trigger thoughts list modal!
+    // 3. Skip if clicking annotation with thought
     const renderer = viewRef.current?.renderer;
-    const contents = renderer?.getContents().find((x: any) => x.index === currentSectionIndexRef.current);
+    const contents = renderer?.getContents?.()?.find((x: any) => x.index === currentSectionIndexRef.current);
     const overlayer = contents?.overlayer;
-    console.log("[BookReader debug] handleClickListener:", { hasOverlayer: !!overlayer, clientX: e.clientX, clientY: e.clientY });
     if (overlayer) {
-      const [value] = overlayer.hitTest(e);
-      console.log("[BookReader debug] handleClickListener hitTest result value:", value);
-      if (value) {
-        const noteCfi = value.startsWith("foliate-note:") ? value.replace("foliate-note:", "") : value;
-        const noteObj = notesRef.current.find(n => n.cfi === noteCfi);
-        console.log("[BookReader debug] handleClickListener matched noteObj:", noteObj);
-        if (noteObj && noteObj.note) {
-          return;
+      try {
+        const [value] = overlayer.hitTest(e);
+        if (value) {
+          const noteCfi = value.startsWith("foliate-note:") ? value.replace("foliate-note:", "") : value;
+          const noteObj = notesRef.current.find(n => n.cfi === noteCfi);
+          if (noteObj && noteObj.note) {
+            return;
+          }
         }
+      } catch {
+        /* ignore hitTest errors */
       }
     }
 
-    const clientWidth = doc.documentElement.clientWidth;
+    // 滑动跟手刚结束时可能合成 click，避免再点翻一页
+    if (Date.now() - lastTouchPanAtRef.current < 280) {
+      return;
+    }
+
+    const clientWidth = doc.documentElement.clientWidth || 1;
     const isMobile = window.innerWidth < 768;
+    const clientX = e.clientX;
+    const ratio = clientX / clientWidth;
 
     const now = Date.now();
     const isDoubleTap = now - lastTapTimeRef.current < 300;
     lastTapTimeRef.current = now;
 
     if (isDoubleTap) {
-      // 捕获双击：取消待执行的单击翻页，在阅读器任意地方轻点两下均可切换/退出沉浸态
       if (lastTapTimerRef.current) {
         clearTimeout(lastTapTimerRef.current);
         lastTapTimerRef.current = null;
       }
       setIsImmersive((prev) => !prev);
-    } else {
-      // 单击：延迟 200ms 触发翻页，等待是否会触发第二次点击（双击）
-      const clientX = e.clientX;
-      const ratio = clientX / clientWidth;
+      return;
+    }
 
+    if (!isMobile) {
+      // 桌面：单击空白切换沉浸（无延迟）
+      setIsImmersive((prev) => !prev);
+      return;
+    }
+
+    // 移动：左右热区立即翻页；中心区延迟等待可能的双击沉浸
+    const EDGE = 0.22;
+    if (ratio < EDGE) {
       if (lastTapTimerRef.current) {
         clearTimeout(lastTapTimerRef.current);
-      }
-
-      lastTapTimerRef.current = setTimeout(() => {
         lastTapTimerRef.current = null;
-        if (isMobile) {
-          // 移动端单击：左侧 50% 区域上一页，右侧 50% 区域下一页
-          if (ratio < 0.5) {
-            viewRef.current?.prev();
-          } else {
-            viewRef.current?.next();
-          }
-        } else {
-          setIsImmersive((prev) => !prev);
-        }
-      }, 200);
+      }
+      void viewRef.current?.prev();
+      return;
     }
+    if (ratio > 1 - EDGE) {
+      if (lastTapTimerRef.current) {
+        clearTimeout(lastTapTimerRef.current);
+        lastTapTimerRef.current = null;
+      }
+      void viewRef.current?.next();
+      return;
+    }
+
+    // 中心区：仅双击沉浸，单击忽略（给选字 / 划线留空间）
+    if (lastTapTimerRef.current) {
+      clearTimeout(lastTapTimerRef.current);
+    }
+    lastTapTimerRef.current = setTimeout(() => {
+      lastTapTimerRef.current = null;
+      // 单击中心不翻页；双击已在上方处理
+    }, 280);
   }, []);
 
+  // 应用层 touch：只做选区菜单，不调用 prev/next（避免与 foliate 双通道翻页）
   const touchStartY = useRef<number | null>(null);
   const touchStartX = useRef<number | null>(null);
 
@@ -981,7 +1023,6 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   }, []);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    // 长按选字后松手：延迟检测 Selection（系统选区有时在 touchend 后才稳定）
     const touchDoc = (e.target as Element)?.ownerDocument;
     let hasTextSelection = false;
     try {
@@ -991,59 +1032,36 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       /* ignore */
     }
 
-    window.setTimeout(() => {
-      if (tryOpenSelectionMenuFromDoc(touchDoc)) return;
-      const iframe = getActiveIframe();
-      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
-      tryOpenSelectionMenuFromDoc(doc);
-    }, 80);
+    // 有位移则记为 pan，抑制随后的 click 点翻
+    if (touchStartX.current != null && touchStartY.current != null && e.changedTouches.length > 0) {
+      const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+      const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+      if (Math.abs(deltaX) > 12 || Math.abs(deltaY) > 12) {
+        lastTouchPanAtRef.current = Date.now();
+        if (lastTapTimerRef.current) {
+          clearTimeout(lastTapTimerRef.current);
+          lastTapTimerRef.current = null;
+        }
+      }
+    }
 
-    // 有文字选区时不做翻页手势，避免长按松手误翻页并冲掉菜单
+    // 选区菜单：仅在有选区时尝试
     if (hasTextSelection) {
-      touchStartY.current = null;
-      touchStartX.current = null;
+      window.setTimeout(() => {
+        if (tryOpenSelectionMenuFromDoc(touchDoc)) return;
+        const iframe = getActiveIframe();
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        tryOpenSelectionMenuFromDoc(doc);
+      }, 80);
       if (lastTapTimerRef.current) {
         clearTimeout(lastTapTimerRef.current);
         lastTapTimerRef.current = null;
       }
-      return;
     }
 
-    if (touchStartY.current !== null && touchStartX.current !== null && e.changedTouches.length > 0) {
-      const startX = touchStartX.current;
-      const endY = e.changedTouches[0].clientY;
-      const endX = e.changedTouches[0].clientX;
-      const deltaY = endY - touchStartY.current;
-      const deltaX = endX - startX;
-      const mode = settingsRef.current?.layoutMode || "paginated";
-      const windowWidth = window.innerWidth;
-
-      // 1. 如果起点在系统手势边缘区（左右各 25px 内），避让 Android/iOS 系统侧滑返回手势
-      const isEdgeGesture = startX < 25 || startX > windowWidth - 25;
-
-      // 2. 如果移动距离极小（Tap 点击），交由 handleClickListener 统一处理，避免二次点击冲突
-      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-        touchStartY.current = null;
-        touchStartX.current = null;
-        return;
-      }
-
-      // 3. 滑动手势判断（避开边缘区）
-      if (!isEdgeGesture) {
-        // 横向轻扫（横向主导且滑动距离 > 50px）
-        if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
-          if (deltaX > 0) viewRef.current?.prev();
-          else viewRef.current?.next();
-        } 
-        // 左右翻页模式下的竖直滑动（纵向主导且滑动距离 > 60px）
-        else if (mode === "paginated" && Math.abs(deltaY) > 60 && Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
-          if (deltaY > 0) viewRef.current?.prev();
-          else viewRef.current?.next();
-        }
-      }
-    }
     touchStartY.current = null;
     touchStartX.current = null;
+    // 滑动翻页：完全交给 foliate paginator（animated + snap），此处不 prev/next
   }, [tryOpenSelectionMenuFromDoc]);
 
   // Refs to hold the latest version of listeners to avoid stale closures
@@ -1178,31 +1196,123 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     };
   }, [loadingState, activeSidebar, attachDocListeners]);
 
-  const drawAnnotationsOnCurrentSection = useCallback(() => {
+  /**
+   * 当前已绘制到 overlayer 的注解签名（value|style|color|hasNote）。
+   * 翻页/章节 load 时只 diff，避免全量 delete+add 卡顿。
+   */
+  const drawnAnnotationSigRef = useRef<Map<string, string>>(new Map());
+  const annotationDrawRafRef = useRef<number | null>(null);
+
+  const annotationValueOf = (n: { cfi: string; type?: string }) =>
+    n.type === "note" ? `foliate-note:${n.cfi}` : n.cfi;
+
+  const annotationSigOf = (n: {
+    cfi: string;
+    type?: string;
+    style?: string;
+    color?: string;
+    note?: string | null;
+  }) =>
+    `${annotationValueOf(n)}|${n.style || ""}|${n.color || ""}|${n.note ? "1" : "0"}`;
+
+  const drawAnnotationsOnCurrentSection = useCallback((opts?: { force?: boolean }) => {
     if (!viewRef.current) return;
-    const currentSectionNotes = notesRef.current.filter(n => n.cfi && n.style);
-    currentSectionNotes.forEach(n => {
+    const view = viewRef.current;
+    const currentSectionNotes = notesRef.current.filter(
+      (n) => n.cfi && n.style,
+    ) as Array<{
+      cfi: string;
+      type?: string;
+      style?: string;
+      color?: string;
+      note?: string | null;
+      userId?: string;
+    }>;
+
+    const nextMap = new Map<string, (typeof currentSectionNotes)[0]>();
+    for (const n of currentSectionNotes) {
+      nextMap.set(annotationValueOf(n), n);
+    }
+
+    if (opts?.force) {
+      // 强制：清掉所有已知绘制再重建
+      drawnAnnotationSigRef.current.forEach((_, value) => {
+        try {
+          view.deleteAnnotation({ value });
+          if (!value.startsWith("foliate-note:")) {
+            view.deleteAnnotation({ value: `foliate-note:${value}` });
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+      drawnAnnotationSigRef.current.clear();
+    } else {
+      // 移除已不存在或签名变化的
+      for (const [value, oldSig] of [...drawnAnnotationSigRef.current.entries()]) {
+        const n = nextMap.get(value);
+        if (!n || annotationSigOf(n) !== oldSig) {
+          try {
+            view.deleteAnnotation({ value });
+            // 兼容历史：同一 cfi 可能以两种 value 画过
+            if (value.startsWith("foliate-note:")) {
+              view.deleteAnnotation({ value: value.replace("foliate-note:", "") });
+            } else {
+              view.deleteAnnotation({ value: `foliate-note:${value}` });
+            }
+          } catch {
+            /* ignore */
+          }
+          drawnAnnotationSigRef.current.delete(value);
+        }
+      }
+    }
+
+    // 添加缺失项
+    for (const n of currentSectionNotes) {
+      const value = annotationValueOf(n);
+      const sig = annotationSigOf(n);
+      if (drawnAnnotationSigRef.current.get(value) === sig) continue;
       try {
-        viewRef.current?.deleteAnnotation({ value: n.cfi });
-        viewRef.current?.deleteAnnotation({ value: `foliate-note:${n.cfi}` });
-        viewRef.current?.addAnnotation({
-          value: n.type === "note" ? `foliate-note:${n.cfi}` : n.cfi,
+        view.addAnnotation({
+          value,
           style: n.style,
           color: n.color,
           note: n.note,
-          userId: n.userId
+          userId: n.userId,
         });
+        drawnAnnotationSigRef.current.set(value, sig);
       } catch (err) {
         console.warn("渲染划线失败:", err);
       }
-    });
+    }
   }, []);
+
+  /** 翻页动画期间推迟划线绘制到下一帧之后，避免与 transform 抢主线程 */
+  const scheduleDrawAnnotations = useCallback(
+    (opts?: { force?: boolean }) => {
+      if (annotationDrawRafRef.current != null) {
+        cancelAnimationFrame(annotationDrawRafRef.current);
+      }
+      annotationDrawRafRef.current = requestAnimationFrame(() => {
+        annotationDrawRafRef.current = requestAnimationFrame(() => {
+          annotationDrawRafRef.current = null;
+          drawAnnotationsOnCurrentSection(opts);
+        });
+      });
+    },
+    [drawAnnotationsOnCurrentSection],
+  );
 
   useEffect(() => {
     if (loadingState === "ready") {
-      drawAnnotationsOnCurrentSection();
+      // notes 列表变化：强制 diff 同步
+      scheduleDrawAnnotations({ force: false });
     }
-  }, [notes, loadingState, drawAnnotationsOnCurrentSection]);
+  }, [notes, loadingState, scheduleDrawAnnotations]);
+
+  // 上次成功注入的样式签名，章节 load 时若设置未变则跳过 setStyles
+  const lastStylesKeyRef = useRef<string>("");
 
   // Section loaded (fires for BOTH primary and adjacent pre-loaded sections)
   // Do NOT update currentSectionIndexRef here - only relocate gives the truly visible index
@@ -1210,82 +1320,113 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     const { doc, index } = e.detail;
     if (!doc) return;
 
-    applyReaderStyles();
-    drawAnnotationsOnCurrentSection();
+    applyReaderStyles(undefined, { skipIfUnchanged: true });
+    // 邻接预载 section 也会 fire load：推迟划线，优先让翻页动画吃满帧
+    scheduleDrawAnnotations();
 
-    // Check if TTS should auto-start on this section
+    // TTS 自动开播：idle 时再扫 DOM，避免与翻页抢同一帧
     const ttsAutoStart = localStorage.getItem("super-tts-auto-start") === "true";
     if (ttsAutoStart) {
       localStorage.removeItem("super-tts-auto-start");
-      
-      // Extract text paragraphs from this new document
-      setTimeout(() => {
-        const elements = Array.from(doc.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6"))
-          .filter((el: any) => {
-            const className = el.className || "";
-            const id = el.id || "";
-            const tagName = el.tagName.toLowerCase();
-            if (tagName === "aside") return false;
-            if (className.includes("footnote") || className.includes("annotation") || className.includes("comment")) return false;
-            if (id.includes("footnote") || id.includes("annotation") || id.includes("comment")) return false;
-            return true;
-          })
-          .map((el: any) => ({
-            el,
-            text: getCleanText(el)
-          }))
-          .filter(item => hasReadableContent(item.text));
+      const runTtsScan = () => {
+        try {
+          const elements = Array.from(doc.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6"))
+            .filter((el: any) => {
+              const className = el.className || "";
+              const id = el.id || "";
+              const tagName = el.tagName.toLowerCase();
+              if (tagName === "aside") return false;
+              if (className.includes("footnote") || className.includes("annotation") || className.includes("comment")) return false;
+              if (id.includes("footnote") || id.includes("annotation") || id.includes("comment")) return false;
+              return true;
+            })
+            .map((el: any) => ({
+              el,
+              text: getCleanText(el),
+            }))
+            .filter((item) => hasReadableContent(item.text));
 
-        if (elements.length > 0) {
-          setTtsParagraphs(elements);
-          setTtsShowPlayer(true);
-          playParagraph(elements, 0);
-        } else {
-          // If this section has no text, try the next one!
-          handleNextSectionTts();
+          if (elements.length > 0) {
+            setTtsParagraphs(elements);
+            setTtsShowPlayer(true);
+            playParagraph(elements, 0);
+          } else {
+            handleNextSectionTts();
+          }
+        } catch {
+          /* ignore */
         }
-      }, 300);
+      };
+      if (typeof (window as any).requestIdleCallback === "function") {
+        (window as any).requestIdleCallback(runTtsScan, { timeout: 800 });
+      } else {
+        window.setTimeout(runTtsScan, 400);
+      }
     }
 
-    // Touch swipe gestures for mobile page flipping
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-
-    doc.addEventListener("touchstart", (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        touchStartTime = Date.now();
-      }
-    }, { passive: true });
-
-    doc.addEventListener("touchend", (e: TouchEvent) => {
-      if (e.changedTouches.length === 1) {
-        const deltaX = e.changedTouches[0].clientX - touchStartX;
-        const deltaY = e.changedTouches[0].clientY - touchStartY;
-        const timeDiff = Date.now() - touchStartTime;
-
-        if (Math.abs(deltaX) > 40 && Math.abs(deltaY) < 80 && timeDiff < 300) {
-          if (deltaX > 0) {
-            viewRef.current?.prev();
-          } else {
-            viewRef.current?.next();
-          }
-          return;
-        }
-      }
-    });
-
-    // 章节切换后重绑（含 touch / 选区菜单）
+    // 滑动翻页由 foliate paginator 处理；此处只重绑选区/点击监听
     attachDocListeners();
   };
 
-  const handleCreateOverlay = (e: any) => {
-    const { index } = e.detail;
-    console.log("[BookReader debug] create-overlay event fired for index:", index);
-    drawAnnotationsOnCurrentSection();
+  const handleCreateOverlay = (_e: any) => {
+    scheduleDrawAnnotations();
   };
+
+  // 进度落盘节流：UI 立即更新；网络 + IDB 合并，避免连翻抢主线程
+  const pendingProgressRef = useRef<{ cfi: string; progress: string } | null>(null);
+  const progressSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushProgressSave = useCallback(() => {
+    const pending = pendingProgressRef.current;
+    if (!pending) return;
+    pendingProgressRef.current = null;
+    if (progressSaveTimerRef.current) {
+      clearTimeout(progressSaveTimerRef.current);
+      progressSaveTimerRef.current = null;
+    }
+    const { cfi, progress } = pending;
+    api.books.saveConfig(bookHash, { location: cfi, progress }).catch(() => {});
+    getBookConfig(bookHash)
+      .then((existing) => {
+        putBookConfig({
+          userId: localStorage.getItem("super-self-userid") || "",
+          bookHash,
+          location: cfi,
+          progress,
+          viewSettings: existing?.viewSettings || JSON.stringify(DEFAULT_SETTINGS),
+          xpointer: existing?.xpointer || null,
+          createdAt: existing?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      })
+      .catch(() => {});
+  }, [bookHash]);
+
+  const scheduleProgressSave = useCallback(
+    (cfi: string, progressPercent: number) => {
+      pendingProgressRef.current = { cfi, progress: `${progressPercent}%` };
+      if (progressSaveTimerRef.current) clearTimeout(progressSaveTimerRef.current);
+      progressSaveTimerRef.current = setTimeout(() => {
+        progressSaveTimerRef.current = null;
+        flushProgressSave();
+      }, 1000);
+    },
+    [flushProgressSave],
+  );
+
+  useEffect(() => {
+    const onHide = () => flushProgressSave();
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      flushProgressSave();
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+      if (progressSaveTimerRef.current) clearTimeout(progressSaveTimerRef.current);
+    };
+  }, [flushProgressSave]);
+
+  const lastRelocateSectionIndexRef = useRef<number | null>(null);
 
   // Relocate event (page/scroll navigation change)
   // detail.index is the actually-visible section index from #getVisibleRange()
@@ -1297,6 +1438,21 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     // ONLY reliable source of the truly-visible section (unlike load events which
     // also fire for adjacent pre-loaded sections)
     if (detail.index !== undefined) {
+      const prevIdx = lastRelocateSectionIndexRef.current;
+      if (
+        prevIdx != null &&
+        prevIdx !== detail.index &&
+        typeof window !== "undefined" &&
+        window.innerWidth < 768
+      ) {
+        // 章边界轻触反馈（非整页，避免吵）
+        try {
+          haptic.light();
+        } catch {
+          /* ignore */
+        }
+      }
+      lastRelocateSectionIndexRef.current = detail.index;
       currentSectionIndexRef.current = detail.index;
     }
 
@@ -1317,32 +1473,14 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       setChapterTitle("");
     }
 
-    // Auto-save progress configuration to backend (debounced / on relocate)
-    api.books.saveConfig(bookHash, {
-      location: cfi,
-      progress: `${progressPercent}%`,
-    }).catch(err => console.warn("保存进度失败:", err));
-
-    // Cache config locally
-    getBookConfig(bookHash).then(existing => {
-      const nextConfig = {
-        userId: localStorage.getItem("super-self-userid") || "",
-        bookHash,
-        location: cfi,
-        progress: `${progressPercent}%`,
-        viewSettings: existing?.viewSettings || JSON.stringify(DEFAULT_SETTINGS),
-        xpointer: existing?.xpointer || null,
-        createdAt: existing?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      putBookConfig(nextConfig);
-    }).catch(() => {});
+    if (cfi) {
+      scheduleProgressSave(cfi, progressPercent);
+    }
   };
 
   // Highlighting annotation clicked
   const handleAnnotationClick = (e: any) => {
     const detail = e.detail;
-    console.log("[BookReader debug] handleAnnotationClick triggered with detail:", detail);
     if (!detail) return;
 
     // Find the note
@@ -1373,11 +1511,65 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   handleRelocateRef.current = handleRelocate;
   handleAnnotationClickRef.current = handleAnnotationClick;
 
-  const applyReaderStyles = (customSettings?: any) => {
+  const applyReaderStyles = (
+    customSettings?: any,
+    opts?: { skipIfUnchanged?: boolean },
+  ) => {
     if (!viewRef.current || !viewRef.current.renderer) return;
 
     const currentSettings = customSettings || settingsRef.current;
     const theme = themeDefOf(currentSettings.theme);
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    const defMarginTop = isMobile ? 64 : 120;
+    const defMarginBottom = isMobile ? 64 : 120;
+    const defMarginLeft = isMobile ? 20 : 40;
+    const defMarginRight = isMobile ? 20 : 40;
+
+    const marginTop = currentSettings.marginTop ?? defMarginTop;
+    const marginBottom = currentSettings.marginBottom ?? defMarginBottom;
+    const marginLeft = currentSettings.marginLeft ?? defMarginLeft;
+    const marginRight = currentSettings.marginRight ?? defMarginRight;
+    const columnGap = currentSettings.columnGap ?? 5;
+    const maxColumnWidth = currentSettings.maxColumnWidth ?? 1200;
+    const maxColumnHeight = currentSettings.maxColumnHeight ?? 1200;
+    const layoutMode = currentSettings.layoutMode || "paginated";
+    const columns = currentSettings.columns ?? 0;
+
+    // 签名：设置未变则跳过 setStyles / 属性写入（章节预载 load 时高频）
+    const stylesKey = [
+      currentSettings.theme,
+      currentSettings.fontFamily,
+      currentSettings.fontSize,
+      currentSettings.lineHeight,
+      currentSettings.usePublisherStyles ? 1 : 0,
+      currentSettings.paragraphSpacing,
+      currentSettings.firstLineIndent,
+      currentSettings.justifyText ? 1 : 0,
+      currentSettings.wordSpacing,
+      currentSettings.letterSpacing,
+      currentSettings.hyphenation ? 1 : 0,
+      layoutMode,
+      columns,
+      marginTop,
+      marginBottom,
+      marginLeft,
+      marginRight,
+      columnGap,
+      maxColumnWidth,
+      maxColumnHeight,
+      isMobile ? "m" : "d",
+    ].join("|");
+
+    if (opts?.skipIfUnchanged && stylesKey === lastStylesKeyRef.current) {
+      // 仍保证 animated 存在（部分路径可能丢属性）
+      try {
+        viewRef.current.renderer?.setAttribute?.("animated", "");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    lastStylesKeyRef.current = stylesKey;
     
     const paragraphMargin = currentSettings.usePublisherStyles ? "" : `margin-bottom: ${currentSettings.paragraphSpacing ?? 1.0}em !important;`;
     const textIndent = currentSettings.usePublisherStyles ? "" : `text-indent: ${currentSettings.firstLineIndent ?? 2.0}em !important;`;
@@ -1434,10 +1626,10 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
 
     // Apply attributes on renderer
     const renderer = viewRef.current.renderer;
-    if (currentSettings.layoutMode === "paginated") {
+    if (layoutMode === "paginated") {
       renderer.removeAttribute("flow");
-      if (currentSettings.columns > 0) {
-        renderer.setAttribute("max-column-count", currentSettings.columns);
+      if (columns > 0) {
+        renderer.setAttribute("max-column-count", String(columns));
       } else {
         renderer.removeAttribute("max-column-count");
       }
@@ -1446,19 +1638,19 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       renderer.removeAttribute("max-column-count");
     }
 
-    const isMobile = window.innerWidth < 768;
-    const defMarginTop = isMobile ? 64 : 120;
-    const defMarginBottom = isMobile ? 64 : 120;
-    const defMarginLeft = isMobile ? 20 : 40;
-    const defMarginRight = isMobile ? 20 : 40;
-
-    renderer.setAttribute("margin-top", `${currentSettings.marginTop ?? defMarginTop}px`);
-    renderer.setAttribute("margin-bottom", `${currentSettings.marginBottom ?? defMarginBottom}px`);
-    renderer.setAttribute("margin-left", `${currentSettings.marginLeft ?? defMarginLeft}px`);
-    renderer.setAttribute("margin-right", `${currentSettings.marginRight ?? defMarginRight}px`);
-    renderer.setAttribute("gap", `${currentSettings.columnGap ?? 5}px`);
-    renderer.setAttribute("max-inline-size", `${currentSettings.maxColumnWidth ?? 1200}px`);
-    renderer.setAttribute("max-block-size", `${currentSettings.maxColumnHeight ?? 1200}px`);
+    renderer.setAttribute("margin-top", `${marginTop}px`);
+    renderer.setAttribute("margin-bottom", `${marginBottom}px`);
+    renderer.setAttribute("margin-left", `${marginLeft}px`);
+    renderer.setAttribute("margin-right", `${marginRight}px`);
+    renderer.setAttribute("gap", `${columnGap}px`);
+    renderer.setAttribute("max-inline-size", `${maxColumnWidth}px`);
+    renderer.setAttribute("max-block-size", `${maxColumnHeight}px`);
+    // 保持跟手翻页（设置变更 / 重新注入后）
+    try {
+      renderer.setAttribute("animated", "");
+    } catch {
+      /* ignore */
+    }
   };
   applyReaderStylesRef.current = applyReaderStyles;
 

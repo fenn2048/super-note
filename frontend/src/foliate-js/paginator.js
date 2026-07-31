@@ -1683,13 +1683,20 @@ export class Paginator extends HTMLElement {
             // correct when the slide animation reveals the new page
             if (!this.scrolled) this.#replaceBackground(offset)
             // Use GPU-accelerated scroll animation for smoother experience on high refresh rate screens
+            // Touch / coarse pointer: shorter slide (~200ms) feels snappier; desktop mouse keep 300ms
+            let duration = 300
+            try {
+                if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) {
+                    duration = 200
+                }
+            } catch { /* ignore */ }
             this.#isAnimating = true
             return animateScroll(
                 this.#container,
                 this.scrollProp,
                 startPosition,
                 offset,
-                300,
+                duration,
             ).then(() => {
                 this.#isAnimating = false
                 this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
