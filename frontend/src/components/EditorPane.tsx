@@ -829,6 +829,25 @@ export default function EditorPane() {
   });
 
   /**
+   * collab yDoc 与当前笔记必须严格匹配，否则会把上一篇笔记的 yText 绑到新标题上
+   * （表现为：标题已是 B，正文仍是 A）。useYDoc 在 noteId 变化后于 effect 阶段
+   * 才销毁旧 provider，首次 render 仍可能带着旧 yDoc。
+   *
+   * 另外要求 collabSynced：未 sync 前 yText 可能为空，此时继续用 REST note.content
+   * 渲染，sync 完成后再挂 yCollab，避免「空正文闪一下」。
+   */
+  const collabMatched =
+    !!(
+      activeNote &&
+      collabYDoc &&
+      collabProvider &&
+      collabProvider.noteId === activeNote.id &&
+      collabSynced
+    );
+  const safeCollabYDoc = collabMatched ? collabYDoc : null;
+  const safeCollabAwareness = collabMatched ? (collabProvider?.awareness ?? null) : null;
+
+  /**
    * collabYDoc 的 ref 镜像。
    *
    * 背景：`toggleEditorMode`（在组件顶部定义）需要在切换前从 yDoc 读取最新
@@ -1395,13 +1414,33 @@ export default function EditorPane() {
   const handleVisibilityChange = useCallback(async (visibility: "PRIVATE" | "WORKSPACE") => {
     if (!activeNote) return;
     haptic.light();
+    // 乐观更新：后端旧版若未回传 visibility 字段，也不会把 UI 打回 PRIVATE。
+    // 只改可见性元数据，避免用 PUT 回包整份覆盖掉编辑器里尚未落库的正文。
+    const prevVisibility = activeNote.visibility;
+    const noteId = activeNote.id;
+    actions.setActiveNote({ ...activeNote, visibility });
+    actions.updateNoteInList({ id: noteId, visibility });
     try {
-      const updated = await api.updateNote(activeNote.id, { visibility } as any);
-      actions.setActiveNote(updated);
-      actions.updateNoteInList({ id: updated.id, visibility: updated.visibility });
+      const updated = await api.updateNote(noteId, { visibility } as any);
+      const nextVis = (updated as any).visibility ?? visibility;
+      const cur = activeNoteRef.current;
+      if (cur?.id === noteId) {
+        actions.setActiveNote({
+          ...cur,
+          visibility: nextVis,
+          version: updated.version ?? cur.version,
+          updatedAt: updated.updatedAt ?? cur.updatedAt,
+        });
+      }
+      actions.updateNoteInList({ id: noteId, visibility: nextVis });
       toast.success(visibility === "WORKSPACE" ? "已设为所有人可见" : "已设为私有");
     } catch (e: any) {
       console.error("Visibility change failed:", e);
+      const cur = activeNoteRef.current;
+      if (cur?.id === noteId) {
+        actions.setActiveNote({ ...cur, visibility: prevVisibility });
+      }
+      actions.updateNoteInList({ id: noteId, visibility: prevVisibility });
       toast.error("可见性切换失败");
     }
   }, [activeNote, actions]);
@@ -1558,6 +1597,32 @@ export default function EditorPane() {
       setAiClassifyLoading(false);
     }
   }, [activeNote, aiClassifyLoading, t]);
+
+  // 笔记级「私有/公开」仅当所属笔记本本身是公开（WORKSPACE）时才有意义；
+  // 笔记本私有时笔记再公开也无法对工作区其他成员生效，应隐藏该开关。
+  const showNoteVisibilityToggle = useMemo(() => {
+    if (!activeNote) return false;
+    const nb = state.notebooks.find((n) => n.id === activeNote.notebookId);
+    return nb?.visibility === "WORKSPACE";
+  }, [activeNote, state.notebooks]);
+
+  /** 进入 MD 预览前，把编辑器当前正文回填到 activeNote（CRDT 模式下 emitSave 不带 content） */
+  const syncEditorSnapshotToActiveNote = useCallback(() => {
+    const cur = activeNoteRef.current;
+    if (!cur) return;
+    try {
+      const snap = editorHandleRef.current?.getSnapshot?.();
+      if (snap && typeof snap.content === "string") {
+        actions.setActiveNote({
+          ...cur,
+          content: snap.content,
+          contentText: snap.contentText ?? cur.contentText,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [actions]);
 
   // 构建与左侧侧边栏完全一致的笔记本树
   //
@@ -1868,15 +1933,19 @@ export default function EditorPane() {
                     <ListTree size={15} className="text-tx-tertiary" />
                     <span>{t('editor.showOutline')}</span>
                   </button>
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* 可见性切换（移动端菜单内） */}
-                  <div className="px-3 py-2">
-                    <VisibilityToggle
-                      value={activeNote.visibility || "PRIVATE"}
-                      onChange={(v) => { handleVisibilityChange(v); setShowMobileMenu(false); }}
-                      size="sm"
-                    />
-                  </div>
+                  {showNoteVisibilityToggle && (
+                    <>
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      {/* 可见性切换（移动端菜单内）——仅所属笔记本公开时显示 */}
+                      <div className="px-3 py-2">
+                        <VisibilityToggle
+                          value={activeNote.visibility || "PRIVATE"}
+                          onChange={(v) => { handleVisibilityChange(v); setShowMobileMenu(false); }}
+                          size="sm"
+                        />
+                      </div>
+                    </>
+                  )}
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* AI 生成标题 */}
                   <button
@@ -1976,6 +2045,7 @@ export default function EditorPane() {
                           setShowMobileMenu(false);
                           if (!mdPreviewMode) {
                             try { await editorHandleRef.current?.flushSave(); } catch {}
+                            syncEditorSnapshotToActiveNote();
                           }
                           setMdPreviewMode(prev => !prev);
                         }}
@@ -2285,12 +2355,14 @@ export default function EditorPane() {
             </Button>
           </div>
 
-          {/* 可见性切换 */}
-          <VisibilityToggle
-            value={activeNote.visibility || "PRIVATE"}
-            onChange={handleVisibilityChange}
-            size="sm"
-          />
+          {/* 可见性切换：仅所属笔记本为公开时显示 */}
+          {showNoteVisibilityToggle && (
+            <VisibilityToggle
+              value={activeNote.visibility || "PRIVATE"}
+              onChange={handleVisibilityChange}
+              size="sm"
+            />
+          )}
 
           {/* 大纲 */}
           <Button
@@ -2374,6 +2446,8 @@ export default function EditorPane() {
               onClick={async () => {
                 if (!mdPreviewMode) {
                   try { await editorHandleRef.current?.flushSave(); } catch {}
+                  // CRDT 模式下 flush 不写 content，预览依赖 activeNote.content——先 snapshot 回填
+                  syncEditorSnapshotToActiveNote();
                 }
                 setMdPreviewMode(prev => !prev);
               }}
@@ -2515,13 +2589,18 @@ export default function EditorPane() {
           ) : editorMode === "md" ? (
             mdPreviewMode ? (
               <MarkdownPreviewPane
+                key={`md-preview-${activeNote.id}`}
                 note={activeNote}
               />
             ) : (
               <MarkdownEditor
-                // Phase 3: key 绑定 CRDT 启用态，切换 provider 时强制重建编辑器，
-                // 避免 yCollab 扩展在运行时更换 yText 带来的状态错乱
-                key={collabYDoc ? `md-y-${activeNote.id}` : `md-${activeNote.id}`}
+                // Phase 3: key 绑定「当前笔记 + 已匹配的 collab provider」，
+                // 避免 noteId 已切到 B 但 yDoc 仍是 A 时把旧正文绑到新标题上。
+                key={
+                  safeCollabYDoc
+                    ? `md-y-${activeNote.id}-${collabProvider?.noteId ?? "none"}`
+                    : `md-${activeNote.id}`
+                }
                 ref={editorHandleRef}
                 note={activeNote}
                 onUpdate={handleUpdate}
@@ -2531,12 +2610,13 @@ export default function EditorPane() {
                 // UX3：模式切换期间冻结编辑（避免用户在 mount→unmount 间隔里敲字，
                 // 这段输入进不了任一编辑器的数据流，属于"黑洞输入"）。
                 editable={!effectiveLocked && !modeSwitching}
-                yDoc={collabYDoc}
-                awareness={collabProvider?.awareness ?? null}
+                yDoc={safeCollabYDoc}
+                awareness={safeCollabAwareness}
               />
             )
           ) : (
             <TiptapEditor
+              key={`tiptap-${activeNote.id}`}
               ref={editorHandleRef}
               note={activeNote}
               onUpdate={handleUpdate}

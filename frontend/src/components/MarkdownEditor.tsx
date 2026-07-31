@@ -203,12 +203,15 @@ const superMdHighlight = HighlightStyle.define([
   { tag: t.link, color: "var(--color-accent-primary, #3b82f6)", textDecoration: "underline" },
   { tag: t.url, color: "var(--color-accent-primary, #3b82f6)" },
   { tag: t.monospace, fontFamily: "ui-monospace, 'JetBrains Mono', Menlo, Monaco, Consolas, monospace" },
-  { tag: t.quote, fontStyle: "italic", color: "var(--color-tx-secondary, #64748b)" },
-  { tag: t.processingInstruction, color: "var(--color-tx-tertiary, #94a3b8)" },
+  { tag: t.quote, fontStyle: "italic", color: "var(--color-text-secondary, #64748b)" },
+  { tag: t.processingInstruction, color: "var(--color-text-tertiary, #94a3b8)" },
   { tag: t.list, color: "var(--color-accent-primary, #3b82f6)" },
 ]);
 
-/** 编辑器 DOM 基础主题（字体 / 尺寸 / 颜色） */
+/** 编辑器 DOM 基础主题（字体 / 尺寸 / 颜色）
+ *  注意：主题 CSS 变量是 `--color-text-*`（不是 `--color-tx-*`）。
+ *  写错变量名时会永远落到 fallback 近黑字 `#0f172a`，深色模式下正文几乎不可读。
+ */
 const baseTheme = EditorView.theme({
   "&": {
     height: "100%",
@@ -224,7 +227,7 @@ const baseTheme = EditorView.theme({
   ".cm-content": {
     padding: "12px 0",
     caretColor: "var(--color-accent-primary, #3b82f6)",
-    color: "var(--color-tx-primary, #0f172a)",
+    color: "var(--color-text-primary, #0f172a)",
   },
   ".cm-line": {
     padding: "0 12px",
@@ -245,13 +248,13 @@ const baseTheme = EditorView.theme({
   ".cm-gutters": {
     backgroundColor: "transparent",
     border: "none",
-    color: "var(--color-tx-tertiary, #94a3b8)",
+    color: "var(--color-text-tertiary, #94a3b8)",
   },
   ".cm-cursor": {
     borderLeftWidth: "2px",
   },
   ".cm-placeholder": {
-    color: "var(--color-tx-tertiary, #94a3b8)",
+    color: "var(--color-text-tertiary, #94a3b8)",
     fontStyle: "italic",
   },
 });
@@ -910,9 +913,13 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
 
     // Phase 3: CRDT 模式下文档由 yCollab 托管，不要手动 dispatch setContent，
     // 否则会产生本地 update 覆盖远端状态。只保留统计/大纲刷新。
+    // 切笔记时的「标题 B + 正文 A」错配由 EditorPane 侧保证：
+    //   仅当 collabProvider.noteId === activeNote.id 才传入 yDoc，
+    //   并用 key 强制 remount，使 yCollab 绑定到正确的 yText。
     if (collabEnabledRef.current) {
       if (lastSyncedNoteIdRef.current !== note.id) {
         lastSyncedNoteIdRef.current = note.id;
+        lastEmittedContentRef.current = null;
       }
       setWordStats(computeStats(view.state.doc.toString()));
       onHeadingsChangeRef.current?.(extractHeadings(view));
