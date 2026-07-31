@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Users,
   LogIn,
-  X,
   Pencil,
   Trash2,
   AlertTriangle,
@@ -31,6 +30,10 @@ import { cn } from "@/lib/utils";
 import MembersPanel from "@/components/MembersPanel";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import { useContextMenu } from "@/hooks/useContextMenu";
+import { AppModal } from "@/components/common/AppModal";
+
+/** 兼容旧 import：统一走 AppModal（portal + app token），避免 MembersPanel 循环依赖与空白弹窗 */
+export { AppModal as Modal } from "@/components/common/AppModal";
 
 interface WorkspaceSwitcherProps {
   /** 切换后父组件触发的回调，通常是 reload 数据 */
@@ -830,66 +833,5 @@ function DeleteWorkspaceDialog({
   );
 }
 
-/* ========== 通用 Modal ========== */
-export function Modal({
-  title,
-  children,
-  onClose,
-  widthClass = "max-w-md",
-  heightClass,
-}: {
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-  widthClass?: string;
-  /**
-   * 可选的高度约束。不传 → 内容自然高度；传如 "h-[80vh]" / "max-h-[80vh]" → 固定/限高
-   * 弹窗，body 区域自动滚动。
-   */
-  heightClass?: string;
-}) {
-  const { t } = useTranslation();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.15 }}
-        className={cn(
-          "bg-card border border-border rounded-lg shadow-xl w-full flex flex-col",
-          widthClass,
-          heightClass,
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-          <h3 className="font-semibold">{title}</h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-accent"
-            aria-label={t("common.close")}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        {/*
-          body 区域：flex-1 + min-h-0 让其在设置了 heightClass 时能正确收缩并
-          启用内部滚动；未设高度时（默认）仅按内容自然撑开，表现与旧版一致。
-        */}
-        <div className="p-4 flex-1 min-h-0 overflow-auto">{children}</div>
-      </motion.div>
-    </div>
-  );
-}
+/* ========== 通用 Modal（本地别名，与 re-export 同源） ========== */
+const Modal = AppModal;

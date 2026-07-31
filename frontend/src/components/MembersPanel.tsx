@@ -16,7 +16,7 @@ import {
   WorkspaceFeatures,
   WORKSPACE_FEATURE_META,
 } from "@/types";
-import { Modal } from "@/components/WorkspaceSwitcher";
+import { AppModal } from "@/components/common/AppModal";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
@@ -52,6 +52,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
   const [features, setFeatures] = useState<WorkspaceFeatures | null>(null);
   const [tab, setTab] = useState<"members" | "invites" | "features">("members");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreateInvite, setShowCreateInvite] = useState(false);
 
   const isManager = workspace?.role === "owner" || workspace?.role === "admin";
@@ -60,18 +61,19 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
 
   const loadAll = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [ws, mem] = await Promise.all([
         api.getWorkspace(workspaceId),
         api.getWorkspaceMembers(workspaceId),
       ]);
       setWorkspace(ws);
-      setMembers(mem);
+      setMembers(Array.isArray(mem) ? mem : []);
       // 只有管理员才能看邀请码
       if (ws.role === "owner" || ws.role === "admin") {
         try {
           const inv = await api.getWorkspaceInvites(workspaceId);
-          setInvites(inv);
+          setInvites(Array.isArray(inv) ? inv : []);
         } catch {
           // 忽略
         }
@@ -84,7 +86,9 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
         }
       }
     } catch (e: any) {
-      toast.error(e.message || t("common.loadingFailed", { defaultValue: "加载失败" }));
+      const msg = e?.message || t("common.loadingFailed", { defaultValue: "加载失败" });
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -161,20 +165,26 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
   };
 
   return (
-    <Modal
-      title={workspace ? `${workspace.icon} ${workspace.name}` : t("sidebar.navigation")}
+    <AppModal
+      title={workspace ? `${workspace.icon || "🏢"} ${workspace.name}` : t("workspace.members.title", { defaultValue: "成员管理" })}
       onClose={onClose}
       widthClass="max-w-2xl"
       heightClass="h-[80vh]"
     >
       {loading ? (
-        <div className="py-8 text-center text-muted-foreground">{t("common.loading")}</div>
+        <div className="py-8 text-center text-tx-tertiary">{t("common.loading")}</div>
+      ) : loadError ? (
+        <div className="py-10 text-center space-y-3">
+          <p className="text-sm text-tx-secondary">{loadError}</p>
+          <Button size="sm" variant="outline" onClick={() => void loadAll()}>
+            {t("common.retry", { defaultValue: "重试" })}
+          </Button>
+        </div>
       ) : (
-        // 纵向填满 Modal body：tab 条固定在顶，面板区 flex-1 内部滚动，
-        // 让弹窗整体高度稳定在 80vh，不再随 tab 内容伸缩。
+        // 纵向填满 Modal body：tab 条固定在顶，面板区 flex-1 内部滚动
         <div className="flex flex-col h-full min-h-0">
           {/* Tab */}
-          <div className="flex gap-1 mb-4 border-b border-border shrink-0">
+          <div className="flex gap-1 mb-4 border-b border-app-border shrink-0">
             <TabBtn active={tab === "members"} onClick={() => setTab("members")}>
               {t("workspace.members.title")} ({members.length})
             </TabBtn>
@@ -192,17 +202,24 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
 
           {tab === "members" && (
             <div className="space-y-1 flex-1 min-h-0 overflow-auto">
+              {members.length === 0 && (
+                <div className="py-10 text-center text-sm text-tx-tertiary">
+                  {t("workspace.members.empty", { defaultValue: "暂无成员" })}
+                </div>
+              )}
               {members.map((m) => (
                 <div
                   key={m.userId}
-                  className="flex items-center gap-3 p-2 rounded hover:bg-accent/50"
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-app-hover"
                 >
-                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold">
-                    {m.username.slice(0, 2).toUpperCase()}
+                  <div className="w-9 h-9 rounded-full bg-accent-primary/15 text-accent-primary flex items-center justify-center text-sm font-semibold">
+                    {(m.displayName || m.username || "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{m.username}</div>
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-sm font-medium text-tx-primary truncate">
+                      {m.displayName || m.username}
+                    </div>
+                    <div className="text-xs text-tx-tertiary truncate">
                       {m.email || t("workspace.members.noEmail")} · {t("workspace.members.joinedAt", { date: new Date(m.joinedAt).toLocaleDateString() })}
                     </div>
                   </div>
@@ -246,7 +263,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
               </div>
               <div className="space-y-2 flex-1 min-h-0 overflow-auto">
                 {invites.length === 0 && (
-                  <div className="text-center text-sm text-muted-foreground py-8">
+                  <div className="text-center text-sm text-tx-tertiary py-8">
                     {t("workspace.members.noInvites")}
                   </div>
                 )}
@@ -265,12 +282,12 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
           {tab === "features" && isManager && (
             <div className="space-y-3 flex-1 min-h-0 overflow-auto">
               {!features ? (
-                <div className="text-center text-sm text-muted-foreground py-8">
+                <div className="text-center text-sm text-tx-tertiary py-8">
                   {t("workspace.members.featureUnavailable")}
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-tx-tertiary">
                     {t("workspace.members.featureHint")}
                     {!isOwner && (
                       <span className="ml-1 text-amber-600 dark:text-amber-400">
@@ -307,7 +324,7 @@ export default function MembersPanel({ workspaceId, onClose }: Props) {
           }}
         />
       )}
-    </Modal>
+    </AppModal>
   );
 }
 
@@ -322,12 +339,13 @@ function TabBtn({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "px-3 py-1.5 text-sm border-b-2 transition-colors -mb-px",
         active
-          ? "border-primary text-primary font-medium"
-          : "border-transparent text-muted-foreground hover:text-foreground",
+          ? "border-accent-primary text-accent-primary font-medium"
+          : "border-transparent text-tx-tertiary hover:text-tx-primary",
       )}
     >
       {children}
@@ -621,20 +639,21 @@ function CreateInviteDialog({
   const roleOptions: WorkspaceRole[] = ["admin", "editor", "commenter", "viewer"];
 
   return (
-    <Modal title={t("workspace.members.createInvite")} onClose={onClose}>
+    <AppModal title={t("workspace.members.createInvite")} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm mb-1 block">{t("userManagement.colRole")}</label>
+          <label className="text-sm mb-1 block text-tx-primary">{t("userManagement.colRole")}</label>
           <div className="flex gap-2 flex-wrap">
             {roleOptions.map((r) => (
               <button
                 key={r}
+                type="button"
                 onClick={() => setRole(r)}
                 className={cn(
                   "px-3 py-1 rounded text-sm border transition-colors",
                   role === r
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border hover:bg-accent",
+                    : "bg-app-surface border-app-border hover:bg-app-hover text-tx-primary",
                 )}
               >
                 {ROLE_LABEL[r]}
@@ -643,7 +662,7 @@ function CreateInviteDialog({
           </div>
         </div>
         <div>
-          <label className="text-sm mb-1 block">{t("workspace.members.maxUses")}</label>
+          <label className="text-sm mb-1 block text-tx-primary">{t("workspace.members.maxUses")}</label>
           <Input
             type="number"
             min={1}
@@ -652,7 +671,7 @@ function CreateInviteDialog({
           />
         </div>
         <div>
-          <label className="text-sm mb-1 block">{t("workspace.members.expireDays")}</label>
+          <label className="text-sm mb-1 block text-tx-primary">{t("workspace.members.expireDays")}</label>
           <Input
             type="number"
             min={0}
@@ -660,7 +679,7 @@ function CreateInviteDialog({
             onChange={(e) => setExpireDays(parseInt(e.target.value) || 0)}
             placeholder={t("workspace.members.expireHint")}
           />
-          <p className="text-xs text-muted-foreground mt-1">{t("workspace.members.expireHint")}</p>
+          <p className="text-xs text-tx-tertiary mt-1">{t("workspace.members.expireHint")}</p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={loading}>
@@ -671,6 +690,6 @@ function CreateInviteDialog({
           </Button>
         </div>
       </div>
-    </Modal>
+    </AppModal>
   );
 }
