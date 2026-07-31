@@ -380,10 +380,27 @@ export default function ReadingDashboard({
                 </div>
               )}
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <h2 className="text-sm font-semibold text-tx-primary mb-3">最近读过</h2>
               {recentBooks.length > 0 ? (
-                <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+                <div
+                  className={cn(
+                    "flex gap-3 sm:gap-4 overflow-x-auto overflow-y-hidden pb-2 -mx-1 px-1",
+                    "overscroll-x-contain scroll-smooth",
+                    // 移动端隐藏滚动条；桌面保留细滚动条便于鼠标拖动
+                    "max-md:no-scrollbar",
+                    "md:[scrollbar-width:thin] md:[&::-webkit-scrollbar]:h-1.5",
+                    "md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-app-border",
+                  )}
+                  onWheel={(e) => {
+                    // 桌面触控板/滚轮：纵向滚动映射为横向，避免被外层首页吃掉
+                    const el = e.currentTarget;
+                    if (el.scrollWidth <= el.clientWidth + 2) return;
+                    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+                    e.preventDefault();
+                    el.scrollLeft += e.deltaY;
+                  }}
+                >
                   {recentBooks.map((b) => (
                     <BookCoverCard key={b.bookHash} book={b} onOpen={onOpenBook} />
                   ))}
@@ -404,8 +421,8 @@ export default function ReadingDashboard({
             </p>
           </div>
 
-          <div className="relative rounded-2xl border border-app-border bg-app-elevated/60 shadow-sm px-4 pt-5 pb-6 sm:px-8 sm:pt-8 sm:pb-10">
-            {/* 设置目标：独立高层，避免被进度环遮挡；移动端始终可见 */}
+          <div className="group/goal relative rounded-2xl border border-app-border bg-app-elevated/60 shadow-sm px-4 pt-5 pb-6 sm:px-8 sm:pt-8 sm:pb-10">
+            {/* 设置目标：桌面默认隐藏，hover 卡片时显示；移动端触控始终可见 */}
             <button
               type="button"
               onClick={openGoalDialog}
@@ -415,9 +432,14 @@ export default function ReadingDashboard({
                 "p-2.5 min-w-[44px] min-h-[44px] rounded-xl",
                 "border border-app-border bg-app-surface text-tx-secondary",
                 "hover:text-accent-primary hover:border-accent-primary/40",
-                "active:scale-95 transition-colors shadow-sm",
+                "active:scale-95 transition-all shadow-sm",
                 "flex items-center justify-center",
                 "touch-manipulation",
+                // 桌面：默认隐藏，鼠标进入卡片或焦点在按钮时显示
+                "md:opacity-0 md:pointer-events-none",
+                "md:group-hover/goal:opacity-100 md:group-hover/goal:pointer-events-auto",
+                "md:focus-visible:opacity-100 md:focus-visible:pointer-events-auto",
+                "max-md:opacity-100",
               )}
               title="设置每日阅读目标"
               aria-label="设置每日阅读目标"
@@ -431,9 +453,9 @@ export default function ReadingDashboard({
             */}
             <div className="relative w-full max-w-[260px] sm:max-w-[300px] mx-auto">
               <SemiRing ratio={ratio} />
-              {/* 文案叠在半环内侧空腔，不参与文档流，也不盖住下方按钮 */}
-              <div className="absolute left-0 right-0 top-[18%] flex flex-col items-center justify-center text-center pointer-events-none px-4">
-                <div className="text-[11px] sm:text-xs font-medium text-tx-secondary mb-0.5">
+              {/* 文案下移，与半环弧顶留出间距，避免贴着进度条 */}
+              <div className="absolute left-0 right-0 top-[32%] sm:top-[34%] flex flex-col items-center justify-center text-center pointer-events-none px-4">
+                <div className="text-[11px] sm:text-xs font-medium text-tx-secondary mb-1">
                   今日阅读进度
                 </div>
                 <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-tx-primary tabular-nums tracking-tight leading-none">
