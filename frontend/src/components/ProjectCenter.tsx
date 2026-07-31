@@ -1,8 +1,9 @@
 import { Play, Pause } from "lucide-react";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { Plan, Project, ProjectGroup, ProjectStage, ProjectTask, Tag } from "@/types";
+import { Plan, Project, ProjectGroup, ProjectMember, ProjectStage, ProjectTask, Tag } from "@/types";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn, detectSuMention, getTagColor } from "@/lib/utils";
@@ -12,7 +13,7 @@ import {
   Plus, Calendar, ListTodo, Briefcase, Star, Search, Filter, Loader2,
   ChevronRight, ChevronDown, ChevronLeft, AlertCircle, ArrowLeft, MoreVertical, Edit2, Trash2, Eye, EyeOff, FolderOpen,
   CheckCircle2, Clock, Globe, Lock, Check, Grid, List as ListIcon, MessageSquare,
-  Bookmark, Award, Circle, Bell, X, User, Maximize2, Menu
+  Bookmark, Award, Circle, Bell, X, User, UserPlus, Maximize2, Menu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -484,6 +485,8 @@ export default function ProjectCenter() {
 
   const projDescRef = useRef<HTMLTextAreaElement>(null);
   const taskDescRef = useRef<HTMLTextAreaElement>(null);
+  /** 编辑项目弹窗可滚动 body，用于滚到成员区 */
+  const projEditScrollRef = useRef<HTMLDivElement>(null);
 
 
   const [showMobileMyTasksSearch, setShowMobileMyTasksSearch] = useState(false);
@@ -598,8 +601,13 @@ export default function ProjectCenter() {
   const [quickAddTags, setQuickAddTags] = useState<Tag[]>([]);
 
   const personalTodoProject = useMemo(
-    () => projects.find((p) => p.name === "个人TODO"),
-    [projects]
+    () =>
+      projects.find(
+        (p) =>
+          p.name === "个人TODO" &&
+          (!p.workspaceId || p.workspaceId === ""),
+      ),
+    [projects],
   );
 
   // Full Screen / Detailed Task Creation Modal State
@@ -687,6 +695,20 @@ export default function ProjectCenter() {
   const [projPlanId, setProjPlanId] = useState<string | null>(null);
   const [projMilestoneId, setProjMilestoneId] = useState<string | null>(null);
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
+  /** 编辑项目时的成员列表 */
+  const [projMembers, setProjMembers] = useState<ProjectMember[]>([]);
+  const [projMembersLoading, setProjMembersLoading] = useState(false);
+  const [projMemberBusy, setProjMemberBusy] = useState(false);
+  const [projAddUserId, setProjAddUserId] = useState("");
+  /** 编辑中项目是否为个人TODO（禁止加人） */
+  const [editingIsPersonalTodo, setEditingIsPersonalTodo] = useState(false);
+  const [editingOwnerId, setEditingOwnerId] = useState<string>("");
+  /** 添加成员：搜索关键词 + 候选列表 */
+  const [memberSearchQ, setMemberSearchQ] = useState("");
+  const [memberCandidates, setMemberCandidates] = useState<
+    Array<{ userId: string; username: string; displayName?: string | null; email?: string | null; avatarUrl?: string | null }>
+  >([]);
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false);
 
   // Star / Favorite toggle helper
   const isFavorite = useCallback((id: string) => favorites.includes(id), [favorites]);
@@ -720,20 +742,25 @@ export default function ProjectCenter() {
 
       let ps = await api.getProjects(workspaceId, "active");
 
-      // Auto-provision "个人TODO" if workspace is personal and it is missing
-      if (workspaceId === "personal") {
-        const hasPersonalTodo = ps.some((p) => p.name === "个人TODO");
-        if (!hasPersonalTodo) {
-          try {
-            await api.createProject({
-              name: "个人TODO",
-              description: "默认个人任务项目",
-              workspaceId: null
-            });
-            ps = await api.getProjects(workspaceId, "active");
-          } catch (createErr) {
-            console.error("Failed to auto-create 个人TODO:", createErr);
-          }
+      // 任何工作区都要有自己的个人TODO（owner=自己、PRIVATE、不挂 workspace）
+      // 后端 list/login 也会 ensure；这里再兜底一次，避免旧后端或缓存导致缺失
+      const hasPersonalTodo = ps.some(
+        (p) =>
+          p.name === "个人TODO" &&
+          (!p.workspaceId || p.workspaceId === ""),
+      );
+      if (!hasPersonalTodo) {
+        try {
+          await api.createProject({
+            name: "个人TODO",
+            description: "个人待办事项项目",
+            cover: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            workspaceId: null,
+            visibility: "PRIVATE",
+          });
+          ps = await api.getProjects(workspaceId, "active");
+        } catch (createErr) {
+          console.error("Failed to auto-create 个人TODO:", createErr);
         }
       }
 
@@ -837,6 +864,83 @@ export default function ProjectCenter() {
       setWsMembers([]);
     }
   }, [workspaceId]);
+
+  // 编辑弹窗：合并「工作区成员 + 用户搜索」作为添加候选（可按关键词过滤）
+  useEffect(() => {
+    if (!showCreateModal || !isEditingProject || editingIsPersonalTodo) {
+      setMemberCandidates([]);
+      setMemberSearchLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setMemberSearchLoading(true);
+      const q = memberSearchQ.trim();
+      const fromWs = (wsMembers || []).map((w: any) => ({
+        userId: String(w.userId || w.id || ""),
+        username: w.username || "",
+        displayName: w.displayName ?? null,
+        email: w.email ?? null,
+        avatarUrl: w.avatarUrl ?? null,
+      })).filter((c) => c.userId);
+
+      const me = currentUserId;
+      const matchQ = (name: string, username: string, email?: string | null) => {
+        if (!q) return true;
+        const s = q.toLowerCase();
+        return (
+          (name || "").toLowerCase().includes(s) ||
+          (username || "").toLowerCase().includes(s) ||
+          (email || "").toLowerCase().includes(s)
+        );
+      };
+
+      api
+        .searchUsers(q)
+        .then((users) => {
+          if (cancelled) return;
+          const fromSearch = (users || []).map((u) => ({
+            userId: u.id,
+            username: u.username,
+            displayName: u.displayName,
+            email: (u as any).email ?? null,
+            avatarUrl: u.avatarUrl,
+          }));
+          const map = new Map<string, (typeof fromWs)[0]>();
+          for (const c of [...fromWs, ...fromSearch]) {
+            if (!c.userId || c.userId === me) continue;
+            if (!matchQ(c.displayName || "", c.username, c.email)) continue;
+            if (!map.has(c.userId)) map.set(c.userId, c);
+          }
+          setMemberCandidates(Array.from(map.values()));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // 搜索失败时至少展示工作区成员
+          setMemberCandidates(
+            fromWs.filter(
+              (c) =>
+                c.userId !== me &&
+                matchQ(c.displayName || "", c.username, c.email),
+            ),
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setMemberSearchLoading(false);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    showCreateModal,
+    isEditingProject,
+    editingIsPersonalTodo,
+    wsMembers,
+    currentUserId,
+    memberSearchQ,
+  ]);
 
   const triggerStatsRefresh = () => {
     try {
@@ -1073,10 +1177,124 @@ export default function ProjectCenter() {
       setProjGroupId(activeFilter.groupId);
     } else {
       setProjGroupId(null);
+    }
     setProjPlanId(null);
     setProjMilestoneId(null);
-    }
+    setProjMembers([]);
+    setProjAddUserId("");
+    setEditingIsPersonalTodo(false);
+    setEditingOwnerId("");
     setShowCreateModal(true);
+  };
+
+  const resolveMeId = useCallback(async (): Promise<string> => {
+    if (currentUserId) return currentUserId;
+    try {
+      const u = await api.getMe();
+      setCurrentUserId(u.id);
+      return u.id;
+    } catch {
+      return "";
+    }
+  }, [currentUserId]);
+
+  const isProjectOwner = useMemo(() => {
+    if (!currentUserId) return false;
+    if (editingOwnerId && currentUserId === editingOwnerId) return true;
+    return projMembers.some(
+      (m) => m.userId === currentUserId && (m.role === "owner" || (m as any).role === "admin"),
+    );
+  }, [currentUserId, editingOwnerId, projMembers]);
+
+  const loadProjectMembers = async (projectId: string) => {
+    setProjMembersLoading(true);
+    try {
+      const me = await resolveMeId();
+      const full = await api.getProject(projectId);
+      let members = [...(full.members || [])];
+      // 兜底：owner 不在 members 表时补上，便于展示与权限判断
+      const ownerId = full.ownerId || "";
+      if (ownerId && !members.some((m) => m.userId === ownerId)) {
+        members = [
+          {
+            userId: ownerId,
+            role: "owner",
+            username: full.ownerName || "owner",
+            displayName: full.ownerDisplayName || null,
+            avatarUrl: null,
+          },
+          ...members,
+        ];
+      }
+      setProjMembers(members);
+      setEditingOwnerId(ownerId || me);
+      setEditingIsPersonalTodo(
+        full.name === "个人TODO" && (!full.workspaceId || full.workspaceId === ""),
+      );
+      if (selectedProject?.id === projectId) {
+        setSelectedProject({ ...full, members });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("加载项目成员失败");
+    } finally {
+      setProjMembersLoading(false);
+    }
+  };
+
+  const handleAddProjectMember = async (userId?: string) => {
+    const targetUserId = userId || projAddUserId;
+    if (!editingProjectId || !targetUserId || projMemberBusy) return;
+    if (editingIsPersonalTodo) {
+      toast.error("个人TODO 仅自己可见，不可添加成员");
+      return;
+    }
+    const me = await resolveMeId();
+    if (!me) {
+      toast.error("无法识别当前用户，请刷新后重试");
+      return;
+    }
+    if (editingOwnerId && me !== editingOwnerId && !isProjectOwner) {
+      toast.error("仅项目所有者可添加成员");
+      return;
+    }
+    setProjMemberBusy(true);
+    try {
+      await api.addProjectMember(editingProjectId, targetUserId, "member");
+      toast.success("已添加成员");
+      setProjAddUserId("");
+      setMemberSearchQ("");
+      await loadProjectMembers(editingProjectId);
+    } catch (err: any) {
+      toast.error(err?.message || "添加成员失败");
+    } finally {
+      setProjMemberBusy(false);
+    }
+  };
+
+  const handleRemoveProjectMember = async (memberUserId: string, label: string) => {
+    if (!editingProjectId || projMemberBusy) return;
+    if (memberUserId === editingOwnerId) {
+      toast.error("不能移除项目所有者");
+      return;
+    }
+    const me = await resolveMeId();
+    // 所有者可移除他人；成员可自行退出
+    if (me !== editingOwnerId && me !== memberUserId && !isProjectOwner) {
+      toast.error("无权移除该成员");
+      return;
+    }
+    if (!confirm(`确定将「${label}」移出项目吗？`)) return;
+    setProjMemberBusy(true);
+    try {
+      await api.removeProjectMember(editingProjectId, memberUserId);
+      toast.success(me === memberUserId ? "已退出项目" : "已移除成员");
+      await loadProjectMembers(editingProjectId);
+    } catch (err: any) {
+      toast.error(err?.message || "移除成员失败");
+    } finally {
+      setProjMemberBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -1110,7 +1328,29 @@ export default function ProjectCenter() {
     // Find planId from milestone
     const plan = availablePlans.find(p => p.milestones?.some(m => m.id === proj.milestoneId));
     setProjPlanId(plan ? plan.id : null);
+    setProjMembers(proj.members || []);
+    setProjAddUserId("");
+    setMemberSearchQ("");
+    setEditingOwnerId(proj.ownerId || "");
+    setEditingIsPersonalTodo(
+      proj.name === "个人TODO" && (!proj.workspaceId || proj.workspaceId === ""),
+    );
     setShowCreateModal(true);
+    void resolveMeId();
+    // 列表项可能不带 members，再拉一次完整详情
+    void loadProjectMembers(proj.id);
+    // 打开后滚到「项目成员」，避免表单过长时底部成员区不可见
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const root = projEditScrollRef.current;
+        const members = document.getElementById("project-edit-members");
+        if (members && root) {
+          members.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } else if (root) {
+          root.scrollTop = root.scrollHeight;
+        }
+      }, 80);
+    });
   };
 
   const handleUploadCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1307,12 +1547,17 @@ export default function ProjectCenter() {
     }
     try {
       const stages = await api.getProjectStages(targetProjectId);
+      // 优先「进行中 / 待启动」，避免落到「已完成」列导致列表不显眼
+      const preferStage =
+        stages.find((s) => s.name === "进行中") ||
+        stages.find((s) => s.name === "待启动") ||
+        stages[0];
       let stageId: string;
-      if (stages.length === 0) {
-        const newStage = await api.createProjectStage(targetProjectId, { name: "待启动" });
+      if (!preferStage) {
+        const newStage = await api.createProjectStage(targetProjectId, { name: "进行中" });
         stageId = newStage.id;
       } else {
-        stageId = stages[0].id;
+        stageId = preferStage.id;
       }
 
       const defaultRemindAt = quickAddDueDate ? calculateDefaultReminderDate(quickAddDueDate) : null;
@@ -1323,11 +1568,14 @@ export default function ProjectCenter() {
       const finalTitle = suQuick.hasSu ? suQuick.cleanText.slice(0, 50) : rawTitle;
       const finalDesc = suQuick.hasSu ? suQuick.cleanText : "";
 
+      // 默认指派给自己，才能出现在「我负责的」列表
+      const assigneeId = quickAddAssigneeId || currentUserId || null;
+
       const payload = {
         stageId,
         title: finalTitle,
         description: finalDesc,
-        assigneeId: quickAddAssigneeId || null,
+        assigneeId,
         endDate: quickAddDueDate ? new Date(quickAddDueDate).toISOString() : null,
         priority: 2,
         remindAt: defaultRemindAt,
@@ -1351,7 +1599,16 @@ export default function ProjectCenter() {
       setQuickAddIsRecurring(false);
       setQuickAddRecurrenceRule({ type: "weekday" });
       setQuickAddTags([]);
-      fetchMyTasks();
+
+      // 立即乐观插入，再拉服务端列表，避免刷新竞态导致「创建成功但列表没有」
+      if (activeFilter.type === "my-tasks" && newTask) {
+        setMyTasks((prev) => {
+          if (prev.some((t) => t.id === newTask.id)) return prev;
+          return [newTask, ...prev];
+        });
+      }
+      await fetchMyTasks();
+
       if (selectedProject && targetProjectId === selectedProject.id) {
         const updatedStages = await api.getProjectStages(targetProjectId);
         setProjectStages(updatedStages);
@@ -1414,7 +1671,7 @@ export default function ProjectCenter() {
         stageId,
         title: finalTitle,
         description: finalDesc,
-        assigneeId: taskAssigneeId || null,
+        assigneeId: taskAssigneeId || currentUserId || null,
         endDate: taskDueDate ? new Date(taskDueDate).toISOString() : null,
         priority: taskPriority,
         remindAt: taskRemindAt || null,
@@ -1428,7 +1685,13 @@ export default function ProjectCenter() {
       const newTask = await api.createProjectTask(taskProjId, payload);
       triggerStatsRefresh();
       toast.success("创建任务成功");
-      fetchMyTasks();
+      if (activeFilter.type === "my-tasks" && newTask) {
+        setMyTasks((prev) => {
+          if (prev.some((t) => t.id === newTask.id)) return prev;
+          return [newTask, ...prev];
+        });
+      }
+      await fetchMyTasks();
       if (selectedProject && taskProjId === selectedProject.id) {
         const updatedStages = await api.getProjectStages(taskProjId);
         setProjectStages(updatedStages);
@@ -1557,6 +1820,18 @@ export default function ProjectCenter() {
               </span>
             }
             onLeadingClick={closeProjectDetail}
+            right={
+              <MobileChromeIconButton
+                title="编辑项目 / 成员"
+                onClick={() =>
+                  handleOpenEditModal(selectedProject, {
+                    stopPropagation: () => {},
+                  } as React.MouseEvent)
+                }
+              >
+                <Edit2 size={16} />
+              </MobileChromeIconButton>
+            }
           />
           <PageHeader
             mdOnly
@@ -1580,6 +1855,17 @@ export default function ProjectCenter() {
             leading={
               <Button variant="ghost" size="icon" onClick={closeProjectDetail} className="h-8 w-8" aria-label="返回">
                 <ArrowLeft size={16} />
+              </Button>
+            }
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={(e) => handleOpenEditModal(selectedProject, e)}
+              >
+                <Edit2 size={13} />
+                编辑 / 成员
               </Button>
             }
           />
@@ -2808,16 +3094,20 @@ export default function ProjectCenter() {
         </div>
       )}
 
-      {/* 5. Create / Edit Project Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-text">
+      {/* 5. Create / Edit Project Modal
+          使用原生 overflow-y-auto（不用 Radix ScrollArea）：在 flex + max-h 弹窗里
+          ScrollArea 常算不出高度，导致底部「项目成员」滚不到 / 被 footer 挡住。 */}
+      {showCreateModal &&
+        typeof document !== "undefined" &&
+        createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 select-text">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
           <form
             onSubmit={handleCreateOrEditProject}
-            className="relative bg-app-elevated w-full max-w-lg rounded-2xl border border-app-border shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in scale-in duration-200"
+            className="relative bg-app-card text-tx-primary w-full max-w-lg rounded-2xl border border-app-border shadow-2xl flex flex-col min-h-0 max-h-[min(90dvh,720px)] overflow-hidden animate-in scale-in duration-200"
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+            <div className="px-5 sm:px-6 py-3.5 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
               <h3 className="text-sm font-bold text-tx-primary">
                 {isEditingProject ? t("projects.editProject") || "编辑项目" : t("projects.createProject") || "新建项目"}
               </h3>
@@ -2830,8 +3120,13 @@ export default function ProjectCenter() {
               </button>
             </div>
 
-            {/* Body */}
-            <ScrollArea className="flex-1 min-h-0 px-6 py-5 space-y-4">
+            {/* Body：flex-1 + min-h-0 + overflow-y-auto 才能滚到成员区 */}
+            <div
+              ref={projEditScrollRef}
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 py-4"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              <div className="space-y-4 pb-2">
               {/* Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.name") || "项目名称"}</label>
@@ -2856,10 +3151,9 @@ export default function ProjectCenter() {
                   value={projDesc}
                   onChange={(e) => setProjDesc(e.target.value)}
                   placeholder={t("projects.projDescPlaceholder") || "输入任务描述信息…"}
-                  className="text-xs leading-relaxed min-h-[80px] border-app-border rounded-xl"
+                  className="text-xs leading-relaxed min-h-[72px] max-h-32 border-app-border rounded-xl"
                 />
               </div>
-
 
               {/* Cover selector */}
               <div className="space-y-2">
@@ -2871,14 +3165,13 @@ export default function ProjectCenter() {
                       type="button"
                       onClick={() => setProjCover(cov)}
                       style={{ background: cov }}
-                      className={`w-9 h-9 rounded-lg border transition-all ${
+                      className={`w-8 h-8 rounded-lg border transition-all ${
                         projCover === cov ? "border-accent-primary scale-110 shadow-md" : "border-white/10"
                       }`}
                     />
                   ))}
-                  {/* Upload custom cover button */}
-                  <label className="w-9 h-9 rounded-lg border border-dashed border-app-border hover:border-app-border/80 flex items-center justify-center cursor-pointer text-tx-tertiary hover:text-tx-primary hover:bg-app-hover transition-colors shrink-0">
-                    <Plus size={16} />
+                  <label className="w-8 h-8 rounded-lg border border-dashed border-app-border hover:border-app-border/80 flex items-center justify-center cursor-pointer text-tx-tertiary hover:text-tx-primary hover:bg-app-hover transition-colors shrink-0">
+                    <Plus size={14} />
                     <input
                       type="file"
                       accept="image/*"
@@ -2887,15 +3180,14 @@ export default function ProjectCenter() {
                     />
                   </label>
                 </div>
-                {/* Cover Preview */}
                 <div
-                  className="w-full h-20 rounded-xl border border-app-border/60"
+                  className="w-full h-14 rounded-xl border border-app-border/60"
                   style={{ background: projCover, backgroundSize: "cover", backgroundPosition: "center" }}
                 />
               </div>
 
               {/* Date fields row */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider block">{t("projects.startDate") || "开始时间"}</label>
                   <SleekDatePicker
@@ -2917,8 +3209,7 @@ export default function ProjectCenter() {
               </div>
 
               {/* Group & Visibility */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Group */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.group") || "项目分组"}</label>
                   <select
@@ -2935,27 +3226,29 @@ export default function ProjectCenter() {
                   </select>
                 </div>
 
-                {/* Visibility */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">{t("projects.visibility") || "可见范围"}</label>
                   <select
                     value={projVisibility}
                     onChange={(e) => setProjVisibility(e.target.value as any)}
-                    className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
+                    disabled={editingIsPersonalTodo}
+                    className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary disabled:opacity-50"
                   >
                     <option value="PRIVATE">{t("projects.private") || "私有：仅项目成员可见"}</option>
                     <option value="PUBLIC">{t("projects.public") || "公开：工作区全员可见"}</option>
                   </select>
+                </div>
+              </div>
+
               {/* Plan & Milestone Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Plan Selection */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">所属规划方案</label>
                   <select
                     value={projPlanId || ""}
                     onChange={(e) => {
-                        setProjPlanId(e.target.value || null);
-                        setProjMilestoneId(null);
+                      setProjPlanId(e.target.value || null);
+                      setProjMilestoneId(null);
                     }}
                     className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary"
                   >
@@ -2968,7 +3261,6 @@ export default function ProjectCenter() {
                   </select>
                 </div>
 
-                {/* Milestone Selection */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider">归属里程碑</label>
                   <select
@@ -2978,20 +3270,243 @@ export default function ProjectCenter() {
                     className="sleek-select w-full h-9 px-3 text-xs text-tx-secondary disabled:opacity-50"
                   >
                     <option value="">不归属里程碑</option>
-                    {projPlanId && availablePlans.find(p => p.id === projPlanId)?.milestones?.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
+                    {projPlanId &&
+                      availablePlans
+                        .find((p) => p.id === projPlanId)
+                        ?.milestones?.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
                   </select>
                 </div>
               </div>
+
+              {/* 项目成员管理（仅编辑已有项目时） */}
+              {isEditingProject && editingProjectId && (
+                <div
+                  id="project-edit-members"
+                  className="space-y-3 pt-3 border-t border-app-border scroll-mt-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1.5">
+                      <UserPlus size={13} className="text-accent-primary" />
+                      {t("projects.members") || "项目成员"}
+                      <span className="text-tx-tertiary font-normal normal-case">
+                        ({projMembers.length})
+                      </span>
+                    </label>
+                    {projMembersLoading && (
+                      <Loader2 size={14} className="animate-spin text-tx-tertiary" />
+                    )}
+                  </div>
+
+                  {editingIsPersonalTodo ? (
+                    <p className="text-[11px] text-tx-tertiary leading-relaxed bg-app-hover/50 rounded-lg px-3 py-2">
+                      「个人TODO」仅自己可见、不可添加/移除成员。请编辑其他协作项目来管理成员。
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-app-border/60 bg-app-sidebar/20 p-1.5">
+                        {projMembers.length === 0 && !projMembersLoading && (
+                          <p className="text-[11px] text-tx-tertiary py-3 text-center">
+                            {t("projects.noMembers") || "暂无成员"}
+                          </p>
+                        )}
+                        {projMembers.map((m) => {
+                          const label = m.displayName || m.username || m.userId;
+                          const isOwnerRow =
+                            m.role === "owner" || m.userId === editingOwnerId;
+                          const canRemove =
+                            !isOwnerRow &&
+                            !!currentUserId &&
+                            (isProjectOwner || currentUserId === m.userId);
+                          return (
+                            <div
+                              key={m.userId}
+                              className="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-app-hover/70"
+                            >
+                              {m.avatarUrl ? (
+                                <img
+                                  src={m.avatarUrl}
+                                  alt={label}
+                                  className="w-8 h-8 rounded-full object-cover border border-app-border shrink-0"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-accent-primary/15 text-accent-primary flex items-center justify-center text-[11px] font-bold shrink-0">
+                                  {(label || "?").slice(0, 1).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-tx-primary truncate">
+                                  {label}
+                                  {m.userId === currentUserId && (
+                                    <span className="ml-1 text-[10px] text-tx-tertiary font-normal">
+                                      (我)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-tx-tertiary">
+                                  {isOwnerRow
+                                    ? t("projects.ownerRole") || "项目所有者"
+                                    : t("projects.memberRole") || "成员"}
+                                </div>
+                              </div>
+                              {canRemove && (
+                                <button
+                                  type="button"
+                                  disabled={projMemberBusy}
+                                  onClick={() =>
+                                    void handleRemoveProjectMember(m.userId, label)
+                                  }
+                                  className="px-2 py-1 rounded-md text-[11px] font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                                  title={
+                                    currentUserId === m.userId
+                                      ? "退出项目"
+                                      : "移除成员"
+                                  }
+                                >
+                                  {currentUserId === m.userId ? "退出" : "移除"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {isProjectOwner ? (
+                        <div className="space-y-2 rounded-xl border border-app-border/60 p-3 bg-app-elevated">
+                          <div className="text-[11px] font-semibold text-tx-secondary">
+                            添加成员
+                          </div>
+                          <div className="relative">
+                            <Search
+                              size={13}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tx-tertiary"
+                            />
+                            <Input
+                              value={memberSearchQ}
+                              onChange={(e) => setMemberSearchQ(e.target.value)}
+                              placeholder="搜索用户名 / 昵称…"
+                              className="h-9 pl-8 text-xs border-app-border"
+                              disabled={projMemberBusy}
+                            />
+                            {memberSearchLoading && (
+                              <Loader2
+                                size={13}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-tx-tertiary"
+                              />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={projAddUserId}
+                              onChange={(e) => setProjAddUserId(e.target.value)}
+                              className="sleek-select flex-1 h-9 px-3 text-xs text-tx-secondary min-w-0"
+                              disabled={projMemberBusy}
+                            >
+                              <option value="">
+                                {memberCandidates.filter(
+                                  (c) =>
+                                    !projMembers.some((pm) => pm.userId === c.userId),
+                                ).length === 0
+                                  ? "输入关键词搜索用户…"
+                                  : "选择要添加的用户…"}
+                              </option>
+                              {memberCandidates
+                                .filter(
+                                  (c) =>
+                                    !projMembers.some((pm) => pm.userId === c.userId),
+                                )
+                                .map((c) => {
+                                  const name =
+                                    c.displayName || c.username || c.userId;
+                                  return (
+                                    <option key={c.userId} value={c.userId}>
+                                      {name}
+                                      {c.username && c.displayName
+                                        ? ` (@${c.username})`
+                                        : ""}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={!projAddUserId || projMemberBusy}
+                              onClick={() => void handleAddProjectMember()}
+                              className="text-xs shrink-0 bg-accent-primary hover:bg-accent-primary/95 text-white h-9"
+                            >
+                              {projMemberBusy ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <>
+                                  <UserPlus size={13} className="mr-1" />
+                                  添加
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          {/* 快捷点击候选 */}
+                          {memberCandidates.filter(
+                            (c) =>
+                              !projMembers.some((pm) => pm.userId === c.userId),
+                          ).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {memberCandidates
+                                .filter(
+                                  (c) =>
+                                    !projMembers.some(
+                                      (pm) => pm.userId === c.userId,
+                                    ),
+                                )
+                                .slice(0, 8)
+                                .map((c) => (
+                                  <button
+                                    key={c.userId}
+                                    type="button"
+                                    disabled={projMemberBusy}
+                                    onClick={() => {
+                                      setProjAddUserId(c.userId);
+                                      void handleAddProjectMember(c.userId);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] border border-app-border bg-app-hover/40 hover:bg-accent-primary/10 hover:border-accent-primary/40 text-tx-secondary hover:text-tx-primary transition-colors disabled:opacity-50"
+                                  >
+                                    <UserPlus size={11} />
+                                    {c.displayName || c.username}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                          {!memberSearchLoading &&
+                            memberCandidates.filter(
+                              (c) =>
+                                !projMembers.some((pm) => pm.userId === c.userId),
+                            ).length === 0 && (
+                              <p className="text-[10px] text-tx-tertiary">
+                                {memberSearchQ.trim()
+                                  ? "未找到匹配用户，请换个关键词"
+                                  : "输入用户名搜索系统用户，或从工作区成员中选择"}
+                              </p>
+                            )}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-tx-tertiary px-1">
+                          {currentUserId
+                            ? "仅项目所有者可以添加/移除其他成员。你可在上方退出项目。"
+                            : "正在识别当前用户…"}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
+              )}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0">
+            <div className="px-5 sm:px-6 py-3 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0 safe-area-pb">
               <Button
                 type="button"
                 variant="ghost"
@@ -3010,7 +3525,8 @@ export default function ProjectCenter() {
               </Button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* 6. Detailed Task Create Modal */}
