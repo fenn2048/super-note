@@ -119,7 +119,7 @@ export default function MobileMorePage() {
       <MobileChromeHeader
         variant="bare"
         title="我的"
-        subtitle="资料库、AI、消息与设置"
+        subtitle="笔记、资料库、AI、消息与设置"
       />
 
       <ContentCanvas className="pb-6" flush>

@@ -1,8 +1,9 @@
 /**
- * 移动底栏：笔记 | 任务 | 说说 | 我的（固定 4 Tab）
+ * 移动底栏：首页 | 任务 | 说说 | 我的（固定 4 Tab）
+ * 笔记入口改到「我的」宫格。
  */
 import React, { useMemo } from "react";
-import { BookOpen, ListTodo, NotebookPen, User as UserIcon } from "lucide-react";
+import { Home, ListTodo, NotebookPen, User as UserIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ import { useWorkspaceFeatures } from "@/store/workspaceFeaturesStore";
 import type { ViewMode } from "@/types";
 
 const TAB_ICONS: Record<string, React.ReactNode> = {
-  notes: <BookOpen size={20} />,
+  home: <Home size={20} />,
   tasks: <ListTodo size={20} />,
   diary: <NotebookPen size={20} />,
 };
@@ -50,7 +51,7 @@ export default function MobileTabBar({ visible }: { visible: boolean }) {
       id: m.id,
       mode: m.mode,
       label: t(m.labelKey, { defaultValue: m.labelFallback }),
-      icon: TAB_ICONS[m.id] || <BookOpen size={20} />,
+      icon: TAB_ICONS[m.id] || <Home size={20} />,
       active: isModuleActive(m, state.viewMode),
       openMyTasks: m.action === "openMyTasks",
     })),

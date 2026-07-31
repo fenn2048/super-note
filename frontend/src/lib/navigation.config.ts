@@ -2,9 +2,10 @@
  * 全局导航单一配置源（产品 IA P0）
  * ---------------------------------------------------------------------------
  * 产品决策（已锁定）：
- *   1. 主场景 = 家庭 OS / 工作台（笔记 + 任务 + 说说并重）
+ *   1. 主场景 = 家庭 OS / 工作台（首页 + 任务 + 说说并重；笔记在「我的」）
  *   2. 任务模型 = 方案 A：统一到 Project（无独立 Task 一级入口）
  *   3. 编辑器主格式 = RTE（tiptap）优先
+ *   4. 移动底栏 = 首页 | 任务 | 说说 | 我的（笔记入口在「我的」宫格）
  *
  * 所有壳（NavRail / 移动底栏 / 我的页 / 侧栏次级入口 / Cmd-K）应消费本文件，
  * 避免增删模块时多处漂移。
@@ -70,7 +71,8 @@ export const NAV_MODULES: NavModule[] = [
     labelKey: "sidebar.home",
     labelFallback: "首页",
     tier: 1,
-    placements: ["desktopRail", "cmdk"],
+    // 移动底栏首位；桌面 Rail 仍保留
+    placements: ["desktopRail", "mobileTab", "cmdk"],
     group: "primary",
   },
   {
@@ -80,8 +82,8 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "笔记",
     feature: "notes",
     tier: 0,
-    // 移动端走底栏「笔记」，不在「我的」重复入口
-    placements: ["desktopRail", "mobileTab", "cmdk"],
+    // 移动端改入「我的」宫格，底栏不再单独占位
+    placements: ["desktopRail", "mobileMore", "cmdk"],
     group: "primary",
     moreDesc: "浏览和管理所有核心笔记",
   },
@@ -224,7 +226,7 @@ export function getDesktopRailModules(
   );
 }
 
-/** 移动底栏：笔记 | 任务 | 说说 | 我的（「我的」由壳层单独渲染） */
+/** 移动底栏：首页 | 任务 | 说说 | 我的（「我的」由壳层单独渲染） */
 export function getMobileTabModules(
   features: WorkspaceFeatures | null,
 ): NavModule[] {
@@ -356,16 +358,20 @@ export function isNotesViewMode(viewMode: ViewMode): boolean {
 
 /**
  * 模块激活态（NavRail / 底栏 / 我的 共用）
- * - notes：笔记派生 + 收藏/回收站（从笔记心智进入的）
+ * - home：仅首页
+ * - notes：笔记派生 + 收藏/回收站（桌面 Rail；移动从「我的」进入）
  * - tasks：projects / plans / 历史 tasks
  * - library：资料库及分项
- * - more：底栏「我的」——二级页也高亮
+ * - more：底栏「我的」——二级页（含笔记）也高亮；首页独立 Tab 后不再占 more
  */
 export function isModuleActive(
   mod: NavModule | string,
   viewMode: ViewMode,
 ): boolean {
   const id = typeof mod === "string" ? mod : mod.id;
+  if (id === "home") {
+    return viewMode === "home";
+  }
   if (id === "notes") {
     return (
       isNotesViewMode(viewMode) ||
@@ -383,10 +389,12 @@ export function isModuleActive(
     );
   }
   if (id === "more") {
-    // 与底栏「我的」历史行为对齐：二级页高亮我的；收藏归笔记 Tab
+    // 底栏「我的」：宫格本身 + 从我的进入的二级页（笔记改入我的后也算）
     return (
       viewMode === "more" ||
-      viewMode === "home" ||
+      isNotesViewMode(viewMode) ||
+      viewMode === "favorites" ||
+      viewMode === "trash" ||
       viewMode === "ai-chat" ||
       viewMode === "mentions" ||
       viewMode === "finance" ||
@@ -394,8 +402,7 @@ export function isModuleActive(
       viewMode === "library" ||
       viewMode === "files" ||
       viewMode === "books" ||
-      viewMode === "media" ||
-      viewMode === "trash"
+      viewMode === "media"
     );
   }
   if (typeof mod !== "string") {

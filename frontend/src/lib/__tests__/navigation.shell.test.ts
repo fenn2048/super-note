@@ -70,12 +70,16 @@ describe("shouldShowDesktopFAB", () => {
 });
 
 describe("isModuleActive", () => {
-  it("highlights notes for notebook views", async () => {
+  it("highlights notes for notebook views; home is own tab; notes under more", async () => {
     const { isModuleActive } = await import("@/lib/navigation.config");
     expect(isModuleActive("notes", "all")).toBe(true);
     expect(isModuleActive("notes", "favorites")).toBe(true);
     expect(isModuleActive("tasks", "projects")).toBe(true);
-    expect(isModuleActive("more", "home")).toBe(true);
-    expect(isModuleActive("more", "favorites")).toBe(false);
+    // 首页独立底栏 Tab，不再高亮「我的」
+    expect(isModuleActive("home", "home")).toBe(true);
+    expect(isModuleActive("more", "home")).toBe(false);
+    // 笔记改入「我的」后，笔记/收藏二级页高亮我的
+    expect(isModuleActive("more", "all")).toBe(true);
+    expect(isModuleActive("more", "favorites")).toBe(true);
   });
 });
