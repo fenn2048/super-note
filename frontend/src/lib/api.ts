@@ -126,6 +126,35 @@ export function getBaseUrl(): string {
   return server ? `${server}/api` : "/api";
 }
 
+/**
+ * Health 探活 URL。
+ * ---------------------------------------------------------------------------
+ * 本地 Vite 开发（页面在 localhost:5173）时，业务请求常走相对 `/api` 代理到 :3001。
+ * 若 localStorage 里残留错误/旧端口的 loopback super-server-url，探活若仍打绝对地址
+ * 会失败，误报「网络不可用」，而页面其实还能通过代理读写笔记。
+ *
+ * 规则：页面 origin 为 loopback，且未配置服务器 **或** 配置的也是 loopback 时，
+ * 探活固定用相对 `/api/health`（走 Vite 代理）。云端绝对地址不受影响。
+ */
+export function getProbeHealthUrl(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const pageHost = window.location.hostname;
+      const pageLoopback =
+        pageHost === "localhost" || pageHost === "127.0.0.1" || pageHost === "[::1]" || pageHost === "::1";
+      if (pageLoopback) {
+        const server = getServerUrl();
+        if (!server || isLoopbackServerUrl(server)) {
+          return "/api/health";
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return `${getBaseUrl()}/health`;
+}
+
 // ============================================================================
 // SSE 流解析工具（专为 AI 流式接口设计）
 // ----------------------------------------------------------------------------
