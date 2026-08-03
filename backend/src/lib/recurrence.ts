@@ -1,4 +1,10 @@
 import crypto from "crypto";
+import {
+  calculateRemindAt,
+  formatTaskDateTime,
+  parseTaskDateTime,
+  taskDatePartsToDate,
+} from "./reminders.js";
 
 export interface RecurrenceRule {
   type: "weekly" | "interval" | "weekday" | "custom_weekdays" | "monthly" | "annually";
@@ -8,9 +14,17 @@ export interface RecurrenceRule {
   month?: number; // for annually (1-12)
 }
 
+export type RecurrenceResult = {
+  created: boolean;
+  newTaskId?: string;
+  nextDueDate?: string;
+  nextRemindAt?: string | null;
+  reason?: string;
+};
+
 export function getNextOccurrence(baseDate: Date, rule: RecurrenceRule): Date {
   const next = new Date(baseDate.getTime());
-  // Start checking from tomorrow to prevent getting stuck
+  // Start checking from tomorrow to prevent getting stuck on the same day
   next.setDate(next.getDate() + 1);
 
   if (rule.type === "interval") {
@@ -48,253 +62,348 @@ export function getNextOccurrence(baseDate: Date, rule: RecurrenceRule): Date {
 
   if (rule.type === "monthly") {
     const targetDay = rule.day ?? 1; // 1 to 31
-    const currentMonth = next.getMonth();
-    const currentYear = next.getFullYear();
+    // Work in calendar months from the base occurrence month
+    let year = baseDate.getFullYear();
+    let month = baseDate.getMonth(); // 0-11
 
-    const candidate = new Date(currentYear, currentMonth, targetDay, baseDate.getHours(), baseDate.getMinutes(), baseDate.getSeconds());
+    // Always advance at least one month from base's calendar month when base day >= target,
+    // otherwise stay in current month if target day is still ahead... 
+    // Spec: next occurrence strictly after baseDate.
+    const tryDate = (y: number, m: number) => {
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const actualDay = Math.min(targetDay, lastDay);
+      return new Date(y, m, actualDay, baseDate.getHours(), baseDate.getMinutes(), baseDate.getSeconds());
+    };
+
+    // Start from base's month; if that day is not after base, go to next months
+    let candidate = tryDate(year, month);
     if (candidate.getTime() <= baseDate.getTime()) {
-      next.setMonth(next.getMonth() + 1);
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+      candidate = tryDate(year, month);
     }
-
-    const targetMonth = next.getMonth();
-    const targetYear = next.getFullYear();
-    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
-    const actualDay = Math.min(targetDay, lastDay);
-    next.setFullYear(targetYear, targetMonth, actualDay);
-    return next;
+    // Safety: if still not after (shouldn't happen), keep advancing
+    let guard = 0;
+    while (candidate.getTime() <= baseDate.getTime() && guard < 24) {
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+      candidate = tryDate(year, month);
+      guard += 1;
+    }
+    return candidate;
   }
 
   if (rule.type === "annually") {
     const targetMonth = (rule.month ?? 1) - 1; // 0-indexed month
     const targetDay = rule.day ?? 1;
-    let targetYear = next.getFullYear();
+    let targetYear = baseDate.getFullYear();
 
-    const candidate = new Date(targetYear, targetMonth, targetDay, baseDate.getHours(), baseDate.getMinutes(), baseDate.getSeconds());
+    const make = (y: number) => {
+      const lastDay = new Date(y, targetMonth + 1, 0).getDate();
+      const actualDay = Math.min(targetDay, lastDay);
+      return new Date(y, targetMonth, actualDay, baseDate.getHours(), baseDate.getMinutes(), baseDate.getSeconds());
+    };
+
+    let candidate = make(targetYear);
     if (candidate.getTime() <= baseDate.getTime()) {
       targetYear += 1;
+      candidate = make(targetYear);
     }
-
-    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
-    const actualDay = Math.min(targetDay, lastDay);
-    next.setFullYear(targetYear, targetMonth, actualDay);
-    return next;
+    return candidate;
   }
 
   return next;
 }
 
-import { calculateRemindAt } from './reminders.js';
-
+/** Next occurrence as local wall-clock string (never bare UTC ISO). */
 export function getNextOccurrenceString(baseStr: string, rule: RecurrenceRule): string {
   if (!baseStr) return "";
-  const isIso = baseStr.includes("T") || baseStr.includes("Z");
-  const hasTime = baseStr.includes(" ") || baseStr.includes("T");
 
-  let baseDate = new Date(baseStr);
-  if (isNaN(baseDate.getTime())) {
-    baseDate = new Date();
+  const parts = parseTaskDateTime(baseStr);
+  let baseDate: Date;
+  let withTime = false;
+
+  if (parts) {
+    baseDate = taskDatePartsToDate(parts);
+    withTime = parts.hasTime;
+  } else {
+    baseDate = new Date(baseStr);
+    if (isNaN(baseDate.getTime())) {
+      baseDate = new Date();
+    }
+    withTime = baseStr.includes("T") || baseStr.includes(" ") || baseStr.includes("Z");
   }
 
   const nextDate = getNextOccurrence(baseDate, rule);
-
-  if (isIso) {
-    return nextDate.toISOString();
-  } else if (hasTime) {
-    const yyyy = nextDate.getFullYear();
-    const MM = String(nextDate.getMonth() + 1).padStart(2, '0');
-    const dd = String(nextDate.getDate()).padStart(2, '0');
-    const hh = String(nextDate.getHours()).padStart(2, '0');
-    const mm = String(nextDate.getMinutes()).padStart(2, '0');
-    return `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
-  } else {
-    const yyyy = nextDate.getFullYear();
-    const MM = String(nextDate.getMonth() + 1).padStart(2, '0');
-    const dd = String(nextDate.getDate()).padStart(2, '0');
-    return `${yyyy}-${MM}-${dd}`;
-  }
+  return formatTaskDateTime(nextDate, withTime);
 }
 
-export function handleRecurringTask(db: any, taskId: string, isProjectTask: boolean): void {
+function computeNextRemindAt(
+  task: {
+    remindAt?: string | null;
+    endDate?: string | null;
+    dueDate?: string | null;
+    reminderOffsetValue?: number | null;
+    reminderOffsetUnit?: string | null;
+  },
+  nextDue: string,
+): string | null {
+  if (!task.remindAt) return null;
+
+  if (
+    task.reminderOffsetValue !== undefined &&
+    task.reminderOffsetValue !== null &&
+    task.reminderOffsetUnit
+  ) {
+    return calculateRemindAt(nextDue, task.reminderOffsetValue, task.reminderOffsetUnit);
+  }
+
+  // Fallback: preserve offset duration from original due/remind pair
+  const dueStr = task.endDate || task.dueDate;
+  if (!dueStr) return null;
+  const dueParts = parseTaskDateTime(dueStr);
+  const remindParts = parseTaskDateTime(task.remindAt);
+  if (!dueParts || !remindParts) return null;
+  const diff =
+    taskDatePartsToDate(dueParts).getTime() - taskDatePartsToDate(remindParts).getTime();
+  if (isNaN(diff)) return null;
+  const nextParts = parseTaskDateTime(nextDue);
+  if (!nextParts) return null;
+  const remDate = new Date(taskDatePartsToDate(nextParts).getTime() - diff);
+  return formatTaskDateTime(remDate, remindParts.hasTime || nextParts.hasTime);
+}
+
+/**
+ * On complete of a recurring task: insert the next occurrence.
+ * Returns structured result (never throws to caller for expected skips).
+ */
+export function handleRecurringTask(
+  db: any,
+  taskId: string,
+  isProjectTask: boolean,
+): RecurrenceResult {
   try {
     if (isProjectTask) {
       const task = db.prepare("SELECT * FROM project_tasks WHERE id = ?").get(taskId);
-      if (!task || !task.isRecurring || !task.recurrenceRule) return;
+      if (!task) return { created: false, reason: "task_not_found" };
+      if (!task.isRecurring || !task.recurrenceRule) {
+        return { created: false, reason: "not_recurring" };
+      }
 
       let rule: RecurrenceRule;
       try {
-        rule = JSON.parse(task.recurrenceRule);
+        rule =
+          typeof task.recurrenceRule === "string"
+            ? JSON.parse(task.recurrenceRule)
+            : task.recurrenceRule;
       } catch {
-        return;
+        return { created: false, reason: "invalid_recurrence_rule" };
+      }
+      if (!rule || !rule.type) {
+        return { created: false, reason: "invalid_recurrence_rule" };
       }
 
-      if (!task.endDate) return;
+      if (!task.endDate) return { created: false, reason: "missing_end_date" };
 
       const nextEndDate = getNextOccurrenceString(task.endDate, rule);
+      if (!nextEndDate) return { created: false, reason: "next_date_failed" };
 
       if (task.recurrenceEndDate) {
-          const recurEnd = new Date(task.recurrenceEndDate).getTime();
-          const nextEnd = new Date(nextEndDate).getTime();
-          if (!isNaN(recurEnd) && !isNaN(nextEnd) && nextEnd > recurEnd) {
-             return;
+        const recurEnd = new Date(task.recurrenceEndDate).getTime();
+        const nextEnd = new Date(nextEndDate.includes("T") || nextEndDate.includes(" ")
+          ? nextEndDate.replace(" ", "T")
+          : `${nextEndDate}T00:00:00`).getTime();
+        // Compare via parseTaskDateTime for local consistency
+        const nextParts = parseTaskDateTime(nextEndDate);
+        const endParts = parseTaskDateTime(task.recurrenceEndDate);
+        if (nextParts && endParts) {
+          if (taskDatePartsToDate(nextParts).getTime() > taskDatePartsToDate(endParts).getTime()) {
+            return { created: false, reason: "past_recurrence_end" };
           }
+        } else if (!isNaN(recurEnd) && !isNaN(nextEnd) && nextEnd > recurEnd) {
+          return { created: false, reason: "past_recurrence_end" };
+        }
       }
 
-      let nextRemindAt = null;
-
-      if (task.remindAt) {
-          if (task.reminderOffsetValue !== undefined && task.reminderOffsetValue !== null && task.reminderOffsetUnit) {
-               nextRemindAt = calculateRemindAt(nextEndDate, task.reminderOffsetValue, task.reminderOffsetUnit);
-          } else {
-              const dueTime = new Date(task.endDate).getTime();
-              const remindTime = new Date(task.remindAt).getTime();
-              const diff = dueTime - remindTime;
-              if (!isNaN(diff)) {
-                const nextDueTime = new Date(nextEndDate).getTime();
-                const remDate = new Date(nextDueTime - diff);
-                if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
-                  nextRemindAt = remDate.toISOString();
-                } else if (task.remindAt.includes(' ')) {
-                  const yyyy = remDate.getFullYear();
-                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-                  const dd = String(remDate.getDate()).padStart(2, '0');
-                  const hh = String(remDate.getHours()).padStart(2, '0');
-                  const mm = String(remDate.getMinutes()).padStart(2, '0');
-                  nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
-                } else {
-                  const yyyy = remDate.getFullYear();
-                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-                  const dd = String(remDate.getDate()).padStart(2, '0');
-                  nextRemindAt = `${yyyy}-${MM}-${dd}`;
-                }
-              }
-          }
-      }
-
+      const nextRemindAt = computeNextRemindAt(task, nextEndDate);
       const newId = crypto.randomUUID();
 
       let targetStageId = task.stageId;
-      const stages = db.prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC").all(task.projectId) as any[];
+      const stages = db
+        .prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC")
+        .all(task.projectId) as any[];
       if (stages && stages.length > 0) {
-         const inProgressStage = stages.find(s => s.name === '进行中');
-         if (inProgressStage) {
-            targetStageId = inProgressStage.id;
-         } else {
-            const firstValidStage = stages.find(s => s.name !== '已完成');
-            if (firstValidStage) {
-               targetStageId = firstValidStage.id;
-            }
-         }
+        const inProgressStage = stages.find((s) => s.name === "进行中");
+        if (inProgressStage) {
+          targetStageId = inProgressStage.id;
+        } else {
+          const firstValidStage = stages.find((s) => s.name !== "已完成");
+          if (firstValidStage) {
+            targetStageId = firstValidStage.id;
+          }
+        }
       }
 
-      // Copy project_task
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO project_tasks (
           id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate,
           description, cover, sortOrder, creatorId, modifierId, priority, remindAt,
           titleColor, progress, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, createdAt, updatedAt
         ) VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, datetime('now'), datetime('now'))
-      `).run(
-        newId, task.projectId, targetStageId, task.title, task.assigneeId, task.startDate,
-        nextEndDate, task.description, task.cover, task.sortOrder, task.creatorId,
-        task.modifierId, task.priority, nextRemindAt, task.titleColor, task.recurrenceRule, task.reminderOffsetValue, task.reminderOffsetUnit, task.recurrenceEndDate
+      `,
+      ).run(
+        newId,
+        task.projectId,
+        targetStageId,
+        task.title,
+        task.assigneeId,
+        task.startDate,
+        nextEndDate,
+        task.description,
+        task.cover,
+        task.sortOrder,
+        task.creatorId,
+        task.modifierId,
+        task.priority,
+        nextRemindAt,
+        task.titleColor,
+        task.recurrenceRule,
+        task.reminderOffsetValue,
+        task.reminderOffsetUnit,
+        task.recurrenceEndDate,
       );
 
-      // Copy participants
-      const members = db.prepare("SELECT userId FROM project_task_members WHERE taskId = ?").all(taskId) as { userId: string }[];
-      const insertMember = db.prepare("INSERT OR IGNORE INTO project_task_members (taskId, userId) VALUES (?, ?)");
+      const members = db
+        .prepare("SELECT userId FROM project_task_members WHERE taskId = ?")
+        .all(taskId) as { userId: string }[];
+      const insertMember = db.prepare(
+        "INSERT OR IGNORE INTO project_task_members (taskId, userId) VALUES (?, ?)",
+      );
       for (const m of members) {
         insertMember.run(newId, m.userId);
       }
 
-      // Copy tags
-      const tags = db.prepare("SELECT tagId FROM project_task_tags WHERE taskId = ?").all(taskId) as { tagId: string }[];
-      const insertTag = db.prepare("INSERT OR IGNORE INTO project_task_tags (taskId, tagId) VALUES (?, ?)");
+      const tags = db
+        .prepare("SELECT tagId FROM project_task_tags WHERE taskId = ?")
+        .all(taskId) as { tagId: string }[];
+      const insertTag = db.prepare(
+        "INSERT OR IGNORE INTO project_task_tags (taskId, tagId) VALUES (?, ?)",
+      );
       for (const t of tags) {
         insertTag.run(newId, t.tagId);
       }
 
-      // Copy checklists (reset isCompleted = 0)
-      const checklists = db.prepare("SELECT title, sortOrder FROM project_task_checklists WHERE taskId = ?").all(taskId) as { title: string, sortOrder: number }[];
-      const insertChecklist = db.prepare("INSERT INTO project_task_checklists (id, taskId, title, isCompleted, sortOrder) VALUES (?, ?, ?, 0, ?)");
+      const checklists = db
+        .prepare("SELECT title, sortOrder FROM project_task_checklists WHERE taskId = ?")
+        .all(taskId) as { title: string; sortOrder: number }[];
+      const insertChecklist = db.prepare(
+        "INSERT INTO project_task_checklists (id, taskId, title, isCompleted, sortOrder) VALUES (?, ?, ?, 0, ?)",
+      );
       for (const cl of checklists) {
         insertChecklist.run(crypto.randomUUID(), newId, cl.title, cl.sortOrder);
       }
 
-    } else {
-      const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
-      if (!task || !task.isRecurring || !task.recurrenceRule) return;
+      return {
+        created: true,
+        newTaskId: newId,
+        nextDueDate: nextEndDate,
+        nextRemindAt,
+      };
+    }
 
-      let rule: RecurrenceRule;
-      try {
-        rule = JSON.parse(task.recurrenceRule);
-      } catch {
-        return;
-      }
+    // legacy tasks table
+    const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
+    if (!task) return { created: false, reason: "task_not_found" };
+    if (!task.isRecurring || !task.recurrenceRule) {
+      return { created: false, reason: "not_recurring" };
+    }
 
-      if (!task.dueDate) return;
+    let rule: RecurrenceRule;
+    try {
+      rule =
+        typeof task.recurrenceRule === "string"
+          ? JSON.parse(task.recurrenceRule)
+          : task.recurrenceRule;
+    } catch {
+      return { created: false, reason: "invalid_recurrence_rule" };
+    }
+    if (!rule || !rule.type) {
+      return { created: false, reason: "invalid_recurrence_rule" };
+    }
 
-      const nextDueDate = getNextOccurrenceString(task.dueDate, rule);
+    if (!task.dueDate) return { created: false, reason: "missing_end_date" };
 
-      if (task.recurrenceEndDate) {
-          const recurEnd = new Date(task.recurrenceEndDate).getTime();
-          const nextEnd = new Date(nextDueDate).getTime();
-          if (!isNaN(recurEnd) && !isNaN(nextEnd) && nextEnd > recurEnd) {
-             return;
-          }
-      }
+    const nextDueDate = getNextOccurrenceString(task.dueDate, rule);
+    if (!nextDueDate) return { created: false, reason: "next_date_failed" };
 
-      let nextRemindAt = null;
-
-      if (task.remindAt) {
-          if (task.reminderOffsetValue !== undefined && task.reminderOffsetValue !== null && task.reminderOffsetUnit) {
-               nextRemindAt = calculateRemindAt(nextDueDate, task.reminderOffsetValue, task.reminderOffsetUnit);
-          } else {
-              const dueTime = new Date(task.dueDate).getTime();
-              const remindTime = new Date(task.remindAt).getTime();
-              const diff = dueTime - remindTime;
-              if (!isNaN(diff)) {
-                const nextDueTime = new Date(nextDueDate).getTime();
-                const remDate = new Date(nextDueTime - diff);
-                if (task.remindAt.includes('T') || task.remindAt.includes('Z')) {
-                  nextRemindAt = remDate.toISOString();
-                } else if (task.remindAt.includes(' ')) {
-                  const yyyy = remDate.getFullYear();
-                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-                  const dd = String(remDate.getDate()).padStart(2, '0');
-                  const hh = String(remDate.getHours()).padStart(2, '0');
-                  const mm = String(remDate.getMinutes()).padStart(2, '0');
-                  nextRemindAt = `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
-                } else {
-                  const yyyy = remDate.getFullYear();
-                  const MM = String(remDate.getMonth() + 1).padStart(2, '0');
-                  const dd = String(remDate.getDate()).padStart(2, '0');
-                  nextRemindAt = `${yyyy}-${MM}-${dd}`;
-                }
-              }
-          }
-      }
-
-      const newId = crypto.randomUUID();
-
-      // Copy task
-      db.prepare(`
-        INSERT INTO tasks (
-          id, userId, workspaceId, title, isCompleted, status, priority, dueDate, remindAt,
-          noteId, parentId, sortOrder, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), datetime('now'))
-      `).run(
-        newId, task.userId, task.workspaceId, task.title, task.priority, nextDueDate,
-        nextRemindAt, task.noteId, task.parentId, task.sortOrder, task.recurrenceRule, task.reminderOffsetValue, task.reminderOffsetUnit, task.recurrenceEndDate
-      );
-
-      // Copy tags
-      const tags = db.prepare("SELECT tagId FROM task_tags WHERE taskId = ?").all(taskId) as { tagId: string }[];
-      const insertTag = db.prepare("INSERT OR IGNORE INTO task_tags (taskId, tagId) VALUES (?, ?)");
-      for (const t of tags) {
-        insertTag.run(newId, t.tagId);
+    if (task.recurrenceEndDate) {
+      const nextParts = parseTaskDateTime(nextDueDate);
+      const endParts = parseTaskDateTime(task.recurrenceEndDate);
+      if (nextParts && endParts) {
+        if (taskDatePartsToDate(nextParts).getTime() > taskDatePartsToDate(endParts).getTime()) {
+          return { created: false, reason: "past_recurrence_end" };
+        }
       }
     }
+
+    const nextRemindAt = computeNextRemindAt(
+      { ...task, endDate: task.dueDate },
+      nextDueDate,
+    );
+    const newId = crypto.randomUUID();
+
+    db.prepare(
+      `
+      INSERT INTO tasks (
+        id, userId, workspaceId, title, isCompleted, status, priority, dueDate, remindAt,
+        noteId, parentId, sortOrder, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `,
+    ).run(
+      newId,
+      task.userId,
+      task.workspaceId,
+      task.title,
+      task.priority,
+      nextDueDate,
+      nextRemindAt,
+      task.noteId,
+      task.parentId,
+      task.sortOrder,
+      task.recurrenceRule,
+      task.reminderOffsetValue,
+      task.reminderOffsetUnit,
+      task.recurrenceEndDate,
+    );
+
+    const tags = db
+      .prepare("SELECT tagId FROM task_tags WHERE taskId = ?")
+      .all(taskId) as { tagId: string }[];
+    const insertTag = db.prepare(
+      "INSERT OR IGNORE INTO task_tags (taskId, tagId) VALUES (?, ?)",
+    );
+    for (const t of tags) {
+      insertTag.run(newId, t.tagId);
+    }
+
+    return {
+      created: true,
+      newTaskId: newId,
+      nextDueDate,
+      nextRemindAt,
+    };
   } catch (err) {
     console.error("Error handling recurrence:", err);
+    return {
+      created: false,
+      reason: `error: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
