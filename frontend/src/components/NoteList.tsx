@@ -933,22 +933,44 @@ const NoteCard = React.memo(function NoteCard({
   onTouchEnd?: () => void;
   cardRef?: (el: HTMLDivElement | null) => void;
 }) {
-  // 预览文本：清洗附件/链接噪声后取前 160 字，并把所有空白序列压成单个空格。
-  // 否则 markdown 多段落换行 + 附件文件名会挤占 line-clamp-2，看起来像「被截断」。
+  const { t } = useTranslation();
+  const fullTitle = note.title || t("common.untitledNote");
+
+  // 列表预览：轻量去噪，保留正文；过猛清洗会把 Memos 附件笔记洗成空白。
   const preview = (() => {
     const raw = note.contentText || "";
-    const cleaned = raw
-      // 常见附件/链接 markdown 噪声
+    let cleaned = raw
+      .replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
       .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
-      .replace(/\[[^\]]*]\([^)]*\)/g, " ")
+      // 链接保留可读文字，丢掉 URL
+      .replace(/\[([^\]]*)]\([^)]*\)/g, " $1 ")
       .replace(/https?:\/\/\S+/gi, " ")
-      .replace(/\b[\w.-]+\.(pdf|docx?|xlsx?|pptx?|zip|rar|epub|png|jpe?g|gif|webp)\b/gi, " ")
+      .replace(/来自\s*Memos\s*导入的文件附件[^\n]*/gi, " ")
       .replace(/[📎🔗📄]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+
+    const title = (note.title || "").trim();
+    if (title) {
+      if (cleaned.startsWith(title)) cleaned = cleaned.slice(title.length).trim();
+      const bare = title.replace(/\s*·\s*附件\s*$/, "").trim();
+      if (bare && cleaned.startsWith(bare)) cleaned = cleaned.slice(bare.length).trim();
+    }
+    // 去掉行首多余 markdown 符号，但保留 #标签 文字（去掉 #）
+    cleaned = cleaned
+      .replace(/(^|\s)#([\w\u4e00-\u9fff·•.-]+)/g, " $2")
+      .replace(/^[*_~`|>\-\s]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
     return cleaned.slice(0, 160);
   })();
-  const { t } = useTranslation();
+
   const wordCount = note.contentText?.length || 0;
   // 工作区视图下笔记可能由不同成员创建，需要在卡片底部展示创建者；
   // 个人空间下创建者一定是当前用户，留白即可。creatorName 由后端 list 接口
@@ -999,32 +1021,30 @@ const NoteCard = React.memo(function NoteCard({
           : "bg-transparent group-hover:bg-app-border"
       )} />
 
-      <div className="pl-3.5 pr-3 py-3 min-w-0 max-md:py-3.5">
-        {/* 标题行 + 状态图标 */}
-        <div className="flex items-center justify-between gap-2 min-w-0">
+      <div className="pl-3.5 pr-3 py-3 min-w-0 w-full max-md:py-3.5">
+        {/* 标题行：图标与标题并排；标题最多 2 行（导入长标题/「·附件」后缀完整可见） */}
+        <div className="flex items-start gap-1.5 min-w-0 w-full">
           {draggable && (
-            <GripVertical size={14} className="text-tx-tertiary opacity-0 group-hover:opacity-60 transition-opacity shrink-0 cursor-grab active:cursor-grabbing" />
+            <GripVertical size={14} className="text-tx-tertiary opacity-0 group-hover:opacity-60 transition-opacity shrink-0 cursor-grab active:cursor-grabbing mt-0.5" />
           )}
-          <h3 className={cn(
-            // 标题强制单行：这里**故意**不用 `truncate`（white-space: nowrap）。
-            // 历史踩坑：`truncate` 在 flex item 里偶发被外层富文本/prose 全局样式覆盖
-            // （某些主题会把 h3 的 white-space 重置为 normal），导致超长英文+空格的标题
-            // 仍然在空格处折行变成 2 行，把后面的 line-clamp-2 预览挤成只剩 1 行。
-            // 改用 line-clamp-1：基于 -webkit-box 实现，不依赖 nowrap，对 flex 容器
-            // 和 CJK/英文/空格混排都稳定，并自带省略号。
-            // break-all：兜底——遇到极长不可断词（连续超长英文/无空格 URL）也强制裁断，
-            // 不让一行的"内容宽度"超过容器，导致 flex 容器再被撑变形。
-            "text-sm font-semibold line-clamp-1 break-all flex-1 min-w-0 flex items-center gap-1 tracking-tight",
-            isActive || isSelected ? "text-tx-primary" : "text-tx-secondary group-hover:text-tx-primary"
-          )}>
-            {note.visibility && note.workspaceId && (
-              <span className="text-[10px] shrink-0" title={note.visibility === "WORKSPACE" ? "所有人可见" : "私有"}>
-                {note.visibility === "WORKSPACE" ? "🌐" : "🔒"}
-              </span>
+          {note.visibility && note.workspaceId && (
+            <span
+              className="text-[10px] shrink-0 mt-0.5 leading-none"
+              title={note.visibility === "WORKSPACE" ? "所有人可见" : "私有"}
+            >
+              {note.visibility === "WORKSPACE" ? "🌐" : "🔒"}
+            </span>
+          )}
+          <h3
+            className={cn(
+              "note-list-title min-w-0 flex-1 text-sm font-semibold tracking-tight",
+              isActive || isSelected ? "text-tx-primary" : "text-tx-secondary group-hover:text-tx-primary",
             )}
-            <span className="truncate">{note.title || t('common.untitledNote')}</span>
+            title={fullTitle}
+          >
+            {fullTitle}
           </h3>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
             {isShared && <Share2 size={12} className="text-emerald-500" />}
             {note.isLocked === 1 && <Lock size={12} className="text-orange-500" />}
             {note.isPinned === 1 && <Pin size={12} className="text-accent-primary" />}
@@ -1032,20 +1052,15 @@ const NoteCard = React.memo(function NoteCard({
           </div>
         </div>
 
-        {/* 内容预览
-            折行策略：
-            - 用 break-words 而非 break-all：CJK 默认就能在任意字符间折行，
-              break-all 会让英文也按字符硬切，反而更难读；break-words 只在
-              "整行装不下的长不可断词"时才强制打破，对中英混排最友好。
-            - overflow-wrap-anywhere 避免极长 URL 撑破容器。 */}
-        {preview && (
+        {/* 内容预览：最多 2 行 */}
+        {preview ? (
           <p
             className="note-list-preview text-xs text-tx-tertiary mt-1.5 line-clamp-2 leading-relaxed break-words [overflow-wrap:anywhere]"
             title={preview}
           >
             {preview}
           </p>
-        )}
+        ) : null}
 
         {/* 底部元信息行
             - 左侧：更新时间（始终显示）

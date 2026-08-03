@@ -825,10 +825,28 @@ select:focus-visible {
   }
 }
 
+/* 笔记列表标题：最多 2 行，带省略号（Memos/剪藏长标题 +「·附件」后缀要完整可见）
+ * 必须用独立 block + -webkit-box，禁止叠 flex，否则会被硬裁成无省略号的半截字。 */
+.note-list-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.35;
+}
+
 /* 笔记列表密度（body.note-list-density-compact） */
 body.note-list-density-compact .note-list-row {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
+}
+body.note-list-density-compact .note-list-row .note-list-title {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 body.note-list-density-compact .note-list-row .note-list-preview {
   -webkit-line-clamp: 1;
