@@ -50,9 +50,23 @@ export type BottomSheetProps = {
   zClassName?: string;
   onSnapChange?: (index: number) => void;
   "aria-label"?: string;
+  /**
+   * 允许从内容区下拉关闭（跳过 button/input 等）。
+   * 全屏播放器等需要「任意位置下拉收起」时开启。
+   */
+  dragFromContent?: boolean;
+  /**
+   * 松手后判定关闭的位移比例（相对 sheet 高度）。
+   * 默认 0.28；全屏播放器可用 0.18–0.25 更易滑关。
+   * 历史默认偏高 0.88 导致几乎滑不掉。
+   */
+  dismissFraction?: number;
+  /** 向下 flick 速度超过此值（px/s）且已有一定位移则关闭。默认 850 */
+  dismissVelocity?: number;
 };
 
-const DISMISS_FRACTION = 0.88;
+const DEFAULT_DISMISS_FRACTION = 0.28;
+const DEFAULT_DISMISS_VELOCITY = 850;
 
 export function BottomSheet({
   open,
@@ -71,6 +85,9 @@ export function BottomSheet({
   zClassName = "z-modal",
   onSnapChange,
   "aria-label": ariaLabel,
+  dragFromContent = false,
+  dismissFraction = DEFAULT_DISMISS_FRACTION,
+  dismissVelocity = DEFAULT_DISMISS_VELOCITY,
 }: BottomSheetProps) {
   const reduce = useReducedMotion();
   const titleId = useId();
@@ -154,12 +171,14 @@ export function BottomSheet({
   );
 
   const onDragStart = useCallback(() => {
+    // 从当前屏幕上的 y 起拖，保证可打断弹簧、跟手无跳变
     baseY.current = y.get();
   }, [y]);
 
   const onDrag = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       const h = height || panelRef.current?.offsetHeight || 1;
+      // 1:1 跟手（仅向上越界 rubberband）
       const raw = baseY.current + info.offset.y;
       if (raw < 0) {
         y.set(rubberband(raw, h, 0.55));
@@ -175,11 +194,14 @@ export function BottomSheet({
       const h = height || panelRef.current?.offsetHeight || 1;
       const current = y.get();
       const velocityY = info.velocity.y;
+      const frac = Math.min(0.95, Math.max(0.12, dismissFraction));
+      const flickClose =
+        velocityY > dismissVelocity && current > Math.min(48, h * 0.06);
       const projected = current + project(velocityY, 0.998);
       const snaps = resolveSnaps(h);
       const target = nearestSnap(projected, snaps);
 
-      if (target >= h * DISMISS_FRACTION) {
+      if (flickClose || target >= h * frac || current >= h * frac) {
         dismiss(velocityY);
         return;
       }
@@ -189,9 +211,26 @@ export function BottomSheet({
         snapIndex.current = idx;
         onSnapChange?.(idx);
       }
+      // 松手速度交给弹簧，消除「拖→回弹」接缝
       animate(y, target, springWithVelocity(springs.momentum, velocityY));
     },
-    [dismiss, height, onSnapChange, resolveSnaps, y],
+    [dismiss, dismissFraction, dismissVelocity, height, onSnapChange, resolveSnaps, y],
+  );
+
+  /** 在 header / 内容区开始拖：跳过交互控件；内容区若已纵向滚动则不抢手势 */
+  const tryStartDrag = useCallback(
+    (e: React.PointerEvent) => {
+      if (reduce) return;
+      const t = e.target as HTMLElement;
+      if (t.closest("button, a, input, textarea, select, label, [data-no-drag], [data-no-sheet-drag]")) {
+        return;
+      }
+      const scrollEl = t.closest("[data-sheet-scroll]") as HTMLElement | null;
+      if (scrollEl && scrollEl.scrollTop > 1) return;
+      // 仅当内容在顶部且主要是下拉意图时，由 drag 接管
+      dragControls.start(e);
+    },
+    [dragControls, reduce],
   );
 
   if (typeof document === "undefined") return null;
@@ -255,15 +294,10 @@ export function BottomSheet({
             onDrag={onDrag}
             onDragEnd={onDragEnd}
           >
-            {/* Drag handle + header (starts drag) */}
+            {/* Drag handle + header（始终可发起下拉） */}
             <div
               className="shrink-0 cursor-grab active:cursor-grabbing select-none"
-              onPointerDown={(e) => {
-                // Don't steal from interactive controls
-                const t = e.target as HTMLElement;
-                if (t.closest("button, a, input, textarea, select, [data-no-drag]")) return;
-                dragControls.start(e);
-              }}
+              onPointerDown={tryStartDrag}
               style={{ touchAction: "none" }}
             >
               {!hideHandle && (
@@ -301,6 +335,11 @@ export function BottomSheet({
                 bodyClassName,
               )}
               data-swipe-blocker
+              data-sheet-scroll
+              onPointerDown={dragFromContent ? tryStartDrag : undefined}
+              // 全屏/跟手拖关：touch-action none 才能 pointer capture 1:1；
+              // 子区域若需纵向滚动，加 data-sheet-scroll 且 scrollTop>0 时不抢手势。
+              style={dragFromContent ? { touchAction: "none" } : undefined}
             >
               {children}
             </div>

@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover, useID3Cover } from "@/lib/id3";
+import CoverBlurBackdrop from "@/components/media/CoverBlurBackdrop";
 import MediaLyrics from "@/components/media/MediaLyrics";
 import {
   stopNativeMediaSession,
@@ -1481,8 +1482,13 @@ export default function GlobalMusicPlayer() {
             open={isExpanded}
             onClose={() => setIsExpanded(false)}
             hideClose
+            hideHandle
             maxHeight="100dvh"
             zClassName="z-[160]"
+            // 全屏播放器：内容区可下拉跟手关闭（DESIGN §13 流体手势）
+            dragFromContent
+            dismissFraction={0.2}
+            dismissVelocity={720}
             className={cn(
               "h-[100dvh] max-h-[100dvh] rounded-none border-0",
               "bg-black md:bg-[var(--color-bg)]",
@@ -1498,37 +1504,28 @@ export default function GlobalMusicPlayer() {
               style={playerAccentStyle}
             >
 
-            {/* 背景：当前封面全屏放大 + 高斯模糊；无封面时标题派生多停靠渐变 */}
-            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none" aria-hidden>
-              {blurCoverSrc ? (
-                <>
-                  <img
-                    src={blurCoverSrc}
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover scale-[1.45] blur-[48px] saturate-[1.45] brightness-[0.85]"
-                  />
-                  <img
-                    src={blurCoverSrc}
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover scale-[1.8] blur-[80px] opacity-70 saturate-150"
-                  />
-                </>
-              ) : (
-                <div className="absolute inset-0" style={{ background: noCoverGradient }} />
-              )}
-              {/* 轻遮罩：保留封面色相，保证文字可读（勿用高不透明 app-bg 盖死 blur） */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/75" />
+            {/* 背景：ID3/附件封面 → canvas 高斯氛围光（CoverBlurBackdrop） */}
+            <CoverBlurBackdrop
+              coverSrc={blurCoverSrc || null}
+              fallbackGradient={noCoverGradient}
+            />
+
+            {/* 顶部拖拽提示条（可拖；与 BottomSheet handle 叠加一层可见反馈） */}
+            <div
+              className="relative z-10 flex justify-center pt-1.5 pb-0.5 md:hidden"
+              aria-hidden
+            >
+              <div className="w-10 h-1 rounded-full bg-white/35" />
             </div>
 
             {/* Header：透明叠在 blur 上；移动端去掉右上角播放列表（底栏控件仍有入口） */}
             <div
               className="relative z-10 grid grid-cols-[44px_1fr_44px] items-center gap-2 px-3 sm:px-5 pb-2 bg-transparent"
-              style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 10px)" }}
+              style={{ paddingTop: "max(6px, env(safe-area-inset-top, 0px))" }}
             >
               <button
                 type="button"
+                data-no-drag
                 onClick={() => setIsExpanded(false)}
                 className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 active:scale-95 transition-transform duration-press ease-out"
                 aria-label="收起"
@@ -1543,6 +1540,7 @@ export default function GlobalMusicPlayer() {
               {/* 占位保持标题居中；桌面保留播放列表入口 */}
               <button
                 type="button"
+                data-no-drag
                 onClick={() => setShowQueue(true)}
                 className={cn(
                   "hidden md:inline-flex w-11 h-11 justify-self-end rounded-full items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
@@ -1608,12 +1606,13 @@ export default function GlobalMusicPlayer() {
                 />
               </div>
 
-              {/* 控件区贴底（浅色叠在封面 blur 上） */}
+              {/* 控件区贴底（浅色叠在封面 blur 上）；进度条禁止触发 sheet 拖拽 */}
               <div
                 className="shrink-0 flex flex-col gap-5 mt-auto pt-2"
                 style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+                data-no-sheet-drag
               >
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2" data-no-drag>
                   <input
                     type="range"
                     min="0"
@@ -1627,6 +1626,7 @@ export default function GlobalMusicPlayer() {
                     className="player-accent-range w-full h-3 outline-none cursor-pointer"
                     style={{ accentColor: coverAccent.solid }}
                     aria-label="播放进度"
+                    data-no-drag
                   />
                   <div className="flex items-center justify-between text-xs text-white/65 select-none font-medium tabular-nums">
                     <span>{formatDuration(progressValue)}</span>
