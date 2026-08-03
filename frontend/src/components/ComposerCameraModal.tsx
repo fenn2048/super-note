@@ -256,7 +256,7 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
       >
         <button
           onClick={handleClose}
-          className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all hover:bg-white/10"
+          className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-90 transition-transform duration-press ease-out hover:bg-white/10"
         >
           <X size={20} />
         </button>
@@ -266,7 +266,7 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
         {!recordedBlob && !recording ? (
           <button
             onClick={toggleFacingMode}
-            className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all hover:bg-white/10"
+            className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-90 transition-transform duration-press ease-out hover:bg-white/10"
           >
             <RefreshCw size={20} />
           </button>
@@ -322,7 +322,7 @@ export default function ComposerCameraModal({ isOpen, onClose, onComplete }: Com
             onClick={recording ? handleStopRecord : handleStartRecord}
             disabled={loading}
             className={cn(
-              "w-20 h-20 rounded-full border-4 flex items-center justify-center bg-transparent active:scale-95 transition-all relative",
+              "w-20 h-20 rounded-full border-4 flex items-center justify-center bg-transparent active:scale-95 transition-transform duration-press ease-out relative",
               recording ? "border-red-500/80" : "border-white/80"
             )}
           >

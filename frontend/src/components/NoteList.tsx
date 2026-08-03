@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { Motion } from "@/components/common/Motion";
 import { Plus, Pin, PinOff, Star, StarOff, Clock, FileText, FileType2, Trash, Trash2, ArchiveRestore, Menu, FolderInput, ChevronRight, ChevronDown, ChevronLeft, Folder, X, Check, Lock, Unlock, CalendarDays, RefreshCw, Share2, GripVertical, Download, ArrowUpDown, ArrowUp, ArrowDown, Image as ImageIcon, Printer, User as UserIcon, Sparkles, Tag as TagIcon, Loader2, FileUp, PanelLeftClose, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,8 +22,9 @@ import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import {
   EmptyState,
   EmptyActionButton,
-  LoadingBlock,
-} from "@/components/common/FeedbackStates";
+  LoadingBlock} from "@/components/common/FeedbackStates";
+import { durations, springs, variants } from "@/lib/motion";
+import { BottomSheet } from "@/components/common/BottomSheet";
 // "导入 Word 文档" 走 dynamic import（见 createNoteInNotebook），减少首屏 bundle 体积。
 
 /* ===== 排序模式 ===== */
@@ -63,8 +65,7 @@ function SortMenu({
   value,
   onChange,
   onClose,
-  anchorRef,
-}: {
+  anchorRef}: {
   value: { by: SortBy; dir: SortDir };
   onChange: (next: { by: SortBy; dir: SortDir }) => void;
   onClose: () => void;
@@ -149,20 +150,23 @@ function SortMenu({
           position: "fixed",
           inset: 0,
           zIndex: 9998,
-          background: "transparent",
-        }}
+          background: "transparent"}}
       >
-        {/* 菜单本体 */}
-        <div
+        {/* 菜单本体：从锚点右上 origin 的 popover 入场（find-animation-opportunities #4） */}
+        <Motion.div
           role="menu"
-          className="rounded-lg border border-app-border bg-app-elevated shadow-xl py-1"
+          variants={variants.popoverIn}
+          initial="initial"
+          animate="animate"
+          transition={springs.snappy}
+          className="rounded-lg border border-app-border bg-app-elevated shadow-xl py-1 origin-top-right"
           style={{
             position: "fixed",
             top: pos.top,
             left: pos.left,
             width: 176,
             zIndex: 9999,
-            animation: "contextMenuIn 0.12s ease-out",
+            transformOrigin: "top right",
           }}
           // 阻止菜单上的 mousedown 冒泡到 backdrop（双保险，因为已用 e.target===currentTarget 判断）
           onMouseDown={(e) => e.stopPropagation()}
@@ -198,7 +202,7 @@ function SortMenu({
               </button>
             );
           })}
-        </div>
+        </Motion.div>
       </div>
     </>,
     document.body
@@ -216,8 +220,7 @@ function SortMenu({
 function CreateMenu({
   onPick,
   onClose,
-  anchorRef,
-}: {
+  anchorRef}: {
   onPick: (type: "normal" | "word" | "markdown") => void;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLButtonElement | null>;
@@ -256,20 +259,17 @@ function CreateMenu({
       id: "normal" as const,
       label: t("noteList.createNormalNote"),
       desc: t("noteList.createNormalNoteDesc"),
-      icon: <FileText size={14} />,
-    },
+      icon: <FileText size={14} />},
     {
       id: "word" as const,
       label: t("noteList.createWordNote"),
       desc: t("noteList.createWordNoteDesc"),
-      icon: <FileType2 size={14} />,
-    },
+      icon: <FileType2 size={14} />},
     {
       id: "markdown" as const,
       label: "导入 Markdown 笔记",
       desc: "选择并导入本地 Markdown 文件",
-      icon: <FileUp size={14} />,
-    },
+      icon: <FileUp size={14} />},
   ];
 
   return createPortal(
@@ -282,8 +282,7 @@ function CreateMenu({
         role="menu"
         className="rounded-lg border border-app-border bg-app-elevated shadow-xl py-1"
         style={{
-          position: "fixed", top: pos.top, left: pos.left, width: 200, zIndex: 9999,
-          animation: "contextMenuIn 0.12s ease-out",
+          position: "fixed", top: pos.top, left: pos.left, width: 200, zIndex: 9999
         }}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -346,8 +345,7 @@ function buildNotebookTree(notebooks: Notebook[]): Notebook[] {
 }
 
 function NotebookTreeItem({
-  notebook, depth, selectedId, currentNotebookId, onSelect,
-}: {
+  notebook, depth, selectedId, currentNotebookId, onSelect}: {
   notebook: Notebook; depth: number; selectedId: string | null;
   currentNotebookId: string; onSelect: (id: string) => void;
 }) {
@@ -402,8 +400,7 @@ function NotebookTreeItem({
 }
 
 function MoveNoteModal({
-  isOpen, noteTitle, count, currentNotebookId, notebooks, sourceWorkspaceId, onMove, onClose,
-}: {
+  isOpen, noteTitle, count, currentNotebookId, notebooks, sourceWorkspaceId, onMove, onClose}: {
   isOpen: boolean; noteTitle: string; count?: number; currentNotebookId: string;
   notebooks: Notebook[];
   /**
@@ -440,60 +437,75 @@ function MoveNoteModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-[360px] mx-4 max-h-[80vh] bg-app-elevated border border-app-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ animation: "contextMenuIn 0.15s ease-out" }}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
-          <div className="flex items-center gap-2 min-w-0">
-            <FolderInput size={16} className="text-accent-primary shrink-0" />
-            <span className="text-sm font-medium text-tx-primary truncate">
-              {isBulk ? t('noteList.moveNotesTitle', { count }) : t('noteList.moveNote')}
-            </span>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-app-hover text-tx-tertiary">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="px-4 py-2 text-xs text-tx-tertiary truncate border-b border-app-border">
-          {isBulk
-            ? t('noteList.selectedCount', { count })
-            : (noteTitle || t('common.untitledNote'))}
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          <div className="p-2">
-            {tree.map((nb) => (
-              <NotebookTreeItem
-                key={nb.id}
-                notebook={nb}
-                depth={0}
-                selectedId={selectedId}
-                currentNotebookId={currentNotebookId}
-                onSelect={setSelectedId}
-              />
-            ))}
-            {tree.length === 0 && (
-              <p className="text-xs text-tx-tertiary text-center py-4">{t('noteList.noNotebooks')}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-app-border">
-          <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button
-            size="sm"
-            disabled={!selectedId || selectedId === currentNotebookId}
-            onClick={() => selectedId && onMove(selectedId)}
-            className="bg-accent-primary text-white hover:bg-accent-primary/90 disabled:opacity-40"
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <Motion.div
+            variants={variants.scrimFade}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.modal}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <Motion.div
+            variants={variants.fadeScaleIn}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.modal}
+            className="relative w-full max-w-[360px] mx-4 max-h-[80vh] bg-app-elevated border border-app-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
           >
-            {t('noteList.moveButton')}
-          </Button>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <FolderInput size={16} className="text-accent-primary shrink-0" />
+                <span className="text-sm font-medium text-tx-primary truncate">
+                  {isBulk ? t('noteList.moveNotesTitle', { count }) : t('noteList.moveNote')}
+                </span>
+              </div>
+              <button onClick={onClose} className="p-1 rounded-md hover:bg-app-hover text-tx-tertiary active:scale-[0.97] transition-transform duration-press ease-out">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-4 py-2 text-xs text-tx-tertiary truncate border-b border-app-border">
+              {isBulk
+                ? t('noteList.selectedCount', { count })
+                : (noteTitle || t('common.untitledNote'))}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+              <div className="p-2">
+                {tree.map((nb) => (
+                  <NotebookTreeItem
+                    key={nb.id}
+                    notebook={nb}
+                    depth={0}
+                    selectedId={selectedId}
+                    currentNotebookId={currentNotebookId}
+                    onSelect={setSelectedId}
+                  />
+                ))}
+                {tree.length === 0 && (
+                  <p className="text-xs text-tx-tertiary text-center py-4">{t('noteList.noNotebooks')}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-app-border">
+              <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
+              <Button
+                size="sm"
+                disabled={!selectedId || selectedId === currentNotebookId}
+                onClick={() => selectedId && onMove(selectedId)}
+                className="bg-accent-primary text-white hover:bg-accent-primary/90 disabled:opacity-40"
+              >
+                {t('noteList.moveButton')}
+              </Button>
+            </div>
+          </Motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -510,8 +522,7 @@ function AiClassifyConfirmModal({
   onCancel,
   onToggle,
   onToggleAll,
-  onConfirm,
-}: {
+  onConfirm}: {
   plan: Array<{
     noteId: string;
     noteTitle: string;
@@ -539,11 +550,11 @@ function AiClassifyConfirmModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onCancel}>
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.15 }}
+        transition={springs.snappy}
         className="w-full max-w-lg max-h-[80vh] flex flex-col bg-app-surface rounded-xl shadow-2xl border border-app-border overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -634,7 +645,7 @@ function AiClassifyConfirmModal({
             {t('noteList.bulkAiClassifyConfirmMove', { count: checkedCount })}
           </button>
         </div>
-      </motion.div>
+      </Motion.div>
     </div>,
     document.body,
   );
@@ -642,8 +653,7 @@ function AiClassifyConfirmModal({
 
 /* ===== 新建笔记时选择笔记本 ===== */
 function NotebookPickerModal({
-  isOpen, notebooks, onPick, onClose,
-}: {
+  isOpen, notebooks, onPick, onClose}: {
   isOpen: boolean; notebooks: Notebook[];
   onPick: (notebookId: string) => void; onClose: () => void;
 }) {
@@ -664,56 +674,71 @@ function NotebookPickerModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-[360px] mx-4 max-h-[80vh] bg-app-elevated border border-app-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ animation: "contextMenuIn 0.15s ease-out" }}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
-          <div className="flex items-center gap-2 min-w-0">
-            <Folder size={16} className="text-accent-primary shrink-0" />
-            <span className="text-sm font-medium text-tx-primary truncate">{t('common.selectNotebook')}</span>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-app-hover text-tx-tertiary">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="px-4 py-2 text-xs text-tx-tertiary border-b border-app-border">
-          {t('common.selectNotebookHint')}
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          <div className="p-2">
-            {tree.map((nb) => (
-              <NotebookTreeItem
-                key={nb.id}
-                notebook={nb}
-                depth={0}
-                selectedId={selectedId}
-                currentNotebookId=""
-                onSelect={setSelectedId}
-              />
-            ))}
-            {tree.length === 0 && (
-              <p className="text-xs text-tx-tertiary text-center py-4">{t('noteList.noNotebooks')}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-app-border">
-          <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button
-            size="sm"
-            disabled={!selectedId}
-            onClick={() => selectedId && onPick(selectedId)}
-            className="bg-accent-primary text-white hover:bg-accent-primary/90 disabled:opacity-40"
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <Motion.div
+            variants={variants.scrimFade}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.modal}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <Motion.div
+            variants={variants.fadeScaleIn}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.modal}
+            className="relative w-full max-w-[360px] mx-4 max-h-[80vh] bg-app-elevated border border-app-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
           >
-            {t('common.confirm')}
-          </Button>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <Folder size={16} className="text-accent-primary shrink-0" />
+                <span className="text-sm font-medium text-tx-primary truncate">{t('common.selectNotebook')}</span>
+              </div>
+              <button onClick={onClose} className="p-1 rounded-md hover:bg-app-hover text-tx-tertiary active:scale-[0.97] transition-transform duration-press ease-out">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-4 py-2 text-xs text-tx-tertiary border-b border-app-border">
+              {t('common.selectNotebookHint')}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+              <div className="p-2">
+                {tree.map((nb) => (
+                  <NotebookTreeItem
+                    key={nb.id}
+                    notebook={nb}
+                    depth={0}
+                    selectedId={selectedId}
+                    currentNotebookId=""
+                    onSelect={setSelectedId}
+                  />
+                ))}
+                {tree.length === 0 && (
+                  <p className="text-xs text-tx-tertiary text-center py-4">{t('noteList.noNotebooks')}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-app-border">
+              <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
+              <Button
+                size="sm"
+                disabled={!selectedId}
+                onClick={() => selectedId && onPick(selectedId)}
+                className="bg-accent-primary text-white hover:bg-accent-primary/90 disabled:opacity-40"
+              >
+                {t('common.confirm')}
+              </Button>
+            </div>
+          </Motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -727,8 +752,7 @@ function MiniCalendarFilter({
   selectedDate,
   onSelect,
   onClear,
-  dateCounts,
-}: {
+  dateCounts}: {
   selectedDate: string | null; // YYYY-MM-DD
   onSelect: (date: string) => void;
   onClear: () => void;
@@ -768,8 +792,7 @@ function MiniCalendarFilter({
     cells.push({
       day: d,
       current: true,
-      dateStr: `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
-    });
+      dateStr: `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`});
   }
   // 下月补齐到 42 或至少填满最后一行
   const remaining = 7 - (cells.length % 7);
@@ -834,7 +857,7 @@ function MiniCalendarFilter({
               }}
               className={cn(
                 // 高度从 h-7 增到 h-9，给底部数量徽章留位置
-                "h-9 text-[11px] rounded-md transition-all flex flex-col items-center justify-center gap-0.5",
+                "h-9 text-[11px] rounded-md transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex flex-col items-center justify-center gap-0.5",
                 !current && "text-tx-tertiary/40",
                 current && !isSelected && !isToday && "text-tx-secondary hover:bg-app-hover",
                 isToday && !isSelected && "text-accent-primary font-bold",
@@ -888,13 +911,12 @@ function MiniCalendarFilter({
 // PopChild 会通过 `child.ref` 读取子元素 ref 转交给自己的 wrapper，而 React 18.3
 // 起把 `ref` 视为非普通 prop，访问会触发
 //   `Warning: ref is not a prop. Trying to access it will result in undefined`。
-// 解决方案：把 ref 改成普通 prop（cardRef），由组件内部直接挂到 motion.div 上，
+// 解决方案：把 ref 改成普通 prop（cardRef），由组件内部直接挂到 Motion.div 上，
 // PopChild 检测到 child 没有 ref 属性时就跳过转发路径，警告也就消失了。
 const NoteCard = React.memo(function NoteCard({
   note, isActive, onClick, onContextMenu, isContextTarget, isShared, isSelected,
   draggable, onDragStart, onDragOver, onDragEnd, onDrop, isDragOver,
-  onTouchStart, onTouchMove, onTouchEnd, cardRef,
-}: {
+  onTouchStart, onTouchMove, onTouchEnd, cardRef}: {
   note: NoteListItem; isActive: boolean; onClick: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   isContextTarget: boolean;
@@ -935,7 +957,7 @@ const NoteCard = React.memo(function NoteCard({
     !!note.creatorName && getCurrentWorkspace() !== "personal";
 
   return (
-    <motion.div
+    <Motion.div
       ref={cardRef}
       // 仅做轻量淡入。早期版本用了 y:4 → y:0 的位移，会造成切换笔记本时
       // 整列卡片"先在面板底部出现再上移"的错觉（尤其当 list 项很少、
@@ -943,11 +965,11 @@ const NoteCard = React.memo(function NoteCard({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.12, ease: "easeOut" }}
+      transition={springs.snappy}
       onClick={onClick}
       onContextMenu={onContextMenu}
       draggable={draggable}
-      // framer-motion 的 motion.div 把 onDragStart/onDragEnd 覆写成 (event, PanInfo) => void，
+      // framer-motion 的 Motion.div 把 onDragStart/onDragEnd 覆写成 (event, PanInfo) => void，
       // 与 HTML 原生 DragEvent 签名冲突。我们在这里确实需要 HTML 的 DragEvent（下游会读
       // dataTransfer），所以用 any 断言绕过类型检查，运行时 React 仍按 HTML 事件派发。
       onDragStart={onDragStart as any}
@@ -1049,7 +1071,7 @@ const NoteCard = React.memo(function NoteCard({
           ) : null}
         </div>
       </div>
-    </motion.div>
+    </Motion.div>
   );
 });
 NoteCard.displayName = "NoteCard";
@@ -1075,8 +1097,7 @@ function VirtualNoteList({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
-  noteCardRefs,
-}: {
+  noteCardRefs}: {
   notes: NoteListItem[];
   activeNoteId: string | undefined;
   menuState: { isOpen: boolean; targetId: string | null };
@@ -1313,8 +1334,7 @@ export default function NoteList() {
     // - 搜索：后端走 FTS rowid IN(...)，排序由命中相关性决定，强行覆盖会破坏体验。
     const sortParams: Record<string, string> = {
       sortBy: sortPref.by,
-      sortOrder: sortPref.dir,
-    };
+      sortOrder: sortPref.dir};
     if (state.viewMode === "notebook" && state.selectedNotebookId) {
       const params: Record<string, string> = { notebookId: state.selectedNotebookId, ...sortParams };
       if (dateFilter) { params.dateFrom = dateFilter; params.dateTo = dateFilter; }
@@ -1347,8 +1367,7 @@ export default function NoteList() {
         isLocked: 0,
         version: 0,
         createdAt: r.updatedAt,
-        updatedAt: r.updatedAt,
-      }));
+        updatedAt: r.updatedAt}));
     } else if (state.viewMode === "tag" && state.selectedTagId) {
       const params: Record<string, string> = { ...sortParams };
       if (dateFilter) { params.dateFrom = dateFilter; params.dateTo = dateFilter; }
@@ -1483,8 +1502,7 @@ export default function NoteList() {
           isPinned: note.isPinned,
           isTrashed: note.isTrashed,
           notebookId: note.notebookId,
-          workspaceId: note.workspaceId,
-        } as any);
+          workspaceId: note.workspaceId} as any);
       } else {
         // 当前筛选下原本没有这条笔记；可能是移动/恢复/新建，低频场景全量刷新更稳。
         actions.refreshNotes();
@@ -1710,8 +1728,7 @@ export default function NoteList() {
         version: note.version || 1,
         sortOrder: note.sortOrder || 0,
         updatedAt: note.updatedAt,
-        createdAt: note.createdAt,
-      } as NoteListItem);
+        createdAt: note.createdAt} as NoteListItem);
       actions.setMobileView("editor");
       actions.refreshNotebooks();
 
@@ -1984,25 +2001,21 @@ export default function NoteList() {
       {
         id: "toggle_pin",
         label: targetNote.isPinned === 1 ? t('noteList.unpin') : t('noteList.pin'),
-        icon: targetNote.isPinned === 1 ? <PinOff size={14} /> : <Pin size={14} />,
-      },
+        icon: targetNote.isPinned === 1 ? <PinOff size={14} /> : <Pin size={14} />},
       {
         id: "toggle_fav",
         label: targetNote.isFavorite === 1 ? t('noteList.unfavorite') : t('noteList.favorite'),
-        icon: targetNote.isFavorite === 1 ? <StarOff size={14} /> : <Star size={14} />,
-      },
+        icon: targetNote.isFavorite === 1 ? <StarOff size={14} /> : <Star size={14} />},
       {
         id: "toggle_lock",
         label: targetNote.isLocked === 1 ? t('noteList.unlock') : t('noteList.lock'),
-        icon: targetNote.isLocked === 1 ? <Unlock size={14} /> : <Lock size={14} />,
-      },
+        icon: targetNote.isLocked === 1 ? <Unlock size={14} /> : <Lock size={14} />},
       { id: "sep1", label: "", separator: true },
       {
         id: "move",
         label: bulkMode ? t('noteList.moveNotesTitle', { count: bulkCount }) : t('noteList.moveTo'),
         icon: <FolderInput size={14} />,
-        disabled: !bulkMode && !!targetNote.isLocked,
-      },
+        disabled: !bulkMode && !!targetNote.isLocked},
       // 单笔记导出为 Markdown / PDF / 图片（批量模式暂不提供，避免一次触发 N 个下载弹窗）
       ...(bulkMode
         ? []
@@ -2010,23 +2023,19 @@ export default function NoteList() {
             {
               id: "export_md",
               label: t('noteList.exportAsMarkdown'),
-              icon: <Download size={14} />,
-            } as ContextMenuItem,
+              icon: <Download size={14} />} as ContextMenuItem,
             {
               id: "export_pdf",
               label: t('noteList.exportAsPDF'),
-              icon: <Printer size={14} />,
-            } as ContextMenuItem,
+              icon: <Printer size={14} />} as ContextMenuItem,
             {
               id: "export_image",
               label: t('noteList.exportAsImage'),
-              icon: <ImageIcon size={14} />,
-            } as ContextMenuItem,
+              icon: <ImageIcon size={14} />} as ContextMenuItem,
             {
               id: "export_word",
               label: t('noteList.exportAsWord'),
-              icon: <FileType2 size={14} />,
-            } as ContextMenuItem,
+              icon: <FileType2 size={14} />} as ContextMenuItem,
           ]),
       { id: "sep2", label: "", separator: true },
       {
@@ -2036,8 +2045,7 @@ export default function NoteList() {
           : t('noteList.moveToTrash'),
         icon: <Trash2 size={14} />,
         danger: true,
-        disabled: !bulkMode && !!targetNote.isLocked,
-      },
+        disabled: !bulkMode && !!targetNote.isLocked},
     ];
   };
 
@@ -2222,15 +2230,13 @@ export default function NoteList() {
             noteIds: ids,
             noteTitle: targetNote.title,
             notebookId: targetNote.notebookId,
-            sourceWorkspaceId: sourceWs ?? null,
-          });
+            sourceWorkspaceId: sourceWs ?? null});
         } else {
           setMoveModal({
             noteIds: [targetId],
             noteTitle: targetNote.title,
             notebookId: targetNote.notebookId,
-            sourceWorkspaceId: (targetNote.workspaceId || null) as string | null,
-          });
+            sourceWorkspaceId: (targetNote.workspaceId || null) as string | null});
         }
         break;
       }
@@ -2423,8 +2429,7 @@ export default function NoteList() {
           version: note.version || 1,
           sortOrder: note.sortOrder || 0,
           updatedAt: note.updatedAt,
-          createdAt: note.createdAt,
-        } as NoteListItem);
+          createdAt: note.createdAt} as NoteListItem);
         okCount++;
       } catch (err: any) {
         console.error("导入文件失败:", f.name, err);
@@ -2534,8 +2539,7 @@ export default function NoteList() {
       startX: touch.clientX,
       currentY: touch.clientY,
       isDragging: false,
-      ghostEl: null,
-    };
+      ghostEl: null};
   }, [canDragSort]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -2609,8 +2613,7 @@ export default function NoteList() {
     favorites: t('noteList.favorite'),
     trash: t('sidebar.trash'),
     search: t('noteList.search', { query: state.searchQuery }),
-    tag: `# ${state.tags.find((tg) => tg.id === state.selectedTagId)?.name || t('noteList.tag')}`,
-  };
+    tag: `# ${state.tags.find((tg) => tg.id === state.selectedTagId)?.name || t('noteList.tag')}`};
 
   return (
     <div className="w-full h-full bg-app-surface border-r border-app-border/80 flex flex-col transition-colors relative">
@@ -2828,9 +2831,16 @@ export default function NoteList() {
         </span>
       </div>
 
-      {/* 多选操作栏 */}
+      {/* 多选操作栏：opacity-only soft seam（find-animation-opportunities #6） */}
+      <AnimatePresence>
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-accent-primary/10 border-y border-accent-primary/20">
+        <Motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: durations.fast }}
+          className="flex items-center justify-between gap-2 px-3 py-2 bg-accent-primary/10 border-y border-accent-primary/20"
+        >
           <span className="text-xs font-medium text-accent-primary truncate">
             {t('noteList.selectedCount', { count: selectedIds.size })}
           </span>
@@ -2865,8 +2875,7 @@ export default function NoteList() {
                       noteIds: ids,
                       noteTitle: first?.title || "",
                       notebookId: first?.notebookId || "",
-                      sourceWorkspaceId: sourceWs ?? null,
-                    });
+                      sourceWorkspaceId: sourceWs ?? null});
                   }}
                   title={t('noteList.moveSelected')}
                 >
@@ -2956,8 +2965,9 @@ export default function NoteList() {
               <X size={14} />
             </button>
           </div>
-        </div>
+        </Motion.div>
       )}
+      </AnimatePresence>
 
       {/* List - 包裹下拉刷新（仅移动端生效，桌面端不影响） */}
       {/* 拖拽外部文件兜底层：让用户拖到列表的任意位置（含空白处、虚拟列表、骨架屏）
@@ -3017,48 +3027,42 @@ export default function NoteList() {
               <p className="text-xs text-tx-tertiary leading-relaxed">
                 {t('noteList.dropToImportHint', {
                   name: state.notebooks.find((n) => n.id === state.selectedNotebookId)?.name
-                    || t('noteList.notebook'),
-                })}
+                    || t('noteList.notebook')})}
               </p>
             </div>
           </div>
         )}      {state.viewMode === "favorites" && window.innerWidth < 768 ? (
         <div className="flex-1 flex flex-col min-h-0 bg-app-bg">
-          {/* Tabs */}
+          {/* Tabs — layoutId pill (ThemeToggle pattern) */}
           <div className="flex border-b border-app-border bg-app-surface px-4 py-2 gap-2 shrink-0">
-            <button
-              onClick={() => setFavSegmentTab("notes")}
-              className={cn(
-                "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center",
-                favSegmentTab === "notes"
-                  ? "bg-accent-primary text-white shadow-sm"
-                  : "text-tx-secondary hover:bg-app-hover"
-              )}
-            >
-              笔记
-            </button>
-            <button
-              onClick={() => setFavSegmentTab("tasks")}
-              className={cn(
-                "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center",
-                favSegmentTab === "tasks"
-                  ? "bg-accent-primary text-white shadow-sm"
-                  : "text-tx-secondary hover:bg-app-hover"
-              )}
-            >
-              待办
-            </button>
-            <button
-              onClick={() => setFavSegmentTab("talks")}
-              className={cn(
-                "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center",
-                favSegmentTab === "talks"
-                  ? "bg-accent-primary text-white shadow-sm"
-                  : "text-tx-secondary hover:bg-app-hover"
-              )}
-            >
-              说说
-            </button>
+            {(
+              [
+                { id: "notes" as const, label: "笔记" },
+                { id: "tasks" as const, label: "待办" },
+                { id: "talks" as const, label: "说说" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFavSegmentTab(tab.id)}
+                className={cn(
+                  "relative flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-fast ease-out text-center z-0",
+                  favSegmentTab === tab.id
+                    ? "text-white"
+                    : "text-tx-secondary hover:bg-app-hover",
+                )}
+              >
+                {favSegmentTab === tab.id && (
+                  <Motion.div
+                    layoutId="fav-segment-pill"
+                    className="absolute inset-0 rounded-lg bg-accent-primary shadow-sm -z-10"
+                    transition={springs.snappy}
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            ))}
           </div>
 
           {/* List Content */}
@@ -3106,7 +3110,7 @@ export default function NoteList() {
                         sessionStorage.setItem("super:pending-navigate", JSON.stringify({ sourceType: "task", sourceId: task.id }));
                         window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
                       }}
-                      className="flex items-center justify-between p-3 rounded-xl border border-app-border bg-app-surface/40 hover:bg-app-hover active:scale-[0.98] transition-all cursor-pointer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-app-border bg-app-surface/40 hover:bg-app-hover active:scale-[0.98] transition-transform duration-press ease-out cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <input
@@ -3172,19 +3176,17 @@ export default function NoteList() {
                               id: diary.id,
                               contentText: diary.text || "",
                               createdAt: diary.createdAt,
-                              images: [],
-                            });
+                              images: []});
                           }
                         } catch {
                           setActiveFavDiary({
                             id: diary.id,
                             contentText: diary.text || "",
                             createdAt: diary.createdAt,
-                            images: [],
-                          });
+                            images: []});
                         }
                       }}
-                      className="p-3 rounded-xl border border-app-border bg-app-surface/40 hover:bg-app-hover active:scale-[0.98] transition-all cursor-pointer space-y-1.5"
+                      className="p-3 rounded-xl border border-app-border bg-app-surface/40 hover:bg-app-hover active:scale-[0.98] transition-transform duration-press ease-out cursor-pointer space-y-1.5"
                     >
                       <div className="flex items-center justify-between text-[10px] text-tx-tertiary">
                         <span>{diary.createdAt}</span>
@@ -3217,84 +3219,92 @@ export default function NoteList() {
         </div>
       ) : (
         <PullToRefresh onRefresh={fetchNotes}>
-          {/* 笔记数量较少时使用普通渲染，较多时使用虚拟滚动 */}
-          {sortedNotes.length > 100 ? (
-            <VirtualNoteList
-              notes={sortedNotes}
-              activeNoteId={state.activeNote?.id}
-              menuState={{ isOpen: menu.isOpen, targetId: menu.targetId }}
-              sharedNoteIds={sharedNoteIds}
-              selectedIds={selectedIds}
-              onSelectNote={handleSelectNote}
-              onContextMenu={(e, noteId) => openMenu(e, noteId, "note")}
-              canDragSort={canDragSort}
-              dragOverNoteId={dragOverNoteId}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              onDrop={handleDrop}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              noteCardRefs={noteCardRefs}
-            />
-          ) : (
-            <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
-              <div className="px-2.5 pb-3 space-y-1.5 max-md:px-3 max-md:space-y-2">
-                <AnimatePresence>
-                  {sortedNotes.map((note) => (
-                    <NoteCard
-                      key={note.id}
-                      cardRef={(el) => handleCardRef(note.id, el)}
-                      note={note}
-                      isActive={state.activeNote?.id === note.id}
-                      isContextTarget={menu.isOpen && menu.targetId === note.id}
-                      isShared={sharedNoteIds.has(note.id)}
-                      isSelected={selectedIds.has(note.id)}
-                      onClick={(e) => handleSelectNote(note.id, e)}
-                      onContextMenu={(e) => openMenu(e, note.id, "note")}
-                      draggable={canDragSort}
-                      onDragStart={(e) => handleDragStart(e, note.id)}
-                      onDragOver={(e) => handleDragOver(e, note.id)}
-                      onDragEnd={handleDragEnd}
-                      onDrop={(e) => handleDrop(e, note.id)}
-                      isDragOver={dragOverNoteId === note.id}
-                      onTouchStart={(e) => handleTouchStart(note.id, e)}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
+          {/* Soft seam on notebook/view switch: opacity only, 150ms (plans/010) */}
+          <Motion.div
+            key={`${state.viewMode}:${state.selectedNotebookId ?? ""}:${state.selectedTagId ?? ""}:${state.searchQuery ?? ""}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: durations.fast }}
+            className="flex-1 min-h-0 flex flex-col"
+          >
+            {/* 笔记数量较少时使用普通渲染，较多时使用虚拟滚动 */}
+            {sortedNotes.length > 100 ? (
+              <VirtualNoteList
+                notes={sortedNotes}
+                activeNoteId={state.activeNote?.id}
+                menuState={{ isOpen: menu.isOpen, targetId: menu.targetId }}
+                sharedNoteIds={sharedNoteIds}
+                selectedIds={selectedIds}
+                onSelectNote={handleSelectNote}
+                onContextMenu={(e, noteId) => openMenu(e, noteId, "note")}
+                canDragSort={canDragSort}
+                dragOverNoteId={dragOverNoteId}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                noteCardRefs={noteCardRefs}
+              />
+            ) : (
+              <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
+                <div className="px-2.5 pb-3 space-y-1.5 max-md:px-3 max-md:space-y-2">
+                  <AnimatePresence>
+                    {sortedNotes.map((note) => (
+                      <NoteCard
+                        key={note.id}
+                        cardRef={(el) => handleCardRef(note.id, el)}
+                        note={note}
+                        isActive={state.activeNote?.id === note.id}
+                        isContextTarget={menu.isOpen && menu.targetId === note.id}
+                        isShared={sharedNoteIds.has(note.id)}
+                        isSelected={selectedIds.has(note.id)}
+                        onClick={(e) => handleSelectNote(note.id, e)}
+                        onContextMenu={(e) => openMenu(e, note.id, "note")}
+                        draggable={canDragSort}
+                        onDragStart={(e) => handleDragStart(e, note.id)}
+                        onDragOver={(e) => handleDragOver(e, note.id)}
+                        onDragEnd={handleDragEnd}
+                        onDrop={(e) => handleDrop(e, note.id)}
+                        isDragOver={dragOverNoteId === note.id}
+                        onTouchStart={(e) => handleTouchStart(note.id, e)}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                      />
+                    ))}
+                  </AnimatePresence>
+                  {state.isLoading && state.notes.length === 0 && (
+                    <LoadingBlock label={t("common.loading") || "加载中…"} className="py-12" />
+                  )}
+                  {!state.isLoading && state.notes.length === 0 && (
+                    <EmptyState
+                      icon={FileText}
+                      title={t("common.noNotes")}
+                      description={t("common.noNotesHint")}
+                      action={
+                        <EmptyActionButton onClick={() => handleCreateNote("normal")}>
+                          <Plus size={14} />
+                          {t("common.newNote")}
+                        </EmptyActionButton>
+                      }
+                      className="py-16"
                     />
-                  ))}
-                </AnimatePresence>
-                {state.isLoading && state.notes.length === 0 && (
-                  <LoadingBlock label={t("common.loading") || "加载中…"} className="py-12" />
-                )}
-                {!state.isLoading && state.notes.length === 0 && (
-                  <EmptyState
-                    icon={FileText}
-                    title={t("common.noNotes")}
-                    description={t("common.noNotesHint")}
-                    action={
-                      <EmptyActionButton onClick={() => handleCreateNote("normal")}>
-                        <Plus size={14} />
-                        {t("common.newNote")}
-                      </EmptyActionButton>
-                    }
-                    className="py-16"
-                  />
-                )}
-                {!state.isLoading && state.notes.length > 0 && sortedNotes.length === 0 && (
-                  <EmptyState
-                    icon={Search}
-                    title={t("noteList.noMatch", { defaultValue: "没有匹配的笔记" })}
-                    description={t("noteList.noMatchHint", {
-                      defaultValue: "试试调整搜索词、标签或日期筛选",
-                    })}
-                    className="py-16"
-                  />
-                )}
-              </div>
-            </ScrollArea>
-          )}
+                  )}
+                  {!state.isLoading && state.notes.length > 0 && sortedNotes.length === 0 && (
+                    <EmptyState
+                      icon={Search}
+                      title={t("noteList.noMatch", { defaultValue: "没有匹配的笔记" })}
+                      description={t("noteList.noMatchHint", {
+                        defaultValue: "试试调整搜索词、标签或日期筛选"})}
+                      className="py-16"
+                    />
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </Motion.div>
         </PullToRefresh>
       )}
       </div>
@@ -3371,17 +3381,13 @@ export default function NoteList() {
       />
 
       {activeFavDiary && (
-        <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="bg-app-surface w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-app-border shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-200">
-            <header className="flex items-center justify-between px-4 py-3 border-b border-app-border shrink-0">
-              <span className="text-xs font-semibold text-tx-secondary">{activeFavDiary.createdAt}</span>
-              <button
-                onClick={() => setActiveFavDiary(null)}
-                className="p-1.5 rounded-lg text-tx-secondary hover:bg-app-hover"
-              >
-                <X size={18} />
-              </button>
-            </header>
+        <BottomSheet
+          open
+          onClose={() => setActiveFavDiary(null)}
+          title={activeFavDiary.createdAt}
+          maxHeight="min(85dvh, 100%)"
+          zClassName="z-[70]"
+        >
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <p className="text-sm text-tx-primary whitespace-pre-wrap leading-relaxed">{activeFavDiary.contentText}</p>
               {activeFavDiary.images && activeFavDiary.images.length > 0 && (
@@ -3411,8 +3417,7 @@ export default function NoteList() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </BottomSheet>
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { springs } from "@/lib/motion";
 
 type AIAction = "continue" | "rewrite" | "polish" | "shorten" | "expand" | "translate_en" | "translate_zh" | "summarize" | "explain" | "fix_grammar" | "format_markdown" | "format_code" | "custom";
 
@@ -243,7 +244,7 @@ export default function AIWritingAssistant({
       initial={{ opacity: 0, y: 8, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.96 }}
-      transition={{ duration: 0.15 }}
+      transition={springs.snappy}
       className="fixed z-[60] w-[360px] max-h-[480px] flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl shadow-2xl overflow-hidden"
       style={position ? { top: position.top, left: position.left } : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}
     >

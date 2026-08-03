@@ -1,3 +1,4 @@
+import { BottomSheet } from "@/components/common/BottomSheet";
 /**
  * 导入规则管理（对齐 beancount-web ImportRuleDrawer）
  * - 基础匹配：对方/类型/商品/分类/支付方式/标签 + AND/OR + 完全匹配
@@ -368,31 +369,16 @@ function RuleEditorModal({
 
   const mappings = rule.methodMappings || [];
 
-  // portal 到 body：避免被 FinanceCenter overflow 裁切；实体背景避免 glass 皮肤半透明看不清
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={rule.id ? "编辑规则" : "添加规则"}
-      onClick={onClose}
+  return (
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={rule.id ? "编辑规则" : "添加规则"}
+      maxHeight="min(92dvh, 100%)"
+      zClassName="z-[10000]"
+      className="sm:max-w-xl sm:mx-auto"
     >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-      <div
-        className="relative z-10 w-full sm:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-app-border p-4 shadow-xl bg-app-elevated text-tx-primary"
-        style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-center justify-between mb-3 sticky top-0 pb-2 z-10 border-b border-app-border -mx-4 px-4"
-          style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
-        >
-          <h3 className="font-semibold text-tx-primary">{rule.id ? "编辑规则" : "添加规则"}</h3>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-app-hover text-tx-secondary">
-            <X size={16} />
-          </button>
-        </div>
-
+      <div className="px-4 pb-4">
         {!rule.id && allRules.length > 0 && (
           <label className="block mb-3">
             <span className="text-xs text-tx-tertiary">从已有规则复制模板</span>
@@ -764,9 +750,7 @@ function RuleEditorModal({
             {saving ? "保存中…" : "保存"}
           </button>
         </div>
-      </div>
-
-      <style>{`
+        <style>{`
         .field {
           width: 100%;
           padding: 0.5rem 0.75rem;
@@ -782,10 +766,11 @@ function RuleEditorModal({
           border-color: var(--color-accent-primary);
         }
       `}</style>
-    </div>,
-    document.body,
+      </div>
+    </BottomSheet>
   );
 }
+
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

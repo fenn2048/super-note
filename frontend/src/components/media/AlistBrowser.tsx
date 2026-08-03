@@ -462,7 +462,7 @@ export default function AlistBrowser({
                   type="button"
                   onClick={() => setImportType("video")}
                   className={cn(
-                    "py-2 rounded-lg border text-xs font-semibold transition-all",
+                    "py-2 rounded-lg border text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                     importType === "video"
                       ? "bg-accent-primary text-white border-accent-primary shadow-sm shadow-accent-primary/20"
                       : "border-app-border bg-app-bg text-tx-secondary hover:bg-app-hover"
@@ -474,7 +474,7 @@ export default function AlistBrowser({
                   type="button"
                   onClick={() => setImportType("audio")}
                   className={cn(
-                    "py-2 rounded-lg border text-xs font-semibold transition-all",
+                    "py-2 rounded-lg border text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                     importType === "audio"
                       ? "bg-accent-primary text-white border-accent-primary shadow-sm shadow-accent-primary/20"
                       : "border-app-border bg-app-bg text-tx-secondary hover:bg-app-hover"
@@ -518,7 +518,7 @@ export default function AlistBrowser({
               onClick={handleImport}
               disabled={selectedFiles.length === 0 || importing}
               className={cn(
-                "w-full py-3 rounded-xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2 min-h-[44px]",
+                "w-full py-3 rounded-xl text-xs font-bold text-white transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-center gap-2 min-h-[44px]",
                 selectedFiles.length === 0
                   ? "bg-tx-tertiary/20 text-tx-tertiary cursor-not-allowed"
                   : "bg-accent-primary hover:bg-accent-primary-hover shadow-lg shadow-accent-primary/10 hover:shadow-accent-primary/20 cursor-pointer"

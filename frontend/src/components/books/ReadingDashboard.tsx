@@ -1,3 +1,4 @@
+import { BottomSheet } from "@/components/common/BottomSheet";
 /**
  * 书库「阅读中」仪表盘：当前图书 / 最近读过 / 每日阅读目标
  * 桌面与移动端共用同一套页面；移动端做触控与窄屏适配。
@@ -249,76 +250,54 @@ export default function ReadingDashboard({
     }
   };
 
-  const goalDialog =
-    goalDialogOpen && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[2px] p-0 sm:p-4"
+  const goalDialog = (
+    <BottomSheet
+      open={goalDialogOpen}
+      onClose={() => setGoalDialogOpen(false)}
+      title="每日阅读目标"
+      maxHeight="min(50dvh, 100%)"
+      zClassName="z-[9999]"
+      className="sm:max-w-xs sm:mx-auto"
+    >
+      <div className="px-5 pb-5">
+        <div className="flex items-center justify-center gap-2 mb-5">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={MIN_DAILY_READING_GOAL}
+            max={MAX_DAILY_READING_GOAL}
+            step={5}
+            value={draftGoal}
+            onChange={(e) => setDraftGoal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void saveGoal();
+            }}
+            className="w-24 text-center text-2xl font-bold bg-app-bg border border-app-border rounded-xl py-2 text-tx-primary"
+            autoFocus
+          />
+          <span className="text-sm text-tx-secondary">分钟 / 天</span>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
             onClick={() => setGoalDialogOpen(false)}
-            role="presentation"
+            className="flex-1 py-2.5 rounded-xl border border-app-border text-sm font-semibold text-tx-secondary min-h-[44px]"
           >
-            <div
-              role="dialog"
-              aria-modal
-              aria-labelledby="daily-reading-goal-title"
-              className="w-full sm:max-w-xs rounded-t-2xl sm:rounded-2xl border border-app-border bg-app-elevated shadow-2xl p-5 pb-[max(1.25rem,var(--safe-area-bottom,0px))]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <h3
-                  id="daily-reading-goal-title"
-                  className="text-base font-bold text-tx-primary text-center flex-1"
-                >
-                  每日阅读目标
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setGoalDialogOpen(false)}
-                  className="p-2 -mr-1 rounded-md text-tx-tertiary hover:bg-app-hover min-w-[40px] min-h-[40px] flex items-center justify-center"
-                  aria-label="关闭"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex items-center justify-center gap-2 mb-5">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_DAILY_READING_GOAL}
-                  max={MAX_DAILY_READING_GOAL}
-                  step={5}
-                  value={draftGoal}
-                  onChange={(e) => setDraftGoal(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void saveGoal();
-                  }}
-                  className="w-24 h-11 px-2 text-center text-base font-semibold rounded-lg border border-app-border bg-app-bg text-tx-primary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 tabular-nums"
-                  autoFocus
-                />
-                <span className="text-sm text-tx-secondary">分钟/天</span>
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setGoalDialogOpen(false)}
-                  className="px-5 py-2.5 rounded-full text-sm font-medium border border-app-border bg-app-surface text-tx-primary hover:bg-app-hover transition-colors min-h-[44px]"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  disabled={savingGoal}
-                  onClick={() => void saveGoal()}
-                  className="px-6 py-2.5 rounded-full text-sm font-semibold bg-tx-primary text-app-bg hover:opacity-90 disabled:opacity-50 transition-opacity min-h-[44px]"
-                >
-                  好
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )
-      : null;
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveGoal()}
+            disabled={savingGoal}
+            className="flex-1 py-2.5 rounded-xl bg-accent-primary text-white text-sm font-semibold min-h-[44px] disabled:opacity-50"
+          >
+            {savingGoal ? "保存中…" : "保存"}
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+
 
   return (
     <div
@@ -432,7 +411,7 @@ export default function ReadingDashboard({
                 "p-2.5 min-w-[44px] min-h-[44px] rounded-xl",
                 "border border-app-border bg-app-surface text-tx-secondary",
                 "hover:text-accent-primary hover:border-accent-primary/40",
-                "active:scale-95 transition-all shadow-sm",
+                "active:scale-95 transition-transform duration-press ease-out shadow-sm",
                 "flex items-center justify-center",
                 "touch-manipulation",
                 // 桌面：默认隐藏，鼠标进入卡片或焦点在按钮时显示
@@ -474,7 +453,7 @@ export default function ReadingDashboard({
                 disabled={!currentBook}
                 onClick={() => currentBook && onOpenBook(currentBook.bookHash)}
                 className={cn(
-                  "w-full max-w-sm px-6 py-3.5 rounded-full text-sm font-semibold transition-all active:scale-[0.98]",
+                  "w-full max-w-sm px-6 py-3.5 rounded-full text-sm font-semibold transition-transform duration-press ease-out active:scale-[0.98]",
                   "bg-tx-primary text-app-bg hover:opacity-90 shadow-md",
                   "disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100",
                   "touch-manipulation min-h-[48px]",

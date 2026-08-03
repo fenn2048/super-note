@@ -70,6 +70,7 @@ import {
   EmptyActionButton,
   LoadingBlock,
 } from "@/components/common/FeedbackStates";
+import { springs } from "@/lib/motion";
 
 
 marked.setOptions({
@@ -1020,7 +1021,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
   return (
     <div
       className={cn(
-        "bg-app-surface border border-app-border/40 rounded-xl p-4 shadow-sm transition-all",
+        "bg-app-surface border border-app-border/40 rounded-xl p-4 shadow-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
         isDragging && "ring-2 ring-accent-primary/50 border-accent-primary/40",
       )}
       onDragEnter={handleDragEnter}
@@ -1029,7 +1030,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       onDrop={handleDrop}
     >
       {/* 输入区域 */}
-      <div className="relative border border-app-border/80 bg-app-bg dark:bg-[#121214] rounded-lg p-2.5 transition-all mb-3 focus-within:border-accent-primary/40 focus-within:ring-1 focus-within:ring-accent-primary/10">
+      <div className="relative border border-app-border/80 bg-app-bg dark:bg-[#121214] rounded-lg p-2.5 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out mb-3 focus-within:border-accent-primary/40 focus-within:ring-1 focus-within:ring-accent-primary/10">
         {showFormatToolbar && (
           <TextareaFormatToolbar
             textareaRef={textareaRef}
@@ -1061,7 +1062,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
           onBlur={() => setTimeout(() => setIsFocused(false), 200)}
           onPaste={handlePaste}
           placeholder="分享新鲜事..."
-          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-xs leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none no-focus-ring transition-all duration-300 min-h-[64px]"
+          className="w-full bg-transparent text-tx-primary placeholder:text-tx-tertiary text-xs leading-relaxed resize-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 border-none no-focus-ring transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel min-h-[64px]"
         />
       </div>
 
@@ -1159,7 +1160,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
           
           <button
             onClick={handleDeleteVoice}
-            className="w-6 h-6 rounded-full bg-black/5 hover:bg-black/10 text-tx-secondary flex items-center justify-center transition-all"
+            className="w-6 h-6 rounded-full bg-black/5 hover:bg-black/10 text-tx-secondary flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             aria-label="删除录音"
           >
             <X size={14} />
@@ -1173,7 +1174,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={springs.modal}
           className="overflow-hidden mt-3 space-y-3"
         >
           {/* 常用标签推荐 */}
@@ -1190,7 +1191,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                 key={tag.id}
                 type="button"
                 onClick={() => handleAddTag(tag.name)}
-                className="text-[11px] px-2 py-0.5 rounded-full bg-app-hover hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary transition-all"
+                className="text-[11px] px-2 py-0.5 rounded-full bg-app-hover hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
               >
                 #{tag.name}
               </button>
@@ -1248,7 +1249,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                   setIsMediaMenuOpen(!isMediaMenuOpen);
                 }}
                 className={cn(
-                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-all border border-app-border bg-app-surface font-medium",
+                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border border-app-border bg-app-surface font-medium",
                   isMediaMenuOpen ? "bg-accent-primary/15 text-accent-primary border-accent-primary/20" : "text-tx-secondary"
                 )}
                 title="选择媒体文件"
@@ -1331,7 +1332,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               <button
                 type="button"
                 onClick={handleUndoAIFormat}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20 transition-all font-semibold"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold"
                 title="恢复到 AI 整理前的原始内容"
               >
                 <RotateCcw size={14} className="text-amber-500" />
@@ -1343,7 +1344,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                 onClick={handleAIFormat}
                 disabled={!text.trim() || formatting}
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all font-semibold",
+                  "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold",
                   text.trim() && !formatting
                     ? "text-accent-primary hover:bg-accent-primary/10 active:bg-accent-primary/20"
                     : "text-tx-tertiary/50 cursor-not-allowed"
@@ -1401,7 +1402,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
                 <button
                   type="button"
                   onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-[#eaebec]/60 dark:bg-white/5 hover:bg-[#eaebec] dark:hover:bg-white/10 text-tx-secondary transition-all"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-[#eaebec]/60 dark:bg-white/5 hover:bg-[#eaebec] dark:hover:bg-white/10 text-tx-secondary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                 >
                   {visibility === "PUBLIC" ? (
                     <>
@@ -1479,7 +1480,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               onClick={handlePost}
               disabled={!canSubmit}
               className={cn(
-                "flex items-center justify-center px-4 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95",
+                "flex items-center justify-center px-4 py-1.5 rounded-lg text-xs font-medium transition-transform duration-press ease-out active:scale-95",
                 canSubmit
                   ? "bg-[#5b51da] hover:bg-[#483ec7] text-white shadow-sm"
                   : "bg-app-hover text-tx-tertiary cursor-not-allowed opacity-50",
@@ -1642,7 +1643,7 @@ function Lightbox({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
+      transition={springs.snappy}
       className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
       onClick={onClose}
     >
@@ -1842,7 +1843,7 @@ function VoicePlayer({
         {/* 播放/暂停按钮 */}
         <button
           onClick={togglePlay}
-          className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all shrink-0 z-10"
+          className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/20 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 active:scale-95 transition-transform duration-press ease-out shrink-0 z-10"
         >
           {isPlaying ? (
             <Pause size={20} fill="white" />
@@ -1898,7 +1899,7 @@ function VoicePlayer({
         {/* 倍速播放 */}
         <button
           onClick={cycleSpeed}
-          className="px-2 py-0.5 rounded bg-app-hover hover:bg-app-active text-[10px] font-semibold text-tx-secondary transition-all shrink-0 z-10"
+          className="px-2 py-0.5 rounded bg-app-hover hover:bg-app-active text-[10px] font-semibold text-tx-secondary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0 z-10"
         >
           {playbackRate}x
         </button>
@@ -2240,12 +2241,12 @@ function DiaryCard({
         id={`diary-card-${item.id}`}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8, transition: { duration: 0.2 } }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
+        exit={{ opacity: 0, y: -8, transition: springs.modal }}
+        transition={springs.ui}
         className="group scroll-mt-20"
       >
         <div className={cn(
-          "bg-app-surface border border-app-border/40 shadow-sm rounded-xl transition-all duration-300 hover:shadow-md",
+          "bg-app-surface border border-app-border/40 shadow-sm rounded-xl transition-[box-shadow,transform,border-color] duration-normal ease-out hover:shadow-md",
           isHighlighted ? "ring-2 ring-accent-primary border-accent-primary shadow-lg shadow-accent-primary/20 scale-[1.01]" : ""
         )}>
           <div className="p-4">
@@ -2362,7 +2363,7 @@ function DiaryCard({
                 {/* Book Card wrapper */}
                 <div 
                   onClick={handleOpenBook}
-                  className="flex items-center gap-3 bg-app-surface border border-app-border/50 rounded-lg p-2.5 hover:border-accent-primary hover:bg-app-hover/50 cursor-pointer transition-all active:scale-[0.98] select-none"
+                  className="flex items-center gap-3 bg-app-surface border border-app-border/50 rounded-lg p-2.5 hover:border-accent-primary hover:bg-app-hover/50 cursor-pointer transition-transform duration-press ease-out active:scale-[0.98] select-none"
                   title="点击开始阅读此书"
                 >
                   {/* Cover */}
@@ -2406,7 +2407,7 @@ function DiaryCard({
                 {item.tags.map((tag) => (
                   <span
                     key={tag.id}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-pointer hover:bg-app-hover active:scale-95 transition-all select-none"
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-pointer hover:bg-app-hover active:scale-95 transition-transform duration-press ease-out select-none"
                     style={{
                       backgroundColor: getTagColor(tag) + "15",
                       borderColor: getTagColor(tag) + "30",
@@ -2484,7 +2485,7 @@ function DiaryCard({
                       e.stopPropagation();
                       setShowActionMenu(!showActionMenu);
                     }}
-                    className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-all"
+                    className="p-1.5 rounded-md text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary active:scale-95 transition-transform duration-press ease-out"
                     title="操作菜单"
                     aria-expanded={showActionMenu}
                     aria-haspopup="menu"
@@ -2501,7 +2502,7 @@ function DiaryCard({
                         initial={{ opacity: 0, scale: 0.95, x: 10, y: "-50%" }}
                         animate={{ opacity: 1, scale: 1, x: 0, y: "-50%" }}
                         exit={{ opacity: 0, scale: 0.95, x: 10, y: "-50%" }}
-                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        transition={springs.snappy}
                         style={{ transformOrigin: "right center" }}
                         role="menu"
                         className="absolute right-full mr-2 top-1/2 bg-[#2c2c2c] text-[#f5f5f5] rounded-lg shadow-xl px-1.5 py-1 z-50 flex flex-row items-center divide-x divide-[#3a3a3a] max-w-[calc(100vw-5rem)] overflow-x-auto hide-scrollbar"
@@ -2797,7 +2798,7 @@ function DiaryCard({
                   )}
 
                   <div className={cn(
-                    "relative flex-1 min-w-0 w-full bg-app-subtle border border-app-border/60 transition-all focus-within:border-accent-primary",
+                    "relative flex-1 min-w-0 w-full bg-app-subtle border border-app-border/60 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out focus-within:border-accent-primary",
                     (typeof window !== "undefined" && window.innerWidth < 768 && showMobileCommentInput)
                       ? "rounded-xl px-3 pt-2.5 pb-2 flex flex-col gap-2"
                       : "rounded-[18px] px-3.5 py-1.5 flex gap-2 items-end"
@@ -2930,7 +2931,7 @@ function DiaryCard({
                       <button
                         type="submit"
                         disabled={!newCommentText.trim() || submittingComment}
-                        className="px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-app-hover text-white disabled:text-tx-tertiary/50 disabled:opacity-50 rounded-full text-xs font-semibold transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                        className="px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-app-hover text-white disabled:text-tx-tertiary/50 disabled:opacity-50 rounded-full text-xs font-semibold transition-transform duration-press ease-out flex items-center gap-1 shrink-0 active:scale-95"
                       >
                         {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                         <span>发送</span>
@@ -2959,7 +2960,7 @@ function DiaryCard({
                   <button
                     type="submit"
                     disabled={!newCommentText.trim() || submittingComment}
-                    className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-app-hover text-white disabled:text-tx-tertiary/50 disabled:opacity-50 rounded-full text-xs font-semibold transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                    className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-app-hover text-white disabled:text-tx-tertiary/50 disabled:opacity-50 rounded-full text-xs font-semibold transition-transform duration-press ease-out flex items-center gap-1 shrink-0 active:scale-95"
                   >
                     {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                     <span>发送</span>
@@ -3252,7 +3253,7 @@ function DiaryEditor({
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18 }}
+      transition={springs.modal}
       className={cn(
         "bg-app-surface/95 backdrop-blur-sm rounded-lg border border-accent-primary/40 ring-1 ring-accent-primary/20 shadow-sm flex flex-col overflow-hidden",
         dockMobile
@@ -3286,7 +3287,7 @@ function DiaryEditor({
           <button
             type="button"
             onClick={onCancel}
-            className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover active:scale-95 transition-all shrink-0"
+            className="p-1.5 rounded-md text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover active:scale-95 transition-transform duration-press ease-out shrink-0"
             title={t("common.cancel") || "取消"}
             aria-label={t("common.cancel") || "取消编辑"}
           >
@@ -3367,7 +3368,7 @@ function DiaryEditor({
           <button
             onClick={() => setShowMoods(!showMoods)}
             className={cn(
-              "flex items-center justify-center w-9 h-9 rounded-full text-xs transition-all",
+              "flex items-center justify-center w-9 h-9 rounded-full text-xs transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
               mood
                 ? "bg-accent-primary/10 text-accent-primary"
                 : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
@@ -3387,7 +3388,7 @@ function DiaryEditor({
                 initial={{ opacity: 0, scale: 0.9, y: -4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                transition={{ duration: 0.15 }}
+                transition={springs.snappy}
                 className="absolute bottom-full left-0 mb-2 p-2.5 bg-app-elevated rounded-xl border border-app-border shadow-lg z-20 w-[220px]"
               >
                 <div className="grid grid-cols-6 gap-1.5">
@@ -3399,10 +3400,10 @@ function DiaryEditor({
                         setShowMoods(false);
                       }}
                       className={cn(
-                        "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-all",
+                        "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                         mood === v
                           ? "bg-accent-primary/15 scale-110 ring-1 ring-accent-primary/30"
-                          : "hover:bg-app-hover hover:scale-110",
+                          : "hover:bg-app-hover [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110",
                       )}
                     >
                       {emoji}
@@ -3419,7 +3420,7 @@ function DiaryEditor({
           onClick={() => fileInputRef.current?.click()}
           disabled={remainingSlots <= 0}
           className={cn(
-            "flex items-center justify-center w-9 h-9 rounded-full text-xs transition-all shrink-0",
+            "flex items-center justify-center w-9 h-9 rounded-full text-xs transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0",
             remainingSlots <= 0
               ? "text-tx-tertiary/50 cursor-not-allowed"
               : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
@@ -3455,7 +3456,7 @@ function DiaryEditor({
               setText(text + formatted);
             }
           }}
-          className="flex items-center justify-center w-9 h-9 rounded-full text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-all shrink-0"
+          className="flex items-center justify-center w-9 h-9 rounded-full text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
           title="插入超链接"
         >
           <Link size={18} />
@@ -3476,7 +3477,7 @@ function DiaryEditor({
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value)}
-            className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2 py-1.5 outline-none cursor-pointer focus:border-accent-primary/50 transition-all font-medium shrink-0 max-w-[5.5rem]"
+            className="text-[11px] bg-app-hover/80 border border-app-border text-tx-secondary rounded-full px-2 py-1.5 outline-none cursor-pointer focus:border-accent-primary/50 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-medium shrink-0 max-w-[5.5rem]"
           >
             <option value="PRIVATE">🔒 私有</option>
             <option value="PUBLIC">公开</option>
@@ -3497,7 +3498,7 @@ function DiaryEditor({
           onClick={handleSave}
           disabled={!canSave}
           className={cn(
-            "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0",
+            "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0",
             canSave
               ? "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-sm shadow-accent-primary/20 active:scale-95"
               : "bg-app-hover text-tx-tertiary cursor-not-allowed",
@@ -3634,7 +3635,7 @@ function FilterBar({
           key={key}
           onClick={() => onChange(key, customRange)}
           className={cn(
-            "px-2.5 py-1 rounded-full text-[11px] font-medium transition-all",
+            "px-2.5 py-1 rounded-full text-[11px] font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
             preset === key
               ? "bg-accent-primary text-white shadow-sm shadow-accent-primary/20"
               : "bg-app-hover/60 text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
@@ -3648,7 +3649,7 @@ function FilterBar({
         <button
           onClick={() => setShowCustom((v) => !v)}
           className={cn(
-            "flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all",
+            "flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
             preset === "custom"
               ? "bg-accent-primary text-white shadow-sm shadow-accent-primary/20"
               : "bg-app-hover/60 text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
@@ -3664,7 +3665,7 @@ function FilterBar({
               initial={{ opacity: 0, scale: 0.95, y: -4 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ duration: 0.15 }}
+              transition={springs.snappy}
               className="absolute right-0 top-full mt-2 p-3 bg-app-elevated rounded-xl border border-app-border shadow-lg z-30 w-[260px]"
             >
               <div className="space-y-2">
@@ -4313,7 +4314,7 @@ export default function DiaryCenter() {
                           sessionStorage.setItem("super-diary-search-mode", JSON.stringify(nextMode));
                         } catch {}
                       }}
-                      className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] font-semibold hover:bg-accent-primary/20 active:scale-95 transition-all select-none cursor-pointer"
+                      className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] font-semibold hover:bg-accent-primary/20 active:scale-95 transition-transform duration-press ease-out select-none cursor-pointer"
                     >
                       <span>关系: {searchMode === "AND" ? "并且 (AND)" : "或者 (OR)"}</span>
                     </button>
@@ -4410,7 +4411,7 @@ export default function DiaryCenter() {
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -10 }}
-                              transition={{ duration: 0.2 }}
+                              transition={springs.modal}
                               key={item.id}
                             >
                               <DiaryCard
@@ -4453,7 +4454,7 @@ export default function DiaryCenter() {
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -10 }}
-                              transition={{ duration: 0.2 }}
+                              transition={springs.modal}
                               key={item.id}
                             >
                               <DiaryCard
@@ -4507,7 +4508,7 @@ export default function DiaryCenter() {
               "w-12 h-12 items-center justify-center rounded-full",
               "bg-accent-primary text-white shadow-fab",
               "hover:brightness-105 active:scale-95",
-              "transition-all duration-fast ease-soft",
+              "transition-[transform,background-color,box-shadow,border-color,color,opacity] duration-fast ease-soft",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-app-bg",
             )}
           >

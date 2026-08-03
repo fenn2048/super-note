@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/lib/api";
 import { ShareComment } from "@/types";
 import { cn } from "@/lib/utils";
+import { springs } from "@/lib/motion";
 
 interface CommentPanelProps {
   noteId: string;
@@ -105,7 +106,7 @@ export default function CommentPanel({ noteId, noteTitle, onClose }: CommentPane
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
+        transition={springs.modal}
         className="w-full max-w-lg mx-4 bg-app-elevated rounded-xl shadow-2xl border border-app-border overflow-hidden max-h-[85vh] flex flex-col"
       >
         {/* Header */}

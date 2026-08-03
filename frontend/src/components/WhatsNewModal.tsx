@@ -5,6 +5,7 @@ import { X, Sparkles, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { springs } from "@/lib/motion";
 
 /**
  * 更新日志结构（与 scripts/generate-changelog.mjs 的 --emit-json 输出保持一致）
@@ -103,7 +104,7 @@ export default function WhatsNewModal({ open, onClose, highlightVersion }: Whats
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
+        transition={springs.snappy}
         // data-swipe-blocker：与 SettingsModal 同款机制，阻止移动端全局侧滑误关
         data-swipe-blocker="whats-new"
         className="fixed inset-0 z-[120] bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center p-4"
@@ -114,7 +115,7 @@ export default function WhatsNewModal({ open, onClose, highlightVersion }: Whats
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          transition={springs.modal}
           onClick={(e) => e.stopPropagation()}
           className="relative w-full max-w-2xl max-h-[85vh] flex flex-col
                      bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl

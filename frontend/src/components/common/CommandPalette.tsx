@@ -15,7 +15,7 @@
  * 新增升级功能：
  *   - 支持静态/系统级别指令，整合至单列表导航 (DisplayItems)；
  *   - 支持一键快捷新建笔记、说说、待办（触发 App 顶层事件）；
- *   - 支持一键切换明暗主题 (next-themes) 和外观皮肤 (useSkin)；
+ *   - 支持一键切换明暗主题 (next-themes)；
  *   - 列表键盘及鼠标高亮无缝适配。
  */
 
@@ -42,7 +42,6 @@ import {
 import { useAppActions } from "@/store/AppContext";
 import { api } from "@/lib/api";
 import type { SearchResult } from "@/types";
-import { useSkin } from "@/hooks/useSkin";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -135,7 +134,6 @@ function parseNLPTask(query: string) {
 
 export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const actions = useAppActions();
-  const { setSkin } = useSkin();
   const { theme, setTheme } = useTheme();
 
   const [query, setQuery] = useState("");
@@ -303,49 +301,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           actions.toggleSidebar();
         },
       },
-      {
-        id: "skin-claude",
-        type: "command",
-        title: "外观皮肤: Claude 风格",
-        subtitle: "切换为温润乳沙色底色、书卷衬线体标题的 Claude 皮肤",
-        icon: Palette,
-        handler: () => {
-          setSkin("claude");
-        },
-      },
-      {
-        id: "skin-obsidian",
-        type: "command",
-        title: "外观皮肤: Obsidian 风格",
-        subtitle: "切换为高级深海幽蓝护眼的 Obsidian 暗色皮肤",
-        icon: Palette,
-        handler: () => {
-          setSkin("obsidian");
-        },
-      },
-      {
-        id: "skin-eink",
-        type: "command",
-        title: "外观皮肤: 墨水屏风格",
-        subtitle: "切换为护眼柔和纸质感墨水屏皮肤",
-        icon: Palette,
-        handler: () => {
-          setSkin("eink");
-        },
-      },
-      {
-        id: "skin-mono",
-        type: "command",
-        title: "外观皮肤: Mono 黑白",
-        subtitle: "切换为简约黑白灰极简大气皮肤",
-        icon: Palette,
-        handler: () => {
-          setSkin("mono");
-        },
-      },
     );
     return list;
-  }, [theme, setTheme, setSkin, actions]);
+  }, [theme, setTheme, actions]);
 
   // 合并计算出最终展示项 (DisplayItems) — 含全局多域搜索结果
   type Hit =
@@ -582,7 +540,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return (
       <div
         className={cn(
-          "fixed inset-0 z-[200] flex justify-center",
+          // Keyboard-first (Cmd-K): no enter/exit animation — DESIGN §11 frequency rule
+          "fixed inset-0 z-toast flex justify-center",
           isMobile
             ? "items-stretch p-0"
             : "items-start pt-[min(15vh,120px)] px-4 pb-8",
@@ -595,10 +554,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         <div
           ref={dialogRef as React.RefObject<HTMLDivElement>}
           className={cn(
-            "relative w-full bg-app-elevated border border-app-border shadow-2xl overflow-hidden flex flex-col",
+            "relative w-full bg-app-elevated border border-app-border shadow-xl overflow-hidden flex flex-col",
             isMobile
               ? "h-full max-w-none rounded-none border-0"
-              : "max-w-[640px] max-h-[min(70vh,640px)] rounded-xl",
+              : "max-w-[640px] max-h-[min(70vh,640px)] rounded-window",
           )}
           role="dialog"
           aria-modal="true"

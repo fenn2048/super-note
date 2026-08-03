@@ -27,6 +27,7 @@ import YoudaoImport from "@/components/YoudaoImport";
 import UrlImport from "@/components/UrlImport";
 import { MemosImport } from "@/components/MemosImport";
 import type { Workspace } from "@/types";
+import { springs } from "@/lib/motion";
 
 // ============================================================================
 // 一级 Tab：scope —— 个人空间 / 工作区 / 系统
@@ -754,7 +755,7 @@ export default function DataManager() {
                     className="bg-indigo-500 h-1.5 rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${exportProgress.current}%` }}
-                    transition={{ duration: 0.3 }}
+                    transition={springs.ui}
                   />
                 </div>
               )}
@@ -783,7 +784,7 @@ export default function DataManager() {
           <button
             onClick={handleExportAll}
             disabled={isExporting || workspaceScopeNotReady || personalExportLocked}
-            className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
               isExporting || workspaceScopeNotReady || personalExportLocked
                 ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                 : exportProgress?.phase === "done"
@@ -844,7 +845,7 @@ export default function DataManager() {
               onDrop={personalImportLocked ? undefined : handleDrop}
               onClick={() => { if (!personalImportLocked) fileInputRef.current?.click(); }}
               aria-disabled={personalImportLocked}
-              className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+              className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 personalImportLocked
                   ? "border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-800/20 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                   : isDragOver
@@ -1107,7 +1108,7 @@ export default function DataManager() {
               <button
                 onClick={handleImport}
                 disabled={isImporting || selectedCount === 0 || workspaceScopeNotReady || personalImportLocked}
-                className={`mt-3 flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+                className={`mt-3 flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   isImporting || selectedCount === 0 || workspaceScopeNotReady || personalImportLocked
                     ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                     : importProgress?.phase === "done"
@@ -1194,7 +1195,7 @@ export default function DataManager() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ type: "spring", duration: 0.4, bounce: 0 }}
+                transition={springs.ui}
                 className="relative bg-white dark:bg-zinc-900 w-full max-w-md p-6 rounded-xl shadow-2xl border border-red-200 dark:border-red-900/50"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -1222,7 +1223,7 @@ export default function DataManager() {
 
                 <motion.div
                   animate={shake ? { x: [-10, 10, -10, 10, 0] } : {}}
-                  transition={{ duration: 0.4 }}
+                  transition={springs.ui}
                 >
                   <input
                     type="text"
@@ -1824,7 +1825,7 @@ export function DataFileSection() {
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className={`flex items-center justify-center w-full py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+              className={`flex items-center justify-center w-full py-2 px-3 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 isExporting
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                   : "bg-violet-600 hover:bg-violet-700 text-white shadow-sm"
@@ -1953,7 +1954,7 @@ export function DataFileSection() {
               <button
                 onClick={handleCheckAttachmentHealth}
                 disabled={isRepairingAttachment || isCheckingHealth || isScanningOrphans || isCleaningOrphans || isVacuuming}
-                className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+                className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   isRepairingAttachment || isCheckingHealth || isScanningOrphans || isCleaningOrphans || isVacuuming
                     ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                     : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
@@ -1977,7 +1978,7 @@ export function DataFileSection() {
               <button
                 onClick={handleScanOrphans}
                 disabled={isRepairingAttachment || isCheckingHealth || isScanningOrphans || isCleaningOrphans || isVacuuming}
-                className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+                className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   isRepairingAttachment || isCheckingHealth || isScanningOrphans || isCleaningOrphans || isVacuuming
                     ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700"
@@ -2000,7 +2001,7 @@ export function DataFileSection() {
             <button
               onClick={handleCleanupOrphans}
               disabled={isCheckingHealth || isCleaningOrphans || isVacuuming || isScanningOrphans}
-              className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+              className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 isCheckingHealth || isCleaningOrphans || isVacuuming || isScanningOrphans
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                   : "bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
@@ -2023,7 +2024,7 @@ export function DataFileSection() {
               <button
                 onClick={handleVacuum}
                 disabled={isRepairingAttachment || isCheckingHealth || isVacuuming || isCleaningOrphans || isScanningOrphans}
-                className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+                className={`flex items-center justify-center py-2 px-3 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   isRepairingAttachment || isCheckingHealth || isVacuuming || isCleaningOrphans || isScanningOrphans
                     ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                     : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
@@ -2168,7 +2169,7 @@ export function DataFileSection() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", duration: 0.4, bounce: 0 }}
+              transition={springs.ui}
               className="relative bg-white dark:bg-zinc-900 w-full max-w-md p-6 rounded-xl shadow-2xl border border-amber-200 dark:border-amber-900/50"
               onClick={(e) => e.stopPropagation()}
             >
@@ -2869,7 +2870,7 @@ function BackupSection() {
                   (status.autoBackupEmailOnSuccess ?? false) === autoEmailOnSuccess &&
                   (status.autoBackupEmailTo ?? "") === autoEmailTo.trim())
               }
-              className={`flex items-center justify-center py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${
+              className={`flex items-center justify-center py-1.5 px-3 rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 autoSaving
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
@@ -2912,7 +2913,7 @@ function BackupSection() {
           <button
             onClick={() => handleCreate("db-only")}
             disabled={creating !== null}
-            className={`flex-1 min-w-0 sm:min-w-[10rem] h-9 flex items-center justify-center px-3 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+            className={`flex-1 min-w-0 sm:min-w-[10rem] h-9 flex items-center justify-center px-3 rounded-lg font-medium text-sm whitespace-nowrap transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
               creating !== null
                 ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                 : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
@@ -2933,7 +2934,7 @@ function BackupSection() {
           <button
             onClick={() => handleCreate("full")}
             disabled={creating !== null}
-            className={`flex-1 min-w-0 sm:min-w-[8rem] h-9 flex items-center justify-center px-3 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+            className={`flex-1 min-w-0 sm:min-w-[8rem] h-9 flex items-center justify-center px-3 rounded-lg font-medium text-sm whitespace-nowrap transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
               creating !== null
                 ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                 : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
@@ -2988,7 +2989,7 @@ function BackupSection() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing || creating !== null}
-            className={`h-9 flex items-center justify-center px-3 rounded-lg font-medium text-sm whitespace-nowrap border transition-all ${
+            className={`h-9 flex items-center justify-center px-3 rounded-lg font-medium text-sm whitespace-nowrap border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
               importing || creating !== null
                 ? "border-zinc-200 dark:border-zinc-700 text-zinc-400 cursor-not-allowed"
                 : "border-sky-300 dark:border-sky-600 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-500/10"
@@ -3126,7 +3127,7 @@ function BackupSection() {
               initial={{ scale: 0.95, y: 10, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.95, y: 10, opacity: 0 }}
-              transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+              transition={springs.modal}
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!sudoPwd) return;
@@ -3182,7 +3183,7 @@ function BackupSection() {
                     placeholder={t("dataManager.backup.sudoPasswordPlaceholder") || "输入登录密码"}
                     autoFocus
                     autoComplete="current-password"
-                    className="block w-full pl-9 pr-10 py-2.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all"
+                    className="block w-full pl-9 pr-10 py-2.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                   />
                   <button
                     type="button"
@@ -3708,7 +3709,7 @@ function BackupDirSection(props: {
             <button
               onClick={handleSwitch}
               disabled={switching}
-              className={`w-full flex items-center justify-center py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+              className={`w-full flex items-center justify-center py-2 px-3 rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 switching
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                   : "bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
@@ -3851,7 +3852,7 @@ function BackupSendEmailDialog(props: {
           initial={{ scale: 0.95, y: 10, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
           exit={{ scale: 0.95, y: 10, opacity: 0 }}
-          transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+          transition={springs.modal}
           className="relative w-full max-w-md bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
         >
           <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">

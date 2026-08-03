@@ -249,7 +249,7 @@ export default function PlanCenter() {
                 <div
                   key={p.id}
                   onClick={() => setSelectedPlanId(p.id)}
-                  className="group/card border border-app-border hover:border-app-border/80 bg-app-sidebar/35 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col cursor-pointer h-64 justify-between"
+                  className="group/card border border-app-border hover:border-app-border/80 bg-app-sidebar/35 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel flex flex-col cursor-pointer h-64 justify-between"
                 >
                   {/* Top Cover Banner */}
                   <div
@@ -270,7 +270,7 @@ export default function PlanCenter() {
                           const newStatus = p.status === "paused" ? "in_progress" : "paused";
                           api.updatePlan(p.id, { status: newStatus }).then(() => loadPlans());
                         }}
-                        className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-all"
+                        className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                         title={p.status === "paused" ? "恢复" : "暂停"}
                       >
                         {p.status === "paused" ? <Play size={10} /> : <Pause size={10} />}
@@ -305,7 +305,7 @@ export default function PlanCenter() {
                       </div>
                       <div className="w-full h-1.5 bg-app-hover rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-accent-primary rounded-full transition-all duration-500"
+                          className="h-full bg-accent-primary rounded-full transition-[width] duration-panel ease-out"
                           style={{ width: `${progressPercentage}%` }}
                         />
                       </div>
@@ -436,7 +436,7 @@ export default function PlanCenter() {
                         key={u.userId}
                         type="button"
                         onClick={() => toggleParticipant(u.userId)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-all ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                           active 
                             ? "bg-accent-primary text-white border-accent-primary" 
                             : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"

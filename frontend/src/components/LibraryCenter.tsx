@@ -270,7 +270,7 @@ export default function LibraryCenter() {
                 key={item.id}
                 type="button"
                 onClick={() => selectTab(item.id)}
-                className="w-full flex items-center gap-3 p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs active:scale-[0.99] transition-all text-left"
+                className="w-full flex items-center gap-3 p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs active:scale-[0.97] transition-transform duration-press ease-out text-left"
               >
                 <div
                   className={cn(
@@ -323,7 +323,7 @@ export default function LibraryCenter() {
           type="button"
           onClick={() => selectTab(t.id)}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-button transition-all min-h-[36px]",
+            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-button transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out min-h-[36px]",
             activeTab === t.id
               ? "bg-app-elevated text-accent-primary shadow-sm"
               : "text-tx-tertiary hover:text-tx-primary",

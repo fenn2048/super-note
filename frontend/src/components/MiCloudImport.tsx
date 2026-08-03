@@ -245,7 +245,7 @@ export default function MiCloudImport() {
             <button
               onClick={handleConnect}
               disabled={phase === "verifying" || !cookie.trim()}
-              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 phase === "verifying" || !cookie.trim()
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                   : "bg-orange-500 hover:bg-orange-600 text-white shadow-md hover:shadow-lg"
@@ -383,7 +383,7 @@ export default function MiCloudImport() {
             <button
               onClick={handleImport}
               disabled={phase === "importing" || selectedCount === 0}
-              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 phase === "importing" || selectedCount === 0
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                   : phase === "done"

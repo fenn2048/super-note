@@ -398,7 +398,7 @@ export default function TextareaFormatToolbar({
                   type="button"
                   onClick={() => handleColor(color)}
                   style={{ backgroundColor: color }}
-                  className="w-5 h-5 rounded-full hover:scale-110 active:scale-95 shadow-sm border border-black/10 transition-transform"
+                  className="w-5 h-5 rounded-full [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 active:scale-95 shadow-sm border border-black/10 transition-transform"
                   title={color}
                 />
               ))}

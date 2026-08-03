@@ -7,8 +7,7 @@ import {
   CODE_BLOCK_THEMES,
   CodeBlockThemeId,
   getSavedCodeBlockTheme,
-  setCodeBlockTheme,
-} from "@/lib/codeBlockTheme";
+  setCodeBlockTheme} from "@/lib/codeBlockTheme";
 import MermaidView from "@/components/MermaidView";
 import { isMermaidLang } from "@/lib/mermaidRenderer";
 
@@ -296,9 +295,7 @@ export function CodeBlockView(props: NodeViewProps) {
                   top: langPopupPos.top,
                   left: langPopupPos.left,
                   width: LANG_POPUP_WIDTH,
-                  zIndex: 1000,
-                  animation: "contextMenuIn 0.12s ease-out",
-                }}
+                  zIndex: 1000}}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
@@ -374,9 +371,7 @@ export function CodeBlockView(props: NodeViewProps) {
                   top: themePopupPos.top,
                   right: themePopupPos.right,
                   width: THEME_POPUP_WIDTH,
-                  zIndex: 1000,
-                  animation: "contextMenuIn 0.12s ease-out",
-                }}
+                  zIndex: 1000}}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
@@ -398,8 +393,7 @@ export function CodeBlockView(props: NodeViewProps) {
                         className="w-5 h-5 rounded border shrink-0 flex items-center justify-center"
                         style={{
                           background: t.preview.bg,
-                          borderColor: "rgba(128,128,128,0.35)",
-                        }}
+                          borderColor: "rgba(128,128,128,0.35)"}}
                       >
                         <span
                           className="w-2 h-2 rounded-sm"

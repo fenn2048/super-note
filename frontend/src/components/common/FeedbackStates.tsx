@@ -6,6 +6,8 @@
 import React from "react";
 import { Loader2, AlertCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Motion } from "@/components/common/Motion";
+import { springs, variants } from "@/lib/motion";
 
 // ── Loading ──────────────────────────────────────────────────────────────
 
@@ -55,29 +57,48 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
+    <Motion.div
       className={cn(
         "flex flex-col items-center justify-center py-14 px-6 text-center",
         className,
       )}
       role="status"
+      variants={variants.listStagger}
+      initial="initial"
+      animate="animate"
     >
       {Icon && (
-        <div
+        <Motion.div
+          variants={variants.listItemIn}
+          transition={springs.snappy}
           className="w-14 h-14 rounded-2xl bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center mb-4"
           aria-hidden
         >
           <Icon size={28} className="text-accent-primary/75" />
-        </div>
+        </Motion.div>
       )}
-      <p className="text-sm font-semibold text-tx-primary mb-1">{title}</p>
+      <Motion.p
+        variants={variants.listItemIn}
+        transition={springs.snappy}
+        className="text-sm font-semibold text-tx-primary mb-1"
+      >
+        {title}
+      </Motion.p>
       {description && (
-        <p className="text-xs text-tx-tertiary max-w-[260px] leading-relaxed mb-1">
+        <Motion.p
+          variants={variants.listItemIn}
+          transition={springs.snappy}
+          className="text-xs text-tx-tertiary max-w-[260px] leading-relaxed mb-1"
+        >
           {description}
-        </p>
+        </Motion.p>
       )}
-      {action && <div className="mt-4">{action}</div>}
-    </div>
+      {action && (
+        <Motion.div variants={variants.listItemIn} transition={springs.snappy} className="mt-4">
+          {action}
+        </Motion.div>
+      )}
+    </Motion.div>
   );
 }
 

@@ -380,7 +380,7 @@ export default function ICloudImport() {
             <button
               onClick={handleParse}
               disabled={!jsonInput.trim()}
-              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 !jsonInput.trim()
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                   : "bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg"
@@ -504,7 +504,7 @@ export default function ICloudImport() {
             <button
               onClick={handleImport}
               disabled={phase === "importing" || selectedCount === 0}
-              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 phase === "importing" || selectedCount === 0
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                   : phase === "done"

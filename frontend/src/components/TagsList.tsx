@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import TagColorPopover from "@/components/TagColorPopover";
 import { confirm as confirmDialog } from "@/components/ui/confirm";
+import { springs } from "@/lib/motion";
 
 export default function TagsList() {
   const { t } = useTranslation();
@@ -53,7 +54,7 @@ export default function TagsList() {
             initial={{ height: 0, opacity: 0, overflow: "hidden" }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-            transition={{ duration: 0.2 }}
+            transition={springs.modal}
             style={{ overflow: "hidden" }}
           >
             <div className="px-2 pb-2 space-y-0.5 overflow-y-auto" style={{ maxHeight: "min(35vh, 260px)" }}>

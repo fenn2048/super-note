@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/hooks/useCapacitor";
+import { rubberband } from "@/lib/motion";
 
 export interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
@@ -21,21 +22,24 @@ export function PullToRefresh({
   const [refreshing, setRefreshing] = useState(false);
   const touchStartY = useRef(0);
   const isAtTop = useRef(false);
+  const crossedThreshold = useRef(false);
   const { t } = useTranslation();
 
   const THRESHOLD = 70; // 触发刷新的下拉距离
-  const MAX_PULL = 120; // 最大下拉距离
+  /** 参考尺寸：用于 Apple-style rubberband 归一化 */
+  const RUBBER_DIM = 280;
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (refreshing) return;
-    
+
     // 支持 radix scroll area 视口，以及标准 overflow-y-auto 容器，或者容器自身
-    const scrollContainer = 
-      containerRef.current?.querySelector("[data-radix-scroll-area-viewport]") || 
-      containerRef.current?.querySelector(".overflow-y-auto") || 
+    const scrollContainer =
+      containerRef.current?.querySelector("[data-radix-scroll-area-viewport]") ||
+      containerRef.current?.querySelector(".overflow-y-auto") ||
       containerRef.current;
 
     isAtTop.current = !scrollContainer || scrollContainer.scrollTop <= 0;
+    crossedThreshold.current = false;
     if (isAtTop.current) {
       touchStartY.current = e.touches[0].clientY;
     }
@@ -45,20 +49,22 @@ export function PullToRefresh({
     if (!isAtTop.current || refreshing) return;
     const deltaY = e.touches[0].clientY - touchStartY.current;
     if (deltaY > 0) {
-      // 应用阻尼效果：越往下拉越难拉
-      const dampedDistance = Math.min(MAX_PULL, deltaY * 0.45);
+      // Apple rubber-band：越过阈值后阻力递增，非硬夹 / 线性系数
+      const dampedDistance = rubberband(deltaY, RUBBER_DIM, 0.55);
       setPullDistance(dampedDistance);
       setPulling(true);
 
-      // 达到阈值时触发触觉反馈
-      if (dampedDistance >= THRESHOLD && pullDistance < THRESHOLD) {
+      if (dampedDistance >= THRESHOLD && !crossedThreshold.current) {
+        crossedThreshold.current = true;
         haptic.light();
+      } else if (dampedDistance < THRESHOLD) {
+        crossedThreshold.current = false;
       }
     } else {
       setPulling(false);
       setPullDistance(0);
     }
-  }, [refreshing, pullDistance]);
+  }, [refreshing]);
 
   const handleTouchEnd = useCallback(async () => {
     if (!pulling) return;
@@ -90,7 +96,7 @@ export function PullToRefresh({
     >
       {/* 下拉刷新指示器 */}
       <div
-        className="absolute top-0 left-0 right-0 flex items-center justify-center z-10 pointer-events-none transition-opacity"
+        className="absolute top-0 left-0 right-0 flex items-center justify-center z-10 pointer-events-none transition-opacity duration-micro ease-out"
         style={{
           height: `${Math.max(pullDistance, 0)}px`,
           opacity: pullDistance > 10 ? 1 : 0,
@@ -100,7 +106,7 @@ export function PullToRefresh({
           <RefreshCw
             size={16}
             className={cn(
-              "transition-transform",
+              "transition-transform duration-press ease-out",
               refreshing && "animate-spin",
               pullDistance >= THRESHOLD && !refreshing && "text-accent-primary"
             )}
@@ -120,12 +126,12 @@ export function PullToRefresh({
         </div>
       </div>
 
-      {/* 内容区域 */}
+      {/* 内容区域：拖动中 1:1 无 transition；松手 ease-out 回落 */}
       <div
-        className="flex-1 flex flex-col min-h-0 transition-transform"
+        className="flex-1 flex flex-col min-h-0"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
-          transition: pulling ? "none" : "transform 0.3s ease-out",
+          transition: pulling ? "none" : "transform 280ms var(--ease-out)",
         }}
       >
         {children}

@@ -2,6 +2,7 @@
  * 记账中心：账本列表 / 解锁 / 概览 / 明细 / 记一笔 / 导入 / 账户 / 规则 / 统计 / 建议
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { BottomSheet } from "@/components/common/BottomSheet";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft, BookOpen, Plus, Lock, Unlock, Trash2, Upload, Wallet,
@@ -665,30 +666,10 @@ export default function FinanceCenter() {
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-      <div
-        className="relative z-10 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-app-border p-4 shadow-xl text-tx-primary"
-        style={{ backgroundColor: "var(--color-elevated-solid, var(--color-elevated))" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-tx-primary">{title}</h3>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-app-hover text-tx-secondary">
-            <X size={16} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>,
-    document.body,
+  return (
+    <BottomSheet open onClose={onClose} title={title} maxHeight="min(92dvh, 100%)" zClassName="z-[10000]" className="sm:max-w-md sm:mx-auto">
+      <div className="px-4 pb-2">{children}</div>
+    </BottomSheet>
   );
 }
 

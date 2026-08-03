@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { User } from "@/types";
 import { toast } from "@/lib/toast";
+import { springs } from "@/lib/motion";
 
 type StatusFilter = "all" | "active" | "disabled";
 type RoleFilter = "all" | "admin" | "user";
@@ -1117,7 +1118,7 @@ function Modal({
         initial={{ scale: 0.95, y: 10 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.95, y: 10 }}
-        transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+        transition={springs.modal}
         className="relative w-full max-w-md bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">

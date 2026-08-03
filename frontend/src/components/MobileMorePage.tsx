@@ -5,13 +5,14 @@ import {
   FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine, Wallet, NotebookPen,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { motion } from "framer-motion";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 import ContentCanvas from "@/components/layout/ContentCanvas";
+import { Motion } from "@/components/common/Motion";
 import { getMobileMoreModules, setLibraryTab, type NavModule } from "@/lib/navigation.config";
 import type { WorkspaceFeatures } from "@/types";
 import { isNativePlatform } from "@/hooks/useCapacitor";
 import QrScanPage from "@/components/QrScanPage";
+import { springs } from "@/lib/motion";
 
 const MORE_ICONS: Record<string, React.ReactNode> = {
   // 与桌面 Rail 一致：笔记 NotebookPen，资料库 BookOpen
@@ -126,15 +127,15 @@ export default function MobileMorePage() {
       <ContentCanvas className="pb-6" flush>
         <div className="px-4 pt-2 grid grid-cols-2 gap-3">
           {menuItems.map((item, idx) => (
-            <motion.button
+            <Motion.button
               key={item.id}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: idx * 0.05 }}
+              transition={{ ...springs.ui, delay: idx * 0.04 }}
               onClick={item.onClick}
-              className="flex flex-col justify-between p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs hover:shadow-sm hover:border-app-border active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px]"
+              className="flex flex-col justify-between p-4 rounded-card border border-app-border/60 bg-app-elevated shadow-xs hover:shadow-sm hover:border-app-border active:scale-[0.97] transition-transform duration-press ease-out text-left group min-h-[128px]"
             >
-              <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform duration-fast relative">
+              <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform duration-press ease-out relative">
                 {item.icon}
                 {item.id === "mentions" && state.unreadMentionCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-elevated">
@@ -146,15 +147,15 @@ export default function MobileMorePage() {
                 <div className="text-sm font-semibold text-tx-primary tracking-tight">{item.label}</div>
                 <div className="text-[11px] text-tx-tertiary mt-1 line-clamp-2 leading-snug">{item.desc}</div>
               </div>
-            </motion.button>
+            </Motion.button>
           ))}
 
-          <motion.button
-            initial={{ opacity: 0, y: 10 }}
+          <Motion.button
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: menuItems.length * 0.05 }}
+            transition={{ ...springs.ui, delay: menuItems.length * 0.04 }}
             onClick={handleLogout}
-            className="flex flex-col justify-between p-4 rounded-card border border-red-200/60 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 shadow-xs hover:shadow-sm active:scale-[0.98] transition-all duration-fast ease-soft text-left group min-h-[128px] col-span-2"
+            className="flex flex-col justify-between p-4 rounded-card border border-red-200/60 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 shadow-xs hover:shadow-sm active:scale-[0.97] transition-transform duration-press ease-out text-left group min-h-[128px] col-span-2"
           >
             <div className="w-11 h-11 rounded-card bg-app-bg border border-app-border/70 flex items-center justify-center shrink-0 shadow-xs">
               <LogOut className="w-6 h-6 text-red-500" />
@@ -163,7 +164,7 @@ export default function MobileMorePage() {
               <div className="text-sm font-semibold text-red-600 dark:text-red-400 tracking-tight">退出登录</div>
               <div className="text-[11px] text-tx-tertiary mt-1">安全退出当前账号</div>
             </div>
-          </motion.button>
+          </Motion.button>
         </div>
       </ContentCanvas>
 

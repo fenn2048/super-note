@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { Motion } from "@/components/common/Motion";
 import ComposerCameraModal from "@/components/ComposerCameraModal";
 import MobileCameraModal from "@/components/MobileCameraModal";
 import OCRModal from "@/components/OCRModal";
@@ -17,6 +18,8 @@ import RecordingPanel from "@/components/RecordingPanel";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
+import { springs } from "@/lib/motion";
+import { BottomSheet } from "@/components/common/BottomSheet";
 
 
 interface DiaryComposeModalProps {
@@ -1158,7 +1161,7 @@ const handleEmojiSelect = (emoji: string) => {
         <button
           onClick={handlePublish}
           disabled={posting}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-accent-primary text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-accent-primary text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-transform duration-press ease-out disabled:opacity-50"
         >
           {posting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           <span>发布</span>
@@ -1217,7 +1220,7 @@ const handleEmojiSelect = (emoji: string) => {
                 type="button"
                 onClick={() => handleAddTag(tag.name)}
                 className={cn(
-                  "text-[11px] px-2.5 py-0.5 rounded-full transition-all border",
+                  "text-[11px] px-2.5 py-0.5 rounded-full transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border",
                   isSelected
                     ? "bg-accent-primary/10 border-accent-primary/30 text-accent-primary font-medium"
                     : "bg-app-hover border-transparent hover:bg-accent-primary/10 hover:text-accent-primary text-tx-secondary"
@@ -1255,7 +1258,7 @@ const handleEmojiSelect = (emoji: string) => {
             </button>
             <button
               onClick={handleDeleteVoice}
-              className="w-8 h-8 rounded-full bg-app-hover hover:bg-red-500/10 text-tx-secondary hover:text-red-500 flex items-center justify-center transition-all"
+              className="w-8 h-8 rounded-full bg-app-hover hover:bg-red-500/10 text-tx-secondary hover:text-red-500 flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
               aria-label="删除录音"
             >
               <Trash2 size={14} />
@@ -1334,7 +1337,7 @@ const handleEmojiSelect = (emoji: string) => {
       {/* 心情表情选择和标签区域 */}
       <AnimatePresence>
         {showMoods && (
-          <motion.div
+          <Motion.div
             initial={{ height: 0 }}
             animate={{ height: "auto" }}
             exit={{ height: 0 }}
@@ -1350,7 +1353,7 @@ const handleEmojiSelect = (emoji: string) => {
                       key={m.value}
                       onClick={() => handleMoodSelect(m.value)}
                       className={cn(
-                        "flex flex-col items-center justify-center p-2 rounded-xl border border-app-border bg-app-surface/50 hover:bg-app-hover active:scale-95 transition-all",
+                        "flex flex-col items-center justify-center p-2 rounded-xl border border-app-border bg-app-surface/50 hover:bg-app-hover active:scale-95 transition-transform duration-press ease-out",
                         mood === m.value ? "border-accent-primary bg-accent-primary/10 ring-1 ring-accent-primary/30" : ""
                       )}
                     >
@@ -1371,11 +1374,11 @@ const handleEmojiSelect = (emoji: string) => {
                 />
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
         )}
 
         {showTags && (
-          <motion.div
+          <Motion.div
             initial={{ height: 0 }}
             animate={{ height: "auto" }}
             exit={{ height: 0 }}
@@ -1425,7 +1428,7 @@ const handleEmojiSelect = (emoji: string) => {
                         key={tag.id}
                         onClick={() => handleTagToggle(tag)}
                         className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border",
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border",
                           active
                             ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 font-medium"
                             : "bg-transparent text-tx-secondary border-app-border hover:border-tx-secondary"
@@ -1441,7 +1444,7 @@ const handleEmojiSelect = (emoji: string) => {
                 <div className="text-xs text-tx-tertiary py-1">暂无标签，请输入并按回车创建新标签</div>
               )}
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -1522,7 +1525,7 @@ const handleEmojiSelect = (emoji: string) => {
             <button
               onClick={() => setVisibility((v) => (v === "PRIVATE" ? "PUBLIC" : "PRIVATE"))}
               className={cn(
-                "flex items-center justify-center transition-all border border-app-border/60 bg-app-surface shrink-0",
+                "flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border border-app-border/60 bg-app-surface shrink-0",
                 isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-full text-xs",
                 visibility === "PUBLIC" ? "text-accent-primary border-accent-primary/20 bg-accent-primary/5" : "text-tx-secondary"
               )}
@@ -1609,7 +1612,7 @@ const handleEmojiSelect = (emoji: string) => {
             </button>
             <AnimatePresence>
               {isMediaMenuOpen && (
-                <motion.div
+                <Motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -1659,7 +1662,7 @@ const handleEmojiSelect = (emoji: string) => {
                     <ScanText size={14} className="text-tx-secondary" />
                     <span>OCR</span>
                   </button>
-                </motion.div>
+                </Motion.div>
               )}
             </AnimatePresence>
           </div>
@@ -1683,7 +1686,7 @@ const handleEmojiSelect = (emoji: string) => {
               type="button"
               onClick={handleUndoAIFormat}
               className={cn(
-                "flex items-center justify-center transition-all font-semibold",
+                "flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold",
                 isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-xl text-xs",
                 "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 dark:hover:text-amber-300 dark:bg-amber-500/20"
               )}
@@ -1698,7 +1701,7 @@ const handleEmojiSelect = (emoji: string) => {
               onClick={handleAIFormat}
               disabled={!text.trim() || formatting}
               className={cn(
-                "flex items-center justify-center transition-all font-semibold",
+                "flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold",
                 isMobile ? "w-10 h-10 rounded-xl" : "gap-1 px-2.5 py-1.5 rounded-xl text-xs",
                 text.trim() && !formatting
                   ? "bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20"
@@ -1810,79 +1813,66 @@ const handleEmojiSelect = (emoji: string) => {
       )}
 
       {/* 底部更多功能菜单 (相册/相机/视频) */}
-      <AnimatePresence>
-        {showMoreOptionsSheet && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.4 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowMoreOptionsSheet(false)}
-              className="fixed inset-0 bg-black z-[1000] cursor-pointer"
-            />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 250 }}
-              className="fixed bottom-0 left-0 right-0 bg-app-elevated rounded-t-2xl z-[1001] overflow-hidden select-none safe-bottom pb-safe max-w-lg mx-auto shadow-2xl border-t border-app-border"
-            >
-              <div className="p-4 flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={images.length >= 9}
-                  onClick={() => {
-                    setShowMoreOptionsSheet(false);
-                    imageInputRef.current?.click();
-                  }}
-                  className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors"
-                >
-                  从相册选择
-                </button>
-                <button
-                  type="button"
-                  disabled={images.length >= 9}
-                  onClick={() => {
-                    setShowMoreOptionsSheet(false);
-                    setShowPhotoCamera(true);
-                  }}
-                  className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors"
-                >
-                  拍摄照片
-                </button>
-                <button
-                  type="button"
-                  disabled={images.length >= 9}
-                  onClick={() => {
-                    setShowMoreOptionsSheet(false);
-                    setShowCamera(true);
-                  }}
-                  className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors"
-                >
-                  录制视频
-                </button>
-                <div className="h-[4px]" />
-                <button
-                  type="button"
-                  onClick={() => setShowMoreOptionsSheet(false)}
-                  className="w-full py-3.5 bg-app-hover hover:bg-app-hover/80 rounded-xl text-sm font-semibold text-tx-secondary active:scale-[0.99] transition-all"
-                >
-                  取消
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <BottomSheet
+        open={showMoreOptionsSheet}
+        onClose={() => setShowMoreOptionsSheet(false)}
+        title="添加媒体"
+        maxHeight="min(50dvh, 100%)"
+        zClassName="z-[1001]"
+        className="max-w-lg mx-auto"
+      >
+        <div className="px-4 pb-2 flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={images.length >= 9}
+            onClick={() => {
+              setShowMoreOptionsSheet(false);
+              imageInputRef.current?.click();
+            }}
+            className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors min-h-[44px]"
+          >
+            从相册选择
+          </button>
+          <button
+            type="button"
+            disabled={images.length >= 9}
+            onClick={() => {
+              setShowMoreOptionsSheet(false);
+              setShowPhotoCamera(true);
+            }}
+            className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors min-h-[44px]"
+          >
+            拍摄照片
+          </button>
+          <button
+            type="button"
+            disabled={images.length >= 9}
+            onClick={() => {
+              setShowMoreOptionsSheet(false);
+              setShowCamera(true);
+            }}
+            className="w-full py-3.5 bg-app-surface border border-app-border/40 rounded-xl text-sm font-medium text-tx-primary active:bg-app-hover disabled:opacity-40 disabled:pointer-events-none transition-colors min-h-[44px]"
+          >
+            录制视频
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowMoreOptionsSheet(false)}
+            className="w-full py-3.5 bg-app-hover rounded-xl text-sm font-semibold text-tx-secondary active:scale-[0.99] transition-transform duration-press ease-out min-h-[44px]"
+          >
+            取消
+          </button>
+        </div>
+      </BottomSheet>
 
       {/* 提醒谁看成员选择页面 (微信风格) */}
       <AnimatePresence>
         {showMemberSelector && (
-          <motion.div
+          <Motion.div
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            transition={springs.sheet}
             className="fixed inset-0 bg-app-elevated z-[1002] flex flex-col select-none overflow-hidden"
           >
             {/* 顶部导航栏 */}
@@ -1894,7 +1884,7 @@ const handleEmojiSelect = (emoji: string) => {
                   setSelectedMemberIds([]);
                   setMemberSearchQuery("");
                 }}
-                className="p-1 -ml-1 text-tx-secondary hover:text-tx-primary active:opacity-70 transition-all"
+                className="p-1 -ml-1 text-tx-secondary hover:text-tx-primary active:opacity-70 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
               >
                 <X size={20} />
               </button>
@@ -1903,7 +1893,7 @@ const handleEmojiSelect = (emoji: string) => {
                 type="button"
                 onClick={handleConfirmMembers}
                 disabled={selectedMemberIds.length === 0}
-                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-500 rounded-md text-xs font-semibold text-white active:scale-95 transition-all"
+                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-500 rounded-md text-xs font-semibold text-white active:scale-95 transition-transform duration-press ease-out"
               >
                 确定{selectedMemberIds.length > 0 ? `(${selectedMemberIds.length})` : ""}
               </button>
@@ -1958,7 +1948,7 @@ const handleEmojiSelect = (emoji: string) => {
                               {/* 圆形选择框 */}
                               <div
                                 className={cn(
-                                  "w-5 h-5 rounded-full border flex items-center justify-center transition-all",
+                                  "w-5 h-5 rounded-full border flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                                   isChecked
                                     ? "bg-emerald-500 border-emerald-500 text-white"
                                     : "border-app-border/80 bg-transparent"
@@ -1998,14 +1988,14 @@ const handleEmojiSelect = (emoji: string) => {
                   <button
                     key={letter}
                     onClick={() => scrollToSection(letter)}
-                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-emerald-500 hover:text-white active:scale-90 transition-all"
+                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-emerald-500 hover:text-white active:scale-90 transition-transform duration-press ease-out"
                   >
                     {letter}
                   </button>
                 ))}
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -2017,7 +2007,7 @@ const handleEmojiSelect = (emoji: string) => {
           <div className="flex items-center justify-between" style={{ paddingTop: "var(--safe-area-top)" }}>
             <button
               onClick={handleCancelVoiceRecord}
-              className="p-2 rounded-full bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+              className="p-2 rounded-full bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 active:scale-95 transition-transform duration-press ease-out"
             >
               <X size={20} />
             </button>
@@ -2031,14 +2021,14 @@ const handleEmojiSelect = (emoji: string) => {
 
             <div className="relative flex items-center justify-center">
               {recording && !isPaused && (
-                <motion.div
+                <Motion.div
                   animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0.1, 0.5] }}
                   transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
                   className="absolute w-32 h-32 rounded-full bg-[#6366f1]/20 blur-xl"
                 />
               )}
               <div
-                className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl z-10 transition-all duration-300"
+                className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl z-10 transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                 style={{
                   backgroundColor: recording && !isPaused ? "#6366f1" : "rgba(255,255,255,0.08)",
                   border: "2px solid rgba(255,255,255,0.15)",
@@ -2050,10 +2040,10 @@ const handleEmojiSelect = (emoji: string) => {
                     {[3, 5, 7, 9, 11, 13, 15, 17, 19].map((waveIdx) => {
                       const val = waveValues[waveIdx] || 0.05;
                       return (
-                        <motion.div
+                        <Motion.div
                           key={waveIdx}
                           animate={{ height: `${Math.max(4, val * 32)}px` }}
-                          transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                          transition={springs.momentum}
                           className="w-1 rounded-full bg-white"
                         />
                       );
@@ -2080,7 +2070,7 @@ const handleEmojiSelect = (emoji: string) => {
             {/* 取消按钮 */}
             <button
               onClick={handleCancelVoiceRecord}
-              className="w-14 h-14 rounded-full border border-white/10 bg-white/5 text-white/60 flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg hover:bg-white/10 hover:text-white"
+              className="w-14 h-14 rounded-full border border-white/10 bg-white/5 text-white/60 flex flex-col items-center justify-center active:scale-95 transition-transform duration-press ease-out text-[10px] font-medium shadow-lg hover:bg-white/10 hover:text-white"
             >
               <X size={18} className="mb-0.5" />
               <span>取消</span>
@@ -2091,7 +2081,7 @@ const handleEmojiSelect = (emoji: string) => {
               onClick={handleTogglePauseVoiceRecord}
               disabled={!recording}
               className={cn(
-                "w-16 h-16 rounded-full flex flex-col items-center justify-center active:scale-95 transition-all text-xs font-bold shadow-lg disabled:opacity-40 disabled:pointer-events-none",
+                "w-16 h-16 rounded-full flex flex-col items-center justify-center active:scale-95 transition-transform duration-press ease-out text-xs font-bold shadow-lg disabled:opacity-40 disabled:pointer-events-none",
                 isPaused
                   ? "bg-[#6366f1] text-white hover:bg-[#4f46e5]"
                   : "bg-white/5 border border-white/15 text-white/80 hover:bg-white/10 hover:text-white"
@@ -2114,7 +2104,7 @@ const handleEmojiSelect = (emoji: string) => {
             <button
               onClick={handleFinishVoiceRecord}
               disabled={recordDuration === 0 && !recording}
-              className="w-14 h-14 rounded-full text-white bg-[#6366f1] hover:bg-[#4f46e5] flex flex-col items-center justify-center active:scale-95 transition-all text-[10px] font-medium shadow-lg disabled:opacity-40 disabled:pointer-events-none"
+              className="w-14 h-14 rounded-full text-white bg-[#6366f1] hover:bg-[#4f46e5] flex flex-col items-center justify-center active:scale-95 transition-transform duration-press ease-out text-[10px] font-medium shadow-lg disabled:opacity-40 disabled:pointer-events-none"
             >
               <Check size={18} className="mb-0.5" />
               <span>完成</span>
@@ -2130,7 +2120,7 @@ const handleEmojiSelect = (emoji: string) => {
   // 桌面：遮罩 + 居中大弹窗（非全屏页）
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -2138,16 +2128,16 @@ const handleEmojiSelect = (emoji: string) => {
         onClick={onClose}
         aria-hidden
       />
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 8 }}
-        transition={{ type: "spring", duration: 0.35, bounce: 0 }}
+        transition={springs.sheet}
         className="relative z-10 w-full max-w-2xl flex justify-center"
         onClick={(e) => e.stopPropagation()}
       >
         {shell}
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

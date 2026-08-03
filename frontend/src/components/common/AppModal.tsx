@@ -1,12 +1,14 @@
 /**
  * 通用居中弹窗（从 WorkspaceSwitcher 抽出，避免 MembersPanel 循环依赖）
+ * Motion: DESIGN.md §11–12 / springs.modal + fadeScaleIn
  */
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { Motion } from "@/components/common/Motion";
+import { springs, variants } from "@/lib/motion";
 
 export function AppModal({
   title,
@@ -44,18 +46,19 @@ export function AppModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 backdrop-blur-[1px] p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-black/45 backdrop-blur-[1px] p-4"
       onClick={onClose}
       role="presentation"
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.15 }}
+      <Motion.div
+        variants={variants.fadeScaleIn}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={springs.modal}
         className={cn(
           // 使用 app-card 实体底 + app token，避免半透明 / 循环依赖导致「空白弹窗」
-          "bg-app-card text-tx-primary border border-app-border rounded-xl shadow-2xl w-full flex flex-col overflow-hidden",
+          "bg-app-card text-tx-primary border border-app-border rounded-window shadow-xl w-full flex flex-col overflow-hidden",
           widthClass,
           heightClass,
         )}
@@ -69,14 +72,14 @@ export function AppModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-app-hover text-tx-secondary shrink-0"
+            className="p-1.5 rounded-lg min-h-[44px] min-w-[44px] inline-flex items-center justify-center transition-colors duration-press ease-out hover:bg-app-hover text-tx-secondary shrink-0 active:scale-[0.97]"
             aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-4 flex-1 min-h-0 overflow-auto text-tx-primary bg-app-card">{children}</div>
-      </motion.div>
+      </Motion.div>
     </div>,
     document.body,
   );

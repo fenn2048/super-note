@@ -110,11 +110,11 @@ export default function DiaryHeatMap({ stats, onDateSelect }: DiaryHeatMapProps)
                       onMouseEnter={() => count > 0 && setHoveredCell({ date: dateStr, count })}
                       onMouseLeave={() => setHoveredCell(null)}
                       className={cn(
-                        "w-[14px] h-[14px] rounded-[4px] transition-all duration-150 relative",
+                        "w-[14px] h-[14px] rounded-[4px] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out duration-150 relative",
                         count === 0
                           ? "bg-neutral-100/40 dark:bg-neutral-900/40 border border-neutral-300 dark:border-neutral-700/70"
                           : cn(
-                              "cursor-pointer hover:ring-1 hover:ring-tx-primary/30 hover:scale-125 hover:shadow-sm",
+                              "cursor-pointer hover:ring-1 hover:ring-tx-primary/30 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 hover:shadow-sm",
                               getColorClass(count),
                               isToday && "ring-1.5 ring-neutral-900/60 dark:ring-neutral-200/60 shadow-sm",
                               isSelected && "ring-1.5 ring-tx-primary scale-125 shadow-md",

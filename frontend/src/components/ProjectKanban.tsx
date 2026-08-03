@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Project, ProjectStage, ProjectTask, Tag, UserPublicInfo, AuditLog } from "@/types";
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "next-themes";
 import {
   Plus, Edit2, Trash2, Play, Pause, CheckSquare, Calendar, User, UserPlus,
   Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, MoreHorizontal, Sparkles, MoveRight,
@@ -64,6 +65,13 @@ export default function ProjectKanban({
 }: ProjectKanbanProps) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === "zh-CN" ? zhCN : enUS;
+  const { resolvedTheme } = useTheme();
+  /** Prefer next-themes; fall back to html class (SSR-safe after mount). */
+  const isDark =
+    resolvedTheme === "dark" ||
+    (typeof document !== "undefined" &&
+      !resolvedTheme &&
+      document.documentElement.classList.contains("dark"));
   const taskDescRef = useRef<HTMLTextAreaElement>(null);
 
 
@@ -494,7 +502,7 @@ export default function ProjectKanban({
               }
             }}
             className={cn(
-              "w-72 shrink-0 bg-app-sidebar border rounded-xl flex flex-col h-full max-h-[85vh] shadow-sm overflow-hidden transition-all duration-200",
+              "w-72 shrink-0 bg-app-sidebar border rounded-xl flex flex-col h-full max-h-[85vh] shadow-sm overflow-hidden transition-[transform,opacity,background-color,box-shadow,border-color] duration-normal",
               isDragOver ? "border-accent-primary ring-2 ring-accent-primary/20 bg-app-active/10" : "border-app-border"
             )}
           >
@@ -552,7 +560,7 @@ export default function ProjectKanban({
                             } catch {}
                           }}
                           className={cn(
-                            "w-4 h-4 rounded-full border transition-all hover:scale-110 shrink-0",
+                            "w-4 h-4 rounded-full border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 shrink-0",
                             isSelected && "ring-1 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
                           )}
                           style={{ backgroundColor: colorInfo.font }}
@@ -578,7 +586,7 @@ export default function ProjectKanban({
                       {stage.tasks?.length || 0}
                     </span>
                     <button
-                      className="p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-all opacity-0 group-hover/header:opacity-100"
+                      className="p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out opacity-0 group-hover/header:opacity-100"
                       onClick={() => handleDeleteStage(stage.id)}
                       title="删除列表"
                     >
@@ -596,14 +604,18 @@ export default function ProjectKanban({
                 const checklistCompleted = task.checklists?.filter((c) => c.isCompleted === 1).length || 0;
                 const hasChecklist = checklistTotal > 0;
 
-                const isDark = document.documentElement.classList.contains("dark");
-                const cardColor = task.titleColor || stage.bgColor || "";
-                const hasCustomColor = cardColor ? !!TASK_COLOR_MAP[cardColor] : false;
-                const customStyles = hasCustomColor ? TASK_COLOR_MAP[cardColor] : null;
+                // Card tint: task title color takes priority, then stage default
+                const cardColorKey = task.titleColor || stage.bgColor || "";
+                const customStyles =
+                  cardColorKey && TASK_COLOR_MAP[cardColorKey]
+                    ? TASK_COLOR_MAP[cardColorKey]
+                    : null;
 
-                const titleColor = task.titleColor || "";
-                const hasTitleColor = titleColor ? !!TASK_COLOR_MAP[titleColor] : false;
-                const titleStyle = hasTitleColor ? { color: TASK_COLOR_MAP[titleColor].font } : {};
+                const titleColorKey = task.titleColor || "";
+                const hasTitleColor = !!(titleColorKey && TASK_COLOR_MAP[titleColorKey]);
+                const titleStyle = hasTitleColor
+                  ? { color: TASK_COLOR_MAP[titleColorKey].font }
+                  : undefined;
 
                 return (
                   <div
@@ -613,14 +625,28 @@ export default function ProjectKanban({
                     onDragStart={(e) => {
                       e.dataTransfer.setData("text/plain", task.id);
                     }}
-                    style={customStyles ? {
-                      backgroundColor: isDark ? customStyles.bgDark : customStyles.bgLight,
-                      borderColor: isDark ? customStyles.borderDark : customStyles.borderLight,
-                    } : {}}
+                    style={
+                      customStyles
+                        ? {
+                            backgroundColor: isDark
+                              ? customStyles.bgDark
+                              : customStyles.bgLight,
+                            borderColor: isDark
+                              ? customStyles.borderDark
+                              : customStyles.borderLight,
+                          }
+                        : undefined
+                    }
                     className={cn(
-                      "bg-app-elevated border border-app-border rounded-xl p-3.5 space-y-3 shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-300 cursor-grab active:cursor-grabbing group/card animate-in fade-in duration-200",
-                      !customStyles && "bg-white/85 dark:bg-zinc-900/85 backdrop-blur-md border-zinc-200/60 dark:border-zinc-800/60",
-                      task.isCompleted === 1 && "opacity-60 saturate-50"
+                      // Semantic surfaces only — never hardcode white/zinc (breaks dark mode)
+                      "rounded-xl p-3.5 space-y-3 shadow-sm",
+                      "hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]",
+                      "transition-[transform,box-shadow,background-color,border-color,opacity] duration-press ease-out",
+                      "cursor-grab active:cursor-grabbing group/card animate-in fade-in duration-200",
+                      !customStyles &&
+                        "bg-app-elevated border border-app-border text-tx-primary",
+                      customStyles && "border",
+                      task.isCompleted === 1 && "opacity-60 saturate-50",
                     )}
                   >
                     {/* Task Tags list */}
@@ -642,12 +668,16 @@ export default function ProjectKanban({
                       </div>
                     )}
 
-                    {/* Title */}
+                    {/* Title — default uses tx-primary so dark/light both stay readable */}
                     <h4
                       style={titleStyle}
-                      className={`text-xs font-semibold text-tx-primary leading-snug break-words ${
-                        task.isCompleted === 1 ? "line-through opacity-55 decoration-tx-primary/30" : (task.status === "paused" ? "opacity-60" : "")
-                      }`}
+                      className={cn(
+                        "text-xs font-semibold leading-snug break-words",
+                        !hasTitleColor && "text-tx-primary",
+                        task.isCompleted === 1 &&
+                          "line-through opacity-55 decoration-tx-primary/30",
+                        task.status === "paused" && task.isCompleted !== 1 && "opacity-60",
+                      )}
                     >
                       {task.title}
                       {task.status === "paused" && (
@@ -667,7 +697,7 @@ export default function ProjectKanban({
                             const newStatus = task.status === "paused" ? "in_progress" : "paused";
                             api.updateProjectTask(task.id, { status: newStatus }).then(() => onRefresh());
                           }}
-                          className="p-1 rounded text-tx-tertiary hover:text-accent-primary transition-all shrink-0"
+                          className="p-1 rounded text-tx-tertiary hover:text-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
                           title={task.status === "paused" ? "恢复" : "暂停"}
                         >
                           {task.status === "paused" ? <Play size={10} /> : <Pause size={10} />}
@@ -675,7 +705,7 @@ export default function ProjectKanban({
                       </div>
                       <div className="w-full bg-app-hover/50 h-1 rounded-full overflow-hidden">
                         <div
-                          className="bg-accent-primary h-full transition-all duration-300"
+                          className="bg-accent-primary h-full transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                           style={{ width: `${task.progress || 0}%` }}
                         />
                       </div>
@@ -717,7 +747,7 @@ export default function ProjectKanban({
                           const isOverdue = task.endDate && task.isCompleted !== 1 && new Date(task.endDate).getTime() < Date.now();
                           return (
                             <div className={cn(
-                              "flex items-center gap-0.5 font-mono px-1.5 py-0.5 rounded text-[9px] transition-all",
+                              "flex items-center gap-0.5 font-mono px-1.5 py-0.5 rounded text-[9px] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                               isOverdue
                                 ? "bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse font-semibold"
                                 : "text-tx-tertiary"
@@ -796,7 +826,7 @@ export default function ProjectKanban({
                     setAddingTaskToStage(stage.id);
                     setNewTaskTitle("");
                   }}
-                  className="w-full flex items-center justify-center gap-1 py-1.5 border border-dashed border-app-border/60 rounded-xl hover:border-app-border text-tx-tertiary hover:text-tx-secondary text-[11px] font-semibold transition-all"
+                  className="w-full flex items-center justify-center gap-1 py-1.5 border border-dashed border-app-border/60 rounded-xl hover:border-app-border text-tx-tertiary hover:text-tx-secondary text-[11px] font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                 >
                   <Plus size={12} />
                   <span>{t("projects.addTask") || "添加任务"}</span>
@@ -841,7 +871,7 @@ export default function ProjectKanban({
       ) : (
         <button
           onClick={() => setAddingStage(true)}
-          className="w-72 shrink-0 h-11 flex items-center justify-center gap-1.5 border border-dashed border-app-border/80 hover:border-app-border bg-app-sidebar/35 rounded-xl text-tx-secondary hover:text-tx-primary text-xs font-bold transition-all"
+          className="w-72 shrink-0 h-11 flex items-center justify-center gap-1.5 border border-dashed border-app-border/80 hover:border-app-border bg-app-sidebar/35 rounded-xl text-tx-secondary hover:text-tx-primary text-xs font-bold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
         >
           <PlusCircle size={14} />
           <span>{t("projects.addStage") || "添加任务列表"}</span>

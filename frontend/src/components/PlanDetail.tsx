@@ -504,7 +504,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
               </div>
               <div className="w-full h-2 bg-app-hover rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-accent-primary rounded-full transition-all duration-500"
+                  className="h-full bg-accent-primary rounded-full transition-[width] duration-panel ease-out"
                   style={{ width: `${progressPercentage}%` }}
                 />
               </div>
@@ -784,7 +784,7 @@ export default function PlanDetail({ planId, onBack }: PlanDetailProps) {
                         key={u.userId}
                         type="button"
                         onClick={() => toggleEditParticipant(u.userId)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-all ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                           active 
                             ? "bg-accent-primary text-white border-accent-primary" 
                             : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"

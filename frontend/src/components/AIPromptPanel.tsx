@@ -407,7 +407,7 @@ export default function AIPromptPanel() {
                           onChange={(e) => handlePromptChange(item.key, e.target.value)}
                           placeholder={`使用系统默认提示词:\n\n${item.placeholder}`}
                           rows={Math.min(Math.max(item.placeholder.split("\n").length + 1, 3), 10)}
-                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-base md:text-sm text-tx-primary font-mono focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400/80"
+                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-base md:text-sm text-tx-primary font-mono focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400/80"
                         />
                       </div>
                     );
@@ -424,7 +424,7 @@ export default function AIPromptPanel() {
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-sm md:text-xs font-medium transition-all disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-sm md:text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-40"
         >
           {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           保存所有提示词配置
@@ -432,7 +432,7 @@ export default function AIPromptPanel() {
 
         <button
           onClick={handleResetAll}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm md:text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:border-red-500 hover:text-red-500 transition-all bg-white dark:bg-zinc-900"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm md:text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:border-red-500 hover:text-red-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out bg-white dark:bg-zinc-900"
         >
           <History size={14} />
           全部恢复默认

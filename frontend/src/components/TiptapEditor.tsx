@@ -74,6 +74,7 @@ import { SearchReplacePanel, createSearchReplaceExtension } from "@/components/S
 import { Video as VideoExtension } from "@/components/VideoExtension";
 
 import { useTranslation } from "react-i18next";
+import { springs } from "@/lib/motion";
 
 const lowlight = createLowlight(common);
 
@@ -1101,7 +1102,7 @@ function ColorPopover({ editor, iconSize = 15, compact = false }: ColorPopoverPr
                 onClick={() => applyColor(c)}
                 title={c}
                 className={cn(
-                  "w-7 h-7 rounded border transition-transform hover:scale-110",
+                  "w-7 h-7 rounded border transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110",
                   current?.toLowerCase() === c.toLowerCase()
                     ? "border-accent-primary ring-2 ring-accent-primary/40"
                     : "border-app-border",
@@ -4094,7 +4095,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
             initial={{ opacity: 0, y: 8, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.9 }}
-            transition={{ duration: 0.15 }}
+            transition={springs.snappy}
             onClick={scrollToTop}
             title={t("tiptap.backToTop", "回到顶部")}
             aria-label={t("tiptap.backToTop", "回到顶部")}
@@ -4113,7 +4114,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
+            transition={springs.modal}
             className={cn(
               "fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl shadow-lg border text-sm font-medium backdrop-blur-sm",
               pasteToast.type === "converting" && "bg-accent-primary/10 border-accent-primary/20 text-accent-primary",
@@ -4169,7 +4170,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={springs.modal}
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
             onClick={(e) => { if (e.target === e.currentTarget) { setPreviewImage(null); } }}
             onWheel={handlePreviewWheel}

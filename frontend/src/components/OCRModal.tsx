@@ -165,7 +165,7 @@ export default function OCRModal({ isOpen, onClose, onInsert }: OCRModalProps) {
                     onClick={() => fileInputRef.current?.click()}
                     className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-app-border rounded-xl hover:border-accent-primary/50 hover:bg-accent-primary/5 transition-colors gap-3 group"
                   >
-                    <div className="w-16 h-16 rounded-full bg-app-hover flex items-center justify-center text-tx-tertiary group-hover:text-accent-primary group-hover:scale-110 transition-all">
+                    <div className="w-16 h-16 rounded-full bg-app-hover flex items-center justify-center text-tx-tertiary group-hover:text-accent-primary group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform duration-press ease-out">
                       <ImagePlus size={32} />
                     </div>
                     <div className="text-center">
@@ -189,7 +189,7 @@ export default function OCRModal({ isOpen, onClose, onInsert }: OCRModalProps) {
                         {progress > 0 && (
                           <div className="w-48 h-1.5 bg-white/20 rounded-full overflow-hidden">
                             <div 
-                              className="h-full bg-accent-primary transition-all duration-300"
+                              className="h-full bg-accent-primary transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                               style={{ width: `${progress}%` }}
                             />
                           </div>
@@ -270,7 +270,7 @@ export default function OCRModal({ isOpen, onClose, onInsert }: OCRModalProps) {
                 <button
                   onClick={handleInsert}
                   disabled={!recognizedText || isRecognizing}
-                  className="px-6 py-2 rounded-xl text-sm font-bold bg-accent-primary text-white hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
+                  className="px-6 py-2 rounded-xl text-sm font-bold bg-accent-primary text-white hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-transform duration-press ease-out shadow-sm active:scale-95"
                 >
                   一键插入
                 </button>

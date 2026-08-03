@@ -910,7 +910,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
                   <button
                     key={i}
                     onClick={() => handleSuggestedQuestion(q)}
-                    className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-xs text-tx-secondary bg-app-surface border border-app-border hover:border-accent-primary/30 hover:bg-accent-primary/5 hover:text-accent-primary transition-all group text-left"
+                    className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-xs text-tx-secondary bg-app-surface border border-app-border hover:border-accent-primary/30 hover:bg-accent-primary/5 hover:text-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out group text-left"
                   >
                     <span>{q}</span>
                     <ArrowRight size={12} className="text-tx-tertiary group-hover:text-accent-primary transition-colors shrink-0 ml-2" />
@@ -1047,7 +1047,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
             type="button"
             onClick={() => setAlwaysThink(!alwaysThink)}
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition-all select-none cursor-pointer",
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out select-none cursor-pointer",
               alwaysThink
                 ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
                 : "bg-app-surface text-tx-tertiary border-app-border hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -1066,7 +1066,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
             onKeyDown={handleKeyDown}
             placeholder={isMobile ? "问点什么..." : t("aiChat.placeholder")}
             rows={1}
-            className="flex-1 resize-none px-3 py-2 bg-app-bg border border-app-border rounded-xl text-base md:text-sm text-tx-primary placeholder:text-tx-tertiary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all max-h-24"
+            className="flex-1 resize-none px-3 py-2 bg-app-bg border border-app-border rounded-xl text-base md:text-sm text-tx-primary placeholder:text-tx-tertiary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out max-h-24"
             style={{ minHeight: "38px" }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
@@ -1078,7 +1078,7 @@ export default function AIChatPanel({ onClose, onNavigateToNote }: {
             onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             className={cn(
-              "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all",
+              "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
               input.trim() && !isLoading
                 ? "bg-accent-primary hover:bg-accent-primary/90 text-white"
                 : "bg-app-hover text-tx-tertiary"

@@ -25,8 +25,7 @@ import {
   PresenceBar,
   EditingLockBanner,
   RemoteUpdateBanner,
-  RemoteDeleteBanner,
-} from "@/components/PresenceBar";
+  RemoteDeleteBanner} from "@/components/PresenceBar";
 import { EditorErrorBoundary } from "@/components/EditorErrorBoundary";
 import { useRealtimeNote } from "@/hooks/useRealtimeNote";
 import { useYDoc } from "@/hooks/useYDoc";
@@ -36,23 +35,21 @@ import {
   persistEditorMode,
   clearForcedModeFromUrl,
   nextEditorMode,
-  type EditorMode,
-} from "@/lib/editorMode";
+  type EditorMode} from "@/lib/editorMode";
 import {
   putWithReconcile,
   makeFetchLatestNoteVersion,
   is409Error,
-  isAborted,
-} from "@/lib/optimisticLockApi";
+  isAborted} from "@/lib/optimisticLockApi";
 import { enqueue as enqueueOfflineMutation } from "@/lib/offlineQueue";
 import {
   saveDraft,
   loadDraft,
   clearDraft,
   shouldOfferRestore,
-  type NoteDraft,
-} from "@/lib/draftStorage";
+  type NoteDraft} from "@/lib/draftStorage";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { springs } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // 编辑器模式切换（MD vs Tiptap）
@@ -356,8 +353,7 @@ export default function EditorPane() {
         actions.setActiveNote({
           ...note,
           content: latestMd,
-          contentText: latestMd,
-        });
+          contentText: latestMd});
       }
     } catch (err) {
       console.warn("[EditorPane] sync yDoc before switch failed:", err);
@@ -403,8 +399,7 @@ export default function EditorPane() {
     actions.setActiveNote({
       ...note,
       content: normalizedMd,
-      contentText: normalizedText,
-    });
+      contentText: normalizedText});
 
     const noteId = note.id;
     const initialVersion = note.version;
@@ -416,8 +411,7 @@ export default function EditorPane() {
         content: normalizedMd,
         contentText: normalizedText,
         version,
-        syncToYjs: true,
-      } as any);
+        syncToYjs: true} as any);
 
     try {
       actions.setSyncStatus("saving");
@@ -425,8 +419,7 @@ export default function EditorPane() {
         initialVersion,
         send: sendNormalizePut,
         fetchLatestVersion: makeFetchLatestNoteVersion(noteId),
-        onAbort: () => activeNoteRef.current?.id !== noteId,
-      });
+        onAbort: () => activeNoteRef.current?.id !== noteId});
 
       // 回填 version / updatedAt，避免后续 handleUpdate 继续 409
       if (updated && activeNoteRef.current?.id === noteId) {
@@ -435,14 +428,12 @@ export default function EditorPane() {
           content: normalizedMd,
           contentText: normalizedText,
           version: updated.version,
-          updatedAt: updated.updatedAt,
-        });
+          updatedAt: updated.updatedAt});
         actions.updateNoteInList({
           id: updated.id,
           title: updated.title,
           contentText: updated.contentText,
-          updatedAt: updated.updatedAt,
-        });
+          updatedAt: updated.updatedAt});
         actions.setSyncStatus("saved");
         actions.setLastSynced(new Date().toISOString());
       }
@@ -512,8 +503,7 @@ export default function EditorPane() {
           contentText: snap.contentText || "",
           title: note.title,
           baseVersion: note.version,
-          savedAt: Date.now(),
-        });
+          savedAt: Date.now()});
       } catch { /* ignore */ }
       // 2) 离线队列（下次启动 flush）
       try {
@@ -526,9 +516,7 @@ export default function EditorPane() {
             title: note.title,
             content: snap.content,
             contentText: snap.contentText,
-            version: note.version,
-          },
-        });
+            version: note.version}});
       } catch { /* ignore */ }
     };
 
@@ -620,15 +608,13 @@ export default function EditorPane() {
       ...note,
       content: draft.content,
       contentText: draft.contentText,
-      title: draft.title,
-    });
+      title: draft.title});
     // 主动触发保存（走现有 putWithReconcile 路径，会自动处理冲突）
     try {
       await handleUpdateRef.current?.({
         title: draft.title,
         content: draft.content,
-        contentText: draft.contentText,
-      });
+        contentText: draft.contentText});
       try { toast.success(t("editor.draftRestored") || "已恢复未保存的修改"); } catch {}
     } catch {
       // handleUpdate 内部已处理错误
@@ -712,8 +698,7 @@ export default function EditorPane() {
       title: msg.title,
       contentText: msg.contentText,
       updatedAt: msg.updatedAt,
-      version: msg.version,
-    } as any);
+      version: msg.version} as any);
 
     if (hasLocalUnsavedChanges()) {
       setRemoteUpdate({ actorUserId: msg.actorUserId, version: msg.version, conflict: true });
@@ -739,8 +724,7 @@ export default function EditorPane() {
         title: fresh.title,
         contentText: fresh.contentText,
         updatedAt: fresh.updatedAt,
-        version: fresh.version,
-      } as any);
+        version: fresh.version} as any);
       actions.setLastSynced(new Date().toISOString());
       setRemoteUpdate(null);
     } catch (e) {
@@ -762,8 +746,7 @@ export default function EditorPane() {
           version: slim.version,
           updatedAt: slim.updatedAt,
           title: slim.title,
-          contentText: slim.contentText,
-        });
+          contentText: slim.contentText});
       }
     } catch (e) {
       console.warn(`[EditorPane] active note version check failed (${reason}):`, e);
@@ -783,8 +766,7 @@ export default function EditorPane() {
       const cur = activeNoteRef.current;
       if (!cur || cur.id !== msg.noteId) return;
       setRemoteDelete({ actorUserId: msg.actorUserId, trashed: msg.trashed });
-    },
-  });
+    }});
 
   // 移动端后台恢复 / 网络恢复 / WebSocket 重连时可能错过实时消息，补查一次当前笔记版本。
   useEffect(() => {
@@ -825,8 +807,7 @@ export default function EditorPane() {
   const { doc: collabYDoc, provider: collabProvider, synced: collabSynced } = useYDoc({
     noteId: collabReady ? (activeNote?.id ?? null) : null,
     user: selfUser,
-    enabled: collabReady,
-  });
+    enabled: collabReady});
 
   /**
    * collab yDoc 与当前笔记必须严格匹配，否则会把上一篇笔记的 yText 绑到新标题上
@@ -930,8 +911,7 @@ export default function EditorPane() {
         id: fresh.id,
         title: fresh.title,
         contentText: fresh.contentText,
-        updatedAt: fresh.updatedAt,
-      });
+        updatedAt: fresh.updatedAt});
     } catch (e) {
       console.warn("[Phase2] reload remote note failed:", e);
       toast.error("加载最新版本失败");
@@ -952,22 +932,19 @@ export default function EditorPane() {
         title: cur.title,
         content: snap.content,
         contentText: snap.contentText,
-        version: latest.version,
-      } as any);
+        version: latest.version} as any);
       if (activeNoteRef.current?.id === cur.id) {
         actions.setActiveNote({
           ...activeNoteRef.current,
           ...updated,
           content: snap.content,
-          contentText: snap.contentText,
-        });
+          contentText: snap.contentText});
         actions.updateNoteInList({
           id: updated.id,
           title: updated.title,
           contentText: updated.contentText,
           updatedAt: updated.updatedAt,
-          version: updated.version,
-        } as any);
+          version: updated.version} as any);
       }
       try { clearDraft(cur.id); } catch { /* ignore */ }
       setRemoteUpdate(null);
@@ -1069,8 +1046,7 @@ export default function EditorPane() {
           contentText: data.contentText || "",
           title: data.title,
           baseVersion: currentNote.version,
-          savedAt: Date.now(),
-        });
+          savedAt: Date.now()});
       } catch { /* ignore quota 等错误 */ }
     }
 
@@ -1109,8 +1085,7 @@ export default function EditorPane() {
             effectiveData = {
               title: data.title,
               content: snap.content,
-              contentText: snap.contentText,
-            };
+              contentText: snap.contentText};
           }
         } catch {
           /* getSnapshot 失败时回退到原 data，不阻塞保存 */
@@ -1161,8 +1136,7 @@ export default function EditorPane() {
               title: fresh.title,
               contentText: fresh.contentText,
               updatedAt: fresh.updatedAt,
-              version: fresh.version,
-            } as any);
+              version: fresh.version} as any);
           } catch {
             /* 拉全文失败也保留本地草稿，稍后让用户重试 */
           }
@@ -1176,15 +1150,13 @@ export default function EditorPane() {
                 contentText: snap.contentText,
                 title: data.title,
                 baseVersion: latestVersion ?? currentNote.version,
-                savedAt: Date.now(),
-              });
+                savedAt: Date.now()});
             } catch { /* ignore */ }
           }
           setRemoteUpdate({
             actorUserId: latestMeta?.userId,
             version: latestVersion ?? currentNote.version + 1,
-            conflict: true,
-          });
+            conflict: true});
           actions.setSyncStatus("error");
           toast.warning("远端已有新版本，本机修改已暂存，请选择重新加载或覆盖远端", 5000);
           return;
@@ -1194,8 +1166,7 @@ export default function EditorPane() {
           initialVersion: currentNote.version,
           send: sendOnce,
           fetchLatestVersion: makeFetchLatestNoteVersion(currentNote.id),
-          onAbort: () => activeNoteRef.current?.id !== currentNote.id,
-        });
+          onAbort: () => activeNoteRef.current?.id !== currentNote.id});
       }
 
       // 仅在保存的笔记仍是当前激活笔记时更新状态（防止快速切换时覆盖错误笔记）
@@ -1249,8 +1220,7 @@ export default function EditorPane() {
           updatedAt: updated.updatedAt,
           title: data.title,
           content: nextContent,
-          contentText: nextContentText,
-        });
+          contentText: nextContentText});
         actions.updateNoteInList({ id: updated.id, title: updated.title, contentText: updated.contentText, updatedAt: updated.updatedAt });
         actions.setSyncStatus("saved");
         actions.setLastSynced(new Date().toISOString());
@@ -1284,9 +1254,7 @@ export default function EditorPane() {
               title: data.title,
               content: snap.content,
               contentText: snap.contentText,
-              version: currentNote.version,
-            },
-          });
+              version: currentNote.version}});
         }
       } catch (queueErr) {
         console.warn("[EditorPane] enqueue offline fallback failed:", queueErr);
@@ -1334,8 +1302,7 @@ export default function EditorPane() {
         title: activeNote.title,
         content: activeNote.content,
         contentText: activeNote.contentText,
-        version: activeNote.version,
-      } as any);
+        version: activeNote.version} as any);
       actions.setActiveNote(updated);
       actions.updateNoteInList({ id: updated.id, title: updated.title, contentText: updated.contentText, updatedAt: updated.updatedAt });
       actions.setSyncStatus("saved");
@@ -1429,8 +1396,7 @@ export default function EditorPane() {
           ...cur,
           visibility: nextVis,
           version: updated.version ?? cur.version,
-          updatedAt: updated.updatedAt ?? cur.updatedAt,
-        });
+          updatedAt: updated.updatedAt ?? cur.updatedAt});
       }
       actions.updateNoteInList({ id: noteId, visibility: nextVis });
       toast.success(visibility === "WORKSPACE" ? "已设为所有人可见" : "已设为私有");
@@ -1616,8 +1582,7 @@ export default function EditorPane() {
         actions.setActiveNote({
           ...cur,
           content: snap.content,
-          contentText: snap.contentText ?? cur.contentText,
-        });
+          contentText: snap.contentText ?? cur.contentText});
       }
     } catch {
       /* ignore */
@@ -1751,7 +1716,7 @@ export default function EditorPane() {
       key={activeNote.id}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.15 }}
+      transition={springs.snappy}
       className="flex-1 flex flex-col bg-app-bg overflow-hidden transition-colors relative"
     >
       {/* 笔记切换 loading 遮罩 */}
@@ -1761,7 +1726,7 @@ export default function EditorPane() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.12 }}
+            transition={springs.snappy}
             className="absolute inset-0 z-50 flex items-center justify-center bg-app-bg/60 backdrop-blur-[2px]"
           >
             <div className="flex flex-col items-center gap-3">
@@ -1852,7 +1817,7 @@ export default function EditorPane() {
                   initial={{ opacity: 0, scale: 0.95, y: -4 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                  transition={{ duration: 0.12 }}
+                  transition={springs.snappy}
                   className="absolute top-full right-0 mt-1 w-56 bg-app-elevated border border-app-border rounded-lg shadow-xl z-50 py-1 overflow-hidden"
                 >
                   <button
@@ -1901,7 +1866,7 @@ export default function EditorPane() {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
+                        transition={springs.snappy}
                         className="overflow-hidden border-t border-b border-app-border bg-app-bg/50"
                       >
                         <div className="max-h-56 overflow-auto py-1 px-1">
@@ -2106,7 +2071,7 @@ export default function EditorPane() {
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            transition={springs.snappy}
             className="fixed inset-0 z-40 bg-app-surface flex flex-col md:hidden"
             style={{ paddingTop: 'var(--safe-area-top)' }}
           >
@@ -2218,7 +2183,7 @@ export default function EditorPane() {
               <div
                 ref={moveDropdownRef}
                 className="absolute top-full left-0 mt-1 w-72 bg-app-elevated border border-app-border rounded-lg shadow-xl z-50 py-1 max-h-96 overflow-auto"
-                style={{ animation: "contextMenuIn 0.12s ease-out" }}
+                
               >
                 {/* ── P3：AI 建议归类 ──
                     放在顶部显眼位置；点击后加载中 → 展示建议 → 点击即移动。
@@ -2640,7 +2605,7 @@ export default function EditorPane() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                transition={springs.snappy}
                 className="absolute inset-0 z-20 flex items-center justify-center bg-app-bg/60 backdrop-blur-sm pointer-events-auto"
               >
                 <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-app-elevated border border-app-border shadow-sm text-sm text-tx-secondary">
@@ -2803,8 +2768,7 @@ export default function EditorPane() {
 function OutlinePanel({
   headings,
   onSelect,
-  onClose,
-}: {
+  onClose}: {
   headings: HeadingItem[];
   onSelect: (pos: number) => void;
   onClose: () => void;
@@ -2907,8 +2871,7 @@ function findPathById(notebooks: Notebook[], id: string | null | undefined): Not
 
 /* ===== 编辑器顶部"移动笔记本"树形条目（与侧边栏目录结构保持一致） ===== */
 function MoveTreeItem({
-  notebook, depth, currentId, onSelect,
-}: {
+  notebook, depth, currentId, onSelect}: {
   notebook: Notebook;
   depth: number;
   currentId: string;
@@ -2975,8 +2938,7 @@ function MoveTreeItem({
 function SyncIndicator({
   syncStatus,
   lastSyncedAt,
-  onManualSync,
-}: {
+  onManualSync}: {
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
   onManualSync: () => void;
@@ -3012,9 +2974,9 @@ function SyncIndicator({
         {syncStatus === "saving" && (
           <motion.div
             key="saving"
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, rotate: 360 }}
-            exit={{ opacity: 0, scale: 0.5 }}
+            exit={{ opacity: 0, scale: 0.96 }}
             transition={{ rotate: { repeat: Infinity, duration: 1, ease: "linear" }, opacity: { duration: 0.15 } }}
           >
             <RefreshCw size={13} className="text-accent-primary" />
@@ -3023,10 +2985,10 @@ function SyncIndicator({
         {syncStatus === "saved" && (
           <motion.div
             key="saved"
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: [1.3, 1] }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={springs.modal}
           >
             <Check size={13} className="text-green-500" />
           </motion.div>
@@ -3034,10 +2996,10 @@ function SyncIndicator({
         {syncStatus === "error" && (
           <motion.div
             key="error"
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.15 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={springs.snappy}
           >
             <CloudOff size={13} className="text-red-500" />
           </motion.div>
@@ -3045,10 +3007,10 @@ function SyncIndicator({
         {(syncStatus === "queued" || syncStatus === "offline") && (
           <motion.div
             key="queued"
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.15 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={springs.snappy}
           >
             <CloudUpload size={13} className="text-amber-500" />
           </motion.div>
@@ -3059,7 +3021,7 @@ function SyncIndicator({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={springs.snappy}
           >
             <Cloud size={13} className="text-tx-tertiary group-hover:text-tx-secondary transition-colors" />
           </motion.div>

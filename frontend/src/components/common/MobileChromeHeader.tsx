@@ -101,7 +101,7 @@ export default function MobileChromeHeader({
         // 默认半透明毛玻璃；Android 原生由 index.css 覆盖为实色，避免状态栏区发白
         "bg-app-elevated/70 backdrop-blur-md",
         !borderless && "border-b border-app-border/60",
-        "transition-all duration-300 ease-soft overflow-hidden",
+        "transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel ease-soft overflow-hidden",
         visible
           ? "min-h-[52px] opacity-100 py-1.5"
           : "h-0 min-h-0 max-h-0 opacity-0 py-0 pointer-events-none border-0",

@@ -24,6 +24,8 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
 import { TASK_COLOR_MAP } from "./ProjectKanban";
+import { BottomSheet } from "@/components/common/BottomSheet";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface TaskDetailModalProps {
   task: ProjectTask;
@@ -41,6 +43,7 @@ export default function TaskDetailModal({
   showProjectName = false
 }: TaskDetailModalProps) {
   const { t, i18n } = useTranslation();
+  const isDesktop = useMediaQuery("(min-width: 768px)");
   const dateLocale = i18n.language.startsWith("zh") ? zhCN : enUS;
 
   // Unify WorkspaceMember and UserPublicInfo structures
@@ -358,13 +361,9 @@ export default function TaskDetailModal({
 
   if (!activeTask) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center md:p-4 select-text">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => handleSaveTaskDetail(true)}
-      />
-      <div className="relative bg-app-elevated w-full md:max-w-2xl h-[100dvh] md:h-auto rounded-none md:rounded-2xl border-0 md:border border-app-border shadow-2xl flex flex-col max-h-none md:max-h-[85vh] animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:scale-in duration-200 overflow-hidden">
+  const sheetBody = (
+    <>
+
         {/* Modal Header */}
         <div
           className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0"
@@ -469,7 +468,7 @@ export default function TaskDetailModal({
               <button
                 type="button"
                 onClick={() => setShowColorDropdown(!showColorDropdown)}
-                className="w-5 h-5 rounded-full border border-app-border flex items-center justify-center shrink-0 hover:scale-105 transition-transform"
+                className="w-5 h-5 rounded-full border border-app-border flex items-center justify-center shrink-0 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 transition-transform"
                 style={{ backgroundColor: activeTask.titleColor ? TASK_COLOR_MAP[activeTask.titleColor]?.font : "transparent" }}
               >
                 {!activeTask.titleColor && <Sparkles size={11} className="text-tx-tertiary" />}
@@ -485,7 +484,7 @@ export default function TaskDetailModal({
                         setShowColorDropdown(false);
                       }}
                       className={cn(
-                        "w-6 h-6 rounded-full border border-app-border transition-all hover:scale-110 shrink-0 flex items-center justify-center bg-transparent text-tx-tertiary",
+                        "w-6 h-6 rounded-full border border-app-border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 shrink-0 flex items-center justify-center bg-transparent text-tx-tertiary",
                         !activeTask.titleColor && "ring-2 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
                       )}
                       title="无颜色"
@@ -504,7 +503,7 @@ export default function TaskDetailModal({
                             setShowColorDropdown(false);
                           }}
                           className={cn(
-                            "w-6 h-6 rounded-full border transition-all hover:scale-110 shrink-0",
+                            "w-6 h-6 rounded-full border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 shrink-0",
                             isSelected && "ring-2 ring-accent-primary ring-offset-1 ring-offset-app-elevated"
                           )}
                           style={{ backgroundColor: colorInfo.font }}
@@ -1035,7 +1034,7 @@ export default function TaskDetailModal({
                   <button
                     type="button"
                     onClick={() => removeChecklistItem(idx)}
-                    className="opacity-0 group-hover/chk:opacity-100 p-0.5 hover:bg-app-active rounded text-tx-tertiary hover:text-accent-danger transition-all"
+                    className="opacity-0 group-hover/chk:opacity-100 p-0.5 hover:bg-app-active rounded text-tx-tertiary hover:text-accent-danger transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                   >
                     <X size={12} />
                   </button>
@@ -1190,7 +1189,7 @@ export default function TaskDetailModal({
                     handleAddComment();
                   }
                 }}
-                className="flex-1 px-3 py-1.5 bg-app-sidebar/40 border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary text-tx-primary placeholder:text-tx-tertiary transition-all"
+                className="flex-1 px-3 py-1.5 bg-app-sidebar/40 border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary text-tx-primary placeholder:text-tx-tertiary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
               />
               <Button
                 size="sm"
@@ -1256,7 +1255,38 @@ export default function TaskDetailModal({
             {t("common.save") || "保存"}
           </Button>
         </div>
+    </>
+  );
+
+  if (!isDesktop) {
+    return (
+      <BottomSheet
+        open
+        onClose={() => handleSaveTaskDetail(true)}
+        hideClose
+        maxHeight="100dvh"
+        className="h-[100dvh] max-h-[100dvh] rounded-none border-0"
+        bodyClassName="flex flex-col min-h-0"
+        zClassName="z-modal"
+        aria-label={t("projects.taskDetails") || "任务详情"}
+      >
+        <div className="flex flex-col min-h-0 flex-1 bg-app-elevated">
+          {sheetBody}
+        </div>
+      </BottomSheet>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4 select-text">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={() => handleSaveTaskDetail(true)}
+      />
+      <div className="relative bg-app-elevated w-full max-w-2xl rounded-window border border-app-border shadow-xl flex flex-col max-h-[85vh] overflow-hidden">
+        {sheetBody}
       </div>
     </div>
   );
 }
+

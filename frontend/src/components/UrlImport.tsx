@@ -176,7 +176,7 @@ export default function UrlImport() {
           <button
             onClick={handleImport}
             disabled={phase === "importing" || !url.trim() || !isWeixin}
-            className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
               phase === "importing" || !url.trim() || !isWeixin
                 ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                 : phase === "done"

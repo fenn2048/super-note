@@ -51,9 +51,9 @@ export default function DashboardQuickActions({
             type="button"
             onClick={onCreateNote}
             aria-label="记笔记"
-            className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
+            className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-[transform,background-color,border-color,box-shadow] duration-press ease-out active:scale-[0.97] group cursor-pointer"
           >
-            <div className="w-11 h-11 rounded-card bg-gradient-to-br from-amber-400/25 to-orange-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
+            <div className="w-11 h-11 rounded-card bg-gradient-to-br from-amber-400/25 to-orange-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5 group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform duration-press ease-out shadow-xs">
               <FileText size={20} aria-hidden />
             </div>
             <span className="text-xs font-semibold text-tx-primary">记笔记</span>
@@ -67,9 +67,9 @@ export default function DashboardQuickActions({
             type="button"
             onClick={onWriteSays}
             aria-label="写说说"
-            className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
+            className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-[transform,background-color,border-color,box-shadow] duration-press ease-out active:scale-[0.97] group cursor-pointer"
           >
-            <div className="w-11 h-11 rounded-card bg-gradient-to-br from-violet-500/25 to-fuchsia-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
+            <div className="w-11 h-11 rounded-card bg-gradient-to-br from-violet-500/25 to-fuchsia-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-2.5 group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform duration-press ease-out shadow-xs">
               <MessageCircle size={20} aria-hidden />
             </div>
             <span className="text-xs font-semibold text-tx-primary">写说说</span>
@@ -83,9 +83,9 @@ export default function DashboardQuickActions({
             type="button"
             onClick={onAddTask}
             aria-label="加待办"
-            className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-all duration-fast ease-soft active:scale-[0.97] group cursor-pointer"
+            className="flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-card border border-app-border/50 bg-app-bg/60 hover:bg-app-hover hover:border-app-border hover:shadow-sm transition-[transform,background-color,border-color,box-shadow] duration-press ease-out active:scale-[0.97] group cursor-pointer"
           >
-            <div className="w-11 h-11 rounded-card bg-gradient-to-br from-emerald-400/25 to-teal-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform duration-fast shadow-xs">
+            <div className="w-11 h-11 rounded-card bg-gradient-to-br from-emerald-400/25 to-teal-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5 group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform duration-press ease-out shadow-xs">
               <ListTodo size={20} aria-hidden />
             </div>
             <span className="text-xs font-semibold text-tx-primary">加待办</span>

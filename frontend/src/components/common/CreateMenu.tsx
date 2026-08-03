@@ -13,6 +13,7 @@ import {
   type CreateMenuAction,
 } from "@/lib/createMenuItems";
 import { getModulePack } from "@/lib/modulePack";
+import { springs } from "@/lib/motion";
 
 export type { CreateMenuAction };
 
@@ -173,7 +174,7 @@ export function CreateFabButton({
         jelly
           ? {
               scale: 1.16,
-              transition: { type: "spring", stiffness: 360, damping: 8, mass: 0.55 },
+              transition: springs.momentum,
             }
           : { scale: 1.05 }
       }
@@ -181,21 +182,21 @@ export function CreateFabButton({
         jelly
           ? {
               scale: 0.88,
-              transition: { type: "spring", stiffness: 500, damping: 16 },
+              transition: springs.snappy,
             }
           : { scale: 0.9 }
       }
       // 静止时也带一点弹簧回正，离开 hover 更有果冻感
       transition={
         jelly
-          ? { type: "spring", stiffness: 320, damping: 12, mass: 0.7 }
-          : { type: "spring", stiffness: 380, damping: 14 }
+          ? springs.momentum
+          : springs.snappy
       }
       style={jelly ? { willChange: "transform", transformOrigin: "center" } : undefined}
     >
       <motion.span
         animate={{ rotate: open ? 45 : 0 }}
-        transition={{ type: "spring", stiffness: 360, damping: 18 }}
+        transition={springs.snappy}
         className="flex items-center justify-center"
       >
         <Plus size={icon} strokeWidth={2.5} aria-hidden />

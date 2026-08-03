@@ -142,7 +142,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search, searchMode 
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={goPrev}
-          className="w-8 h-8 rounded-lg hover:bg-app-hover text-tx-secondary flex items-center justify-center transition-all active:scale-90"
+          className="w-8 h-8 rounded-lg hover:bg-app-hover text-tx-secondary flex items-center justify-center transition-transform duration-press ease-out active:scale-90"
           aria-label="上个月"
         >
           <ChevronLeft size={18} />
@@ -155,7 +155,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search, searchMode 
           {(year !== today.getFullYear() || month !== today.getMonth() + 1) && (
             <button
               onClick={goToday}
-              className="text-[11px] px-2.5 py-1 rounded-full bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 font-medium transition-all"
+              className="text-[11px] px-2.5 py-1 rounded-full bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             >
               今日
             </button>
@@ -166,7 +166,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search, searchMode 
           onClick={goNext}
           disabled={isFutureMonth}
           className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-90",
+            "w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-press ease-out active:scale-90",
             isFutureMonth
               ? "text-tx-tertiary/30 cursor-not-allowed"
               : "hover:bg-app-hover text-tx-secondary",
@@ -222,7 +222,7 @@ export default function DiaryCalendar({ onDateSelect, tagId, search, searchMode 
                   key={dateStr}
                   onClick={() => handleDateClick(dateStr)}
                   className={cn(
-                    "relative flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-90",
+                    "relative flex flex-col items-center justify-center py-2 rounded-xl transition-transform duration-press ease-out active:scale-90",
                     hasEntry ? "hover:bg-accent-primary/10 text-tx-primary" : "text-tx-tertiary/60 hover:bg-app-hover",
                     isToday && "ring-1 ring-accent-primary/30",
                     selectedDate === dateStr && "bg-accent-primary/10 ring-1 ring-accent-primary/30",

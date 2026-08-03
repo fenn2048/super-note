@@ -110,7 +110,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           <button
             onClick={handleCreateFamily}
             disabled={creating}
-            className="w-full py-3 rounded-xl text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+            className="w-full py-3 rounded-xl text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 shadow-lg shadow-emerald-500/20 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {creating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
             {creating ? "创建中..." : "创建家庭空间"}
@@ -128,7 +128,7 @@ export default function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           {!showJoin ? (
             <button
               onClick={() => setShowJoin(true)}
-              className="w-full py-3 rounded-xl text-sm font-medium border border-app-border text-tx-primary hover:bg-app-hover transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl text-sm font-medium border border-app-border text-tx-primary hover:bg-app-hover transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-center gap-2"
             >
               <LogIn size={16} />
               加入已有空间

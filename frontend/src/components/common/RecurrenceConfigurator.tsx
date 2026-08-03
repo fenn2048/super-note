@@ -245,7 +245,7 @@ export default function RecurrenceConfigurator({
                       type="button"
                       onClick={() => toggleCustomDay(day.value)}
                       className={cn(
-                        "w-6 h-6 rounded-md text-[10px] font-bold border transition-all flex items-center justify-center",
+                        "w-6 h-6 rounded-md text-[10px] font-bold border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-center",
                         active
                           ? "bg-accent-primary border-transparent text-white shadow-sm shadow-accent-primary/20"
                           : "bg-app-bg border-app-border text-tx-tertiary hover:text-tx-primary hover:border-app-border-hover"

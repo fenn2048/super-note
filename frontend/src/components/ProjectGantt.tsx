@@ -187,7 +187,7 @@ export default function ProjectGantt({ stages, onTaskClick }: ProjectGanttProps)
                       {hasTimeline ? (
                         <div
                           style={barStyle}
-                          className={`absolute h-7 rounded-lg flex items-center justify-between px-2.5 text-[10px] font-bold shadow-sm transition-all border select-none cursor-pointer truncate bg-white dark:bg-zinc-900 overflow-hidden ${
+                          className={`absolute h-7 rounded-lg flex items-center justify-between px-2.5 text-[10px] font-bold shadow-sm transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel border select-none cursor-pointer truncate bg-app-elevated text-tx-primary overflow-hidden ${
                             task.isCompleted === 1
                               ? "border-green-500/40 text-green-600 dark:text-green-400"
                               : "border-accent-primary/30 text-accent-primary"
@@ -198,7 +198,7 @@ export default function ProjectGantt({ stages, onTaskClick }: ProjectGanttProps)
                           {/* Beautiful dynamic gradient overlay representing task progress */}
                           <div
                             className={cn(
-                              "absolute inset-y-0 left-0 -z-10 transition-all duration-500",
+                              "absolute inset-y-0 left-0 -z-10 transition-[width] duration-panel ease-out",
                               task.isCompleted === 1
                                 ? "bg-gradient-to-r from-green-500/20 to-emerald-500/25"
                                 : "bg-gradient-to-r from-indigo-500/20 to-purple-500/25 dark:from-indigo-400/15 dark:to-purple-400/20"

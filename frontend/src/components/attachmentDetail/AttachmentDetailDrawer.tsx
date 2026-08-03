@@ -47,6 +47,7 @@ import {
   type ImageHostFormat,
 } from "@/lib/imageHostFormats";
 import AttachmentPreview from "@/components/attachmentPreview/AttachmentPreview";
+import { springs } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // 工具函数：人类可读大小 / 本地时间格式化（与 FileManager 保持一致）
@@ -298,7 +299,7 @@ export default function AttachmentDetailDrawer({
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
-        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+        transition={springs.sheet}
         className={cn(
           "fixed z-50 bg-app-surface shadow-2xl flex flex-col transition-[width] duration-200",
           // 移动：全屏；桌面：右侧抽屉

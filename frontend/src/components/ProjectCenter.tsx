@@ -48,6 +48,10 @@ import {
 } from "@/components/common/FeedbackStates";
 import MobileChromeHeader, { MobileChromeIconButton } from "@/components/common/MobileChromeHeader";
 import PageHeader from "@/components/layout/PageHeader";
+import { Motion } from "@/components/common/Motion";
+import { springs } from "@/lib/motion";
+import { BottomSheet } from "@/components/common/BottomSheet";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 const PlanCenter = React.lazy(() => import("./PlanCenter"));
 
@@ -235,7 +239,7 @@ function TaskRow({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchEnd}
-      className="group flex items-center justify-between p-3 px-3.5 pr-2.5 md:pr-3.5 hover:bg-app-hover/20 transition-all gap-2 md:gap-4 cursor-pointer select-none"
+      className="group flex items-center justify-between p-3 px-3.5 pr-2.5 md:pr-3.5 hover:bg-app-hover/20 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out gap-2 md:gap-4 cursor-pointer select-none"
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Checkbox button */}
@@ -281,7 +285,7 @@ function TaskRow({
                 e.stopPropagation();
                 onStartTask(task);
               }}
-              className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-all shrink-0"
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
               title="启动任务"
             >
               <Play size={11} fill="currentColor" />
@@ -294,7 +298,7 @@ function TaskRow({
                 e.stopPropagation();
                 onStartTask(task);
               }}
-              className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
               title="恢复任务"
             >
               <Play size={11} fill="currentColor" />
@@ -309,7 +313,7 @@ function TaskRow({
                     e.stopPropagation();
                     onPauseTask(task);
                   }}
-                  className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-all shrink-0"
+                  className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
                   title="暂停任务"
                 >
                   <Pause size={11} fill="currentColor" />
@@ -320,7 +324,7 @@ function TaskRow({
                   e.stopPropagation();
                   onToggleComplete(task.id, task.isCompleted);
                 }}
-                className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-all shrink-0"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
                 title="完成任务"
               >
                 <Check size={11} />
@@ -357,77 +361,67 @@ function TaskRow({
             e.stopPropagation();
             onDelete(task.id);
           }}
-          className="hidden md:block opacity-0 group-hover:opacity-100 p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-all shrink-0"
+          className="hidden md:block opacity-0 group-hover:opacity-100 p-1 hover:bg-app-hover rounded text-tx-tertiary hover:text-accent-danger transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
         >
           <Trash2 size={14} />
         </button>
       </div>
     </div>
     
-    <AnimatePresence>
-      {showActionSheet && (
-        <div className="md:hidden">
-          <div className="fixed inset-0 z-[100] bg-black/40" onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); }} />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 z-[101] bg-app-bg rounded-t-3xl border-t border-app-border/40 shadow-xl pb-[var(--safe-area-bottom)]"
+    <div className="md:hidden" onClick={(e) => e.stopPropagation()}>
+      <BottomSheet
+        open={showActionSheet}
+        onClose={() => setShowActionSheet(false)}
+        title={task.title}
+        maxHeight="min(70dvh, 100%)"
+        zClassName="z-[101]"
+      >
+        <div className="px-4 pb-2 space-y-2">
+          {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划" || task.status === "paused") && onStartTask && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onStartTask(task); }}
+              className="w-full py-4 bg-app-elevated rounded-xl font-bold text-accent-primary flex items-center justify-center gap-2 active:scale-[0.98] transition-transform min-h-[44px]"
+            >
+              <Play size={18} />
+              启动任务
+            </button>
+          )}
+
+          {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && onPauseTask && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onPauseTask(task); }}
+              className="w-full py-4 bg-app-elevated rounded-xl font-bold text-amber-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform min-h-[44px]"
+            >
+              <Pause size={18} />
+              暂停任务
+            </button>
+          )}
+
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onToggleComplete(task.id, task.isCompleted); }}
+            className="w-full py-4 bg-app-elevated rounded-xl font-bold text-green-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform min-h-[44px]"
           >
-            <div className="flex justify-center pt-3 pb-2">
-              <div className="w-12 h-1.5 bg-app-border/60 rounded-full" />
-            </div>
-            <div className="px-6 py-4 space-y-2">
-              <div className="text-sm font-bold text-tx-secondary text-center mb-4 truncate">{task.title}</div>
-              
-              {task.isCompleted !== 1 && ((task as any).stageName === "待启动" || (task as any).stageName === "待规划" || task.status === "paused") && onStartTask && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onStartTask(task); }}
-                  className="w-full py-4 bg-app-elevated rounded-xl font-bold text-accent-primary flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-                >
-                  <Play size={18} />
-                  启动任务
-                </button>
-              )}
-              
-              {task.isCompleted !== 1 && (task as any).stageName !== "待启动" && (task as any).stageName !== "待规划" && task.status !== "paused" && onPauseTask && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onPauseTask(task); }}
-                  className="w-full py-4 bg-app-elevated rounded-xl font-bold text-amber-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-                >
-                  <Pause size={18} />
-                  暂停任务
-                </button>
-              )}
-              
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onToggleComplete(task.id, task.isCompleted); }}
-                className="w-full py-4 bg-app-elevated rounded-xl font-bold text-green-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <CheckCircle2 size={18} />
-                {task.isCompleted === 1 ? "标记为未完成" : "完成任务"}
-              </button>
-              
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onDelete(task.id); }}
-                className="w-full py-4 bg-app-elevated rounded-xl font-bold text-accent-danger flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <Trash2 size={18} />
-                删除任务
-              </button>
-              
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); }}
-                className="w-full py-4 bg-app-hover rounded-xl font-bold text-tx-tertiary flex items-center justify-center gap-2 active:scale-[0.98] transition-transform mt-2"
-              >
-                取消
-              </button>
-            </div>
-          </motion.div>
+            <CheckCircle2 size={18} />
+            {task.isCompleted === 1 ? "标记为未完成" : "完成任务"}
+          </button>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); onDelete(task.id); }}
+            className="w-full py-4 bg-app-elevated rounded-xl font-bold text-accent-danger flex items-center justify-center gap-2 active:scale-[0.98] transition-transform min-h-[44px]"
+          >
+            <Trash2 size={18} />
+            删除任务
+          </button>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowActionSheet(false); }}
+            className="w-full py-4 bg-app-hover rounded-xl font-bold text-tx-tertiary flex items-center justify-center gap-2 active:scale-[0.98] transition-transform mt-2 min-h-[44px]"
+          >
+            取消
+          </button>
         </div>
-      )}
-    </AnimatePresence>
+      </BottomSheet>
+    </div>
     </>
   );
 }
@@ -482,6 +476,8 @@ export default function ProjectCenter() {
   const { t } = useTranslation();
   const { state } = useApp();
   const actions = useAppActions();
+  /** BottomSheet portals to body — CSS md:hidden cannot hide it; gate with JS */
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const projDescRef = useRef<HTMLTextAreaElement>(null);
   const taskDescRef = useRef<HTMLTextAreaElement>(null);
@@ -1891,65 +1887,45 @@ export default function ProjectCenter() {
             }
           />
 
-          {/* Inner Project Tabs Switcher */}
+          {/* Inner Project Tabs Switcher — layoutId pill (ThemeToggle pattern) */}
           <div className="px-3 md:px-4 py-2 border-b border-app-border bg-app-bg shrink-0 overflow-x-auto">
             <div className="flex items-center bg-app-hover/50 p-0.5 rounded-button border border-app-border/40 text-[11px] font-semibold w-max min-w-full md:min-w-0 md:w-auto">
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                  detailTab === "kanban" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setDetailTab("kanban")}
-              >
-                <Grid size={12} />
-                <span>{t("projects.kanban") || "看板"}</span>
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                  detailTab === "list" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setDetailTab("list")}
-              >
-                <ListIcon size={12} />
-                <span>{t("projects.list") || "列表"}</span>
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                  detailTab === "discussion" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setDetailTab("discussion")}
-              >
-                <MessageSquare size={12} />
-                <span>{t("projects.discussion") || "讨论"}</span>
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                  detailTab === "calendar" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setDetailTab("calendar")}
-              >
-                <Calendar size={12} />
-                <span>{t("projects.calendar") || "日历"}</span>
-              </button>
-              {window.innerWidth >= 768 && (
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                    detailTab === "gantt" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                  }`}
-                  onClick={() => setDetailTab("gantt")}
-                >
-                  <Clock size={12} />
-                  <span>{t("projects.gantt") || "甘特图"}</span>
-                </button>
-              )}
-              <button
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1 ${
-                  detailTab === "overview" ? "bg-app-bg text-tx-primary shadow-sm" : "text-tx-secondary hover:text-tx-primary"
-                }`}
-                onClick={() => setDetailTab("overview")}
-              >
-                <Award size={12} />
-                <span>{t("projects.overview") || "概况"}</span>
-              </button>
+              {(
+                [
+                  { id: "kanban" as const, icon: Grid, label: t("projects.kanban") || "看板", desktopOnly: false },
+                  { id: "list" as const, icon: ListIcon, label: t("projects.list") || "列表", desktopOnly: false },
+                  { id: "discussion" as const, icon: MessageSquare, label: t("projects.discussion") || "讨论", desktopOnly: false },
+                  { id: "calendar" as const, icon: Calendar, label: t("projects.calendar") || "日历", desktopOnly: false },
+                  { id: "gantt" as const, icon: Clock, label: t("projects.gantt") || "甘特图", desktopOnly: true },
+                  { id: "overview" as const, icon: Award, label: t("projects.overview") || "概况", desktopOnly: false },
+                ] as const
+              )
+                .filter((tab) => !tab.desktopOnly || (typeof window !== "undefined" && window.innerWidth >= 768))
+                .map((tab) => {
+                  const Icon = tab.icon;
+                  const active = detailTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={cn(
+                        "relative px-3 py-1.5 rounded-md transition-colors duration-fast ease-out flex items-center gap-1 z-0",
+                        active ? "text-tx-primary" : "text-tx-secondary hover:text-tx-primary",
+                      )}
+                      onClick={() => setDetailTab(tab.id)}
+                    >
+                      {active && (
+                        <Motion.div
+                          layoutId="project-detail-tab"
+                          className="absolute inset-0 rounded-md bg-app-bg shadow-sm -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <Icon size={12} className="relative z-10" />
+                      <span className="relative z-10">{tab.label}</span>
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
@@ -2262,7 +2238,7 @@ export default function ProjectCenter() {
                             <Button
                               type="submit"
                               disabled={!quickAddTitle.trim() || (!quickAddIsPersonal && !quickAddProjId)}
-                              className="h-8 text-xs font-semibold px-4 rounded-xl bg-accent-primary hover:bg-accent-primary/95 text-white disabled:opacity-40 disabled:pointer-events-none transition-all shadow-sm shrink-0"
+                              className="h-8 text-xs font-semibold px-4 rounded-xl bg-accent-primary hover:bg-accent-primary/95 text-white disabled:opacity-40 disabled:pointer-events-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-sm shrink-0"
                             >
                               {t("common.add") || "添加"}
                             </Button>
@@ -2295,7 +2271,7 @@ export default function ProjectCenter() {
                                 <button
                                   type="button"
                                   onClick={() => setProjectSearchMode(projectSearchMode === "AND" ? "OR" : "AND")}
-                                  className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] font-semibold hover:bg-accent-primary/20 active:scale-95 transition-all cursor-pointer"
+                                  className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-[10px] font-semibold hover:bg-accent-primary/20 active:scale-95 transition-transform duration-press ease-out cursor-pointer"
                                 >
                                   <span>关系: {projectSearchMode === "AND" ? "并且 (AND)" : "或者 (OR)"}</span>
                                 </button>
@@ -2442,7 +2418,7 @@ export default function ProjectCenter() {
                                     <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
                                       <button
                                         onClick={() => setVisibleCounts(prev => ({ ...prev, overdue: prev.overdue + 15 }))}
-                                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-transform duration-press ease-out"
                                       >
                                         <ChevronDown size={12} />
                                         <span>加载更多 ({myTasksCategorized.overdue.length - visibleCounts.overdue})</span>
@@ -2493,7 +2469,7 @@ export default function ProjectCenter() {
                                       <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
                                         <button
                                           onClick={() => setVisibleCounts(prev => ({ ...prev, today: prev.today + 15 }))}
-                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-transform duration-press ease-out"
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.today.length - visibleCounts.today})</span>
@@ -2545,7 +2521,7 @@ export default function ProjectCenter() {
                                       <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
                                         <button
                                           onClick={() => setVisibleCounts(prev => ({ ...prev, notStarted: prev.notStarted + 15 }))}
-                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-transform duration-press ease-out"
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.notStarted.length - visibleCounts.notStarted})</span>
@@ -2597,7 +2573,7 @@ export default function ProjectCenter() {
                                       <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
                                         <button
                                           onClick={() => setVisibleCounts(prev => ({ ...prev, pending: prev.pending + 15 }))}
-                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-transform duration-press ease-out"
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.pending.length - visibleCounts.pending})</span>
@@ -2649,7 +2625,7 @@ export default function ProjectCenter() {
                                       <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
                                         <button
                                           onClick={() => setVisibleCounts(prev => ({ ...prev, paused: prev.paused + 15 }))}
-                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-transform duration-press ease-out"
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.paused.length - visibleCounts.paused})</span>
@@ -2701,7 +2677,7 @@ export default function ProjectCenter() {
                                       <div className="flex justify-center p-3 border-t border-app-border/10 bg-app-sidebar/5">
                                         <button
                                           onClick={() => setVisibleCounts(prev => ({ ...prev, completed: prev.completed + 15 }))}
-                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-all"
+                                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-semibold text-tx-secondary bg-app-hover hover:bg-app-hover/80 active:scale-95 transition-transform duration-press ease-out"
                                         >
                                           <ChevronDown size={12} />
                                           <span>加载更多 ({myTasksCategorized.completed.length - visibleCounts.completed})</span>
@@ -2750,7 +2726,7 @@ export default function ProjectCenter() {
                       <button
                         type="button"
                         onClick={() => setProjectSearchMode(projectSearchMode === "AND" ? "OR" : "AND")}
-                        className="px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary font-semibold hover:bg-accent-primary/20 active:scale-95 transition-all cursor-pointer"
+                        className="px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-accent-primary font-semibold hover:bg-accent-primary/20 active:scale-95 transition-transform duration-press ease-out cursor-pointer"
                       >
                         {projectSearchMode === "AND" ? "并且 (AND)" : "或者 (OR)"}
                       </button>
@@ -2913,7 +2889,7 @@ export default function ProjectCenter() {
                 <button
                   onClick={() => setSelectedProjectTagId(null)}
                   className={cn(
-                    "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold transition-all border",
+                    "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border",
                     !selectedProjectTagId
                       ? "bg-accent-primary text-white border-accent-primary"
                       : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
@@ -2926,7 +2902,7 @@ export default function ProjectCenter() {
                     key={tag.id}
                     onClick={() => setSelectedProjectTagId(tag.id)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all",
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                       selectedProjectTagId === tag.id
                         ? "bg-accent-primary text-white border-accent-primary"
                         : "bg-app-sidebar text-tx-secondary border-app-border hover:bg-app-hover"
@@ -3022,7 +2998,7 @@ export default function ProjectCenter() {
                   <div
                     key={p.id}
                     onClick={() => selectProject(p.id)}
-                    className="group/card border border-app-border hover:border-app-border/80 bg-app-sidebar/35 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col cursor-pointer h-60"
+                    className="group/card border border-app-border hover:border-app-border/80 bg-app-sidebar/35 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel flex flex-col cursor-pointer h-60"
                   >
                     {/* Project Cover Banner */}
                     <div
@@ -3043,26 +3019,26 @@ export default function ProjectCenter() {
                       <div className="flex items-center gap-1.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => handleTogglePauseProject(p, e)}
-                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-all"
+                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                           title={p.status === "paused" ? "恢复" : "暂停"}
                         >
                           {p.status === "paused" ? <Play size={12} /> : <Pause size={12} />}
                         </button>
                         <button
                           onClick={(e) => toggleFavorite(p.id, e)}
-                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 hover:border-accent-primary/50 transition-all"
+                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 hover:border-accent-primary/50 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                         >
                           <Star size={12} className={isFavorite(p.id) ? "fill-accent-primary text-accent-primary" : ""} />
                         </button>
                         <button
                           onClick={(e) => handleOpenEditModal(p, e)}
-                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-all"
+                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-primary border border-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                         >
                           <Edit2 size={12} />
                         </button>
                         <button
                           onClick={(e) => handleDeleteProject(p.id, e)}
-                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-danger border border-white/10 transition-all"
+                          className="p-1.5 bg-black/30 backdrop-blur-md rounded-lg text-white hover:text-accent-danger border border-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -3095,7 +3071,7 @@ export default function ProjectCenter() {
                         </div>
                         <div className="w-full h-1.5 bg-app-hover rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-accent-primary rounded-full transition-all duration-500"
+                            className="h-full bg-accent-primary rounded-full transition-[width] duration-panel ease-out"
                             style={{
                               width: `${
                                 p.totalTasksCount && p.totalTasksCount > 0
@@ -3186,7 +3162,7 @@ export default function ProjectCenter() {
                       type="button"
                       onClick={() => setProjCover(cov)}
                       style={{ background: cov }}
-                      className={`w-8 h-8 rounded-lg border transition-all ${
+                      className={`w-8 h-8 rounded-lg border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                         projCover === cov ? "border-accent-primary scale-110 shadow-md" : "border-white/10"
                       }`}
                     />
@@ -3550,59 +3526,22 @@ export default function ProjectCenter() {
         document.body,
       )}
 
-      {/* 6. Detailed Task Create Modal */}
-      {showTaskCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 select-text"
-          /* 移动端：遮罩底边抬到键盘上方，sheet 不再 marginBottom + 二次减键盘高 */
-          style={
-            typeof window !== "undefined" && window.innerWidth < 768
-              ? {
-                  bottom: "var(--keyboard-height, 0px)",
-                  transition: "bottom 0.15s ease-out",
-                }
-              : undefined
-          }
-        >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
-          <div
-            className={cn(
-              "relative bg-app-elevated w-full shadow-2xl overflow-hidden flex flex-col text-sm text-tx-primary z-10",
-              "md:h-auto md:max-h-[85vh] md:max-w-xl",
-              "rounded-t-2xl md:rounded-2xl border-t md:border border-app-border",
-              "animate-in slide-in-from-bottom md:slide-in-from-bottom-0 md:scale-in duration-200",
-            )}
-            style={{
-              // 父层移动端 bottom 已扣键盘；100% = 可用高度，85vh 限制收起时高度
-              maxHeight: "min(85vh, 100%)",
-            }}
-          >
-            {/* Header：移动端含 safe-area */}
-            <div
-              className="px-4 md:px-8 pb-3 md:py-5 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0"
-              style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
+      {/* 6. Detailed Task Create Modal — mobile BottomSheet / desktop panel
+          (must branch in JS: BottomSheet portals to body, so md:hidden cannot hide it) */}
+      {showTaskCreateModal && !isDesktop && (
+            <BottomSheet
+              open={showTaskCreateModal}
+              onClose={() => setShowTaskCreateModal(false)}
+              title="新建任务"
+              maxHeight="min(92dvh, 100%)"
+              zClassName="z-modal"
+              bodyClassName="flex flex-col min-h-0"
             >
-              <h3 className="text-sm font-bold text-tx-primary">
-                新建任务
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowTaskCreateModal(false)}
-                className="p-1.5 hover:bg-app-hover rounded-lg text-tx-tertiary hover:text-tx-primary transition-colors"
+              <div
+                className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4"
+                style={{ WebkitOverflowScrolling: "touch", minHeight: "min(40vh, 280px)" }}
               >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Body：原生 overflow 滚动；min-height 防止键盘弹起时被压成一条 */}
-            <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-8 py-4 md:py-6"
-              style={{
-                WebkitOverflowScrolling: "touch",
-                minHeight: "min(40vh, 280px)",
-              }}
-            >
-              <div className="space-y-5 md:space-y-6.5 pb-2">
+<div className="space-y-5 md:space-y-6.5 pb-2">
               {/* Title */}
               <div className="space-y-2.5 relative">
                 <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">任务标题</label>
@@ -3687,7 +3626,7 @@ export default function ProjectCenter() {
                       key={prio.level}
                       type="button"
                       onClick={() => setTaskPriority(prio.level)}
-                      className={`py-2 rounded-xl border text-xs font-semibold transition-all ${prio.color} ${
+                      className={`py-2 rounded-xl border text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${prio.color} ${
                         taskPriority === prio.level ? "ring-2 ring-accent-primary border-transparent" : "opacity-80"
                       }`}
                     >
@@ -3794,105 +3733,235 @@ export default function ProjectCenter() {
                 )}
               </div>
               </div>
-            </div>
+              </div>
+              <div className="px-4 py-3 border-t border-app-border flex items-center justify-end gap-2 shrink-0 bg-app-elevated">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowTaskCreateModal(false)} className="text-xs">
+                  取消
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleDetailedCreateTask(false)}
+                  disabled={!taskTitle.trim()}
+                  size="sm"
+                  className="text-xs bg-accent-primary hover:bg-accent-primary/95 text-white"
+                >
+                  完成
+                </Button>
+              </div>
+            </BottomSheet>
+      )}
+      {showTaskCreateModal && isDesktop && (
+            <div className="fixed inset-0 z-modal flex items-center justify-center p-4 select-text">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskCreateModal(false)} />
+              <div className="relative bg-app-elevated w-full max-w-xl max-h-[85vh] rounded-window border border-app-border shadow-xl overflow-hidden flex flex-col text-sm text-tx-primary z-10">
+                <div className="px-8 py-5 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0">
+                  <h3 className="text-sm font-bold text-tx-primary">新建任务</h3>
+                  <button type="button" onClick={() => setShowTaskCreateModal(false)} className="p-1.5 hover:bg-app-hover rounded-lg text-tx-tertiary">
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 py-6">
+<div className="space-y-5 md:space-y-6.5 pb-2">
+              {/* Title */}
+              <div className="space-y-2.5 relative">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">任务标题</label>
+                <Input
+                  value={taskTitle}
+                  onChange={(e) => {
+                    setTaskTitle(e.target.value);
+                    setTitleCursorPos(e.target.selectionStart || 0);
+                  }}
+                  onKeyUp={(e) => setTitleCursorPos(e.currentTarget.selectionStart || 0)}
+                  onClick={(e) => setTitleCursorPos(e.currentTarget.selectionStart || 0)}
+                  placeholder="输入任务标题…"
+                  className="h-10 text-xs border-app-border w-full rounded-xl"
+                  required
+                  autoFocus
+                />
+                <AiFormatHelper value={taskTitle} onChange={setTaskTitle} />
+                {titleMention && (
+                  <div className="relative z-50">
+                    <MentionPicker
+                      search={titleMention.search}
+                      onSelect={(user) => {
+                        const newText = replaceMentionText(taskTitle, titleCursorPos, titleMention.startIndex, user.username);
+                        setTaskTitle(newText);
+                        setTitleCursorPos(titleMention.startIndex + user.username.length + 2);
+                        titleMention.clear();
+                      }}
+                      onClose={titleMention.clear}
+                    />
+                  </div>
+                )}
+              </div>
 
-            {/* Footer：移动端可换行 + safe-area */}
-            <div
-              className="px-4 md:px-8 py-3 md:py-4 border-t border-app-border bg-app-sidebar/30 flex flex-wrap justify-end gap-2 shrink-0"
-              style={{ paddingBottom: "calc(var(--safe-area-bottom, 0px) + 12px)" }}
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowTaskCreateModal(false)}
-                className="text-xs"
-              >
-                取消
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleDetailedCreateTask(true)}
-                disabled={!taskTitle.trim()}
-                variant="outline"
-                size="sm"
-                className="text-xs border-app-border text-tx-primary hover:bg-app-hover"
-              >
-                完成并创建下一个
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleDetailedCreateTask(false)}
-                disabled={!taskTitle.trim()}
-                size="sm"
-                className="text-xs bg-accent-primary hover:bg-accent-primary/95 text-white"
-              >
-                完成
-              </Button>
+              {/* Project & Assignee Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+                {/* Project Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">所属项目</label>
+                  <select
+                    value={taskProjId}
+                    onChange={(e) => setTaskProjId(e.target.value)}
+                    className="sleek-select w-full h-10 px-3 text-xs text-tx-secondary rounded-xl"
+                    required
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assignee Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">指派给</label>
+                  <select
+                    value={taskAssigneeId}
+                    onChange={(e) => setTaskAssigneeId(e.target.value)}
+                    className="sleek-select w-full h-10 px-3 text-xs text-tx-secondary rounded-xl"
+                  >
+                    <option value={currentUserId}>我自己</option>
+                    {wsMembers.filter(m => m.userId !== currentUserId).map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.displayName || m.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Priority Selection */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">优先级</label>
+                <div className="grid grid-cols-4 gap-2.5">
+                  {[
+                    { level: 3, label: "高", color: "bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20" },
+                    { level: 2, label: "中", color: "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20" },
+                    { level: 1, label: "低", color: "bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20" },
+                    { level: 0, label: "无", color: "bg-zinc-500/10 border-zinc-500/30 text-tx-secondary hover:bg-zinc-500/20" }
+                  ].map((prio) => (
+                    <button
+                      key={prio.level}
+                      type="button"
+                      onClick={() => setTaskPriority(prio.level)}
+                      className={`py-2 rounded-xl border text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${prio.color} ${
+                        taskPriority === prio.level ? "ring-2 ring-accent-primary border-transparent" : "opacity-80"
+                      }`}
+                    >
+                      {prio.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline & Reminder Date Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+                {/* Due Date */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">截止日期</label>
+                  <SleekDatePicker
+                    value={taskDueDate}
+                    onChange={(val) => {
+                      setTaskDueDate(val);
+                      // Auto calculate reminder date: due date - 24 hours (1 day)
+                      if (val) {
+                        const defaultReminder = calculateDefaultReminderDate(val);
+                        setTaskRemindAt(defaultReminder);
+                      } else {
+                        setTaskRemindAt("");
+                      }
+                    }}
+                    className="w-full h-10 rounded-xl"
+                    placeholder="选择截止日期"
+                    showTime={true}
+                  />
+                </div>
+
+                {/* Reminder Offset */}
+                <div className="space-y-2 min-w-0">
+                  {(taskDueDate || taskIsRecurring) ? (
+                    <>
+                      <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">提醒设置</label>
+                      <ReminderOffsetPicker
+                        value={taskReminderOffsetValue}
+                        unit={taskReminderOffsetUnit}
+                        onChangeValue={setTaskReminderOffsetValue}
+                        onChangeUnit={setTaskReminderOffsetUnit}
+                      />
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Recurrence Configuration */}
+              <div className="border-t border-app-border/40 pt-4">
+                <RecurrenceConfigurator
+                  isRecurring={taskIsRecurring}
+                  onChangeRecurring={setTaskIsRecurring}
+                  rule={taskRecurrenceRule}
+                  onChangeRule={setTaskRecurrenceRule}
+                />
+              </div>
+
+              {/* Tags Selection */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">任务标签</label>
+                <GenericTagInput
+                  selectedTags={taskTags}
+                  onTagsChange={setTaskTags}
+                  placeholder="添加标签..."
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2.5 relative">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">详细描述</label>
+                <TextareaFormatToolbar
+                  textareaRef={taskDescRef}
+                  value={taskDescription}
+                  onChange={setTaskDescription}
+                />
+                <Textarea
+                  ref={taskDescRef}
+                  value={taskDescription}
+                  onChange={(e) => {
+                    setTaskDescription(e.target.value);
+                    setDescCursorPos(e.target.selectionStart || 0);
+                  }}
+                  onKeyUp={(e) => setDescCursorPos(e.currentTarget.selectionStart || 0)}
+                  onClick={(e) => setDescCursorPos(e.currentTarget.selectionStart || 0)}
+                  placeholder="输入任务描述信息（支持Markdown及@提及）…"
+                  className="text-xs leading-relaxed min-h-[120px] border-app-border rounded-xl w-full p-3"
+                />
+                <AiFormatHelper value={taskDescription} onChange={setTaskDescription} />
+
+                {descMention && (
+                  <div className="relative z-50">
+                    <MentionPicker
+                      search={descMention.search}
+                      onSelect={(user) => {
+                        const newText = replaceMentionText(taskDescription, descCursorPos, descMention.startIndex, user.username);
+                        setTaskDescription(newText);
+                        setDescCursorPos(descMention.startIndex + user.username.length + 2);
+                        descMention.clear();
+                      }}
+                      onClose={descMention.clear}
+                    />
+                  </div>
+                )}
+              </div>
+              </div>
+                </div>
+                <div className="px-8 py-4 border-t border-app-border flex items-center justify-end gap-2 shrink-0">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowTaskCreateModal(false)} className="text-xs">取消</Button>
+                  <Button type="button" onClick={() => handleDetailedCreateTask(false)} disabled={!taskTitle.trim()} size="sm" className="text-xs bg-accent-primary hover:bg-accent-primary/95 text-white">完成</Button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
       )}
 
-      {/* 移动端角色筛选器 Bottom Sheet Drawer */}
-      <AnimatePresence>
-        {showMobileRoleSelector && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowMobileRoleSelector(false)}
-              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs md:hidden"
-            />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 350, damping: 30 }}
-              className="fixed bottom-0 left-0 right-0 z-[101] bg-app-surface rounded-t-2xl border-t border-app-border p-4 pb-[calc(var(--safe-area-bottom)+16px)] md:hidden flex flex-col gap-2.5 max-h-[80vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-app-border/40 shrink-0">
-                <span className="text-sm font-bold text-tx-primary">切换筛选角色</span>
-                <button
-                  onClick={() => setShowMobileRoleSelector(false)}
-                  className="p-1 rounded-lg text-tx-secondary hover:bg-app-hover"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="flex flex-col gap-1.5 py-2">
-                {[
-                  { value: "favorites", label: "我收藏的" },
-                  { value: "assigned", label: "我负责的" },
-                  { value: "created", label: "我创建的" },
-                  { value: "participating", label: "我参与的" }
-                ].map((item) => {
-                  const active = roleFilter === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      onClick={() => {
-                        setRoleFilter(item.value as any);
-                        setShowMobileRoleSelector(false);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold transition-all border text-left",
-                        active
-                          ? "bg-accent-primary/10 border-accent-primary/30 text-accent-primary"
-                          : "bg-app-sidebar/40 border-app-border/40 text-tx-secondary hover:bg-app-hover"
-                      )}
-                    >
-                      <span>{item.label}</span>
-                      {active && <Check size={14} className="text-accent-primary shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
       {centerActiveTask && (
         <TaskDetailModal
           task={centerActiveTask}
@@ -3903,59 +3972,52 @@ export default function ProjectCenter() {
         />
       )}
 
-      {/* Project Filter Bottom Sheet for Mobile */}
-      <AnimatePresence>
-        {showProjectFilterSheet && (
-          <div className="md:hidden">
-            <div className="fixed inset-0 z-[100] bg-black/40" onClick={() => setShowProjectFilterSheet(false)} />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 z-[101] bg-app-bg rounded-t-3xl border-t border-app-border/40 shadow-xl pb-[calc(1.5rem+var(--safe-area-bottom))] select-none"
+      {/* Project Filter Bottom Sheet for Mobile (portal → gate with !isDesktop) */}
+      {!isDesktop && (
+        <BottomSheet
+          open={showProjectFilterSheet}
+          onClose={() => setShowProjectFilterSheet(false)}
+          title="筛选项目"
+          maxHeight="min(70dvh, 100%)"
+          zClassName="z-[101]"
+        >
+          <div className="px-4 pb-2 space-y-1.5">
+            <button
+              onClick={() => {
+                setMyTasksProjectFilter("all");
+                setShowProjectFilterSheet(false);
+              }}
+              className={cn(
+                "w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-between active:scale-[0.98] transition-transform text-xs min-h-[44px]",
+                myTasksProjectFilter === "all"
+                  ? "bg-accent-primary/10 text-accent-primary"
+                  : "bg-app-elevated text-tx-secondary",
+              )}
             >
-              <div className="flex justify-center pt-3 pb-2">
-                <div className="w-12 h-1.5 bg-app-border/60 rounded-full" />
-              </div>
-              <div className="px-6 py-4 space-y-2">
-                <div className="text-sm font-bold text-tx-secondary text-center mb-4">筛选项目</div>
-                <div className="max-h-[60vh] overflow-y-auto space-y-1.5 pr-1">
-                  <button
-                    onClick={() => {
-                      setMyTasksProjectFilter("all");
-                      setShowProjectFilterSheet(false);
-                    }}
-                    className={cn(
-                      "w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-between active:scale-[0.98] transition-transform text-xs",
-                      myTasksProjectFilter === "all" ? "bg-accent-primary/10 text-accent-primary" : "bg-app-elevated text-tx-secondary"
-                    )}
-                  >
-                    <span>全部项目</span>
-                    {myTasksProjectFilter === "all" && <Check size={14} />}
-                  </button>
-                  {projects.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        setMyTasksProjectFilter(p.id);
-                        setShowProjectFilterSheet(false);
-                      }}
-                      className={cn(
-                        "w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-between active:scale-[0.98] transition-transform text-xs",
-                        myTasksProjectFilter === p.id ? "bg-accent-primary/10 text-accent-primary" : "bg-app-elevated text-tx-secondary"
-                      )}
-                    >
-                      <span className="truncate">{p.name}</span>
-                      {myTasksProjectFilter === p.id && <Check size={14} />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
+              <span>全部项目</span>
+              {myTasksProjectFilter === "all" && <Check size={14} />}
+            </button>
+            {projects.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setMyTasksProjectFilter(p.id);
+                  setShowProjectFilterSheet(false);
+                }}
+                className={cn(
+                  "w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-between active:scale-[0.98] transition-transform text-xs min-h-[44px]",
+                  myTasksProjectFilter === p.id
+                    ? "bg-accent-primary/10 text-accent-primary"
+                    : "bg-app-elevated text-tx-secondary",
+                )}
+              >
+                <span className="truncate">{p.name}</span>
+                {myTasksProjectFilter === p.id && <Check size={14} />}
+              </button>
+            ))}
           </div>
-        )}
-      </AnimatePresence>
+        </BottomSheet>
+      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export default function ManualPanel() {
             <button
               key={item.id}
               onClick={() => setActiveSection(item.id)}
-              className={`flex-1 lg:flex-none text-left px-3 py-2 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+              className={`flex-1 lg:flex-none text-left px-3 py-2 rounded-xl transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out cursor-pointer whitespace-nowrap ${
                 isActive
                   ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold"
                   : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 hover:text-zinc-900 dark:hover:text-zinc-200"

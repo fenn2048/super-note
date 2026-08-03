@@ -129,7 +129,7 @@ export default function ServerAddressInput({
       className={
         "relative flex flex-col md:flex-row md:items-stretch w-full " +
         "border border-app-border rounded-xl " +
-        "bg-app-surface/80 transition-all overflow-hidden " +
+        "bg-app-surface/80 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out overflow-hidden " +
         ACCENT_CLASS[accent]
       }
     >

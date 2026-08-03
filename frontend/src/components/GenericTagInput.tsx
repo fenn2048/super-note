@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { Tag } from "@/types";
 import TagColorPicker from "@/components/TagColorPicker";
 import { getTagColor } from "@/lib/utils";
+import { springs } from "@/lib/motion";
 
 interface TagLike {
   id: string;
@@ -146,10 +147,10 @@ export default function GenericTagInput<T extends TagLike>({
             <motion.span
               key={tag.id}
               layout
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={springs.snappy}
               className="inline-flex items-center gap-0.5 sm:gap-1 pl-1 sm:pl-2 pr-0.5 sm:pr-1 py-0 sm:py-0.5 rounded sm:rounded-md text-[10px] sm:text-[11px] leading-[1.4] font-medium group/tag cursor-default border transition-colors"
               style={{
                 backgroundColor: tag.color + "15",
@@ -209,7 +210,7 @@ export default function GenericTagInput<T extends TagLike>({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.12 }}
+            transition={springs.snappy}
             className="absolute z-50 top-full left-0 mt-1 w-56 max-h-44 overflow-y-auto bg-app-elevated border border-app-border rounded-lg shadow-xl"
           >
             {suggestions.map((tag, i) => (

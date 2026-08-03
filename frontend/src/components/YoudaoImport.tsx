@@ -270,7 +270,7 @@ export default function YoudaoImport() {
             />
             <button
               onClick={triggerPick}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm bg-rose-500 hover:bg-rose-600 text-white shadow-md hover:shadow-lg transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm bg-rose-500 hover:bg-rose-600 text-white shadow-md hover:shadow-lg transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             >
               <FolderOpen size={16} />
               {t("youdao.pickFolder")}
@@ -378,7 +378,7 @@ export default function YoudaoImport() {
                 </div>
                 <div className="h-1.5 rounded-full bg-rose-100 dark:bg-rose-900/30 overflow-hidden">
                   <div
-                    className="h-full bg-rose-500 transition-all"
+                    className="h-full bg-rose-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                     style={{
                       width:
                         progress.total > 0
@@ -439,7 +439,7 @@ export default function YoudaoImport() {
               <button
                 onClick={handleImport}
                 disabled={phase === "importing" || phase === "done" || selectedCount === 0}
-                className={`flex-[2] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+                className={`flex-[2] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   phase === "importing" || selectedCount === 0
                     ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                     : phase === "done"

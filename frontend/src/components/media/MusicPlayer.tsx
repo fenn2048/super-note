@@ -232,7 +232,7 @@ export default function MusicPlayer({ mediaId }: MusicPlayerProps) {
             {/* Play / Pause button */}
             <button
               onClick={handlePlayClick}
-              className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/20 hover:scale-105 active:scale-95 transition-all"
+              className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-lg shadow-accent-primary/20 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 active:scale-95 transition-transform duration-press ease-out"
             >
               {activeIsPlaying ? (
                 <Pause size={18} className="fill-white" />

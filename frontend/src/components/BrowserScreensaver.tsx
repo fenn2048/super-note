@@ -114,7 +114,7 @@ export default function BrowserScreensaver({ isOpen, onClose }: BrowserScreensav
           e.stopPropagation();
           onClose();
         }}
-        className="absolute z-50 p-2.5 rounded-full bg-black/40 hover:bg-black/75 border border-white/10 hover:border-white/20 text-white/70 hover:text-white transition-all shadow-lg hover:scale-105"
+        className="absolute z-50 p-2.5 rounded-full bg-black/40 hover:bg-black/75 border border-white/10 hover:border-white/20 text-white/70 hover:text-white transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-lg [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105"
         style={{
           top: "calc(var(--safe-area-top, 0px) + 16px)",
           right: 16,

@@ -5,6 +5,7 @@ import { X, BookOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { springs } from "@/lib/motion";
 
 /**
  * 「作者感言」Modal —— 渲染 public/author-story.{zh,en}.md
@@ -92,7 +93,7 @@ export default function AuthorStoryModal({ open, onClose }: AuthorStoryModalProp
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
+        transition={springs.snappy}
         className="fixed inset-0 z-[1100] flex items-center justify-center
                    bg-black/40 backdrop-blur-sm p-4"
         onClick={onClose}
@@ -101,7 +102,7 @@ export default function AuthorStoryModal({ open, onClose }: AuthorStoryModalProp
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: 4 }}
-          transition={{ duration: 0.18 }}
+          transition={springs.modal}
           className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl
                      w-full max-w-3xl max-h-[85vh] flex flex-col
                      border border-zinc-200 dark:border-zinc-800"

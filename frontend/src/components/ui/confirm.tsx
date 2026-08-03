@@ -27,6 +27,7 @@ import { AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { springs, variants } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -331,10 +332,11 @@ function DialogShell({
         "fixed inset-0 z-system flex items-center justify-center px-4",
         isTop ? "pointer-events-auto" : "pointer-events-none",
       )}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
+      variants={variants.scrimFade}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={springs.modal}
       onMouseDown={(e) => {
         // 点击遮罩 = 取消（仅最顶层；点 dialog 本体不会冒泡到这里）
         if (isTop && e.target === e.currentTarget) onCancel();
@@ -343,15 +345,16 @@ function DialogShell({
       {/* 遮罩 */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
 
-      {/* 对话框 */}
+      {/* 对话框：scale≥0.96 + springs.modal（DESIGN §11） */}
       <motion.div
         role="dialog"
         aria-modal="true"
-        initial={{ scale: 0.95, opacity: 0, y: 10 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.97, opacity: 0, y: 4 }}
-        transition={{ duration: 0.16, ease: "easeOut" }}
-        className="relative z-10 w-full max-w-md rounded-xl border border-app-border bg-app-surface shadow-xl overflow-hidden"
+        variants={variants.fadeScaleIn}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={springs.modal}
+        className="relative z-10 w-full max-w-md rounded-window border border-app-border bg-app-surface shadow-xl overflow-hidden"
         onKeyDown={(e) => {
           if (e.key === "Enter" && (isPrompt || !danger)) {
             // prompt：回车提交；confirm 非危险：回车确认；危险确认默认要点

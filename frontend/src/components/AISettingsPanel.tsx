@@ -338,7 +338,7 @@ export default function AISettingsPanel() {
                 key={p.id}
                 onClick={() => handleProviderChange(p.id)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left group",
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-left group",
                   isSelected
                     ? "border-accent-primary bg-accent-primary/5 dark:bg-accent-primary/10"
                     : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -398,7 +398,7 @@ export default function AISettingsPanel() {
             value={settings.ai_api_url}
             onChange={(e) => setSettings(prev => ({ ...prev, ai_api_url: e.target.value }))}
             placeholder={currentPreset?.url || "https://api.openai.com/v1"}
-            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
           />
         </div>
 
@@ -412,7 +412,7 @@ export default function AISettingsPanel() {
                 value={localKey}
                 onChange={(e) => { setLocalKey(e.target.value); setTestResult(null); }}
                 placeholder={settings.ai_api_key_set ? t("ai.apiKeySet") : "sk-..."}
-                className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
               />
               <button
                 onClick={() => setShowKey(!showKey)}
@@ -441,7 +441,7 @@ export default function AISettingsPanel() {
                   }
                 }}
                 placeholder={currentPreset?.defaultModel || "gpt-4o-mini"}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
               />
               {modelDropdownOpen && models.length > 0 && (
                 <>
@@ -484,7 +484,7 @@ export default function AISettingsPanel() {
             value={settings.ai_think_keywords || ""}
             onChange={(e) => setSettings(prev => ({ ...prev, ai_think_keywords: e.target.value }))}
             placeholder={t("ai.thinkKeywordsPlaceholder")}
-            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
           />
           <p className="text-[11px] text-tx-tertiary">
             {t("ai.thinkKeywordsDesc")}
@@ -503,7 +503,7 @@ export default function AISettingsPanel() {
               value={settings.ai_temperature || ""}
               onChange={(e) => setSettings(prev => ({ ...prev, ai_temperature: e.target.value }))}
               placeholder="0.7"
-              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
             />
             <p className="text-[11px] text-tx-tertiary">{t("ai.temperatureDesc") || "值越大回复越具随机性/创意性"}</p>
           </div>
@@ -517,7 +517,7 @@ export default function AISettingsPanel() {
               value={settings.ai_top_p || ""}
               onChange={(e) => setSettings(prev => ({ ...prev, ai_top_p: e.target.value }))}
               placeholder="0.9"
-              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
             />
             <p className="text-[11px] text-tx-tertiary">{t("ai.topPDesc") || "核采样概率，值越大回复越具创意性"}</p>
           </div>
@@ -533,7 +533,7 @@ export default function AISettingsPanel() {
                 value={settings.ai_ollama_num_ctx || ""}
                 onChange={(e) => setSettings(prev => ({ ...prev, ai_ollama_num_ctx: e.target.value }))}
                 placeholder={t("ai.ollamaNumCtxPlaceholder")}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
               />
               <p className="text-[11px] text-tx-tertiary">{t("ai.ollamaNumCtxDesc")}</p>
             </div>
@@ -544,7 +544,7 @@ export default function AISettingsPanel() {
                 value={settings.ai_ollama_num_threads || ""}
                 onChange={(e) => setSettings(prev => ({ ...prev, ai_ollama_num_threads: e.target.value }))}
                 placeholder={t("ai.ollamaNumThreadsPlaceholder")}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
               />
               <p className="text-[11px] text-tx-tertiary">{t("ai.ollamaNumThreadsDesc")}</p>
             </div>
@@ -582,7 +582,7 @@ export default function AISettingsPanel() {
                 value={settings.ai_embedding_model || ""}
                 onChange={(e) => setSettings(prev => ({ ...prev, ai_embedding_model: e.target.value }))}
                 placeholder="text-embedding-3-small / bge-m3 / nomic-embed-text"
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
               />
             </div>
 
@@ -594,7 +594,7 @@ export default function AISettingsPanel() {
                 value={settings.ai_embedding_url || ""}
                 onChange={(e) => setSettings(prev => ({ ...prev, ai_embedding_url: e.target.value }))}
                 placeholder={t("ai.embeddingUrlPlaceholder") || "留空则复用主 AI 的 API 地址"}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
               />
             </div>
 
@@ -607,7 +607,7 @@ export default function AISettingsPanel() {
                   value={localEmbeddingKey}
                   onChange={(e) => { setLocalEmbeddingKey(e.target.value); }}
                   placeholder={settings.ai_embedding_key_set ? t("ai.apiKeySet") || "已设置" : t("ai.embeddingKeyPlaceholder") || "留空则复用主 AI 的 Key"}
-                  className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-zinc-400"
+                  className="w-full px-3 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base md:text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-zinc-400"
                 />
                 <button
                   onClick={() => setShowEmbeddingKey(!showEmbeddingKey)}
@@ -626,7 +626,7 @@ export default function AISettingsPanel() {
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-sm md:text-xs font-medium transition-all disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-sm md:text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-40"
         >
           {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           {t("ai.saveSettings")}
@@ -635,7 +635,7 @@ export default function AISettingsPanel() {
         <button
           onClick={handleTest}
           disabled={isTesting || !settings.ai_api_url}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm md:text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:border-accent-primary/50 transition-all disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm md:text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:border-accent-primary/50 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-40"
         >
           {isTesting ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
           {t("ai.testConnection")}

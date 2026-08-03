@@ -241,10 +241,10 @@ export default function SleekDatePicker({
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           variant === "mobile-form"
-            ? "flex items-center gap-2 px-3 py-2.5 rounded-xl border border-app-border bg-app-surface text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 w-full min-w-0"
+            ? "flex items-center gap-2 px-3 py-2.5 rounded-xl border border-app-border bg-app-surface text-xs cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hover:bg-app-hover/80 hover:border-app-border/80 w-full min-w-0"
             : variant === "ghost"
             ? "flex items-center gap-1.5 text-xs cursor-pointer transition-colors w-full min-w-0"
-            : "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-border bg-app-sidebar/80 text-xs cursor-pointer transition-all hover:bg-app-hover/80 hover:border-app-border/80 min-w-[90px]",
+            : "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-border bg-app-sidebar/80 text-xs cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hover:bg-app-hover/80 hover:border-app-border/80 min-w-[90px]",
           isOpen && variant !== "ghost" && "border-accent-primary ring-1 ring-accent-primary/20"
         )}
       >
@@ -319,7 +319,7 @@ export default function SleekDatePicker({
                   onClick={() => handleDateClick(day)}
                   type="button"
                   className={cn(
-                    "h-7 w-7 rounded-lg text-[11px] flex items-center justify-center transition-all focus:outline-none",
+                    "h-7 w-7 rounded-lg text-[11px] flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out focus:outline-none",
                     !isCurrentMonth ? "text-tx-tertiary/30" : "text-tx-secondary",
                     isCurrentMonth && "hover:bg-app-hover hover:text-tx-primary",
                     isDayToday && !isSelected && "border border-accent-primary/40 text-accent-primary font-semibold",
@@ -373,7 +373,7 @@ export default function SleekDatePicker({
             <button
               onClick={handleTodayClick}
               type="button"
-              className="text-[10px] font-semibold text-accent-primary hover:underline transition-all"
+              className="text-[10px] font-semibold text-accent-primary hover:underline transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             >
               {t("calendar.today")}
             </button>
@@ -382,7 +382,7 @@ export default function SleekDatePicker({
                 <button
                   onClick={handleConfirm}
                   type="button"
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-accent-primary hover:bg-accent-primary/95 text-white transition-all shadow-sm"
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-accent-primary hover:bg-accent-primary/95 text-white transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-sm"
                 >
                   {t("common.confirm") || "确定"}
                 </button>
@@ -391,7 +391,7 @@ export default function SleekDatePicker({
                 <button
                   onClick={handleClear}
                   type="button"
-                  className="text-[10px] font-semibold text-tx-tertiary hover:text-accent-danger transition-all"
+                  className="text-[10px] font-semibold text-tx-tertiary hover:text-accent-danger transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                 >
                   {t("calendar.clear", { defaultValue: "清除" })}
                 </button>

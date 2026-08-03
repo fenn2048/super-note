@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useSyncExternalStore, useCallback } from "react";
+import { BottomSheet } from "@/components/common/BottomSheet";
 import { createPortal } from "react-dom";
 import { api, getCurrentWorkspace, resolveAttachmentUrl } from "@/lib/api";
 import { useTranslation } from "react-i18next";
@@ -10,12 +11,14 @@ import MediaPlayer from "./MediaPlayer";
 import MusicPlayer from "./MusicPlayer";
 import AlistBrowser from "./AlistBrowser";
 import AssignCollectionModal from "./AssignCollectionModal";
+import MediaCacheSheet from "./MediaCacheSheet";
 import ContextMenu, { type ContextMenuItem } from "@/components/ContextMenu";
 import {
   Film, Music, Plus, Search, Grid, List as ListIcon, Trash2, Edit3, Play, Pause, Info,
   Settings, ChevronRight, Download, Upload, CheckCircle, MessageSquare, Clock,
   User, Tag, ChevronLeft, PlusCircle, Globe, Lock, ShieldAlert, SlidersHorizontal,
-  X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal, FolderInput, Car
+  X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal, FolderInput, Car,
+  HardDrive, DownloadCloud
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
@@ -23,6 +26,23 @@ import { AudioCover } from "@/lib/id3";
 import { EmptyState, LoadingBlock } from "@/components/common/FeedbackStates";
 import { pushNativeMediaCatalog, type NativeMediaTrack } from "@/lib/nativeMedia";
 import { isNativePlatform } from "@/hooks/useCapacitor";
+import {
+  subscribeMediaCache,
+  getCachedMediaIdSet,
+  getMediaCacheVersion,
+  refreshCachedMediaIdSet,
+  setMediaCacheUser,
+  isMediaCacheReady,
+} from "@/lib/mediaFileCache";
+import {
+  enqueueMediaCache,
+  removeLocalMediaCache,
+  removeLocalMediaCaches,
+  getMediaCacheJob,
+  subscribeMediaCacheQueue,
+  getMediaCacheQueueVersion,
+} from "@/lib/mediaCacheQueue";
+import { toast } from "@/lib/toast";
 
 interface Collection {
   id: string;
@@ -139,6 +159,13 @@ export default function MediaCenter() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignMediaIds, setAssignMediaIds] = useState<string[]>([]);
 
+  // 本地缓存
+  const [showCacheSheet, setShowCacheSheet] = useState(false);
+  useSyncExternalStore(subscribeMediaCache, getMediaCacheVersion, () => 0);
+  const cachedIds = getCachedMediaIdSet();
+  // 订阅队列以刷新角标进度
+  useSyncExternalStore(subscribeMediaCacheQueue, getMediaCacheQueueVersion, () => 0);
+
   // 右键菜单
   const [ctxMenu, setCtxMenu] = useState<{
     open: boolean;
@@ -182,6 +209,20 @@ export default function MediaCenter() {
     };
   }, [ctxMenu.open]);
 
+  const cacheItem = useCallback((item: MediaItem) => {
+    enqueueMediaCache({
+      mediaId: item.id,
+      type: item.type,
+      title: item.title,
+      alistPath: item.alist_path,
+    });
+  }, []);
+
+  const uncacheItem = useCallback(async (item: MediaItem) => {
+    await removeLocalMediaCache(item.id);
+    toast.success(`已删除「${item.title}」的本地缓存`);
+  }, []);
+
   const handleCtxMenuAction = async (actionId: string) => {
     const item = ctxMenu.item;
     closeItemContextMenu();
@@ -190,6 +231,10 @@ export default function MediaCenter() {
       setSelectedItem(item);
     } else if (actionId === "assign") {
       openAssignForIds([item.id]);
+    } else if (actionId === "cache") {
+      cacheItem(item);
+    } else if (actionId === "uncache") {
+      await uncacheItem(item);
     } else if (actionId === "delete") {
       if (!isAdmin) return;
       if (!window.confirm(`确认删除「${item.title}」吗？`)) return;
@@ -203,6 +248,29 @@ export default function MediaCenter() {
     }
   };
 
+  const batchCacheSelected = useCallback(() => {
+    const list = items.filter((it) => selectedItemIds.has(it.id));
+    if (list.length === 0) return;
+    enqueueMediaCache(
+      list.map((it) => ({
+        mediaId: it.id,
+        type: it.type,
+        title: it.title,
+        alistPath: it.alist_path,
+      })),
+    );
+  }, [items, selectedItemIds]);
+
+  const batchUncacheSelected = useCallback(async () => {
+    const ids = Array.from(selectedItemIds).filter((id) => cachedIds.has(id));
+    if (ids.length === 0) {
+      toast.info("选中项中没有本地缓存");
+      return;
+    }
+    if (!window.confirm(`确认删除选中 ${ids.length} 项的本地缓存？`)) return;
+    await removeLocalMediaCaches(ids);
+  }, [selectedItemIds, cachedIds]);
+
   const selectedItemRef = React.useRef<MediaItem | null>(null);
   useEffect(() => {
     selectedItemRef.current = selectedItem;
@@ -213,13 +281,17 @@ export default function MediaCenter() {
 
   const { playMedia, isPlaying, currentTime } = useMediaStore();
 
-  // Load scope and roles
+  // Load scope and roles + 绑定媒体缓存用户
   useEffect(() => {
     const ws = getCurrentWorkspace();
     setWorkspaceId(!ws || ws === "personal" ? null : ws);
     
     // Check if user is admin
     api.getMe().then(async (me) => {
+      if (me?.id && !isMediaCacheReady()) {
+        setMediaCacheUser(String(me.id));
+      }
+      void refreshCachedMediaIdSet();
       let isWsOwner = false;
       if (ws !== "personal") {
         try {
@@ -994,9 +1066,43 @@ export default function MediaCenter() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-4 text-[10px] text-tx-tertiary select-none">
+                  <div className="flex items-center gap-4 text-[10px] text-tx-tertiary select-none flex-wrap">
                     <span className="flex items-center gap-1"><Play size={12} /> 播放次数: {selectedItem.play_count}</span>
                     <span className="flex items-center gap-1"><Clock size={12} /> 时长: {formatDuration(selectedItem.duration)}</span>
+                    {cachedIds.has(selectedItem.id) && (
+                      <span className="flex items-center gap-1 text-accent-primary font-semibold">
+                        <HardDrive size={12} /> 已本地缓存
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 本地缓存操作（移动端优先展示） */}
+                  <div className="flex items-center gap-2 md:hidden">
+                    {cachedIds.has(selectedItem.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => void uncacheItem(selectedItem)}
+                        className="min-h-11 flex-1 px-3 rounded-xl border border-app-border text-xs font-semibold text-tx-secondary flex items-center justify-center gap-1.5 active:bg-app-hover"
+                      >
+                        <HardDrive size={14} />
+                        删除本地缓存
+                      </button>
+                    ) : getMediaCacheJob(selectedItem.id)?.status === "downloading" ||
+                      getMediaCacheJob(selectedItem.id)?.status === "queued" ? (
+                      <div className="min-h-11 flex-1 px-3 rounded-xl border border-accent-primary/30 bg-accent-primary/5 text-xs font-semibold text-accent-primary flex items-center justify-center gap-1.5">
+                        <Loader2 size={14} className="animate-spin" />
+                        缓存中…
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => cacheItem(selectedItem)}
+                        className="min-h-11 flex-1 px-3 rounded-xl bg-accent-primary text-white text-xs font-bold flex items-center justify-center gap-1.5 active:opacity-90"
+                      >
+                        <DownloadCloud size={14} />
+                        缓存到本地
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1059,9 +1165,9 @@ export default function MediaCenter() {
                     <button
                       type="button"
                       onClick={() => setShowReviewInput(true)}
-                      className="px-6 py-2.5 bg-app-sidebar border border-app-border hover:bg-app-hover hover:border-accent-primary/50 text-tx-secondary hover:text-accent-primary font-bold text-sm rounded-xl shadow-sm flex items-center gap-2 transition-all group"
+                      className="px-6 py-2.5 bg-app-sidebar border border-app-border hover:bg-app-hover hover:border-accent-primary/50 text-tx-secondary hover:text-accent-primary font-bold text-sm rounded-xl shadow-sm flex items-center gap-2 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out group"
                     >
-                      <MessageSquare size={16} className="group-hover:scale-110 transition-transform" />
+                      <MessageSquare size={16} className="group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform" />
                       写评论 / 影评
                     </button>
                   </div>
@@ -1083,23 +1189,38 @@ export default function MediaCenter() {
           >
             {mobileLevel === "type" && (
               <div className="flex-1 flex flex-col min-h-0">
-                {/* 设置：portal 到 titlebar 右上角，与「媒体」标题同一水平线 */}
-                {isAdmin &&
+                {/* titlebar 右上角：车载入口（始终）+ Alist 设置（管理员） */}
+                {typeof document !== "undefined" &&
                   createPortal(
-                    <button
-                      type="button"
+                    <div
                       data-media-chrome
-                      onClick={() => void openAlistSettings()}
-                      className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center"
+                      className="md:hidden fixed z-[45] flex items-center gap-0.5"
                       style={{
                         top: "calc(var(--safe-area-top, 0px) + 12px)",
                         right: "10px",
                       }}
-                      title="Alist 挂载配置"
-                      aria-label="Alist 挂载配置"
                     >
-                      <Settings size={20} />
-                    </button>,
+                      <button
+                        type="button"
+                        onClick={() => setShowCarMode(true)}
+                        className="w-11 h-11 min-w-11 min-h-11 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center transition-colors duration-press"
+                        title="车载 / CarLife"
+                        aria-label="车载 / CarLife"
+                      >
+                        <Car size={20} />
+                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => void openAlistSettings()}
+                          className="w-11 h-11 min-w-11 min-h-11 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center transition-colors duration-press"
+                          title="Alist 挂载配置"
+                          aria-label="Alist 挂载配置"
+                        >
+                          <Settings size={20} />
+                        </button>
+                      )}
+                    </div>,
                     document.body,
                   )}
                 {/* 紧贴 titlebar 下方，无居中大标题 */}
@@ -1107,7 +1228,7 @@ export default function MediaCenter() {
                   <button
                     type="button"
                     onClick={() => enterMediaType("video")}
-                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-app-border bg-app-sidebar/40 hover:bg-app-hover active:scale-[0.99] transition-all text-left"
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-app-border bg-app-sidebar/40 hover:bg-app-hover active:scale-[0.99] transition-[transform,background-color,border-color,color] duration-press ease-out text-left"
                   >
                     <div className="w-12 h-12 rounded-2xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center shrink-0">
                       <Film size={24} className="text-sky-500" />
@@ -1121,7 +1242,7 @@ export default function MediaCenter() {
                   <button
                     type="button"
                     onClick={() => enterMediaType("audio")}
-                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-app-border bg-app-sidebar/40 hover:bg-app-hover active:scale-[0.99] transition-all text-left"
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-app-border bg-app-sidebar/40 hover:bg-app-hover active:scale-[0.99] transition-[transform,background-color,border-color,color] duration-press ease-out text-left"
                   >
                     <div className="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center shrink-0">
                       <Music size={24} className="text-violet-500" />
@@ -1129,6 +1250,23 @@ export default function MediaCenter() {
                     <div className="min-w-0 flex-1">
                       <p className="text-base font-bold text-tx-primary">音频</p>
                       <p className="text-xs text-tx-tertiary mt-0.5">音乐、播客与其它音频合集</p>
+                    </div>
+                    <ChevronRight size={18} className="text-tx-tertiary shrink-0" />
+                  </button>
+                  {/* 车载 / CarLife：说明与同步入口（非 CarLife 合作 SDK） */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCarMode(true)}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-app-border bg-app-sidebar/40 hover:bg-app-hover active:scale-[0.99] transition-[transform,background-color,border-color,color] duration-press ease-out text-left"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center shrink-0">
+                      <Car size={24} className="text-accent-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-bold text-tx-primary">车载 / CarLife</p>
+                      <p className="text-xs text-tx-tertiary mt-0.5">
+                        蓝牙与车机控制说明 · 同步音乐库
+                      </p>
                     </div>
                     <ChevronRight size={18} className="text-tx-tertiary shrink-0" />
                   </button>
@@ -1165,7 +1303,7 @@ export default function MediaCenter() {
                       <button
                         type="button"
                         onClick={() => enterCollection(null)}
-                        className="w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-app-border bg-app-sidebar/30 hover:bg-app-hover active:scale-[0.99] transition-all text-left"
+                        className="w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-app-border bg-app-sidebar/30 hover:bg-app-hover active:scale-[0.99] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-left"
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-tx-primary">全部</p>
@@ -1183,7 +1321,7 @@ export default function MediaCenter() {
                           key={col.id}
                           type="button"
                           onClick={() => enterCollection(col)}
-                          className="w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-app-border bg-app-sidebar/30 hover:bg-app-hover active:scale-[0.99] transition-all text-left"
+                          className="w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-app-border bg-app-sidebar/30 hover:bg-app-hover active:scale-[0.99] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-left"
                         >
                           <div className="min-w-0 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center shrink-0">
@@ -1277,6 +1415,33 @@ export default function MediaCenter() {
                                     {" / "}
                                     {selectedCollection?.title || "全部"}
                                   </p>
+                                  <div className="my-1 border-t border-app-border/60" />
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      "w-full px-3.5 py-2.5 text-left text-sm hover:bg-app-hover flex items-center gap-2",
+                                      isBatchMode ? "text-accent-danger" : "text-tx-primary",
+                                    )}
+                                    onClick={() => {
+                                      setShowItemsMenu(false);
+                                      setIsBatchMode(!isBatchMode);
+                                      setSelectedItemIds(new Set());
+                                    }}
+                                  >
+                                    <SlidersHorizontal size={15} />
+                                    {isBatchMode ? "退出选择" : "选择 / 批量缓存"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="w-full px-3.5 py-2.5 text-left text-sm text-tx-primary hover:bg-app-hover flex items-center gap-2"
+                                    onClick={() => {
+                                      setShowItemsMenu(false);
+                                      setShowCacheSheet(true);
+                                    }}
+                                  >
+                                    <HardDrive size={15} />
+                                    缓存管理
+                                  </button>
                                   {isAdmin && (
                                     <>
                                       <div className="my-1 border-t border-app-border/60" />
@@ -1301,21 +1466,6 @@ export default function MediaCenter() {
                                       >
                                         <Upload size={15} />
                                         JSON 导入
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={cn(
-                                          "w-full px-3.5 py-2.5 text-left text-sm hover:bg-app-hover flex items-center gap-2",
-                                          isBatchMode ? "text-accent-danger" : "text-tx-primary",
-                                        )}
-                                        onClick={() => {
-                                          setShowItemsMenu(false);
-                                          setIsBatchMode(!isBatchMode);
-                                          setSelectedItemIds(new Set());
-                                        }}
-                                      >
-                                        <SlidersHorizontal size={15} />
-                                        {isBatchMode ? "退出编辑" : "编辑 / 批量管理"}
                                       </button>
                                       <div className="my-1 border-t border-app-border/60" />
                                     </>
@@ -1500,7 +1650,23 @@ export default function MediaCenter() {
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-tx-primary truncate">{item.title}</p>
+                            <p className="text-sm font-semibold text-tx-primary truncate flex items-center gap-1.5">
+                              <span className="truncate">{item.title}</span>
+                              {cachedIds.has(item.id) && (
+                                <HardDrive
+                                  size={12}
+                                  className="shrink-0 text-accent-primary"
+                                  aria-label="已缓存"
+                                />
+                              )}
+                              {getMediaCacheJob(item.id)?.status === "downloading" && (
+                                <Loader2
+                                  size={12}
+                                  className="shrink-0 text-accent-primary animate-spin"
+                                  aria-label="缓存中"
+                                />
+                              )}
+                            </p>
                             <p className="text-[11px] text-tx-tertiary truncate">
                               {item.type === "audio"
                                 ? [item.artist, item.album].filter(Boolean).join(" · ") || "未知歌手"
@@ -1539,6 +1705,19 @@ export default function MediaCenter() {
                               isBatchMode && selectedItemIds.has(item.id) && "ring-2 ring-accent-primary",
                             )}
                           >
+                            {cachedIds.has(item.id) && (
+                              <span
+                                className="absolute top-1 left-1 z-10 w-6 h-6 rounded-lg bg-black/55 text-white flex items-center justify-center"
+                                title="已缓存"
+                              >
+                                <HardDrive size={12} />
+                              </span>
+                            )}
+                            {getMediaCacheJob(item.id)?.status === "downloading" && (
+                              <span className="absolute top-1 left-1 z-10 w-6 h-6 rounded-lg bg-black/55 text-white flex items-center justify-center">
+                                <Loader2 size={12} className="animate-spin" />
+                              </span>
+                            )}
                             {item.type === "audio" ? (
                               <AudioCover
                                 item={item}
@@ -1629,7 +1808,7 @@ export default function MediaCenter() {
                   <button
                     onClick={() => { setMediaType("video"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
+                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                       mediaType === "video" 
                         ? "bg-accent-primary border-accent-primary text-white shadow-md shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
@@ -1643,7 +1822,7 @@ export default function MediaCenter() {
                   <button
                     onClick={() => { setMediaType("audio"); setSelectedCollection(null); }}
                     className={cn(
-                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-all",
+                      "flex-1 py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-bold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                       mediaType === "audio" 
                         ? "bg-accent-primary border-accent-primary text-white shadow-md shadow-accent-primary/10" 
                         : "border-app-border text-tx-secondary bg-app-bg hover:bg-app-hover"
@@ -1709,7 +1888,7 @@ export default function MediaCenter() {
                 <button
                   type="button"
                   onClick={() => setShowCarMode(true)}
-                  className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                  className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold"
                   title="车载 / CarLife"
                   aria-label="车载 / CarLife"
                 >
@@ -1719,7 +1898,7 @@ export default function MediaCenter() {
                 {isAdmin && (
                   <button
                     onClick={() => void openAlistSettings()}
-                    className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-all font-semibold"
+                    className="w-full py-2 px-3 border border-app-border hover:bg-app-hover rounded-xl flex items-center justify-center gap-2 text-sm text-tx-secondary hover:text-tx-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold"
                     title="Alist 挂载配置"
                     aria-label="Alist 挂载配置"
                   >
@@ -1763,6 +1942,17 @@ export default function MediaCenter() {
                     <option value="title">拼音</option>
                   </select>
 
+                  {/* 桌面：缓存管理入口 */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCacheSheet(true)}
+                    className="hidden md:flex items-center gap-1.5 px-2.5 py-2 bg-app-sidebar border border-app-border text-sm rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover shrink-0"
+                    title="缓存管理"
+                  >
+                    <HardDrive size={16} />
+                    <span className="text-xs font-semibold">缓存</span>
+                  </button>
+
                   {/* Layout Switcher */}
                   <div className="flex items-center bg-app-sidebar border border-app-border rounded-xl p-0.5 shrink-0">
                     <button
@@ -1792,52 +1982,54 @@ export default function MediaCenter() {
                   </div>
                 </div>
 
-                {/* Import actions (admin/owner only) */}
-                {isAdmin && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => {
-                        setIsBatchMode(!isBatchMode);
-                        setSelectedItemIds(new Set());
-                      }}
-                      className={cn(
-                        "text-sm font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all border",
-                        isBatchMode 
-                          ? "bg-accent-danger/10 border-accent-danger/25 text-accent-danger hover:bg-accent-danger/20"
-                          : "bg-app-sidebar border-app-border hover:bg-app-hover text-tx-secondary"
-                      )}
-                      title={isBatchMode ? "退出管理" : "批量管理"}
-                      aria-label={isBatchMode ? "退出管理" : "批量管理"}
-                    >
-                      <SlidersHorizontal size={15} />
-                      <span>{isBatchMode ? "退出管理" : "批量管理"}</span>
-                    </button>
-                    <button
-                      onClick={() => setShowAlistBrowser(true)}
-                      className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-2 px-4 rounded-xl shadow-md shadow-accent-primary/10 flex items-center gap-1 transition-all"
-                      title="网盘导入"
-                      aria-label="网盘导入"
-                    >
-                      <Plus size={15} />
-                      <span>网盘导入</span>
-                    </button>
-                    <button
-                      onClick={() => setShowImportJson(true)}
-                      className="flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-all"
-                    >
-                      <Upload size={16} />
-                      JSON 导入
-                    </button>
-                    <a
-                      href="/api/media/import/template"
-                      download="template.json"
-                      className="flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-all"
-                    >
-                      <Download size={16} />
-                      下载模板
-                    </a>
-                  </div>
-                )}
+                {/* 批量选择（全员可用：缓存）；导入仅 admin */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      setIsBatchMode(!isBatchMode);
+                      setSelectedItemIds(new Set());
+                    }}
+                    className={cn(
+                      "text-sm font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-colors border",
+                      isBatchMode 
+                        ? "bg-accent-danger/10 border-accent-danger/25 text-accent-danger hover:bg-accent-danger/20"
+                        : "bg-app-sidebar border-app-border hover:bg-app-hover text-tx-secondary"
+                    )}
+                    title={isBatchMode ? "退出选择" : "批量选择"}
+                    aria-label={isBatchMode ? "退出选择" : "批量选择"}
+                  >
+                    <SlidersHorizontal size={15} />
+                    <span>{isBatchMode ? "退出选择" : "批量选择"}</span>
+                  </button>
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => setShowAlistBrowser(true)}
+                        className="bg-accent-primary hover:bg-accent-primary-hover text-white text-sm font-bold py-2 px-4 rounded-xl shadow-md shadow-accent-primary/10 flex items-center gap-1 transition-colors"
+                        title="网盘导入"
+                        aria-label="网盘导入"
+                      >
+                        <Plus size={15} />
+                        <span>网盘导入</span>
+                      </button>
+                      <button
+                        onClick={() => setShowImportJson(true)}
+                        className="flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-colors"
+                      >
+                        <Upload size={16} />
+                        JSON 导入
+                      </button>
+                      <a
+                        href="/api/media/import/template"
+                        download="template.json"
+                        className="flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-colors"
+                      >
+                        <Download size={16} />
+                        下载模板
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Items content list — 底部为迷你播放器/批量条留白（栈页 tab-h=0 时仍够用） */}
@@ -1851,7 +2043,7 @@ export default function MediaCenter() {
                         <div className="flex items-center gap-2 select-none">
                           <button
                             onClick={() => handleOpenEditCollection(selectedCollection)}
-                            className="p-1 px-2 text-[11px] font-semibold text-tx-secondary hover:text-tx-primary border border-app-border hover:bg-app-hover rounded-lg flex items-center gap-1 transition-all"
+                            className="p-1 px-2 text-[11px] font-semibold text-tx-secondary hover:text-tx-primary border border-app-border hover:bg-app-hover rounded-lg flex items-center gap-1 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                             title="编辑合集"
                           >
                             <Edit3 size={12} />
@@ -1859,7 +2051,7 @@ export default function MediaCenter() {
                           </button>
                           <button
                             onClick={() => handleDeleteCollection(selectedCollection)}
-                            className="p-1 px-2 text-[11px] font-semibold text-accent-danger hover:text-white hover:bg-accent-danger border border-accent-danger/20 rounded-lg flex items-center gap-1 transition-all"
+                            className="p-1 px-2 text-[11px] font-semibold text-accent-danger hover:text-white hover:bg-accent-danger border border-accent-danger/20 rounded-lg flex items-center gap-1 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                             title="删除合集"
                           >
                             <Trash2 size={12} />
@@ -2075,7 +2267,7 @@ export default function MediaCenter() {
                           }
                         }}
                         className={cn(
-                          "group cursor-pointer transition-all flex flex-col relative",
+                          "group cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex flex-col relative",
                           selectedItemIds.has(item.id) && isBatchMode && "ring-2 ring-accent-primary rounded-xl"
                         )}
                       >
@@ -2096,7 +2288,7 @@ export default function MediaCenter() {
                           {item.type === "audio" ? (
                             <AudioCover
                               item={item}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              className="w-full h-full object-cover group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 transition-transform duration-300"
                               fallbackIconSize={32}
                             />
                           ) : item.cover_url ? (
@@ -2107,7 +2299,7 @@ export default function MediaCenter() {
                                   : resolveAttachmentUrl(item.cover_url)
                               }
                               alt={item.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              className="w-full h-full object-cover group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 transition-transform duration-300"
                               loading="lazy"
                               onError={(e) => {
                                 const el = e.currentTarget;
@@ -2122,7 +2314,7 @@ export default function MediaCenter() {
                             <img
                               src="/default_video_cover.jpg"
                               alt={item.title}
-                              className="w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-300"
+                              className="w-full h-full object-cover opacity-75 group-[@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 transition-transform duration-300"
                               loading="lazy"
                             />
                           )}
@@ -2209,107 +2401,75 @@ export default function MediaCenter() {
         }}
       />
 
-      {/* 写评论 / 影评：移动与桌面均以居中弹窗呈现 */}
-      {typeof document !== "undefined" &&
-        showReviewInput &&
-        reviewEditor &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[2px] p-0 sm:p-4"
-            onClick={() => {
-              setShowReviewInput(false);
-              reviewEditor.commands.setContent("");
-              setReviewTitle("");
-            }}
-            role="presentation"
-          >
-            <div
-              role="dialog"
-              aria-modal
-              aria-labelledby="media-review-dialog-title"
-              className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-app-border bg-app-elevated shadow-2xl overflow-hidden flex flex-col max-h-[min(90dvh,640px)]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-4 py-3 border-b border-app-border flex items-center justify-between shrink-0">
-                <h3
-                  id="media-review-dialog-title"
-                  className="text-sm font-bold text-tx-primary flex items-center gap-2"
-                >
-                  <MessageSquare size={16} className="text-accent-primary" />
-                  写评论 / 影评
-                </h3>
+      {/* 写评论 / 影评 */}
+      {showReviewInput && reviewEditor && (
+        <BottomSheet
+          open
+          onClose={() => {
+            setShowReviewInput(false);
+            reviewEditor.commands.setContent("");
+            setReviewTitle("");
+          }}
+          title="写评论 / 影评"
+          maxHeight="min(90dvh, 640px)"
+          zClassName="z-[70]"
+          className="sm:max-w-lg sm:mx-auto"
+          bodyClassName="flex flex-col min-h-0"
+        >
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={reviewType}
+                onChange={(e) => setReviewType(e.target.value as any)}
+                className="bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-secondary outline-none min-h-[36px]"
+              >
+                <option value="short_comment">短评</option>
+                <option value="long_review">影评 / 乐评</option>
+                <option value="recommendation">推荐语</option>
+              </select>
+              {reviewType === "long_review" && (
+                <input
+                  type="text"
+                  placeholder="影评标题..."
+                  value={reviewTitle}
+                  onChange={(e) => setReviewTitle(e.target.value)}
+                  className="flex-1 min-w-[8rem] bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-primary outline-none focus:border-accent-primary min-h-[36px]"
+                />
+              )}
+              {selectedItem?.type === "video" && isPlaying && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowReviewInput(false);
-                    reviewEditor.commands.setContent("");
-                    setReviewTitle("");
-                  }}
-                  className="p-2 rounded-md text-tx-tertiary hover:bg-app-hover min-w-[40px] min-h-[40px] flex items-center justify-center"
-                  aria-label="关闭"
+                  onClick={handleInsertTimestamp}
+                  className="text-xs font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-1.5 rounded-lg transition-colors ml-auto"
                 >
-                  <X size={16} />
+                  打点 {formatDuration(currentTime)}
                 </button>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={reviewType}
-                    onChange={(e) => setReviewType(e.target.value as any)}
-                    className="bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-secondary outline-none min-h-[36px]"
-                  >
-                    <option value="short_comment">短评</option>
-                    <option value="long_review">影评 / 乐评</option>
-                    <option value="recommendation">推荐语</option>
-                  </select>
-                  {reviewType === "long_review" && (
-                    <input
-                      type="text"
-                      placeholder="影评标题..."
-                      value={reviewTitle}
-                      onChange={(e) => setReviewTitle(e.target.value)}
-                      className="flex-1 min-w-[8rem] bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-primary outline-none focus:border-accent-primary min-h-[36px]"
-                    />
-                  )}
-                  {selectedItem?.type === "video" && isPlaying && (
-                    <button
-                      type="button"
-                      onClick={handleInsertTimestamp}
-                      className="text-xs font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-1.5 rounded-lg transition-colors ml-auto"
-                    >
-                      打点 {formatDuration(currentTime)}
-                    </button>
-                  )}
-                </div>
-
-                <EditorContent editor={reviewEditor} />
-              </div>
-
-              <div className="px-4 py-3 border-t border-app-border flex items-center justify-end gap-2 shrink-0 pb-[max(0.75rem,var(--safe-area-bottom,0px))]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowReviewInput(false);
-                    reviewEditor.commands.setContent("");
-                    setReviewTitle("");
-                  }}
-                  className="px-5 py-2.5 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl transition-all min-h-[40px]"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePostReview}
-                  className="px-6 py-2.5 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow transition-all min-h-[40px]"
-                >
-                  发布互动
-                </button>
-              </div>
+              )}
             </div>
-          </div>,
-          document.body,
-        )}
+            <EditorContent editor={reviewEditor} />
+          </div>
+          <div className="px-4 py-3 border-t border-app-border flex items-center justify-end gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setShowReviewInput(false);
+                reviewEditor.commands.setContent("");
+                setReviewTitle("");
+              }}
+              className="px-5 py-2.5 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl min-h-[40px]"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handlePostReview}
+              className="px-6 py-2.5 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow min-h-[40px]"
+            >
+              发布互动
+            </button>
+          </div>
+        </BottomSheet>
+      )}
 
       {/* 车载 / CarLife 说明 */}
       <AnimatePresence>
@@ -2370,12 +2530,12 @@ export default function MediaCenter() {
                 <button
                   type="button"
                   onClick={() => {
-                    setMediaType("audio");
-                    setSelectedCollection(null);
                     setShowCarMode(false);
+                    // 移动端进入音频合集层；桌面仅切换类型（mobileLevel 无影响）
+                    enterMediaType("audio");
                     void fetchData();
                   }}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-accent-primary text-white hover:opacity-90"
+                  className="flex-1 py-2.5 min-h-11 rounded-xl text-xs font-bold bg-accent-primary text-white hover:opacity-90"
                 >
                   打开音乐库并同步
                 </button>
@@ -2396,7 +2556,7 @@ export default function MediaCenter() {
                       alert("未检测到 CarLife，请从应用商店安装百度 CarLife 后连接车机。");
                     }
                   }}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-app-border bg-app-surface text-tx-primary hover:bg-app-hover"
+                  className="flex-1 py-2.5 min-h-11 rounded-xl text-xs font-semibold border border-app-border bg-app-surface text-tx-primary hover:bg-app-hover"
                 >
                   尝试打开 CarLife
                 </button>
@@ -2416,6 +2576,17 @@ export default function MediaCenter() {
         items={
           [
             { id: "detail", label: "详情", icon: <Info size={14} /> },
+            ctxMenu.item && cachedIds.has(ctxMenu.item.id)
+              ? {
+                  id: "uncache",
+                  label: "删除本地缓存",
+                  icon: <HardDrive size={14} />,
+                }
+              : {
+                  id: "cache",
+                  label: "缓存到本地",
+                  icon: <DownloadCloud size={14} />,
+                },
             ...(isAdmin
               ? ([
                   { id: "assign", label: "合入", icon: <FolderInput size={14} /> },
@@ -2430,6 +2601,12 @@ export default function MediaCenter() {
               : []),
           ] as ContextMenuItem[]
         }
+      />
+
+      <MediaCacheSheet
+        open={showCacheSheet}
+        onClose={() => setShowCacheSheet(false)}
+        filterType={mediaType}
       />
 
       {/* Modal: Alist settings */}
@@ -2590,7 +2767,7 @@ export default function MediaCenter() {
                           setFetchingMetadata(false);
                         }
                       }}
-                      className="text-[10px] text-accent-primary hover:bg-accent-primary/10 px-2 py-0.5 rounded-lg border border-accent-primary/20 transition-all font-semibold flex items-center gap-1 disabled:opacity-50"
+                      className="text-[10px] text-accent-primary hover:bg-accent-primary/10 px-2 py-0.5 rounded-lg border border-accent-primary/20 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold flex items-center gap-1 disabled:opacity-50"
                     >
                       {fetchingMetadata ? (
                         <>
@@ -2683,63 +2860,100 @@ export default function MediaCenter() {
                         setSelectedItemIds(new Set(items.map((item) => item.id)));
                       }
                     }}
-                    className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all whitespace-nowrap"
+                    className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out whitespace-nowrap"
                   >
                     {selectedItemIds.size === items.length ? "取消全选" : "全选"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => openAssignForIds(Array.from(selectedItemIds))}
+                    onClick={() => batchCacheSelected()}
                     disabled={selectedItemIds.size === 0}
                     className={cn(
-                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 shadow whitespace-nowrap",
+                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
                       selectedItemIds.size > 0
                         ? "bg-accent-primary hover:bg-accent-primary-hover text-white"
                         : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
                     )}
-                    title="合入到其它合集（不移出原合集）"
+                    title="缓存到本地"
                   >
-                    <FolderInput size={13} />
-                    合入
+                    <DownloadCloud size={13} />
+                    缓存
                   </button>
 
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (selectedItemIds.size === 0) return;
-                      if (
-                        window.confirm(
-                          `确认要删除选中的 ${selectedItemIds.size} 个单品吗？`,
-                        )
-                      ) {
-                        try {
-                          await api.request("/media/items/batch-delete", {
-                            method: "POST",
-                            body: JSON.stringify({
-                              ids: Array.from(selectedItemIds),
-                            }),
-                          });
-                          setSelectedItemIds(new Set());
-                          setIsBatchMode(false);
-                          fetchData();
-                        } catch (err) {
-                          console.error("Batch delete failed:", err);
-                        }
-                      }
-                    }}
+                    onClick={() => void batchUncacheSelected()}
                     disabled={selectedItemIds.size === 0}
                     className={cn(
-                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 shadow whitespace-nowrap",
+                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
                       selectedItemIds.size > 0
-                        ? "bg-accent-danger hover:bg-accent-danger-hover text-white"
+                        ? "bg-app-sidebar border border-app-border text-tx-primary hover:bg-app-hover"
                         : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
                     )}
+                    title="删除本地缓存"
                   >
-                    <Trash2 size={13} />
-                    <span className="max-md:hidden">批量</span>
-                    删除
+                    <HardDrive size={13} />
+                    <span className="max-md:hidden">移除</span>
+                    缓存
                   </button>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => openAssignForIds(Array.from(selectedItemIds))}
+                      disabled={selectedItemIds.size === 0}
+                      className={cn(
+                        "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap max-md:hidden",
+                        selectedItemIds.size > 0
+                          ? "bg-accent-primary hover:bg-accent-primary-hover text-white"
+                          : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
+                      )}
+                      title="合入到其它合集（不移出原合集）"
+                    >
+                      <FolderInput size={13} />
+                      合入
+                    </button>
+                  )}
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (selectedItemIds.size === 0) return;
+                        if (
+                          window.confirm(
+                            `确认要删除选中的 ${selectedItemIds.size} 个单品吗？`,
+                          )
+                        ) {
+                          try {
+                            await api.request("/media/items/batch-delete", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                ids: Array.from(selectedItemIds),
+                              }),
+                            });
+                            setSelectedItemIds(new Set());
+                            setIsBatchMode(false);
+                            fetchData();
+                          } catch (err) {
+                            console.error("Batch delete failed:", err);
+                          }
+                        }
+                      }}
+                      disabled={selectedItemIds.size === 0}
+                      className={cn(
+                        "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
+                        selectedItemIds.size > 0
+                          ? "bg-accent-danger hover:bg-accent-danger-hover text-white"
+                          : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
+                      )}
+                    >
+                      <Trash2 size={13} />
+                      <span className="max-md:hidden">批量</span>
+                      删除
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -2747,7 +2961,7 @@ export default function MediaCenter() {
                       setIsBatchMode(false);
                       setSelectedItemIds(new Set());
                     }}
-                    className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-all text-tx-secondary whitespace-nowrap"
+                    className="py-1.5 px-2.5 md:px-3 bg-app-sidebar border border-app-border text-[11px] font-semibold hover:bg-app-hover rounded-xl transition-colors text-tx-secondary whitespace-nowrap"
                   >
                     取消
                   </button>

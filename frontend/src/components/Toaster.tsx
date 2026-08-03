@@ -18,6 +18,40 @@ const ACCENTS: Record<ToastItem["type"], string> = {
   warning: "border-amber-500/30",
 };
 
+function ToastRow({ it }: { it: ToastItem }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const open = shown && !it.exiting;
+
+  return (
+    <div
+      className={cn(
+        "pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-lg shadow-lg w-full",
+        "bg-app-elevated border text-sm text-tx-primary",
+        "transition-[transform,opacity] duration-normal ease-out will-change-transform",
+        open ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
+        ACCENTS[it.type],
+      )}
+    >
+      {ICONS[it.type]}
+      <span className="flex-1 break-words">{it.message}</span>
+      <button
+        type="button"
+        onClick={() => toast.dismiss(it.id)}
+        className="p-0.5 rounded hover:bg-app-hover text-tx-tertiary hover:text-tx-secondary transition-colors"
+        aria-label="dismiss"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 export default function Toaster() {
   const [items, setItems] = useState<ToastItem[]>([]);
 
@@ -27,33 +61,15 @@ export default function Toaster() {
 
   return createPortal(
     <div
-      className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 w-[calc(100%-2rem)] md:w-auto md:max-w-[480px]"
+      className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-toast flex flex-col items-center gap-2 w-[calc(100%-2rem)] md:w-auto md:max-w-[480px]"
       style={{ top: "var(--toast-top, 1rem)" }}
       role="status"
       aria-live="polite"
     >
       {items.map((it) => (
-        <div
-          key={it.id}
-          className={cn(
-            "pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-lg shadow-lg w-full",
-            "bg-app-elevated border text-sm text-tx-primary",
-            "animate-in fade-in slide-in-from-top-2 duration-200",
-            ACCENTS[it.type]
-          )}
-        >
-          {ICONS[it.type]}
-          <span className="flex-1 break-words">{it.message}</span>
-          <button
-            onClick={() => toast.dismiss(it.id)}
-            className="p-0.5 rounded hover:bg-app-hover text-tx-tertiary hover:text-tx-secondary transition-colors"
-            aria-label="dismiss"
-          >
-            <X size={14} />
-          </button>
-        </div>
+        <ToastRow key={it.id} it={it} />
       ))}
     </div>,
-    document.body
+    document.body,
   );
 }

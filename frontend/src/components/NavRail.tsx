@@ -230,8 +230,8 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
     };
   }, [isMobile, railWidthPx]);
   const itemBaseClass = showLabel
-    ? "relative w-14 py-1.5 rounded-button flex flex-col items-center justify-center gap-0.5 transition-all duration-fast ease-soft"
-    : "relative w-10 h-10 rounded-button flex items-center justify-center transition-all duration-fast ease-soft";
+    ? "relative w-14 py-1.5 rounded-button flex flex-col items-center justify-center gap-0.5 transition-[transform,background-color,box-shadow,border-color,color,opacity] duration-fast ease-soft"
+    : "relative w-10 h-10 rounded-button flex items-center justify-center transition-[transform,background-color,box-shadow,border-color,color,opacity] duration-fast ease-soft";
 
   const renderItem = (mod: NavModule) => {
     const active = isModuleActive(mod, state.viewMode);
@@ -354,7 +354,7 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
           title={currentUser.displayName || currentUser.username}
           className={cn(
             itemBaseClass,
-            "flex flex-col items-center justify-center gap-1 group/avatar cursor-pointer hover:bg-app-hover/50 rounded-lg p-1 text-tx-secondary transition-all mb-1"
+            "flex flex-col items-center justify-center gap-1 group/avatar cursor-pointer hover:bg-app-hover/50 rounded-lg p-1 text-tx-secondary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out mb-1"
           )}
           onClick={() => window.dispatchEvent(new CustomEvent("super:open-settings"))}
         >

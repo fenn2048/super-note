@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { Motion } from "@/components/common/Motion";
 import {
   MessageCircle,
   ListTodo,
@@ -35,6 +36,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import ContentCanvas from "@/components/layout/ContentCanvas";
 import ReadingDashboard from "@/components/books/ReadingDashboard";
 import { setLibraryTab } from "@/lib/navigation.config";
+import { springs } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // 快捷卡片
@@ -57,7 +59,7 @@ function QuickStatCard({
       onClick={onClick}
       disabled={!onClick}
       className={cn(
-        "flex items-center gap-3 p-4 rounded-card border border-app-border/70 bg-app-elevated shadow-xs transition-all duration-fast ease-soft",
+        "flex items-center gap-3 p-4 rounded-card border border-app-border/70 bg-app-elevated shadow-xs transition-[transform,background-color,box-shadow,border-color,color,opacity] duration-fast ease-soft",
         onClick ? "hover:bg-app-hover hover:shadow-sm hover:border-app-border cursor-pointer active:scale-[0.98]" : "",
       )}
     >
@@ -167,7 +169,7 @@ function TaskItem({
       <div
         onClick={(e) => onToggle(item.id, e)}
         className={cn(
-          "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 transition-all active:scale-[0.9] hover:scale-110",
+          "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 transition-transform duration-press ease-out active:scale-[0.97] [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110",
           item.isCompleted
             ? "border-green-500 bg-green-500 text-white"
             : isOverdue
@@ -249,10 +251,10 @@ function BackupStatusCard() {
     : null;
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.35 }}
+      transition={{ ...springs.ui, delay: 0.35  }}
       className="flex items-center justify-between px-4 py-3 rounded-xl border border-app-border/40 bg-app-surface/20"
     >
       <div className="flex items-center gap-3">
@@ -281,7 +283,7 @@ function BackupStatusCard() {
       >
         ＞ 设置
       </button>
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -314,7 +316,7 @@ function InviteCodeDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -342,7 +344,7 @@ function InviteCodeDialog({
             <span className="flex-1 text-xs text-accent-primary truncate select-all">{joinLink}</span>
             <button
               onClick={handleCopyLink}
-              className="w-8 h-8 rounded-lg bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 flex items-center justify-center transition-all shrink-0"
+              className="w-8 h-8 rounded-lg bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
             >
               {copiedLink ? <Check size={14} /> : <Copy size={14} />}
             </button>
@@ -358,7 +360,7 @@ function InviteCodeDialog({
             </code>
             <button
               onClick={handleCopyCode}
-              className="w-8 h-8 rounded-lg bg-app-hover text-tx-secondary hover:bg-accent-primary/10 hover:text-accent-primary flex items-center justify-center transition-all shrink-0"
+              className="w-8 h-8 rounded-lg bg-app-hover text-tx-secondary hover:bg-accent-primary/10 hover:text-accent-primary flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0"
             >
               {copiedCode ? <Check size={14} /> : <Copy size={14} />}
             </button>
@@ -368,18 +370,18 @@ function InviteCodeDialog({
         <div className="flex flex-col gap-2">
           <button
             onClick={handleCopyLink}
-            className="w-full py-2.5 rounded-xl bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 transition-all flex items-center justify-center gap-1.5"
+            className="w-full py-2.5 rounded-xl bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-center gap-1.5"
           >
             {copiedLink ? "已复制链接！" : <><Link size={13} /> 复制分享链接</>}
           </button>
           <button
             onClick={onClose}
-            className="w-full py-2 rounded-xl text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-all"
+            className="w-full py-2 rounded-xl text-xs text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
           >
             开始使用
           </button>
         </div>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }
@@ -733,10 +735,10 @@ export default function Dashboard() {
       >
         <div className="px-4 sm:px-0 py-2 sm:py-4 space-y-6">
           {/* ===== 欢迎区域 ===== */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={springs.ui}
           >
             <div className="flex items-center gap-3.5 mb-1">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-400 flex items-center justify-center shadow-accent">
@@ -755,14 +757,14 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
 
           {/* ===== 快捷操作面板 ===== */}
           {hasWorkspaces && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.05 }}
+              transition={{ ...springs.ui, delay: 0.05  }}
               className="rounded-window border border-app-border/60 bg-app-elevated shadow-sm p-4 sm:p-5"
             >
               <DashboardQuickActions
@@ -770,15 +772,15 @@ export default function Dashboard() {
                 onWriteSays={handleQuickWriteSays}
                 onAddTask={handleQuickAddTask}
               />
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* ===== 书籍「阅读中」仪表盘（桌面 + 移动首页共用） ===== */}
           {(isModuleAllowedByPack("books") || isModuleAllowedByPack("library")) && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.06 }}
+              transition={{ ...springs.ui, delay: 0.06  }}
               className="rounded-window border border-app-border/60 bg-app-elevated shadow-sm p-4 sm:p-5"
             >
               <ReadingDashboard
@@ -786,15 +788,15 @@ export default function Dashboard() {
                 onOpenBook={handleOpenBookFromHome}
                 variant="section"
               />
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* ===== 本月记账摘要 ===== */}
           {isModuleAllowedByPack("finance") && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.08 }}
+              transition={{ ...springs.ui, delay: 0.08  }}
             >
               <button
                 type="button"
@@ -854,15 +856,15 @@ export default function Dashboard() {
                   );
                 })()}
               </button>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* ===== 创建家庭空间（无工作区时展示） ===== */}
           {!hasFamilyGroup && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
+              transition={{ ...springs.ui, delay: 0.1  }}
               className="relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-pink-500/5 p-6"
             >
               {/* 装饰背景 */}
@@ -900,7 +902,7 @@ export default function Dashboard() {
                 <button
                   onClick={handleCreateFamily}
                   disabled={creating}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
                 >
                   {creating ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -910,7 +912,7 @@ export default function Dashboard() {
                   {creating ? "正在创建..." : "一键创建家庭空间"}
                 </button>
               </div>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* ===== 状态卡片 ===== */}
@@ -963,10 +965,10 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-6">
               {/* 最近说说 */}
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
+                transition={{ ...springs.ui, delay: 0.1  }}
                 className="rounded-window border border-app-border/60 bg-app-elevated shadow-xs overflow-hidden"
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/30">
@@ -1003,13 +1005,13 @@ export default function Dashboard() {
                     />
                   ))
                 )}
-              </motion.div>
+              </Motion.div>
 
               {/* 即将到期待办 */}
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
+                transition={{ ...springs.ui, delay: 0.2  }}
                 className="rounded-window border border-app-border/60 bg-app-elevated shadow-xs overflow-hidden"
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/30">
@@ -1052,13 +1054,13 @@ export default function Dashboard() {
                     />
                   ))
                 )}
-              </motion.div>
+              </Motion.div>
 
               {/* 最近编辑的笔记 */}
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.3 }}
+                transition={{ ...springs.ui, delay: 0.3  }}
                 className="rounded-window border border-app-border/60 bg-app-elevated shadow-xs overflow-hidden"
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-app-border/40 bg-app-surface/30">
@@ -1094,7 +1096,7 @@ export default function Dashboard() {
                     />
                   ))
                 )}
-              </motion.div>
+              </Motion.div>
             </div>
           ))}
 

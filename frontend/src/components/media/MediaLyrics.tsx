@@ -116,7 +116,7 @@ export default function MediaLyrics({
                     if (onSeek && line.time >= 0) onSeek(line.time);
                   }}
                   className={cn(
-                    "w-full max-w-md text-center px-4 py-1.5 rounded-xl transition-all duration-300",
+                    "w-full max-w-md text-center px-4 py-1.5 rounded-xl transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel",
                     active
                       ? "text-accent-primary text-[17px] font-extrabold scale-[1.02] bg-accent-primary/10 border border-accent-primary/20"
                       : near

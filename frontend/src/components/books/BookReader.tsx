@@ -2659,7 +2659,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
             // Auto close sidebar on mobile
             if (window.innerWidth < 640) setActiveSidebar(null);
           }}
-          className="w-full text-left py-1.5 px-3 hover:bg-app-surface hover:text-accent-primary text-xs rounded transition-all truncate block"
+          className="w-full text-left py-1.5 px-3 hover:bg-app-surface hover:text-accent-primary text-xs rounded transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out truncate block"
           style={{ paddingLeft: `${depth * 12 + 12}px` }}
           title={item.label}
         >
@@ -2733,7 +2733,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
               <button
                 type="button"
                 onClick={() => setActiveSidebar(null)}
-                className="inline-flex items-center gap-1 min-w-[44px] min-h-[44px] px-2.5 rounded-xl font-semibold text-xs shrink-0 active:scale-95 transition-all"
+                className="inline-flex items-center gap-1 min-w-[44px] min-h-[44px] px-2.5 rounded-xl font-semibold text-xs shrink-0 active:scale-95 transition-transform duration-press ease-out"
                 style={{
                   color: theme.fg,
                   backgroundColor: `${theme.fg}14`,
@@ -2786,7 +2786,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     <button
                       type="submit"
                       disabled={isSearching || !searchQuery.trim()}
-                      className="min-h-[44px] min-w-[44px] px-3 sm:px-4 bg-accent-primary text-white text-sm font-semibold rounded-xl hover:bg-accent-primary/95 disabled:opacity-50 transition-all shrink-0 inline-flex items-center justify-center gap-1.5"
+                      className="min-h-[44px] min-w-[44px] px-3 sm:px-4 bg-accent-primary text-white text-sm font-semibold rounded-xl hover:bg-accent-primary/95 disabled:opacity-50 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0 inline-flex items-center justify-center gap-1.5"
                       aria-label="搜索"
                     >
                       {isSearching ? (
@@ -2842,7 +2842,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                                 (e.currentTarget as HTMLElement).click();
                               }
                             }}
-                            className="p-3.5 border rounded-xl cursor-pointer transition-all text-left flex flex-col gap-1.5 active:scale-[0.99]"
+                            className="p-3.5 border rounded-xl cursor-pointer transition-transform duration-press ease-out text-left flex flex-col gap-1.5 active:scale-[0.99]"
                             style={{
                               borderColor: `${theme.fg}18`,
                               backgroundColor: `${theme.fg}08`,
@@ -2876,7 +2876,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     {notes.length > 0 && (
                       <button
                         onClick={handleExportNotes}
-                        className="px-2.5 py-1 text-[10px] font-bold border border-app-border text-tx-secondary rounded-lg hover:bg-app-surface transition-all flex items-center gap-1 shrink-0"
+                        className="px-2.5 py-1 text-[10px] font-bold border border-app-border text-tx-secondary rounded-lg hover:bg-app-surface transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center gap-1 shrink-0"
                       >
                         <Download size={10} />
                         <span>导出 Markdown</span>
@@ -2903,7 +2903,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                             console.warn("跳转笔记失败:", err);
                           }
                         }}
-                        className="p-3 border border-app-border/50 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-xl cursor-pointer transition-all text-left flex flex-col gap-2"
+                        className="p-3 border border-app-border/50 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-xl cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-left flex flex-col gap-2"
                       >
                         <p className="text-xs italic font-serif leading-relaxed opacity-95 border-l-2 pl-2" style={{ borderColor: n.color }}>
                           "{n.text}"
@@ -2941,7 +2941,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         <button
                           key={item.id}
                           onClick={() => updateSetting("fontFamily", item.id)}
-                          className="py-2 px-3 rounded-lg border text-xs font-semibold transition-all"
+                          className="py-2 px-3 rounded-lg border text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                           style={{
                             borderColor: settings.fontFamily === item.id ? "var(--color-accent-primary, #8b7cf6)" : `${theme.fg}33`,
                             backgroundColor: settings.fontFamily === item.id ? `${theme.fg}12` : "transparent",
@@ -2967,7 +2967,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         <button
                           key={key}
                           onClick={() => updateSetting("theme", key)}
-                          className="py-2 px-3 rounded-lg border flex items-center justify-between text-xs font-semibold transition-all"
+                          className="py-2 px-3 rounded-lg border flex items-center justify-between text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                           style={{
                             backgroundColor: value.bg,
                             color: value.fg,
@@ -2993,7 +2993,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         <button
                           key={item.id}
                           onClick={() => updateSetting("layoutMode", item.id)}
-                          className="py-2 px-3 rounded-lg border text-xs font-semibold transition-all"
+                          className="py-2 px-3 rounded-lg border text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                           style={{
                             borderColor: settings.layoutMode === item.id ? "var(--color-accent-primary, #8b7cf6)" : `${theme.fg}33`,
                             backgroundColor: settings.layoutMode === item.id ? `${theme.fg}12` : "transparent",
@@ -3084,7 +3084,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   {/* Reset Settings */}
                   <button
                     onClick={handleResetSettings}
-                    className="w-full mt-4 py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 font-semibold text-sm"
+                    className="w-full mt-4 py-2.5 rounded-lg transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-center gap-2 font-semibold text-sm"
                     style={{
                       border: `1px solid ${theme.fg}33`,
                       color: theme.fg,
@@ -3157,7 +3157,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
               {/* Bottom Left Page Flip Button */}
               <button
                 onClick={() => viewRef.current?.prev()}
-                className="absolute left-6 bottom-[49px] flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs z-30 transition-all active:scale-95 hidden md:flex"
+                className="absolute left-6 bottom-[49px] flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs z-30 transition-transform duration-press ease-out active:scale-95 hidden md:flex"
                 style={{
                   borderColor: `${theme.fg}40`,
                   color: theme.fg,
@@ -3173,7 +3173,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
               {/* Bottom Right Page Flip Button */}
               <button
                 onClick={() => viewRef.current?.next()}
-                className="absolute right-6 bottom-[49px] flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs z-30 transition-all active:scale-95 hidden md:flex"
+                className="absolute right-6 bottom-[49px] flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs z-30 transition-transform duration-press ease-out active:scale-95 hidden md:flex"
                 style={{
                   borderColor: `${theme.fg}40`,
                   color: theme.fg,
@@ -3214,7 +3214,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
           <button
             onClick={onBack}
-            className="p-2 -ml-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-all active:scale-95 shrink-0"
+            className="p-2 -ml-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-transform duration-press ease-out active:scale-95 shrink-0"
             aria-label="返回"
           >
             <ArrowLeft size={18} />
@@ -3235,7 +3235,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         <div className="hidden md:flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={handleToggleFullscreen}
-            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all text-inherit"
+            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-inherit"
             title={isFullscreen ? "退出全屏 (Esc)" : "全屏阅读"}
           >
             {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
@@ -3253,35 +3253,35 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
           )}
           <button
             onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "toc" ? null : "toc"); }}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "toc" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${activeSidebar === "toc" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="大纲目录"
           >
             <List size={16} />
           </button>
           <button
             onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "search" ? null : "search"); }}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "search" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${activeSidebar === "search" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="全文搜索"
           >
             <Search size={16} />
           </button>
           <button
             onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "notes" ? null : "notes"); }}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "notes" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${activeSidebar === "notes" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="读书笔记"
           >
             <MessageSquare size={16} />
           </button>
           <button
             onClick={() => { setIsImmersive(false); setActiveSidebar(activeSidebar === "settings" ? null : "settings"); }}
-            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all ${activeSidebar === "settings" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
+            className={`p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${activeSidebar === "settings" ? "bg-black/10 dark:bg-white/10 text-accent-primary" : ""}`}
             title="字体排版设置"
           >
             <Settings size={16} />
           </button>
           <button
             onClick={handleShareBookToTalk}
-            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all text-inherit"
+            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-inherit"
             title="推荐分享本书到说说"
           >
             <Share2 size={16} />
@@ -3383,7 +3383,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         const existingAnnotation = notes.find(n => n.cfi === selectionRange.cfi);
         const isMobileMenu = typeof window !== "undefined" && window.innerWidth < 768;
         const btnClass = cn(
-          "px-2.5 py-1.5 rounded transition-all flex items-center gap-1 shrink-0",
+          "px-2.5 py-1.5 rounded transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center gap-1 shrink-0",
           theme.isDark ? "hover:bg-white/10 active:bg-white/15" : "hover:bg-black/5 active:bg-black/10",
         );
 
@@ -3409,7 +3409,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   void handleAddHighlight(color, "solid");
                   setShowMarkerColors(false);
                 }}
-                className="w-7 h-7 rounded-full border border-white/20 shadow hover:scale-110 active:scale-95 transition-transform"
+                className="w-7 h-7 rounded-full border border-white/20 shadow [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 active:scale-95 transition-transform"
                 style={{ backgroundColor: color }}
               />
             ))}
@@ -3564,7 +3564,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   value={noteEditText}
                   onChange={(e) => setNoteEditText(e.target.value)}
                   placeholder="添加批注内容..."
-                  className="w-full h-32 p-3 bg-transparent border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-all resize-none"
+                  className="w-full h-32 p-3 bg-transparent border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out resize-none"
                   style={{
                     borderColor: `${theme.fg}20`,
                     color: theme.fg
@@ -3664,7 +3664,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       {/* Floating Audio Player */}
       {ttsShowPlayer && (
         <div className={cn(
-          "fixed left-1/2 -translate-x-1/2 bottom-14 z-45 max-w-[420px] w-[calc(100%-2rem)] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl p-2.5 flex items-center justify-between gap-3 select-none text-zinc-850 dark:text-zinc-100 transition-all duration-300 animate-fade-in",
+          "fixed left-1/2 -translate-x-1/2 bottom-14 z-45 max-w-[420px] w-[calc(100%-2rem)] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl p-2.5 flex items-center justify-between gap-3 select-none text-zinc-850 dark:text-zinc-100 transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel animate-fade-in",
           isImmersive ? "translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
         )}>
           {/* Cover & Info */}
@@ -3701,7 +3701,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
             {/* Play/Pause */}
             <button
               onClick={handleToggleTts}
-              className="w-8 h-8 rounded-full bg-accent-primary text-white flex items-center justify-center shadow hover:scale-105 active:scale-95 transition-all"
+              className="w-8 h-8 rounded-full bg-accent-primary text-white flex items-center justify-center shadow [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 active:scale-95 transition-transform duration-press ease-out"
               title={ttsState === "playing" ? "暂停" : "播放"}
             >
               {ttsState === "playing" ? (
@@ -3849,7 +3849,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   placeholder={shareConfig.placeholder}
                   value={shareComment}
                   onChange={(e) => setShareComment(e.target.value)}
-                  className="w-full h-24 p-3 bg-app-bg border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-all resize-none text-tx-primary placeholder-tx-tertiary"
+                  className="w-full h-24 p-3 bg-app-bg border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out resize-none text-tx-primary placeholder-tx-tertiary"
                   disabled={sharing}
                 />
               </div>
@@ -3859,7 +3859,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
             <div className="px-5 py-3.5 border-t border-app-border bg-app-surface/50 flex justify-end gap-3">
               <button
                 onClick={() => setShareConfig(prev => ({ ...prev, show: false }))}
-                className="px-4 py-1.5 border border-app-border hover:bg-app-border text-tx-secondary rounded-lg text-xs font-semibold transition-all active:scale-95"
+                className="px-4 py-1.5 border border-app-border hover:bg-app-border text-tx-secondary rounded-lg text-xs font-semibold transition-transform duration-press ease-out active:scale-95"
                 disabled={sharing}
               >
                 取消
@@ -3877,7 +3877,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     setSharing(false);
                   }
                 }}
-                className="flex items-center gap-2 px-5 py-1.5 bg-accent-primary hover:bg-accent-primary/95 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all active:scale-95 shadow"
+                className="flex items-center gap-2 px-5 py-1.5 bg-accent-primary hover:bg-accent-primary/95 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-transform duration-press ease-out active:scale-95 shadow"
                 disabled={sharing}
               >
                 {sharing ? (
@@ -3942,7 +3942,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   placeholder="这一刻的想法..."
                   value={thoughtText}
                   onChange={(e) => setThoughtText(e.target.value)}
-                  className="w-full h-32 p-3 bg-transparent border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-all resize-none"
+                  className="w-full h-32 p-3 bg-transparent border rounded-xl text-xs focus:outline-none focus:border-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out resize-none"
                   style={{
                     borderColor: `${theme.fg}20`,
                     color: theme.fg
@@ -3958,7 +3958,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     type="button"
                     onClick={() => setThoughtVisibility("public")}
                     className={cn(
-                      "px-2.5 py-1 rounded-md transition-all font-semibold text-[10px]",
+                      "px-2.5 py-1 rounded-md transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold text-[10px]",
                       thoughtVisibility === "public"
                         ? "bg-accent-primary text-white"
                         : "opacity-75 hover:opacity-100"
@@ -3970,7 +3970,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     type="button"
                     onClick={() => setThoughtVisibility("private")}
                     className={cn(
-                      "px-2.5 py-1 rounded-md transition-all font-semibold text-[10px]",
+                      "px-2.5 py-1 rounded-md transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out font-semibold text-[10px]",
                       thoughtVisibility === "private"
                         ? "bg-accent-primary text-white"
                         : "opacity-75 hover:opacity-100"
@@ -3996,7 +3996,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
               </button>
               <button
                 onClick={handleSaveThought}
-                className="px-4 py-1.5 bg-accent-primary hover:bg-accent-primary/95 text-white text-xs rounded-xl font-semibold transition-all active:scale-95 shadow-sm"
+                className="px-4 py-1.5 bg-accent-primary hover:bg-accent-primary/95 text-white text-xs rounded-xl font-semibold transition-transform duration-press ease-out active:scale-95 shadow-sm"
               >
                 发表想法
               </button>
@@ -4038,7 +4038,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                 <button
                   type="button"
                   onClick={() => setActiveSidebar(null)}
-                  className="inline-flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-2.5 rounded-xl font-semibold text-xs shrink-0 active:scale-95 transition-all"
+                  className="inline-flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-2.5 rounded-xl font-semibold text-xs shrink-0 active:scale-95 transition-transform duration-press ease-out"
                   style={{
                     color: theme.fg,
                     backgroundColor: `${theme.fg}14`,
@@ -4067,7 +4067,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   <button
                     type="button"
                     onClick={handleExportNotes}
-                    className="min-h-[40px] px-3 py-1.5 text-xs font-bold border rounded-xl transition-all inline-flex items-center justify-center gap-1.5 shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    className="min-h-[40px] px-3 py-1.5 text-xs font-bold border rounded-xl transition-transform duration-press ease-out inline-flex items-center justify-center gap-1.5 shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
                     style={{
                       borderColor: `${theme.fg}30`,
                       color: theme.fg,
@@ -4102,7 +4102,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                       }
                     }}
                     className={cn(
-                      "p-3.5 md:p-4 border rounded-xl cursor-pointer transition-all text-left flex flex-col justify-between gap-3 active:scale-[0.99]",
+                      "p-3.5 md:p-4 border rounded-xl cursor-pointer transition-transform duration-press ease-out text-left flex flex-col justify-between gap-3 active:scale-[0.99]",
                       theme.isDark
                         ? "border-white/10 bg-white/5 hover:bg-white/10"
                         : "border-black/10 bg-black/5 hover:bg-black/10",
@@ -4232,7 +4232,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     type="button"
                     disabled={notesPage === 1}
                     onClick={() => setNotesPage((prev) => Math.max(1, prev - 1))}
-                    className="min-h-[40px] px-3 rounded-xl border text-xs font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    className="min-h-[40px] px-3 rounded-xl border text-xs font-semibold disabled:opacity-40 transition-transform duration-press ease-out hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
                     style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
                   >
                     上一页
@@ -4245,7 +4245,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                         key={p}
                         onClick={() => setNotesPage(p)}
                         className={cn(
-                          "min-w-[36px] min-h-[36px] rounded-xl border text-xs font-bold transition-all inline-flex items-center justify-center active:scale-95",
+                          "min-w-[36px] min-h-[36px] rounded-xl border text-xs font-bold transition-transform duration-press ease-out inline-flex items-center justify-center active:scale-95",
                           notesPage === p
                             ? "bg-accent-primary text-white border-transparent"
                             : "hover:bg-black/5 dark:hover:bg-white/5",
@@ -4266,7 +4266,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                     onClick={() =>
                       setNotesPage((prev) => Math.min(totalNotesPages, prev + 1))
                     }
-                    className="min-h-[40px] px-3 rounded-xl border text-xs font-semibold disabled:opacity-40 transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                    className="min-h-[40px] px-3 rounded-xl border text-xs font-semibold disabled:opacity-40 transition-transform duration-press ease-out hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
                     style={{ borderColor: `${theme.fg}20`, color: theme.fg }}
                   >
                     下一页

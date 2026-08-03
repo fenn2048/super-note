@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { setServerUrl, testServerConnection } from "@/lib/api";
 import { buildServerUrl, parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
 import ServerAddressInput from "@/components/ServerAddressInput";
+import { springs } from "@/lib/motion";
 
 interface ServerConnectProps {
   onConnected: () => void;
@@ -77,16 +78,16 @@ export default function ServerConnect({ onConnected }: ServerConnectProps) {
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        transition={springs.soft}
         className="relative w-full max-w-[460px] mx-4"
       >
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl dark:shadow-2xl dark:shadow-black/20 p-8">
           {/* Icon & Title */}
           <div className="text-center mb-8">
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1, duration: 0.4 }}
+              transition={{ ...springs.ui, delay: 0.1 }}
               className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 mb-4"
             >
               <Server size={24} className="text-emerald-600 dark:text-emerald-400" />
@@ -136,7 +137,7 @@ export default function ServerConnect({ onConnected }: ServerConnectProps) {
             <button
               type="submit"
               disabled={isLoading || !parts.host.trim()}
-              className="w-full flex items-center justify-center py-2.5 px-4 rounded-xl text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              className="w-full flex items-center justify-center py-2.5 px-4 rounded-xl text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-sm hover:shadow-md"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

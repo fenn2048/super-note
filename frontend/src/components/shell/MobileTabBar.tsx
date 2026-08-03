@@ -69,7 +69,7 @@ export default function MobileTabBar({ visible }: { visible: boolean }) {
   return (
     <nav
       className={cn(
-        "mobile-tab-bar fixed bottom-0 left-0 right-0 z-rail-fab md:hidden flex items-center justify-around transition-all duration-300 ease-soft",
+        "mobile-tab-bar fixed bottom-0 left-0 right-0 z-rail-fab md:hidden flex items-center justify-around transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel ease-soft",
         visible
           ? "translate-y-0 opacity-100"
           : "translate-y-full opacity-0 pointer-events-none",
@@ -90,7 +90,7 @@ export default function MobileTabBar({ visible }: { visible: boolean }) {
             handleTabClick(tab.mode, { openMyTasks: tab.openMyTasks });
           }}
           className={cn(
-            "flex flex-col items-center justify-center flex-1 h-16 max-h-16 relative transition-all duration-fast ease-soft active:scale-95",
+            "flex flex-col items-center justify-center flex-1 h-16 max-h-16 relative transition-transform duration-press ease-out duration-fast ease-soft active:scale-95",
             tab.active
               ? "text-accent-primary"
               : "text-tx-tertiary hover:text-tx-primary",
@@ -100,7 +100,7 @@ export default function MobileTabBar({ visible }: { visible: boolean }) {
         >
           <div
             className={cn(
-              "relative flex items-center justify-center w-11 h-7 rounded-full transition-all duration-fast ease-soft",
+              "relative flex items-center justify-center w-11 h-7 rounded-full transition-[transform,background-color,box-shadow,border-color,color,opacity] duration-fast ease-soft",
               tab.active && "bg-accent-primary/12",
             )}
           >

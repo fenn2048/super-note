@@ -538,7 +538,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
         ) : (
           <>
             {posts.map((post) => (
-              <div key={post.id} className="flex items-start gap-3 group/post animate-in fade-in duration-300">
+              <div key={post.id} className="flex items-start gap-3 group/post animate-in fade-in duration-fast">
                 {renderAvatar(post)}
                 <div className="flex-1 space-y-1.5 max-w-[85%]">
                   <div className="flex items-baseline gap-2">
@@ -605,7 +605,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
 
             {/* AI 建议审批卡片 */}
             {pendingSuggestion && (
-              <div className="flex items-start gap-3 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="flex items-start gap-3 animate-in slide-in-from-bottom-2 duration-fast">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 shrink-0 flex items-center justify-center text-sm">
                   {AI_AVATAR}
                 </div>
@@ -718,7 +718,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
           type="button"
           onClick={() => setAlwaysThink(!alwaysThink)}
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-semibold transition-all cursor-pointer select-none",
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out cursor-pointer select-none",
             alwaysThink
               ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
               : "bg-app-surface text-tx-tertiary border-app-border hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -732,7 +732,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
 
       {/* Text Composer Form */}
       <form onSubmit={handleSend} className="p-3 border-t border-app-border bg-app-sidebar flex items-center gap-2 shrink-0">
-        <div className="relative flex-1 flex items-center bg-app-bg border border-app-border rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-accent-primary focus-within:border-accent-primary transition-all">
+        <div className="relative flex-1 flex items-center bg-app-bg border border-app-border rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-accent-primary focus-within:border-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out">
           <Input
             ref={composerInputRef}
             value={content}
@@ -869,7 +869,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                       <div
                         key={t.id}
                         onClick={() => handleLinkCardSelect({ id: t.id, title: t.title })}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-app-hover cursor-pointer text-xs font-medium text-tx-secondary hover:text-tx-primary border border-transparent hover:border-app-border/40 transition-all"
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-app-hover cursor-pointer text-xs font-medium text-tx-secondary hover:text-tx-primary border border-transparent hover:border-app-border/40 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                       >
                         <div className="flex items-center gap-2 truncate">
                           {t.isCompleted === 1 ? (
@@ -893,7 +893,7 @@ export default function ProjectDiscussionView({ project, tasks }: ProjectDiscuss
                     <div
                       key={n.id}
                       onClick={() => handleLinkCardSelect({ id: n.id, title: n.title })}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-app-hover cursor-pointer text-xs font-medium text-tx-secondary hover:text-tx-primary border border-transparent hover:border-app-border/40 transition-all"
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-app-hover cursor-pointer text-xs font-medium text-tx-secondary hover:text-tx-primary border border-transparent hover:border-app-border/40 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                     >
                       <div className="flex items-center gap-2 truncate">
                         <FileText size={13} className="text-accent-primary shrink-0" />

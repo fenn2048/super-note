@@ -9,6 +9,10 @@ import {
   cacheMediaPlayUrl,
 } from "@/store/mediaStore";
 import { api, resolveAttachmentUrl } from "@/lib/api";
+import {
+  acquireLocalPlayUrl,
+  releaseLocalPlayUrl,
+} from "@/lib/mediaFileCache";
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, 
   Volume2, VolumeX, ListMusic, ChevronDown, Music, Loader2, X, Minimize2 
@@ -37,6 +41,8 @@ import {
   extractCoverAccent,
   type CoverAccent,
 } from "@/lib/coverAccent";
+import { springs } from "@/lib/motion";
+import { BottomSheet } from "@/components/common/BottomSheet";
 
 /** 环形进度：viewBox 64，半径 29，描边 3 */
 function MiniProgressRing({ progressPct }: { progressPct: number }) {
@@ -112,6 +118,8 @@ export default function GlobalMusicPlayer() {
   } = useMediaStore();
 
   const [playUrl, setPlayUrl] = useState<string>("");
+  /** 当前占用的本地 blob 对应 mediaId */
+  const localPlayHeldIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -248,8 +256,18 @@ export default function GlobalMusicPlayer() {
     : id3Meta?.album || currentMedia?.album || "";
 
   // 1. Fetch play URL when currentMedia is global-playable（纯音频；视频后台仅听走 MediaPlayer 自身 video）
+  //    优先本地文件缓存 → 会话直链缓存 → 在线 play-url
   useEffect(() => {
+    // 释放上一首的本地 blob
+    const releasePrevLocal = () => {
+      if (localPlayHeldIdRef.current) {
+        releaseLocalPlayUrl(localPlayHeldIdRef.current);
+        localPlayHeldIdRef.current = null;
+      }
+    };
+
     if (!currentMedia || !isGlobalPlayerItem(currentMedia)) {
+      releasePrevLocal();
       setPlayUrl("");
       if (audioRef.current) {
         audioRef.current.pause();
@@ -264,10 +282,13 @@ export default function GlobalMusicPlayer() {
     setLoading(true);
     setError("");
 
-    // 切歌瞬间：立刻将 playUrl 设为缓存直链（若有）或空，同时停止并卸载旧曲目 <audio>，防止在新直链请求期间重复起播旧曲 A
-    const cached = getCachedMediaPlayUrl(mediaId);
-    setPlayUrl(cached || "");
-    if (!cached && audioRef.current) {
+    // 切歌：先卸旧 blob，再尝试同步会话缓存
+    if (localPlayHeldIdRef.current && localPlayHeldIdRef.current !== mediaId) {
+      releasePrevLocal();
+    }
+    const sessionCached = getCachedMediaPlayUrl(mediaId);
+    setPlayUrl(sessionCached || "");
+    if (!sessionCached && audioRef.current) {
       audioRef.current.pause();
       audioRef.current.removeAttribute("src");
       audioRef.current.load();
@@ -275,8 +296,23 @@ export default function GlobalMusicPlayer() {
 
     async function fetchPlayUrl() {
       try {
-        if (cached) {
-          if (!active) return;
+        // 1) 本地离线缓存
+        const localUrl = await acquireLocalPlayUrl(mediaId);
+        if (!active) {
+          if (localUrl) releaseLocalPlayUrl(mediaId);
+          return;
+        }
+        if (localUrl) {
+          if (localPlayHeldIdRef.current && localPlayHeldIdRef.current !== mediaId) {
+            releaseLocalPlayUrl(localPlayHeldIdRef.current);
+          }
+          localPlayHeldIdRef.current = mediaId;
+          setPlayUrl(localUrl);
+          setLoading(false);
+          return;
+        }
+
+        if (sessionCached) {
           setLoading(false);
         }
 
@@ -286,11 +322,19 @@ export default function GlobalMusicPlayer() {
         if (res && res.url) {
           cacheMediaPlayUrl(mediaId, res.url);
           setPlayUrl(res.url);
-        } else if (!cached) {
+        } else if (!sessionCached) {
           setError("无法获取播放直链");
         }
       } catch (err: any) {
         if (!active) return;
+        // 在线失败时再试一次本地（竞态：刚缓存完）
+        const localRetry = await acquireLocalPlayUrl(mediaId);
+        if (localRetry) {
+          localPlayHeldIdRef.current = mediaId;
+          setPlayUrl(localRetry);
+          setError("");
+          return;
+        }
         const hit = getCachedMediaPlayUrl(mediaId);
         if (hit) {
           setPlayUrl(hit);
@@ -973,9 +1017,9 @@ export default function GlobalMusicPlayer() {
           <motion.div
             drag
             dragMomentum={false}
-            initial={{ opacity: 0, scale: 0.8 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
+            exit={{ opacity: 0, scale: 0.96 }}
             data-global-music-ui
             className={cn(
               "fixed z-[100] top-24 right-6 w-[4.25rem] h-[4.25rem] rounded-full cursor-move group",
@@ -1014,7 +1058,7 @@ export default function GlobalMusicPlayer() {
                   e.preventDefault();
                   isPlaying ? pauseMedia() : resumeMedia();
                 }}
-                className="text-tx-primary dark:text-white hover:scale-110 active:scale-95 transition-transform"
+                className="text-tx-primary dark:text-white [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 active:scale-95 transition-transform"
               >
                 {isPlaying ? (
                   <Pause size={20} className="fill-current" />
@@ -1054,7 +1098,7 @@ export default function GlobalMusicPlayer() {
         <div
         data-global-music-ui
         className={cn(
-          "z-40 select-none transition-all duration-300 overflow-hidden flex flex-col",
+          "z-40 select-none transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel overflow-hidden flex flex-col",
           // 移动 / 桌面统一：悬浮圆角条；桌面宽度≈主内容区，两侧留边
           "fixed left-3 right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] mobile-music-mini rounded-2xl",
           "bg-app-elevated border border-app-border/60 shadow-xl",
@@ -1168,7 +1212,7 @@ export default function GlobalMusicPlayer() {
                 e.stopPropagation();
                 isPlaying ? pauseMedia() : resumeMedia();
               }}
-              className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/25 hover:scale-105 active:scale-95 transition-all"
+              className="w-10 h-10 rounded-full bg-accent-primary text-white flex items-center justify-center shadow-md shadow-accent-primary/25 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 active:scale-95 transition-transform duration-press ease-out"
             >
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -1196,7 +1240,7 @@ export default function GlobalMusicPlayer() {
                   e.stopPropagation();
                   isPlaying ? pauseMedia() : resumeMedia();
                 }}
-                className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+                className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 active:scale-95 transition-transform duration-press ease-out"
               >
                 {loading ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -1208,7 +1252,7 @@ export default function GlobalMusicPlayer() {
               </button>
               <button 
                 onClick={() => nextMedia(false)}
-                className="w-9 h-9 rounded-full bg-app-sidebar border border-app-border text-tx-secondary flex items-center justify-center active:bg-app-hover transition-all"
+                className="w-9 h-9 rounded-full bg-app-sidebar border border-app-border text-tx-secondary flex items-center justify-center active:bg-app-hover transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
               >
                 <SkipForward size={16} />
               </button>
@@ -1294,7 +1338,7 @@ export default function GlobalMusicPlayer() {
                   initial={{ opacity: 0, y: 40 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 40 }}
-                  transition={{ type: "spring", damping: 28, stiffness: 320 }}
+                  transition={springs.ui}
                   className={cn(
                     "fixed z-[170] flex flex-col overflow-hidden shadow-2xl",
                     "bg-[var(--color-elevated-solid,var(--color-elevated))] text-tx-primary border border-app-border",
@@ -1431,42 +1475,29 @@ export default function GlobalMusicPlayer() {
         )}
 
       {/* ----------------------------------------------------------------------- */}
-      {/* 全屏播放器：封面放大高斯模糊背景 + 大圆碟 + 主控件；主题适配 */}
+      {/* 全屏播放器：BottomSheet（拖拽关闭 + velocity） */}
       {/* ----------------------------------------------------------------------- */}
-      {typeof document !== "undefined" &&
-        createPortal(
-      <AnimatePresence>
-        {isExpanded && (
-          <>
-          <motion.div
-            key="global-player-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            data-global-music-ui
-            className="fixed inset-0 z-[159] hidden md:block bg-black/45 dark:bg-black/60"
-            onClick={() => setIsExpanded(false)}
-            aria-hidden
-          />
-          <motion.div
-            key="global-player-panel"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 240 }}
-            data-global-music-ui
-            data-global-player-panel
+      <BottomSheet
+            open={isExpanded}
+            onClose={() => setIsExpanded(false)}
+            hideClose
+            maxHeight="100dvh"
+            zClassName="z-[160]"
             className={cn(
-              "fixed z-[160] flex flex-col overflow-hidden select-none text-tx-primary",
-              // 深色底仅作兜底；真正可见的是封面 blur 层（移动端不铺实体色以免压死模糊）
+              "h-[100dvh] max-h-[100dvh] rounded-none border-0",
               "bg-black md:bg-[var(--color-bg)]",
-              "inset-0",
-              "md:inset-y-0 md:left-0 md:right-0 md:mx-auto",
-              "md:w-[min(42vw,520px)] md:min-w-[400px] md:max-w-[520px]",
-              "md:shadow-2xl md:border-x md:border-app-border",
+              "md:max-w-[520px] md:mx-auto md:rounded-t-window md:border-x md:border-app-border",
             )}
-            style={playerAccentStyle}
+            bodyClassName="flex flex-col min-h-0 p-0 overflow-hidden"
+            scrimClassName="hidden md:block bg-black/45 dark:bg-black/60"
           >
+            <div
+              data-global-music-ui
+              data-global-player-panel
+              className="relative flex flex-col flex-1 min-h-0 overflow-hidden text-tx-primary select-none"
+              style={playerAccentStyle}
+            >
+
             {/* 背景：当前封面全屏放大 + 高斯模糊；无封面时标题派生多停靠渐变 */}
             <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none" aria-hidden>
               {blurCoverSrc ? (
@@ -1499,7 +1530,7 @@ export default function GlobalMusicPlayer() {
               <button
                 type="button"
                 onClick={() => setIsExpanded(false)}
-                className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 active:scale-95 transition-all"
+                className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 active:scale-95 transition-transform duration-press ease-out"
                 aria-label="收起"
               >
                 <ChevronDown size={26} />
@@ -1514,7 +1545,7 @@ export default function GlobalMusicPlayer() {
                 type="button"
                 onClick={() => setShowQueue(true)}
                 className={cn(
-                  "hidden md:inline-flex w-11 h-11 justify-self-end rounded-full items-center justify-center transition-all",
+                  "hidden md:inline-flex w-11 h-11 justify-self-end rounded-full items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                   showQueue
                     ? "text-accent-primary bg-accent-primary/15"
                     : "text-white/90 hover:bg-white/10",
@@ -1607,7 +1638,7 @@ export default function GlobalMusicPlayer() {
                   <button
                     type="button"
                     onClick={cyclePlayMode}
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all"
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                     title="播放模式"
                   >
                     {playMode === "random" && (
@@ -1622,7 +1653,7 @@ export default function GlobalMusicPlayer() {
                   <button
                     type="button"
                     onClick={prevMedia}
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 transition-all"
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 transition-transform duration-press ease-out"
                   >
                     <SkipBack size={28} />
                   </button>
@@ -1633,7 +1664,7 @@ export default function GlobalMusicPlayer() {
                       e.stopPropagation();
                       isPlaying ? pauseMedia() : resumeMedia();
                     }}
-                    className="w-[4.5rem] h-[4.5rem] rounded-full text-white flex items-center justify-center shadow-xl hover:opacity-95 active:scale-95 transition-all"
+                    className="w-[4.5rem] h-[4.5rem] rounded-full text-white flex items-center justify-center shadow-xl hover:opacity-95 active:scale-95 transition-transform duration-press ease-out"
                     style={{
                       backgroundColor: coverAccent.solid,
                       boxShadow: `0 12px 32px ${coverAccent.shadow}`,
@@ -1651,7 +1682,7 @@ export default function GlobalMusicPlayer() {
                   <button
                     type="button"
                     onClick={() => nextMedia(false)}
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 transition-all"
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 transition-transform duration-press ease-out"
                   >
                     <SkipForward size={28} />
                   </button>
@@ -1659,7 +1690,7 @@ export default function GlobalMusicPlayer() {
                   <button
                     type="button"
                     onClick={() => setShowQueue(true)}
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all md:hidden"
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out md:hidden"
                     title="播放列表"
                   >
                     <ListMusic size={20} />
@@ -1667,7 +1698,7 @@ export default function GlobalMusicPlayer() {
                   <button
                     type="button"
                     onClick={() => setMuted(!isMuted)}
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all hidden md:flex"
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hidden md:flex"
                   >
                     {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
                   </button>
@@ -1698,12 +1729,10 @@ export default function GlobalMusicPlayer() {
                 </div>
               </div>
             </div>
-          </motion.div>
-          </>
-        )}
-      </AnimatePresence>,
-          document.body,
-        )}
+
+            </div>
+          </BottomSheet>
+
         </>
       )}
     </>

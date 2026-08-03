@@ -41,6 +41,7 @@ import { api } from "@/lib/api";
 import { confirm } from "@/components/ui/confirm";
 import { toast } from "@/lib/toast";
 import TokenUsageStats from "@/components/TokenUsageStats";
+import { springs } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -206,7 +207,7 @@ export default function TokenManagement(): JSX.Element {
             type="button"
             onClick={() => void reload(true)}
             disabled={refreshing}
-            className="p-2 rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 disabled:opacity-50 transition-all"
+            className="p-2 rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 disabled:opacity-50 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             title={t("common.refresh", { defaultValue: "刷新" })}
             aria-label={t("common.refresh", { defaultValue: "刷新" })}
           >
@@ -219,7 +220,7 @@ export default function TokenManagement(): JSX.Element {
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition-all shadow-sm hover:shadow-md"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-sm hover:shadow-md"
           >
             <Plus className="w-4 h-4" />
             {t("tokens.createAction", { defaultValue: "创建令牌" })}
@@ -312,7 +313,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
       <button
         type="button"
         onClick={onCreate}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-all"
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
       >
         <Plus className="w-4 h-4" />
         {t("tokens.empty.cta", { defaultValue: "立即创建" })}
@@ -586,7 +587,7 @@ function CreateTokenDialog({
                   key={s}
                   type="button"
                   onClick={() => toggleScope(s)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-all text-left ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-left ${
                     checked
                       ? "border-indigo-400 dark:border-indigo-500/50 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-200"
                       : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40 text-zinc-700 dark:text-zinc-300 hover:border-indigo-200 dark:hover:border-indigo-500/30"
@@ -619,7 +620,7 @@ function CreateTokenDialog({
                 key={d}
                 type="button"
                 onClick={() => setExpiresInDays(d)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   expiresInDays === d
                     ? "border-indigo-400 dark:border-indigo-500/50 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-200"
                     : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40 text-zinc-700 dark:text-zinc-300 hover:border-indigo-200 dark:hover:border-indigo-500/30"
@@ -634,7 +635,7 @@ function CreateTokenDialog({
             <button
               type="button"
               onClick={() => setExpiresInDays(null)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                 expiresInDays === null
                   ? "border-amber-400 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-200"
                   : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40 text-zinc-700 dark:text-zinc-300 hover:border-amber-200 dark:hover:border-amber-500/30"
@@ -676,7 +677,7 @@ function CreateTokenDialog({
           type="button"
           onClick={handleSubmit}
           disabled={submitting}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-sm"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-sm"
         >
           {submitting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -801,7 +802,7 @@ function CreatedTokenDialog({
           <button
             type="button"
             onClick={handleCopy}
-            className={`inline-flex items-center gap-1.5 px-3 rounded-xl text-sm font-medium transition-all ${
+            className={`inline-flex items-center gap-1.5 px-3 rounded-xl text-sm font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
               copied
                 ? "bg-emerald-600 text-white"
                 : "bg-indigo-600 hover:bg-indigo-700 text-white"
@@ -880,7 +881,7 @@ function DialogShell({
         initial={{ opacity: 0, y: 12, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.97 }}
-        transition={{ duration: 0.18 }}
+        transition={springs.modal}
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6"
       >

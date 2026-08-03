@@ -453,7 +453,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               setSelectedFilter("reading");
               setShowMobileSidebar(false);
             }}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-between ${
               selectedFilter === "reading"
                 ? "bg-accent-primary/10 text-accent-primary"
                 : "hover:bg-app-surface text-tx-secondary"
@@ -466,7 +466,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               setSelectedFilter("all");
               setShowMobileSidebar(false);
             }}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-between ${
               selectedFilter === "all"
                 ? "bg-accent-primary/10 text-accent-primary"
                 : "hover:bg-app-surface text-tx-secondary"
@@ -479,7 +479,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               setSelectedFilter("finished");
               setShowMobileSidebar(false);
             }}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-between ${
               selectedFilter === "finished"
                 ? "bg-accent-primary/10 text-accent-primary"
                 : "hover:bg-app-surface text-tx-secondary"
@@ -492,7 +492,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               setSelectedFilter("uncategorized");
               setShowMobileSidebar(false);
             }}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out flex items-center justify-between ${
               selectedFilter === "uncategorized"
                 ? "bg-accent-primary/10 text-accent-primary"
                 : "hover:bg-app-surface text-tx-secondary"
@@ -516,7 +516,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                     setSelectedFilter(group.id);
                     setShowMobileSidebar(false);
                   }}
-                  className={`group/item w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                  className={`group/item w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                     selectedFilter === group.id
                       ? "bg-accent-primary/10 text-accent-primary"
                       : "hover:bg-app-surface text-tx-secondary"
@@ -528,7 +528,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                   </span>
                   <button
                     onClick={(e) => handleDeleteGroup(group.id, e)}
-                    className="opacity-0 group-hover/item:opacity-100 hover:text-red-500 p-0.5 rounded transition-all"
+                    className="opacity-0 group-hover/item:opacity-100 hover:text-red-500 p-0.5 rounded transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -565,7 +565,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
 
       {/* Main Books Grid */}
       <div
-        className={`flex-1 flex flex-col overflow-hidden relative transition-all ${isDragging ? "bg-accent-primary/5" : ""}`}
+        className={`flex-1 flex flex-col overflow-hidden relative transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${isDragging ? "bg-accent-primary/5" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -649,7 +649,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                     key={book.bookHash}
                     onClick={() => onOpenBook(book.bookHash)}
                     className={cn(
-                      "group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all shrink-0",
+                      "group relative flex flex-col cursor-pointer active:scale-[0.98] transition-transform duration-press ease-out shrink-0",
                       BOOK_COVER_WIDTH_CLASS,
                     )}
                   >
@@ -687,14 +687,14 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                       <div className="absolute top-1.5 left-1.5 z-[3] opacity-0 md:group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-black/60 rounded-md p-0.5 shadow">
                         <button
                           onClick={(e) => handleEditClick(book, e)}
-                          className="p-1 text-white hover:text-accent-primary hover:bg-white/10 rounded transition-all"
+                          className="p-1 text-white hover:text-accent-primary hover:bg-white/10 rounded transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                           title="编辑信息"
                         >
                           <Edit size={12} />
                         </button>
                         <button
                           onClick={(e) => handleDeleteBook(book.bookHash, e)}
-                          className="p-1 text-white hover:text-red-400 hover:bg-white/10 rounded transition-all"
+                          className="p-1 text-white hover:text-red-400 hover:bg-white/10 rounded transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
                           title="删除书籍"
                         >
                           <Trash2 size={12} />
@@ -722,7 +722,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                 title="导入书籍"
                 aria-label="导入书籍"
                 className={cn(
-                  "group relative flex flex-col cursor-pointer active:scale-[0.98] transition-all text-left disabled:opacity-60 disabled:cursor-wait shrink-0",
+                  "group relative flex flex-col cursor-pointer active:scale-[0.98] transition-transform duration-press ease-out text-left disabled:opacity-60 disabled:cursor-wait shrink-0",
                   BOOK_COVER_WIDTH_CLASS,
                 )}
               >
@@ -828,7 +828,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                     <button
                       type="button"
                       onClick={() => setEditVisibility("PRIVATE")}
-                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                         editVisibility === "PRIVATE"
                           ? "border-accent-primary bg-accent-primary/5 text-accent-primary"
                           : "border-app-border hover:bg-app-surface text-tx-secondary"
@@ -840,7 +840,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                     <button
                       type="button"
                       onClick={() => setEditVisibility("WORKSPACE")}
-                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                         editVisibility === "WORKSPACE"
                           ? "border-emerald-500 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400"
                           : "border-app-border hover:bg-app-surface text-tx-secondary"
@@ -861,7 +861,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               <button
                 type="button"
                 onClick={() => setEditingBook(null)}
-                className="px-4 py-2 border border-app-border rounded-lg text-xs font-semibold text-tx-secondary hover:bg-app-surface transition-all"
+                className="px-4 py-2 border border-app-border rounded-lg text-xs font-semibold text-tx-secondary hover:bg-app-surface transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
               >
                 取消
               </button>
@@ -869,7 +869,7 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="px-4 py-2 bg-accent-primary text-white rounded-lg text-xs font-semibold hover:bg-accent-primary/95 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 bg-accent-primary text-white rounded-lg text-xs font-semibold hover:bg-accent-primary/95 active:scale-95 transition-transform duration-press ease-out flex items-center gap-2 disabled:opacity-50"
               >
                 {isSavingEdit && <Loader2 size={12} className="animate-spin" />}
                 <span>保存</span>

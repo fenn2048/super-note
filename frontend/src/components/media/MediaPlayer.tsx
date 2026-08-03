@@ -18,6 +18,10 @@ import {
   updateNativeMediaSession,
 } from "@/lib/nativeMedia";
 import { isNativePlatform } from "@/hooks/useCapacitor";
+import {
+  acquireLocalPlayUrl,
+  releaseLocalPlayUrl,
+} from "@/lib/mediaFileCache";
 
 export interface MediaPlayerMediaMeta {
   title: string;
@@ -101,6 +105,8 @@ export default function MediaPlayer({
   const mediaMetaRef = useRef(media);
   mediaMetaRef.current = media;
   const playUrlRef = useRef<string>("");
+  /** 本地 blob URL 占用：卸载时 release */
+  const localPlayHeldRef = useRef(false);
   /** 节流推送锁屏进度 */
   const lastNativePosPush = useRef(0);
   const armedRef = useRef(false);
@@ -521,25 +527,44 @@ export default function MediaPlayer({
       setLoading(true);
       setError("");
 
-      const res = await api.request<any>(`/media/items/${mediaId}/play-url`, {
-        method: "GET",
-      });
-
-      if (!active.current) return;
-
+      // 优先本地缓存
+      if (localPlayHeldRef.current) {
+        releaseLocalPlayUrl(mediaId);
+        localPlayHeldRef.current = false;
+      }
       let rawUrl = "";
       let initialProgress = 0;
-      if (res && res.url) {
-        rawUrl = res.url;
-        initialProgress = res.progress || 0;
-      } else if (res && res.data && res.data.raw_url) {
-        rawUrl = res.data.raw_url;
+      let fromLocal = false;
+
+      const localUrl = await acquireLocalPlayUrl(mediaId);
+      if (!active.current) {
+        if (localUrl) releaseLocalPlayUrl(mediaId);
+        return;
+      }
+      if (localUrl) {
+        rawUrl = localUrl;
+        fromLocal = true;
+        localPlayHeldRef.current = true;
       } else {
-        throw new Error("未能从服务器获取到播放直链");
+        const res = await api.request<any>(`/media/items/${mediaId}/play-url`, {
+          method: "GET",
+        });
+
+        if (!active.current) return;
+
+        if (res && res.url) {
+          rawUrl = res.url;
+          initialProgress = res.progress || 0;
+        } else if (res && res.data && res.data.raw_url) {
+          rawUrl = res.data.raw_url;
+        } else {
+          throw new Error("未能从服务器获取到播放直链");
+        }
+
+        cacheMediaPlayUrl(mediaId, rawUrl);
       }
 
       playUrlRef.current = rawUrl;
-      cacheMediaPlayUrl(mediaId, rawUrl);
 
       if (!containerRef.current) return;
 
@@ -548,6 +573,8 @@ export default function MediaPlayer({
         import("hls.js"),
       ]);
       const Hls = hlsMod.default;
+
+      const isHls = !fromLocal && rawUrl.includes(".m3u8");
 
       const player = new Artplayer({
         container: containerRef.current,
@@ -568,7 +595,7 @@ export default function MediaPlayer({
         fullscreenWeb: false,
         playsInline: true,
         theme: "#23ade5",
-        type: rawUrl.includes(".m3u8") ? "m3u8" : "auto",
+        type: isHls ? "m3u8" : "auto",
         controls: [
           {
             name: "audioOnly",
@@ -775,6 +802,7 @@ export default function MediaPlayer({
 
   useEffect(() => {
     const active = { current: true };
+    const heldId = mediaId;
     fetchAndInitPlayer(active);
 
     return () => {
@@ -787,6 +815,10 @@ export default function MediaPlayer({
         }
         playerRef.current.destroy(false);
         playerRef.current = null;
+      }
+      if (localPlayHeldRef.current) {
+        releaseLocalPlayUrl(heldId);
+        localPlayHeldRef.current = false;
       }
     };
     // mediaId 变化时重建
@@ -853,7 +885,7 @@ export default function MediaPlayer({
       )}
       <div
         className={cn(
-          "relative overflow-hidden bg-black select-none transition-all duration-300 w-full aspect-video md:rounded-xl md:border md:border-app-border",
+          "relative overflow-hidden bg-black select-none transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel w-full aspect-video md:rounded-xl md:border md:border-app-border",
           isTheaterMode && !isFullscreen ? "z-50 ring-2 ring-white/10 shadow-2xl" : "z-10",
         )}
       >

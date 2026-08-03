@@ -212,7 +212,7 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete,
                               </div>
                               <div className="w-full bg-app-hover/50 h-1.5 rounded-full overflow-hidden">
                                 <div
-                                  className="bg-accent-primary h-full transition-all duration-300"
+                                  className="bg-accent-primary h-full transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                                   style={{ width: `${task.progress || 0}%` }}
                                 />
                               </div>
@@ -246,7 +246,7 @@ export default function ProjectList({ stages, onTaskClick, onToggleTaskComplete,
                           <td className="p-3 text-right">
                             <button
                               onClick={() => onTaskClick?.(task)}
-                              className="opacity-0 group-hover/row:opacity-100 p-1 hover:bg-app-hover rounded transition-all text-tx-tertiary hover:text-tx-primary"
+                              className="opacity-0 group-hover/row:opacity-100 p-1 hover:bg-app-hover rounded transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-tx-tertiary hover:text-tx-primary"
                               title={t("projects.viewDetails") || "查看详情"}
                             >
                               <ArrowRight size={14} />

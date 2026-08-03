@@ -149,7 +149,7 @@ export default function TokenUsageStats(): JSX.Element | null {
               type="button"
               onClick={() => setDays(d)}
               disabled={loading}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all disabled:opacity-50 ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-50 ${
                 days === d
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"

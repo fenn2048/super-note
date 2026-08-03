@@ -107,7 +107,7 @@ export default function TagColorPicker({ currentColor, onColorChange, size = "sm
       <button
         ref={triggerRef}
         type="button"
-        className={`${dotSize} rounded-full shrink-0 ring-1 ring-transparent hover:ring-accent-primary/40 transition-all cursor-pointer`}
+        className={`${dotSize} rounded-full shrink-0 ring-1 ring-transparent hover:ring-accent-primary/40 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out cursor-pointer`}
         style={{ backgroundColor: currentColor }}
         onClick={(e) => {
           e.stopPropagation();
@@ -133,7 +133,7 @@ export default function TagColorPicker({ currentColor, onColorChange, size = "sm
                 <button
                   key={color}
                   type="button"
-                  className={`w-4 h-4 rounded-full flex items-center justify-center transition-transform hover:scale-125 ${
+                  className={`w-4 h-4 rounded-full flex items-center justify-center transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 ${
                     isActive ? "ring-2 ring-accent-primary ring-offset-1 ring-offset-app-elevated" : ""
                   } ${color === "#ffffff" || color === "#e6edf3" ? "border border-app-border" : ""}`}
                   style={{ backgroundColor: color }}

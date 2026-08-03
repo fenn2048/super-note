@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Square } from "lucide-react";
+import { springs } from "@/lib/motion";
 
 interface RecordingPanelProps {
   duration: number;
@@ -79,7 +80,7 @@ export default function RecordingPanel({
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: "auto" }}
       exit={{ opacity: 0, height: 0 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={springs.ui}
       className="w-full border-t border-app-border/50 bg-app-bg overflow-hidden"
     >
       <div className="px-4 py-3 flex items-center justify-between gap-4">
@@ -106,7 +107,7 @@ export default function RecordingPanel({
               <motion.div
                 key={index}
                 animate={{ height: `${Math.max(3, value * 28)}px` }}
-                transition={{ duration: 0.08, ease: "easeOut" }}
+                transition={springs.snappy}
                 className="w-[3px] rounded-full bg-accent-primary/80"
               />
             ))}
@@ -123,7 +124,7 @@ export default function RecordingPanel({
           {/* 取消按钮 */}
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 rounded-lg text-xs text-tx-secondary hover:bg-app-hover transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs text-tx-secondary hover:bg-app-hover transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
           >
             取消
           </button>
@@ -131,7 +132,7 @@ export default function RecordingPanel({
           {/* 停止并保存按钮 */}
           <button
             onClick={onRecordingComplete}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium bg-accent-primary text-white hover:opacity-90 active:scale-95 transition-all shadow-md shadow-accent-primary/20"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium bg-accent-primary text-white hover:opacity-90 active:scale-95 transition-transform duration-press ease-out shadow-md shadow-accent-primary/20"
           >
             <Square size={12} fill="currentColor" />
             <span>停止并保存</span>

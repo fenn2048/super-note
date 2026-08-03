@@ -40,7 +40,7 @@
  */
 :root {
   font-family: "LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
-  --editor-font-family: "LXGW WenKai Screen", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  --editor-font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-weight: 480;
   line-height: 1.65;
 
@@ -119,9 +119,19 @@
   --radius-input: 10px;
   --radius-pill: 999px;
 
+  /* Motion craft tokens — see DESIGN.md §11–12 / docs/MOTION.md / lib/motion.ts
+   * Theme-independent motion tokens (light/dark only). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-instant: 0ms;
+  --duration-press: 120ms;
+  --duration-micro: 160ms;
   --duration-fast: 150ms;
   --duration-normal: 220ms;
+  --duration-panel: 280ms;
+  --duration-sheet: 360ms;
 
   /* 编辑器：油墨感 + 柔和选区（长写护眼） */
   --pm-text: #322a22;
@@ -161,7 +171,7 @@ html.font-lxgw * {
   font-size-adjust: none !important;
 }
 html.font-lxgw {
-  --editor-font-family: "LXGW WenKai Screen", sans-serif !important;
+  --editor-font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
 /* 优化霞鹜文楷字体下的粗体文字：解除 550 粗度上限，加粗至 650 并恢复 full 不透明度以增强可读性与美感 */
@@ -241,9 +251,15 @@ html.font-lxgw .font-semibold {
 html, body, #root {
   height: 100%;
   width: 100%;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  /* 避免 100vw 溢出时露出浏览器默认白底 */
+  background-color: var(--color-bg, #f3efe6);
+}
+html.dark, html.dark body, html.dark #root {
+  background-color: var(--color-bg, #16131c);
 }
 
 /* ===== Z-Index Scale（DESIGN.md §5）=====
@@ -1597,7 +1613,7 @@ body.density-compact {
   border: 2px solid var(--task-checkbox-border);
   background: var(--task-checkbox-bg);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 120ms var(--ease-out), border-color 150ms var(--ease-out-soft), box-shadow 150ms var(--ease-out-soft), background-color 150ms var(--ease-out-soft);
   position: relative;
   flex-shrink: 0;
 }
@@ -1626,7 +1642,7 @@ body.density-compact {
 
 /* 文本内容区（保留过渡/outline，布局由上面的 > div 规则主导） */
 .ProseMirror li[data-type="taskItem"] > div {
-  transition: all 0.2s ease;
+  transition: color 150ms var(--ease-out-soft), opacity 150ms var(--ease-out-soft);
   outline: none;
 }
 
@@ -1804,17 +1820,7 @@ body.density-compact {
   display: none;
 }
 
-/* Context menu open animation */
-@keyframes contextMenuIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+
 
 /* ===== 移动端 Android 适配 ===== */
 
@@ -2602,128 +2608,18 @@ body.density-compact {
   border-radius: 4px;
 }
 
-
-
-
-
-/* ============================================================================
- * macOS 外观风格（Skin）
- * ----------------------------------------------------------------------------
- * 设计来源：Apple Human Interface Guidelines（color / materials / typography）。
- *
- * 与默认皮肤的关键差异：
- *   1. 调色板更冷、更"真实 Apple"。Light 用 macOS windowBackground (#ECECEC)
- *      + 白色内容面板；Dark 用炭灰 (#1E1E1E / #2E2E2E) 而非纯黑，避免 OLED halo。
- *   2. 强调色 Light=#007AFF / Dark=#0A84FF（System Blue），不是 Tailwind 默认蓝。
- *   3. 分隔线与悬停态用 rgba() 而非硬编码灰——可叠加在任意背景上保持层级。
- *   4. 新增第四级文字色 --color-text-quaternary（禁用态 / 极弱提示）。
- *   5. 提供 --radius-window/card/button/input 四级圆角语义令牌。
- *   6. 侧边栏语义色偏半透明，配合 .vibrancy-* 工具类呈现 Vibrancy 毛玻璃。
- *
- * 通过 [data-skin="macos"] 与 next-themes 的 .dark 正交组合：
- *   [data-skin="macos"]          → macOS Light
- *   [data-skin="macos"].dark     → macOS Dark
- * ========================================================================= */
-
-/* 默认圆角/solid 色已在 :root / .dark 主题块中统一定义，此处不再硬覆盖为 4px */
-
-
-
-/* ============================================================================
- * Vibrancy（毛玻璃）工具类
- * ----------------------------------------------------------------------------
- * 用法：在侧边栏、下拉菜单、弹出面板根节点加 className="vibrancy-sidebar" 等。
- *
- * 重要实现细节（踩坑经验）：
- *   CSS 规范规定：非 none 的 `backdrop-filter` 会让元素成为 fixed/absolute 后代
- *   的 containing block。若宿主元素内部有 `position: fixed` 的 Modal / Portal
- *   组件（例如 SettingsModal 渲染在 Sidebar 子树里），宿主一旦开启 backdrop-filter，
- *   fixed 就会被困在宿主盒子里而不是铺满视口——导致弹窗被挤成一小条。
- *
- *   因此**不能直接**在宿主上应用 `backdrop-filter`。这里改用 `::before` 伪元素
- *   承担毛玻璃层：宿主保持"干净"，内部 fixed 不受影响。宿主需要 position: relative
- *   以便 ::before 能 absolute 填充；实际 .vibrancy-sidebar 已经处在 flex 布局中，
- *   加 position: relative 无副作用。
- *
- *   其它注意事项：
- *   1. 依赖 backdrop-filter。Electron（Chromium 新版本）全平台支持；Web 端
- *      Safari 14+ / Chrome 76+ / Firefox 103+。不支持时自动回退为 solid 变量。
- *   2. @media (prefers-reduced-transparency: reduce) 会强制走 solid，尊重系统偏好。
- *   3. 仅在 macOS 皮肤启用时才显露毛玻璃语义——默认皮肤只用 solid 底色，
- *      避免给非 Apple 风格的设计引入不必要视觉负担。
- * ========================================================================= */
-.vibrancy-sidebar,
-.vibrancy-panel {
-  position: relative;
-  background-color: var(--color-sidebar-solid);
-}
-
-/* macOS 皮肤下：宿主 bg 透明，由 ::before 伪元素负责毛玻璃层。
- * 不使用 isolation: isolate，避免创建新层叠上下文（否则宿主内部的高 z-index
- * 子元素，例如 Sidebar 子树里可能渲染的 SettingsModal，将被困在宿主 stacking
- * context 内，出现被"塞进侧栏"的错乱）。靠 ::before 的 z-index: -1 让它穿透
- * 宿主背景层；宿主本身背景透明，真实内容自然叠在上方。 */
-:root[data-skin="macos"] .vibrancy-sidebar,
-:root[data-skin="macos"] .vibrancy-panel {
-  background-color: transparent;
-}
-
-:root[data-skin="macos"] .vibrancy-sidebar::before,
-:root[data-skin="macos"] .vibrancy-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-}
-
-:root[data-skin="macos"] .vibrancy-sidebar::before {
-  background-color: var(--color-sidebar);
-  -webkit-backdrop-filter: saturate(180%) blur(30px);
-  backdrop-filter: saturate(180%) blur(30px);
-}
-
-:root[data-skin="macos"] .vibrancy-panel::before {
-  background-color: var(--color-elevated);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
-}
-
-/* 不支持 backdrop-filter 时回退到不透明底色（直接打到宿主，放弃伪元素） */
+/* 不支持 backdrop-filter / 减少透明度 → solid 回退 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root[data-skin="macos"] .vibrancy-sidebar { background-color: var(--color-sidebar-solid); }
-  :root[data-skin="macos"] .vibrancy-panel { background-color: var(--color-elevated-solid); }
-  :root[data-skin="macos"] .vibrancy-sidebar::before,
-  :root[data-skin="macos"] .vibrancy-panel::before { display: none; }
+  .vibrancy-sidebar { background-color: var(--color-sidebar-solid); }
+  .vibrancy-panel { background-color: var(--color-elevated-solid); }
 }
-
-/* 用户开启"减少透明度"偏好 → 强制 solid（HIG 可访问性准则） */
 @media (prefers-reduced-transparency: reduce) {
-  :root[data-skin="macos"] .vibrancy-sidebar { background-color: var(--color-sidebar-solid); }
-  :root[data-skin="macos"] .vibrancy-panel { background-color: var(--color-elevated-solid); }
-  :root[data-skin="macos"] .vibrancy-sidebar::before,
-  :root[data-skin="macos"] .vibrancy-panel::before { display: none; }
-}
-
-/* ============================================================================
- * Focus Ring：HIG 标准的 3px 蓝色光晕
- * ----------------------------------------------------------------------------
- * 仅在 macOS 皮肤下生效，不覆盖默认皮肤（默认皮肤继续用 Tailwind ring）。
- * 使用 :focus-visible 而非 :focus，避免鼠标点击产生光晕。
- * ========================================================================= */
-:root[data-skin="macos"] *:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 50%, transparent);
-  border-radius: var(--radius-input);
-  transition: box-shadow 0.12s ease-out;
-}
-
-/* 输入框自身原本就有 ring-*，我们避免双重光晕 */
-:root[data-skin="macos"] input:focus-visible,
-:root[data-skin="macos"] textarea:focus-visible,
-:root[data-skin="macos"] select:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
-  border-color: var(--color-accent-primary);
+  .vibrancy-sidebar,
+  .vibrancy-panel {
+    background-color: var(--color-sidebar-solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 /* ============================================================================
@@ -2808,8 +2704,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   display: none;
 }
 
-
-
 /* ============================================================================
  * prefers-contrast: more —— 高对比度偏好（HIG / WCAG 2.1 AA-AAA 过渡要求）
  * ----------------------------------------------------------------------------
@@ -2835,14 +2729,10 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
 
   /* 毛玻璃 → solid */
   .vibrancy-sidebar,
-  .vibrancy-panel,
-  :root[data-skin="macos"] .vibrancy-sidebar,
-  :root[data-skin="macos"] .vibrancy-panel {
+  .vibrancy-panel {
     background-color: var(--color-sidebar-solid) !important;
-  }
-  :root[data-skin="macos"] .vibrancy-sidebar::before,
-  :root[data-skin="macos"] .vibrancy-panel::before {
-    display: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
   /* 焦点环：更粗、更纯 */
@@ -2851,9 +2741,9 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
     outline-offset: 2px !important;
     box-shadow: none !important;
   }
-  :root[data-skin="macos"] input:focus-visible,
-  :root[data-skin="macos"] textarea:focus-visible,
-  :root[data-skin="macos"] select:focus-visible {
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
     outline: 3px solid var(--color-accent-primary) !important;
     outline-offset: 1px !important;
     box-shadow: none !important;
@@ -2873,8 +2763,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
     outline-offset: -1px;
   }
 }
-
-
 
 /* ===== 作者感言 Modal 专属排版微调 =====
  * 复用 .shared-note-content 自给自足的基础排版，再为长文阅读场景做几处增强：
@@ -2987,7 +2875,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   background-color: rgba(255, 255, 255, 0.25) !important;
 }
 
-
 /* ===== 编辑器媒体渲染响应式适配 ===== */
 .ProseMirror iframe,
 .ProseMirror video {
@@ -3003,430 +2890,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   max-width: 100% !important;
   margin: 12px auto;
   display: block;
-}
-
-
-
-
-
-/* ============================================================================
- * E-Ink 外观风格（Skin）
- * ----------------------------------------------------------------------------
- * 设计理念：墨水屏电子纸风格（护眼柔和纸质感、碳灰色调无彩色、硬朗直角、极简高对比度）。
- * ========================================================================= */
-
-/* ---------- E-Ink Light (墨水屏浅色 - 护眼柔和纸质感) ---------- */
-:root[data-skin="eink"] {
-  --color-bg: rgba(242, 239, 235, 0.45);
-  --color-surface: rgba(247, 245, 242, 0.55);
-  --color-sidebar: rgba(234, 230, 225, 0.65);
-  --color-sidebar-solid: rgba(234, 230, 225, 0.65);
-  --color-elevated: rgba(255, 255, 255, 0.85);
-  --color-elevated-solid: rgba(255, 255, 255, 0.85);
-  --color-border: rgba(219, 216, 208, 0.45);          /* 调柔和的灰色边框 */
-  --color-hover: #e0dcd5;
-  --color-active: #d5d0c9;
-
-  --color-text-primary: #1c1c1c;
-  --color-text-secondary: #4a4a4a;
-  --color-text-tertiary: #757575;
-  --color-text-quaternary: #9e9e9e;
-  --color-text-inverse: #ffffff;
-
-  --color-accent-primary: #1c1c1c;
-  --color-accent-secondary: #4a4a4a;
-  --color-accent-warning: #757575;
-  --color-accent-danger: #1c1c1c;
-  --color-accent-muted: #dbd8d0;    /* 与 border 同步调柔和 */
-
-  --radius-window: 4px;
-  --radius-card: 4px;
-  --radius-button: 4px;
-  --radius-input: 4px;
-
-  /* 编辑器样式 */
-  --pm-text: #1c1c1c;
-  --pm-heading: #1c1c1c;
-  --pm-code-bg: #eae6e1;
-  --pm-code-text: #1c1c1c;
-  --pm-pre-bg: #f7f5f2;
-  --pm-pre-border: #dbd8d0;         /* 同步调柔和 */
-  --pm-pre-text: #1c1c1c;
-  --pm-blockquote-border: #1c1c1c;
-  --pm-blockquote-text: #4a4a4a;
-  --pm-hr: #dbd8d0;                 /* 同步调柔和 */
-  --pm-placeholder: #9e9e9e;
-  --pm-task-done: #9e9e9e;
-  --pm-scrollbar: #eae6e1;
-  --pm-scrollbar-hover: #d5d0c9;
-  --pm-selection: rgba(28, 28, 28, 0.15);
-}
-
-/* ============================================================================
- * Claude 外观风格（Skin）
- * ----------------------------------------------------------------------------
- * 设计来源：Claude.ai 官方网站（温润乳沙色底色、高级衬线体标题、陶土橙高亮）。
- * ========================================================================= */
-
-/* ---------- Claude Light ---------- */
-:root[data-skin="claude"] {
-  --color-bg: rgba(249, 246, 240, 0.45);
-  --color-surface: rgba(255, 255, 255, 0.55);
-  --color-sidebar: rgba(242, 237, 228, 0.65);
-  --color-sidebar-solid: rgba(242, 237, 228, 0.65);
-  --color-elevated: rgba(255, 255, 255, 0.85);
-  --color-elevated-solid: rgba(255, 255, 255, 0.85);
-  --color-border: rgba(233, 229, 217, 0.45);
-  --color-hover: rgba(201, 91, 54, 0.05);
-  --color-active: rgba(201, 91, 54, 0.12);
-
-  --color-text-primary: #191919;
-  --color-text-secondary: #595650;
-  --color-text-tertiary: #747167;
-  --color-text-quaternary: #9c988c;
-  --color-text-inverse: #ffffff;
-
-  --color-accent-primary: #c95b36;
-  --color-accent-secondary: #0f7b6c;
-  --color-accent-warning: #d99c00;
-  --color-accent-danger: #c84040;
-  --color-accent-muted: rgba(201, 91, 54, 0.4);
-
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 6px;
-
-  /* 编辑器样式 */
-  --pm-text: #191919;
-  --pm-heading: #191919;
-  --pm-code-bg: rgba(201, 91, 54, 0.08);
-  --pm-code-text: #c95b36;
-  --pm-pre-bg: #f2ede4;
-  --pm-pre-border: #e9e5d9;
-  --pm-pre-text: #191919;
-  --pm-blockquote-border: #c95b36;
-  --pm-blockquote-text: #595650;
-  --pm-hr: #e9e5d9;
-  --pm-placeholder: #9c988c;
-  --pm-task-done: #9c988c;
-  --pm-scrollbar: rgba(201, 91, 54, 0.12);
-  --pm-scrollbar-hover: rgba(201, 91, 54, 0.25);
-  --pm-selection: rgba(201, 91, 54, 0.15);
-}
-
-/* ---------- Claude Dark ---------- */
-:root[data-skin="claude"].dark {
-  --color-bg: rgba(24, 23, 21, 0.45);
-  --color-surface: rgba(34, 32, 28, 0.55);
-  --color-sidebar: rgba(29, 27, 25, 0.65);
-  --color-sidebar-solid: rgba(29, 27, 25, 0.65);
-  --color-elevated: rgba(44, 41, 37, 0.85);
-  --color-elevated-solid: rgba(44, 41, 37, 0.85);
-  --color-border: rgba(47, 45, 40, 0.5);
-  --color-hover: rgba(226, 138, 109, 0.08);
-  --color-active: rgba(226, 138, 109, 0.18);
-
-  --color-text-primary: #e5e3dd;
-  --color-text-secondary: #aba8a0;
-  --color-text-tertiary: #9b9890;
-  --color-text-quaternary: #6b6861;
-  --color-text-inverse: #181715;
-
-  --color-accent-primary: #e28a6d;
-  --color-accent-secondary: #30d158;
-  --color-accent-warning: #ff9f0a;
-  --color-accent-danger: #ff453a;
-  --color-accent-muted: rgba(226, 138, 109, 0.4);
-
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 6px;
-
-  /* 编辑器样式 */
-  --pm-text: #e5e3dd;
-  --pm-heading: #ffffff;
-  --pm-code-bg: rgba(226, 138, 109, 0.12);
-  --pm-code-text: #e28a6d;
-  --pm-pre-bg: #1d1b19;
-  --pm-pre-border: #2f2d28;
-  --pm-pre-text: #e5e3dd;
-  --pm-blockquote-border: #e28a6d;
-  --pm-blockquote-text: #aba8a0;
-  --pm-hr: #2f2d28;
-  --pm-placeholder: #9b9890;
-  --pm-task-done: #9b9890;
-  --pm-scrollbar: rgba(226, 138, 109, 0.15);
-  --pm-scrollbar-hover: rgba(226, 138, 109, 0.3);
-  --pm-selection: rgba(226, 138, 109, 0.25);
-}
-
-/* ---------- E-Ink Dark (墨水屏深色 - 夜间护眼低亮) ---------- */
-:root[data-skin="eink"].dark {
-  --color-bg: rgba(28, 28, 28, 0.45);
-  --color-surface: rgba(38, 38, 38, 0.55);
-  --color-sidebar: rgba(24, 24, 24, 0.65);
-  --color-sidebar-solid: rgba(24, 24, 24, 0.65);
-  --color-elevated: rgba(46, 46, 46, 0.85);
-  --color-elevated-solid: rgba(46, 46, 46, 0.85);
-  --color-border: rgba(51, 51, 51, 0.5);          /* 调柔和的暗灰边框 */
-  --color-hover: #333333;
-  --color-active: #3a3a3a;
-
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #aaaaaa;
-  --color-text-tertiary: #777777;
-  --color-text-quaternary: #555555;
-  --color-text-inverse: #1c1c1c;
-
-  --color-accent-primary: #e0e0e0;
-  --color-accent-secondary: #aaaaaa;
-  --color-accent-warning: #777777;
-  --color-accent-danger: #e0e0e0;
-  --color-accent-muted: #333333;    /* 与 border 同步调柔和 */
-
-  --radius-window: 4px;
-  --radius-card: 4px;
-  --radius-button: 4px;
-  --radius-input: 4px;
-
-  /* 编辑器样式 */
-  --pm-text: #e0e0e0;
-  --pm-heading: #ffffff;
-  --pm-code-bg: #262626;
-  --pm-code-text: #e0e0e0;
-  --pm-pre-bg: #181818;
-  --pm-pre-border: #333333;         /* 同步调柔和 */
-  --pm-pre-text: #e0e0e0;
-  --pm-blockquote-border: #e0e0e0;
-  --pm-blockquote-text: #aaaaaa;
-  --pm-hr: #333333;                 /* 同步调柔和 */
-  --pm-placeholder: #777777;
-  --pm-task-done: #777777;
-  --pm-scrollbar: #262626;
-  --pm-scrollbar-hover: #333333;
-  --pm-selection: rgba(224, 224, 224, 0.15);
-}
-
-/* ============================================================================
- * Mono 黑白灰外观（Skin）
- * ----------------------------------------------------------------------------
- * 简约大气、无彩色干扰：纯黑 / 白 / 灰层级，适合长读写与极简审美。
- * 与明暗模式正交：data-skin="mono" × .dark
- * ========================================================================= */
-
-/* ---------- Mono Light ---------- */
-:root[data-skin="mono"] {
-  --color-bg: #f4f4f5;
-  --color-surface: #eaeaec;
-  --color-sidebar: #e4e4e7;
-  --color-sidebar-solid: #e4e4e7;
-  --color-elevated: #ffffff;
-  --color-elevated-solid: #ffffff;
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.14);
-  --color-hover: rgba(0, 0, 0, 0.045);
-  --color-active: rgba(0, 0, 0, 0.08);
-
-  --color-text-primary: #18181b;
-  --color-text-secondary: #52525b;
-  --color-text-tertiary: #71717a;
-  --color-text-quaternary: #a1a1aa;
-  --color-text-inverse: #fafafa;
-
-  --color-accent-primary: #18181b;
-  --color-accent-primary-hover: #09090b;
-  --color-accent-secondary: #3f3f46;
-  --color-accent-warning: #52525b;
-  --color-accent-danger: #27272a;
-  --color-accent-muted: rgba(24, 24, 27, 0.35);
-
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.05), 0 10px 28px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 18px 44px rgba(0, 0, 0, 0.09);
-  --shadow-xl: 0 8px 20px rgba(0, 0, 0, 0.07), 0 28px 60px rgba(0, 0, 0, 0.11);
-  --shadow-accent: 0 4px 16px rgba(0, 0, 0, 0.18);
-  --shadow-fab: 0 6px 22px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.1);
-
-  --radius-window: 14px;
-  --radius-card: 12px;
-  --radius-button: 10px;
-  --radius-input: 10px;
-
-  --pm-text: #27272a;
-  --pm-heading: #18181b;
-  --pm-code-bg: #f4f4f5;
-  --pm-code-text: #3f3f46;
-  --pm-pre-bg: #fafafa;
-  --pm-pre-border: rgba(0, 0, 0, 0.08);
-  --pm-pre-text: #27272a;
-  --pm-blockquote-border: #18181b;
-  --pm-blockquote-text: #52525b;
-  --pm-hr: rgba(0, 0, 0, 0.1);
-  --pm-placeholder: #a1a1aa;
-  --pm-task-done: #a1a1aa;
-  --pm-scrollbar: rgba(0, 0, 0, 0.12);
-  --pm-scrollbar-hover: rgba(0, 0, 0, 0.22);
-  --pm-selection: rgba(0, 0, 0, 0.12);
-}
-
-/* ---------- Mono Dark ---------- */
-:root[data-skin="mono"].dark {
-  --color-bg: #0c0c0e;
-  --color-surface: #141416;
-  --color-sidebar: #101012;
-  --color-sidebar-solid: #101012;
-  --color-elevated: #1a1a1d;
-  --color-elevated-solid: #1a1a1d;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
-  --color-hover: rgba(255, 255, 255, 0.055);
-  --color-active: rgba(255, 255, 255, 0.1);
-
-  --color-text-primary: #f4f4f5;
-  --color-text-secondary: #a1a1aa;
-  --color-text-tertiary: #71717a;
-  --color-text-quaternary: #52525b;
-  --color-text-inverse: #0c0c0e;
-
-  --color-accent-primary: #fafafa;
-  --color-accent-primary-hover: #ffffff;
-  --color-accent-secondary: #d4d4d8;
-  --color-accent-warning: #a1a1aa;
-  --color-accent-danger: #e4e4e7;
-  --color-accent-muted: rgba(250, 250, 250, 0.4);
-
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 3px 12px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 4px 14px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.4);
-  --shadow-xl: 0 8px 22px rgba(0, 0, 0, 0.5), 0 30px 64px rgba(0, 0, 0, 0.45);
-  --shadow-accent: 0 4px 18px rgba(255, 255, 255, 0.12);
-  --shadow-fab: 0 6px 22px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(255, 255, 255, 0.06);
-
-  --radius-window: 14px;
-  --radius-card: 12px;
-  --radius-button: 10px;
-  --radius-input: 10px;
-
-  --pm-text: #e4e4e7;
-  --pm-heading: #fafafa;
-  --pm-code-bg: #27272a;
-  --pm-code-text: #d4d4d8;
-  --pm-pre-bg: #101012;
-  --pm-pre-border: rgba(255, 255, 255, 0.08);
-  --pm-pre-text: #e4e4e7;
-  --pm-blockquote-border: #fafafa;
-  --pm-blockquote-text: #a1a1aa;
-  --pm-hr: rgba(255, 255, 255, 0.1);
-  --pm-placeholder: #52525b;
-  --pm-task-done: #52525b;
-  --pm-scrollbar: rgba(255, 255, 255, 0.1);
-  --pm-scrollbar-hover: rgba(255, 255, 255, 0.2);
-  --pm-selection: rgba(255, 255, 255, 0.16);
-}
-
-/* Mono：中性环境光（去掉默认紫/绿彩晕） */
-:root[data-skin="mono"] body::before {
-  background:
-    radial-gradient(1000px 520px at 10% -8%, rgba(0, 0, 0, 0.04), transparent 55%),
-    radial-gradient(800px 400px at 100% 0%, rgba(0, 0, 0, 0.03), transparent 50%);
-}
-:root[data-skin="mono"].dark body::before {
-  background:
-    radial-gradient(1000px 520px at 10% -8%, rgba(255, 255, 255, 0.04), transparent 55%),
-    radial-gradient(800px 400px at 100% 0%, rgba(255, 255, 255, 0.03), transparent 50%);
-}
-
-/* Mono：主按钮黑白渐变 */
-:root[data-skin="mono"] .btn-primary-glow {
-  background: linear-gradient(145deg, #3f3f46 0%, #18181b 55%, #09090b 100%);
-  color: #fafafa;
-  box-shadow: var(--shadow-accent);
-}
-:root[data-skin="mono"].dark .btn-primary-glow {
-  background: linear-gradient(145deg, #ffffff 0%, #f4f4f5 48%, #d4d4d8 100%);
-  color: #0c0c0e;
-  box-shadow: var(--shadow-accent);
-}
-
-/* Mono：导航激活胶囊灰阶 */
-:root[data-skin="mono"] .nav-active-pill {
-  background: rgba(24, 24, 27, 0.08);
-  color: var(--color-accent-primary);
-  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.14);
-}
-:root[data-skin="mono"].dark .nav-active-pill {
-  background: rgba(250, 250, 250, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(250, 250, 250, 0.16);
-}
-
-
-/* ============================================================================
- * macOS 外观风格重设计与圆角阴影微调
- * ========================================================================= */
-:root[data-skin="macos"] {
-  --radius-window: 12px;
-  --radius-card: 10px;
-  --radius-button: 8px;
-  --radius-input: 6px;
-}
-:root[data-skin="macos"] *:focus-visible {
-  outline: 2px solid var(--color-accent-primary) !important;
-  outline-offset: -1px !important;
-  box-shadow: 0 0 8px rgba(0, 122, 255, 0.4) !important;
-}
-
-/* 弱化 eink 和 claude 皮肤下的卡片立体虚饰投影 */
-:root[data-skin="eink"] .shadow-sm,
-:root[data-skin="eink"] .shadow,
-:root[data-skin="eink"] .shadow-md,
-:root[data-skin="eink"] .shadow-lg,
-:root[data-skin="eink"] .shadow-xl,
-:root[data-skin="claude"] .shadow-sm,
-:root[data-skin="claude"] .shadow,
-:root[data-skin="claude"] .shadow-md,
-:root[data-skin="claude"] .shadow-lg,
-:root[data-skin="claude"] .shadow-xl {
-  box-shadow: none !important;
-}
-
-/* 弱化 eink 和 claude 皮肤下卡片边框 */
-:root[data-skin="eink"] .border-zinc-100,
-:root[data-skin="eink"] .border-zinc-200,
-:root[data-skin="eink"] .border-zinc-300,
-:root[data-skin="eink"] .border-zinc-400,
-:root[data-skin="eink"] .border-zinc-700,
-:root[data-skin="eink"] .border-zinc-800,
-:root[data-skin="eink"] .border-zinc-900,
-:root[data-skin="eink"] .border-gray-100,
-:root[data-skin="eink"] .border-gray-200,
-:root[data-skin="eink"] .border-gray-300,
-:root[data-skin="eink"] .border-gray-400,
-:root[data-skin="eink"] .border-gray-700,
-:root[data-skin="eink"] .border-gray-800,
-:root[data-skin="eink"] .border-neutral-100,
-:root[data-skin="eink"] .border-neutral-200,
-:root[data-skin="eink"] .border-neutral-300,
-:root[data-skin="eink"] .border-neutral-700,
-:root[data-skin="eink"] .border-neutral-800,
-:root[data-skin="eink"] .border-slate-100,
-:root[data-skin="eink"] .border-slate-200,
-:root[data-skin="eink"] .border-slate-300,
-:root[data-skin="eink"] .border-slate-700,
-:root[data-skin="eink"] .border-slate-800,
-:root[data-skin="claude"] .border-zinc-200,
-:root[data-skin="claude"] .border-zinc-300 {
-  border-color: var(--color-border) !important;
-}
-
-/* 墨水屏专有聚焦状态：无发光，纯实线轮廓 */
-:root[data-skin="eink"] *:focus-visible {
-  outline: 2px solid var(--color-accent-primary) !important;
-  outline-offset: 1px !important;
-  box-shadow: none !important;
 }
 
 /* Sleek custom select dropdown styles */
@@ -3470,103 +2933,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   background-color: var(--color-hover) !important;
 }
 
-/* Disable default focus ring and keep border consistent */
-:root[data-skin="claude"] input.no-focus-ring:focus-visible,
-:root[data-skin="claude"] textarea.no-focus-ring:focus-visible,
-:root[data-skin="claude"] select.no-focus-ring:focus-visible,
-input.no-focus-ring:focus-visible,
-textarea.no-focus-ring:focus-visible,
-.no-focus-ring:focus-visible,
-.no-focus-ring:focus,
-.no-focus-ring:focus-within {
-  box-shadow: none !important;
-  outline: none !important;
-  border-color: var(--color-border) !important;
-}
-
-/* ---------- Claude Specific Focus & Fonts ---------- */
-:root[data-skin="claude"] *:focus-visible {
-  outline: 2px solid var(--color-accent-primary) !important;
-  outline-offset: -1px !important;
-  box-shadow: 0 0 8px rgba(201, 91, 54, 0.4) !important;
-}
-:root[data-skin="claude"] input:focus-visible,
-:root[data-skin="claude"] textarea:focus-visible,
-:root[data-skin="claude"] select:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 30%, transparent) !important;
-  border-color: var(--color-accent-primary) !important;
-}
-
-:root[data-skin="claude"] h1,
-:root[data-skin="claude"] h2,
-:root[data-skin="claude"] h3,
-:root[data-skin="claude"] h4,
-:root[data-skin="claude"] h5,
-:root[data-skin="claude"] h6,
-:root[data-skin="claude"] .claude-serif-font {
-  font-family: 'Georgia', 'Lora', 'Songti SC', 'SimSun', 'STSong', serif !important;
-}
-:root[data-skin="claude"] {
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-button: 6px;
-  --radius-input: 6px;
-}
-
-/* ---------- Skin & Theme Compatibility Safety Fallbacks ---------- */
-:root[data-skin] .dark .bg-white {
-  background-color: var(--color-surface) !important;
-}
-
-:root[data-skin] .dark .bg-zinc-50,
-:root[data-skin] .dark .bg-slate-50,
-:root[data-skin] .dark .bg-gray-50,
-:root[data-skin] .dark .bg-neutral-50 {
-  background-color: var(--color-bg) !important;
-}
-
-:root[data-skin] .dark .text-zinc-900,
-:root[data-skin] .dark .text-zinc-850,
-:root[data-skin] .dark .text-zinc-800,
-:root[data-skin] .dark .text-slate-900,
-:root[data-skin] .dark .text-gray-900,
-:root[data-skin] .dark .text-black {
-  color: var(--color-text-primary) !important;
-}
-
-/* Redirect hardcoded focus ring styles to the current skin's accent color */
-:root[data-skin] .focus-within\:ring-emerald-500:focus-within,
-:root[data-skin] .focus\:ring-indigo-500:focus,
-:root[data-skin] .focus\:ring-indigo-500\/30:focus,
-:root[data-skin] .focus\:ring-accent-primary\/40:focus,
-:root[data-skin] .focus-within\:ring-indigo-500:focus-within {
-  --tw-ring-color: var(--color-accent-primary) !important;
-}
-
-:root[data-skin] .focus-within\:border-transparent:focus-within,
-:root[data-skin] .focus\:border-indigo-500:focus,
-:root[data-skin] .focus\:border-accent-primary:focus,
-:root[data-skin] .focus-within\:border-accent-primary:focus-within {
-  border-color: var(--color-accent-primary) !important;
-}
-
-/* Fix mobile bottom navigation active indicators and hover rules for custom skins */
-:root[data-skin] .text-accent-primary {
-  color: var(--color-accent-primary) !important;
-}
-:root[data-skin] .bg-accent-primary {
-  background-color: var(--color-accent-primary) !important;
-}
-:root[data-skin] .bg-accent-primary\/5 {
-  background-color: color-mix(in srgb, var(--color-accent-primary) 5%, transparent) !important;
-}
-:root[data-skin] .bg-accent-primary\/10 {
-  background-color: color-mix(in srgb, var(--color-accent-primary) 10%, transparent) !important;
-}
-:root[data-skin] .bg-accent-primary\/15 {
-  background-color: color-mix(in srgb, var(--color-accent-primary) 15%, transparent) !important;
-}
-
 /* ============================================================================
    Stitch Design System Card & Background Hierarchy Overrides
    ============================================================================ */
@@ -3602,7 +2968,7 @@ textarea.no-focus-ring:focus-visible,
 
 /* Smooth transitions for settings switches */
 label.cursor-pointer {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 150ms var(--ease-out-soft), color 150ms var(--ease-out-soft), opacity 150ms var(--ease-out-soft);
 }
 label.cursor-pointer:hover {
   background-color: rgba(0, 0, 0, 0.02) !important;
@@ -3610,7 +2976,6 @@ label.cursor-pointer:hover {
 .dark label.cursor-pointer:hover {
   background-color: rgba(255, 255, 255, 0.02) !important;
 }
-
 
 /* ===== Emoji Image Markdown Rendering ===== */
 img[alt="emoji"] {

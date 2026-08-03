@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Folder, User, Flag, Calendar, Loader2, ChevronDown, Check, ScanText } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { Motion } from "@/components/common/Motion";
+import { springs } from "@/lib/motion";
+import { BottomSheet } from "@/components/common/BottomSheet";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { Project, ProjectMember, Tag } from "@/types";
 import { toast } from "@/lib/toast";
@@ -233,7 +236,7 @@ export default function MobileTaskCreateModal({
           }
         >
           {/* Backdrop */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -243,7 +246,7 @@ export default function MobileTaskCreateModal({
           />
 
           {/* Modal Panel */}
-          <motion.div
+          <Motion.div
             initial={
               isDesktop
                 ? { opacity: 0, scale: 0.96, y: 12 }
@@ -257,11 +260,7 @@ export default function MobileTaskCreateModal({
                 ? { opacity: 0, scale: 0.98, y: 8 }
                 : { y: "100%" }
             }
-            transition={
-              isDesktop
-                ? { type: "tween", duration: 0.22, ease: [0.22, 1, 0.36, 1] }
-                : { type: "tween", duration: 0.28, ease: [0.22, 1, 0.36, 1] }
-            }
+            transition={isDesktop ? springs.modal : springs.sheet}
             onAnimationComplete={() => {
               if (isOpen && !isDesktop) setEnterDone(true);
             }}
@@ -328,7 +327,7 @@ export default function MobileTaskCreateModal({
               ) : (
                 <>
                   {/* Task Title Input — 聚焦由 enterDone 延迟触发，勿 autoFocus */}
-                  <div className="border border-app-border focus-within:border-accent-primary focus-within:ring-1 focus-within:ring-accent-primary/20 rounded-xl px-3 py-1 bg-app-surface transition-all">
+                  <div className="border border-app-border focus-within:border-accent-primary focus-within:ring-1 focus-within:ring-accent-primary/20 rounded-xl px-3 py-1 bg-app-surface transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out">
                     <input
                       ref={titleInputRef}
                       value={title}
@@ -396,7 +395,7 @@ export default function MobileTaskCreateModal({
                           key={prio.level}
                           type="button"
                           onClick={() => setPriority(prio.level)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border border-transparent ${
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border border-transparent ${
                             priority === prio.level ? prio.activeClass : prio.inactiveClass
                           }`}
                         >
@@ -463,7 +462,7 @@ export default function MobileTaskCreateModal({
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="输入任务描述信息（支持Markdown及@提及）..."
                       rows={4}
-                      className="w-full p-3 text-xs rounded-xl border border-app-border focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/20 bg-app-surface text-tx-primary outline-none transition-all placeholder:text-tx-tertiary resize-none focus:outline-none"
+                      className="w-full p-3 text-xs rounded-xl border border-app-border focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/20 bg-app-surface text-tx-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-tx-tertiary resize-none focus:outline-none"
                     />
                   </div>
                 </>
@@ -475,7 +474,7 @@ export default function MobileTaskCreateModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 rounded-xl border border-app-border bg-app-surface text-sm font-semibold text-tx-secondary active:scale-[0.98] transition-all hover:bg-app-hover"
+                className="flex-1 py-3 rounded-xl border border-app-border bg-app-surface text-sm font-semibold text-tx-secondary active:scale-[0.98] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hover:bg-app-hover"
               >
                 取消
               </button>
@@ -483,7 +482,7 @@ export default function MobileTaskCreateModal({
                 type="button"
                 onClick={handleFinish}
                 disabled={submitting || loading || !title.trim()}
-                className="flex-1 py-3 rounded-xl bg-accent-primary text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-md disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 rounded-xl bg-accent-primary text-sm font-semibold text-white active:scale-[0.98] transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-md disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5"
               >
                 {submitting && <Loader2 size={16} className="animate-spin" />}
                 <span>完成</span>
@@ -491,200 +490,86 @@ export default function MobileTaskCreateModal({
             </div>
 
             {/* Project Selector — 移动 bottom sheet / 桌面嵌套居中面板 */}
-            <AnimatePresence>
-              {isProjectDrawerOpen && (
-                <div
-                  className={cn(
-                    "absolute inset-0 z-[110] flex justify-center",
-                    isDesktop ? "items-center p-4" : "items-end",
-                  )}
-                >
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setIsProjectDrawerOpen(false)}
-                    className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                  />
-                  <motion.div
-                    initial={isDesktop ? { opacity: 0, scale: 0.96 } : { y: "100%" }}
-                    animate={isDesktop ? { opacity: 1, scale: 1 } : { y: 0 }}
-                    exit={isDesktop ? { opacity: 0, scale: 0.98 } : { y: "100%" }}
-                    transition={{ type: "spring", damping: 25, stiffness: 220 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={cn(
-                      "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
-                      isDesktop
-                        ? "w-full max-w-sm max-h-[60%] rounded-2xl border border-app-border"
-                        : "w-full rounded-t-3xl border-t border-app-border",
-                    )}
-                    style={
-                      isDesktop
-                        ? undefined
-                        : {
-                            maxHeight: "60%",
-                            paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
-                          }
-                    }
-                  >
-                    {!isDesktop && (
-                      <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
-                    )}
-                    <div
+                        <BottomSheet
+              open={isProjectDrawerOpen}
+              onClose={() => setIsProjectDrawerOpen(false)}
+              title="选择所属项目"
+              maxHeight="min(60dvh, 100%)"
+              zClassName="z-[110]"
+            >
+              <div className="px-4 py-2 space-y-1">
+                {projects.map((p) => {
+                  const isSelected = p.id === selectedProjectId;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(p.id);
+                        setIsProjectDrawerOpen(false);
+                      }}
                       className={cn(
-                        "px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0",
-                        isDesktop && "pt-4",
+                        "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold min-h-[44px] transition-transform duration-press ease-out active:scale-[0.99]",
+                        isSelected ? "bg-accent-primary/10 text-accent-primary" : "hover:bg-app-hover text-tx-primary",
                       )}
                     >
-                      <span className="w-6" />
-                      <h4 className="text-sm font-bold text-tx-primary">选择所属项目</h4>
-                      <button
-                        type="button"
-                        onClick={() => setIsProjectDrawerOpen(false)}
-                        className="p-1 hover:bg-app-hover rounded-full text-tx-tertiary hover:text-tx-primary transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
-                      {projects.map((p) => {
-                        const isSelected = p.id === selectedProjectId;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedProjectId(p.id);
-                              setIsProjectDrawerOpen(false);
-                            }}
-                            className={cn(
-                              "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
-                              isSelected
-                                ? "bg-accent-primary/10 text-accent-primary"
-                                : "hover:bg-app-hover text-tx-primary",
-                            )}
-                          >
-                            <span>{p.name}</span>
-                            {isSelected && (
-                              <Check size={16} className="text-accent-primary font-bold" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                </div>
-              )}
-            </AnimatePresence>
+                      <span>{p.name}</span>
+                      {isSelected && <Check size={16} className="text-accent-primary font-bold" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </BottomSheet>
+
 
             {/* Assignee Selector */}
-            <AnimatePresence>
-              {isAssigneeDrawerOpen && (
-                <div
+                        <BottomSheet
+              open={isAssigneeDrawerOpen}
+              onClose={() => setIsAssigneeDrawerOpen(false)}
+              title="选择负责人"
+              maxHeight="min(60dvh, 100%)"
+              zClassName="z-[110]"
+            >
+              <div className="px-4 py-2 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssigneeId("");
+                    setIsAssigneeDrawerOpen(false);
+                  }}
                   className={cn(
-                    "absolute inset-0 z-[110] flex justify-center",
-                    isDesktop ? "items-center p-4" : "items-end",
+                    "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold min-h-[44px]",
+                    !assigneeId ? "bg-accent-primary/10 text-accent-primary" : "hover:bg-app-hover text-tx-primary",
                   )}
                 >
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setIsAssigneeDrawerOpen(false)}
-                    className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                  />
-                  <motion.div
-                    initial={isDesktop ? { opacity: 0, scale: 0.96 } : { y: "100%" }}
-                    animate={isDesktop ? { opacity: 1, scale: 1 } : { y: 0 }}
-                    exit={isDesktop ? { opacity: 0, scale: 0.98 } : { y: "100%" }}
-                    transition={{ type: "spring", damping: 25, stiffness: 220 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={cn(
-                      "relative bg-app-elevated flex flex-col overflow-hidden shadow-2xl text-tx-primary z-10",
-                      isDesktop
-                        ? "w-full max-w-sm max-h-[60%] rounded-2xl border border-app-border"
-                        : "w-full rounded-t-3xl border-t border-app-border",
-                    )}
-                    style={
-                      isDesktop
-                        ? undefined
-                        : {
-                            maxHeight: "60%",
-                            paddingBottom: "calc(var(--safe-area-bottom) + 16px)",
-                          }
-                    }
-                  >
-                    {!isDesktop && (
-                      <div className="w-12 h-1 bg-app-border/60 rounded-full mx-auto my-3 shrink-0" />
-                    )}
-                    <div
+                  未指定
+                </button>
+                {(members || []).map((u: any) => {
+                  const id = u.userId || u.id;
+                  const name = u.displayName || u.username || id;
+                  const isSelected = assigneeId === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setAssigneeId(id);
+                        setIsAssigneeDrawerOpen(false);
+                      }}
                       className={cn(
-                        "px-5 pb-3 border-b border-app-border flex items-center justify-between shrink-0",
-                        isDesktop && "pt-4",
+                        "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold min-h-[44px]",
+                        isSelected ? "bg-accent-primary/10 text-accent-primary" : "hover:bg-app-hover text-tx-primary",
                       )}
                     >
-                      <span className="w-6" />
-                      <h4 className="text-sm font-bold text-tx-primary">选择指派给</h4>
-                      <button
-                        type="button"
-                        onClick={() => setIsAssigneeDrawerOpen(false)}
-                        className="p-1 hover:bg-app-hover rounded-full text-tx-tertiary hover:text-tx-primary transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAssigneeId(currentUserId);
-                          setIsAssigneeDrawerOpen(false);
-                        }}
-                        className={cn(
-                          "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
-                          assigneeId === currentUserId
-                            ? "bg-accent-primary/10 text-accent-primary"
-                            : "hover:bg-app-hover text-tx-primary",
-                        )}
-                      >
-                        <span>我自己</span>
-                        {assigneeId === currentUserId && (
-                          <Check size={16} className="text-accent-primary font-bold" />
-                        )}
-                      </button>
-                      {members
-                        .filter((m) => m.userId !== currentUserId)
-                        .map((m) => {
-                          const isSelected = m.userId === assigneeId;
-                          const name = m.displayName || m.username;
-                          return (
-                            <button
-                              key={m.userId}
-                              type="button"
-                              onClick={() => {
-                                setAssigneeId(m.userId);
-                                setIsAssigneeDrawerOpen(false);
-                              }}
-                              className={cn(
-                                "w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-left text-sm font-semibold transition-all active:scale-[0.99]",
-                                isSelected
-                                  ? "bg-accent-primary/10 text-accent-primary"
-                                  : "hover:bg-app-hover text-tx-primary",
-                              )}
-                            >
-                              <span>{name}</span>
-                              {isSelected && (
-                                <Check size={16} className="text-accent-primary font-bold" />
-                              )}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </motion.div>
-                </div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+                      <span>{name}</span>
+                      {isSelected && <Check size={16} className="text-accent-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </BottomSheet>
+
+          </Motion.div>
         </div>
       )}
     

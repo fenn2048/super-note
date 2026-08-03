@@ -10,38 +10,56 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#4F46E5" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <!-- 预连接到字体 CDN，并异步加载字体样式表（不阻塞首屏渲染） -->
-    <link rel="preconnect" href="https://cdn.staticfile.org" crossorigin />
-    <link rel="stylesheet" href="https://cdn.staticfile.org/lxgw-wenkai-screen-webfont/1.6.0/lxgwwenkaiscreen.css" media="print" onload="this.media='all'" />
     <title>蜉蝣</title>
     <!--
-      FOUC 防护：在 React 挂载前同步读取皮肤偏好并写入 <html data-skin="...">。
-      next-themes 已处理明暗模式的首帧闪烁；此脚本只负责 skin 维度。
-      注意：必须是同步内联脚本，不能放到外部文件，否则会被 <link modulepreload> 抢占在前。
+      FOUC 防护：同步应用 light/dark（无多皮肤）。
+      注意：必须是同步内联脚本。
     -->
     <script>
       (function () {
         try {
           var t = localStorage.getItem("super-note-theme");
           if (!t || t === "system") {
-            t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            t = "light";
           }
           if (t === "light") {
             document.documentElement.classList.remove("dark");
           } else {
             document.documentElement.classList.add("dark");
           }
-
-          var s = localStorage.getItem("super-note-skin");
-          if (s && s !== "obsidian") {
-            document.documentElement.setAttribute("data-skin", s);
-          }
-        } catch (e) { /* 隐私模式 / localStorage 被禁：静默忽略，按默认皮肤渲染 */ }
+          // skins removed
+          document.documentElement.removeAttribute("data-skin");
+          try { localStorage.removeItem("super-note-skin"); } catch (_) {}
+        } catch (e) { /* ignore */ }
       })();
     </script>
+    <!--
+      关键 CSS 必须在 head：强制刷新首帧 body 默认白底 + ~8px margin 会在左侧/顶部露出细白条；
+      且 100vw 含滚动条宽度易横向溢出。用 100%（非 100vw）+ 与产品一致的底色。
+    -->
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #f3efe6;
+      }
+      html.dark, html.dark body {
+        background-color: #16131c;
+      }
+      #root {
+        height: 100%;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        background-color: inherit;
+      }
+    </style>
   </head>
   <body>
-    <div id="root" style="height:100vh;width:100vw;overflow:hidden;">
+    <div id="root">
       <!-- 首屏加载占位符，由 React 挂载后自动替换 -->
       <div class="initial-loader">
         <div class="loader-content">
@@ -57,7 +75,7 @@
           justify-content: center;
           height: 100%;
           width: 100%;
-          background-color: #F5F3EE;
+          background-color: #f3efe6;
           color: #1a1a1a;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif;
           transition: background-color 0.2s, color 0.2s;
@@ -75,7 +93,7 @@
           user-select: none;
         }
         .dark .initial-loader {
-          background-color: #1e1e1e;
+          background-color: #16131c;
           color: #dadada;
         }
         .dark .initial-loader p {

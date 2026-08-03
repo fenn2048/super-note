@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { Loader2, Home, NotebookPen, BookOpen, ListTodo, MoreHorizontal, Plus, Briefcase, Camera, Bell, CheckCheck, Film, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
@@ -1404,7 +1404,7 @@ function AppLayout() {
   }
 
   return (
-    <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
+    <div className="flex h-[100dvh] w-full max-w-full bg-app-bg overflow-hidden transition-colors duration-200">
       {/* ===== 移动端：抽屉式侧边栏 ===== */}
       <MobileDrawer />
 
@@ -1431,15 +1431,11 @@ function AppLayout() {
         "flex-1 flex flex-col min-w-0 relative overflow-hidden transition-[padding] duration-300",
         showMobileTabBar ? "mobile-content-pad md:pb-[var(--global-music-bar-height,0px)]" : "pb-0 md:pb-[var(--global-music-bar-height,0px)]"
       )}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={state.viewMode}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="flex-1 flex flex-col min-h-0 overflow-hidden"
-          >
+        {/* High-frequency viewMode switches: no enter/exit motion (plans/001) */}
+        <div
+          key={state.viewMode}
+          className="flex-1 flex flex-col min-h-0 overflow-hidden"
+        >
             {(() => {
               const registered = renderRegisteredView(state.viewMode, {
                 onCloseSettings: closeSettingsPage,
@@ -1534,8 +1530,7 @@ function AppLayout() {
               </div>
               );
             })()}
-          </motion.div>
-        </AnimatePresence>
+        </div>
         <GlobalMusicPlayer />
       </div>
 
@@ -1546,7 +1541,7 @@ function AppLayout() {
         <>
           <div
             className={cn(
-              "mobile-fab-anchor fixed right-4 z-rail-fab md:hidden transition-all duration-300 ease-soft",
+              "mobile-fab-anchor fixed right-4 z-rail-fab md:hidden transition-[transform,opacity,bottom] duration-panel ease-out",
               barsVisuallyVisible
                 ? "opacity-100 translate-y-0 pointer-events-auto"
                 : "opacity-0 translate-y-4 pointer-events-none",

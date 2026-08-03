@@ -72,6 +72,7 @@ import {
   type ImageHostFormat,
 } from "@/lib/imageHostFormats";
 import AttachmentDetailDrawer from "@/components/attachmentDetail/AttachmentDetailDrawer";
+import { springs } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // 工具：文件大小可读化 / MIME → 图标 / 时间格式化
@@ -1084,7 +1085,7 @@ export default function FileManager() {
           <button
             onClick={toggleImageHostMode}
             className={cn(
-              "w-9 h-9 rounded-xl flex items-center justify-center border transition-all shrink-0",
+              "w-9 h-9 rounded-xl flex items-center justify-center border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0",
               isImageHostMode
                 ? "bg-accent-primary/15 text-accent-primary border-accent-primary/30"
                 : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover",
@@ -1096,7 +1097,7 @@ export default function FileManager() {
           <button
             onClick={toggleSelectionMode}
             className={cn(
-              "w-9 h-9 rounded-xl flex items-center justify-center border transition-all shrink-0",
+              "w-9 h-9 rounded-xl flex items-center justify-center border transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0",
               selectionMode
                 ? "bg-accent-primary/15 text-accent-primary border-accent-primary/30"
                 : "bg-app-bg text-tx-secondary border-app-border active:bg-app-hover",
@@ -1335,7 +1336,7 @@ export default function FileManager() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={springs.modal}
             className="overflow-hidden border-b border-app-border bg-accent-primary/5"
           >
             <div className="flex flex-wrap items-center gap-2 px-4 md:px-6 py-2">
@@ -1662,7 +1663,7 @@ const GridCard = React.memo(function GridCard({
   return (
     <div
       className={cn(
-        "group relative rounded-card border bg-app-surface overflow-hidden hover:shadow-sm transition-all cursor-pointer",
+        "group relative rounded-card border bg-app-surface overflow-hidden hover:shadow-sm transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out cursor-pointer",
         selected
           ? "border-accent-primary ring-2 ring-accent-primary/40"
           : "border-app-border hover:border-accent-primary/50",

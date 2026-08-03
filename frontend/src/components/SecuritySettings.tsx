@@ -26,6 +26,7 @@ import {
   confirm as confirmDialog,
   prompt as promptDialog,
 } from "@/components/ui/confirm";
+import { springs } from "@/lib/motion";
 
 function QRCodeCanvas({ text }: { text: string }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,7 +52,7 @@ function QRCodeCanvas({ text }: { text: string }): JSX.Element {
   }, [text]);
 
   return (
-    <div className="flex justify-center p-2.5 bg-white rounded-2xl border border-zinc-200/80 shadow-inner w-fit mx-auto transition-all duration-300">
+    <div className="flex justify-center p-2.5 bg-white rounded-2xl border border-zinc-200/80 shadow-inner w-fit mx-auto transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel">
       <canvas ref={canvasRef} className="rounded-lg" />
     </div>
   );
@@ -200,7 +201,7 @@ function AvatarCropModal({
           <div className="flex items-center gap-3">
             <button
               onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
-              className="p-1.5 rounded-lg border border-border bg-background hover:bg-accent text-tx-secondary active:scale-95 transition-all"
+              className="p-1.5 rounded-lg border border-border bg-background hover:bg-accent text-tx-secondary active:scale-95 transition-transform duration-press ease-out"
               type="button"
             >
               <Minus size={14} />
@@ -216,7 +217,7 @@ function AvatarCropModal({
             />
             <button
               onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
-              className="p-1.5 rounded-lg border border-border bg-background hover:bg-accent text-tx-secondary active:scale-95 transition-all"
+              className="p-1.5 rounded-lg border border-border bg-background hover:bg-accent text-tx-secondary active:scale-95 transition-transform duration-press ease-out"
               type="button"
             >
               <Plus size={14} />
@@ -374,10 +375,10 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
             <img
               src={avatarUrl}
               alt="Avatar"
-              className="w-20 h-20 rounded-full object-cover border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-all duration-300"
+              className="w-20 h-20 rounded-full object-cover border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
             />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center text-2xl font-bold border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-all duration-300">
+            <div className="w-20 h-20 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center text-2xl font-bold border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel">
               {firstChar.toUpperCase()}
             </div>
           )}
@@ -477,7 +478,7 @@ function ProfileSection({ user, onUpdate }: { user: any; onUpdate: () => void })
               placeholder={t("securitySettings.displayNamePlaceholder", {
                 defaultValue: "显示在首页问候、协作评论等处",
               })}
-              className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-app-border bg-app-bg text-sm text-tx-primary outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             />
             <button
               type="button"
@@ -698,7 +699,7 @@ function PasswordSection() {
               type={showCurrentPassword ? "text" : "password"}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm ${
+              className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-sm ${
                 error && !currentPassword ? "border-red-500/50 dark:border-red-500/50" : "border-zinc-200 dark:border-zinc-700"
               }`}
               placeholder={t('securitySettings.currentPasswordPlaceholder')}
@@ -728,7 +729,7 @@ function PasswordSection() {
               type="text"
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm"
+              className="block w-full pl-10 pr-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-sm"
               placeholder={t('securitySettings.newUsernamePlaceholder')}
               autoComplete="username"
             />
@@ -746,7 +747,7 @@ function PasswordSection() {
               type={showNewPassword ? "text" : "password"}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm"
+              className="block w-full pl-10 pr-10 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-sm"
               placeholder={t('securitySettings.newPasswordPlaceholder')}
               autoComplete="new-password"
             />
@@ -766,7 +767,7 @@ function PasswordSection() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={springs.modal}
               className="space-y-1.5 overflow-hidden"
             >
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('securitySettings.confirmPassword')}</label>
@@ -778,7 +779,7 @@ function PasswordSection() {
                   type={showNewPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all text-sm ${
+                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-xl bg-zinc-50/50 dark:bg-zinc-800/50 text-tx-primary placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 dark:focus:border-indigo-500 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-sm ${
                     confirmPassword && newPassword !== confirmPassword ? "border-red-500/50 dark:border-red-500/50" : "border-zinc-200 dark:border-zinc-700"
                   }`}
                   placeholder={t('securitySettings.confirmPasswordPlaceholder')}
@@ -810,7 +811,7 @@ function PasswordSection() {
         <button
           type="submit"
           disabled={isLoading || success}
-          className={`w-full flex items-center justify-center py-2.5 px-4 rounded-xl text-sm font-medium text-white transition-all shadow-sm hover:shadow-md ${
+          className={`w-full flex items-center justify-center py-2.5 px-4 rounded-xl text-sm font-medium text-white transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shadow-sm hover:shadow-md ${
             success
               ? "bg-green-500"
               : "bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500"

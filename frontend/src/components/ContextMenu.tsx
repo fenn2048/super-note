@@ -69,6 +69,17 @@ export default function ContextMenu({
     setAdjustedPos({ x, y });
   }, [x, y]);
 
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  useEffect(() => {
+    if (!isOpen) {
+      setMenuOpen(false);
+      return;
+    }
+    setMenuOpen(false);
+    const id = requestAnimationFrame(() => setMenuOpen(true));
+    return () => cancelAnimationFrame(id);
+  }, [isOpen, x, y]);
+
   if (!isOpen) return null;
 
   return createPortal(
@@ -78,7 +89,7 @@ export default function ContextMenu({
         position: "fixed",
         top: adjustedPos.y,
         left: adjustedPos.x,
-        animation: "contextMenuIn 0.12s ease-out",
+        transformOrigin: "top left",
       }}
       // 必须用语义色：zinc-* 被映射成 CSS 变量后，dark:bg-zinc-900/95 透明度会失效，
       // 深色模式仍露出 bg-white，菜单整块发白、文字发虚。
@@ -87,6 +98,8 @@ export default function ContextMenu({
         "bg-app-elevated text-tx-primary",
         "border border-app-border",
         "backdrop-blur-md",
+        "origin-top-left transition-[transform,opacity] duration-micro ease-out",
+        menuOpen ? "opacity-100 scale-100" : "opacity-0 scale-[0.97]",
       )}
     >
       {header && (

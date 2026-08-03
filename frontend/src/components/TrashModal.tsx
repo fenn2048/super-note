@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { Trash2, X, RefreshCw, AlertCircle, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,8 @@ import MarkdownPreviewPane from "@/components/MarkdownPreviewPane";
 import HtmlPreviewPane, { isFullHtmlDocument } from "@/components/HtmlPreviewPane";
 import { detectFormat } from "@/lib/contentFormat";
 import { useAppActions } from "@/store/AppContext";
+import { Motion } from "@/components/common/Motion";
+import { springs, variants } from "@/lib/motion";
 
 interface TrashModalProps {
   isOpen: boolean;
@@ -149,11 +151,12 @@ export default function TrashModal({ isOpen, onClose }: TrashModalProps) {
   return createPortal(
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 md:p-10 bg-black/50 backdrop-blur-xs">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.96 }}
-          transition={{ duration: 0.2 }}
+        <Motion.div
+          variants={variants.fadeScaleIn}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={springs.modal}
           className="w-full max-w-5xl h-[85vh] bg-app-elevated border border-app-border rounded-window shadow-2xl flex flex-col overflow-hidden"
         >
           {/* Modal Header */}
@@ -220,7 +223,7 @@ export default function TrashModal({ isOpen, onClose }: TrashModalProps) {
                           key={note.id}
                           onClick={() => setActiveNoteId(note.id)}
                           className={cn(
-                            "group p-3 rounded-lg border text-left transition-all cursor-pointer relative",
+                            "group p-3 rounded-lg border text-left transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out cursor-pointer relative",
                             isSelected
                               ? "bg-app-active border-accent-primary/40 shadow-2xs"
                               : "border-transparent hover:bg-app-hover text-tx-secondary"
@@ -342,50 +345,68 @@ export default function TrashModal({ isOpen, onClose }: TrashModalProps) {
               )}
             </div>
           </div>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Empty Trash Confirm Dialog */}
-      {emptyConfirmOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-app-elevated border border-app-border rounded-window p-6 shadow-2xl space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center shrink-0">
-                <AlertCircle size={20} />
+      <AnimatePresence>
+        {emptyConfirmOpen && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+            <Motion.div
+              variants={variants.scrimFade}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={springs.modal}
+              className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => !emptying && setEmptyConfirmOpen(false)}
+            />
+            <Motion.div
+              variants={variants.fadeScaleIn}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={springs.modal}
+              className="relative z-10 w-full max-w-md bg-app-elevated border border-app-border rounded-window p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center shrink-0">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-tx-primary">
+                    {t("sidebar.emptyTrashConfirmTitle") || "确认清空回收站？"}
+                  </h4>
+                  <p className="text-xs text-tx-tertiary mt-1 leading-relaxed">
+                    {t("sidebar.emptyTrashConfirmHint") || "此操作将永久删除回收站中的所有笔记，且无法恢复。"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-base font-bold text-tx-primary">
-                  {t("sidebar.emptyTrashConfirmTitle") || "确认清空回收站？"}
-                </h4>
-                <p className="text-xs text-tx-tertiary mt-1 leading-relaxed">
-                  {t("sidebar.emptyTrashConfirmHint") || "此操作将永久删除回收站中的所有笔记，且无法恢复。"}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEmptyConfirmOpen(false)}
-                disabled={emptying}
-              >
-                {t("common.cancel") || "取消"}
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleEmptyTrash}
-                disabled={emptying}
-                className="gap-1.5"
-              >
-                {emptying && <Loader2 size={13} className="animate-spin" />}
-                {t("sidebar.confirmEmpty") || "确定清空"}
-              </Button>
-            </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEmptyConfirmOpen(false)}
+                  disabled={emptying}
+                >
+                  {t("common.cancel") || "取消"}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleEmptyTrash}
+                  disabled={emptying}
+                  className="gap-1.5"
+                >
+                  {emptying && <Loader2 size={13} className="animate-spin" />}
+                  {t("sidebar.confirmEmpty") || "确定清空"}
+                </Button>
+              </div>
+            </Motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </AnimatePresence>,
     document.body
   );

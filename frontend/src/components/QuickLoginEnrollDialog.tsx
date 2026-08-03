@@ -32,6 +32,7 @@ import {
   type BiometryStatus,
 } from "@/lib/quickLogin";
 import { getServerUrl } from "@/lib/api";
+import { springs } from "@/lib/motion";
 
 interface Props {
   /** 当前已登录用户名，仅用于文案 */
@@ -155,7 +156,7 @@ export default function QuickLoginEnrollDialog({
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={springs.modal}
             className="relative w-full max-w-[380px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-6"
           >
             {/* 关闭 */}

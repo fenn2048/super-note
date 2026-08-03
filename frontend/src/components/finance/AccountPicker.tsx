@@ -4,10 +4,10 @@
  * - variant=dropdown（默认）| sheet（portal 底部抽屉，触控友好）
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { ChevronDown, Search, X } from "lucide-react";
 import type { FinanceAccount } from "@/types";
 import { cn } from "@/lib/utils";
+import { BottomSheet } from "@/components/common/BottomSheet";
 
 const TYPE_LABEL: Record<string, string> = {
   ASSETS: "资产",
@@ -179,46 +179,18 @@ export default function AccountPicker({
     </>
   );
 
-  const sheet =
-    open &&
-    isSheet &&
-    typeof document !== "undefined" &&
-    createPortal(
-      <div
-        className="fixed inset-0 z-[10000] flex flex-col justify-end"
-        role="dialog"
-        aria-modal="true"
-        aria-label={sheetTitle || placeholder}
-      >
-        <button
-          type="button"
-          className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-          aria-label="关闭"
-          onClick={() => setOpen(false)}
-        />
-        <div
-          className="relative z-[10001] w-full max-h-[70vh] flex flex-col rounded-t-2xl border border-app-border shadow-xl text-tx-primary"
-          style={{
-            paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
-            backgroundColor: "var(--color-elevated-solid, var(--color-elevated))",
-          }}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-app-border shrink-0">
-            <span className="text-sm font-medium">{sheetTitle || placeholder}</span>
-            <button
-              type="button"
-              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-tx-tertiary"
-              onClick={() => setOpen(false)}
-              aria-label="关闭"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          {listBody}
-        </div>
-      </div>,
-      document.body,
-    );
+  const sheet = isSheet ? (
+    <BottomSheet
+      open={open}
+      onClose={() => setOpen(false)}
+      title={sheetTitle || placeholder}
+      maxHeight="min(70dvh, 100%)"
+      zClassName="z-modal"
+      bodyClassName="flex flex-col min-h-0"
+    >
+      {listBody}
+    </BottomSheet>
+  ) : null;
 
   return (
     <div ref={rootRef} className={cn("relative min-w-0", className)}>

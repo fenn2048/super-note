@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { Motion } from "@/components/common/Motion";
 import {
   BookOpen, Plus, Star, Trash, Trash2, Search, ChevronRight, FileText,
   ChevronDown, ListTodo,
@@ -9,8 +10,7 @@ import {
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2, FileUp,
   Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Globe, Lock, Eye,
-  Compass, Milestone,
-} from "lucide-react";
+  Compass, Milestone} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { prompt as appPrompt, confirm as confirmDialog } from "@/components/ui/confirm";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import { springs } from "@/lib/motion";
 
 /* ===== Emoji 图标选择器 ===== */
 const EMOJI_GROUPS = [
@@ -39,45 +40,39 @@ const EMOJI_GROUPS = [
       "📝", "📄", "📋", "📁", "📂", "🗂️", "🗃️", "🗄️",
       "💼", "🎒", "👜", "📦", "🗑️", "📌", "📎", "🔗",
       "✂️", "🔍", "🔐", "🔑", "🛠️", "⚙️", "🧲", "🧪",
-    ],
-  },
+    ]},
   {
     label: "smileys",
     emojis: [
       "😊", "😎", "🤓", "🧐", "🤔", "💡", "⭐", "🌟",
       "❤️", "🔥", "✨", "🎯", "🎨", "🎵", "🎮", "🏆",
       "🚀", "💎", "🌈", "☀️", "🌙", "⚡", "💫", "🍀",
-    ],
-  },
+    ]},
   {
     label: "tech",
     emojis: [
       "💻", "🖥️", "⌨️", "🖱️", "🖨️", "📱", "📡", "🔌",
       "🧑‍💻", "⚛️", "🐍", "🦀", "☕", "🐳", "🐙", "🤖",
-    ],
-  },
+    ]},
   {
     label: "nature",
     emojis: [
       "🌸", "🌺", "🌻", "🌹", "🌿", "🍃", "🌲", "🌴",
       "🦋", "🐱", "🐶", "🦊", "🐼", "🐨", "🐸", "🦉",
-    ],
-  },
+    ]},
   {
     label: "food",
     emojis: [
       "🍎", "🍊", "🍋", "🍇", "🍓", "🍒", "🍰", "🍩",
       "☕", "🍵", "🧃", "🍺", "🧁", "🍕", "🌮", "🍣",
-    ],
-  },
+    ]},
 ];
 
 function EmojiIconPicker({
   currentIcon,
   onSelect,
   onClose,
-  position,
-}: {
+  position}: {
   currentIcon: string;
   onSelect: (emoji: string) => void;
   onClose: () => void;
@@ -115,16 +110,15 @@ function EmojiIconPicker({
     smileys: t("sidebar.emojiSmileys"),
     tech: t("sidebar.emojiTech"),
     nature: t("sidebar.emojiNature"),
-    food: t("sidebar.emojiFood"),
-  };
+    food: t("sidebar.emojiFood")};
 
   return (
-    <motion.div
+    <Motion.div
       ref={ref}
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.92 }}
-      transition={{ duration: 0.15 }}
+      transition={springs.snappy}
       className="fixed z-[70] w-[260px] bg-app-elevated rounded-xl border border-app-border shadow-2xl"
       style={{ top: adjustedPos.top, left: adjustedPos.left }}
     >
@@ -154,10 +148,10 @@ function EmojiIconPicker({
               key={emoji}
               onClick={() => { onSelect(emoji); onClose(); }}
               className={cn(
-                "w-7 h-7 rounded-md flex items-center justify-center text-base transition-all",
+                "w-7 h-7 rounded-md flex items-center justify-center text-base transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
                 currentIcon === emoji
                   ? "bg-accent-primary/15 ring-1 ring-accent-primary/30 scale-110"
-                  : "hover:bg-app-hover hover:scale-110"
+                  : "hover:bg-app-hover [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110"
               )}
             >
               {emoji}
@@ -165,7 +159,7 @@ function EmojiIconPicker({
           ))}
         </div>
       </div>
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -196,8 +190,7 @@ function buildTree(notebooks: Notebook[]): Notebook[] {
 
 /* ===== 移动笔记本：树形选择器条目 ===== */
 function NotebookMoveTreeItem({
-  notebook, depth, selectedId, disabledIds, currentParentId, onSelect,
-}: {
+  notebook, depth, selectedId, disabledIds, currentParentId, onSelect}: {
   notebook: Notebook; depth: number;
   selectedId: string | null;
   disabledIds: Set<string>;          // 自身及子孙（禁用）
@@ -257,8 +250,7 @@ function NotebookMoveTreeItem({
 }
 
 function MoveNotebookModal({
-  isOpen, notebook, allNotebooks, onMove, onClose,
-}: {
+  isOpen, notebook, allNotebooks, onMove, onClose}: {
   isOpen: boolean;
   notebook: Notebook | null;
   allNotebooks: Notebook[];
@@ -306,10 +298,7 @@ function MoveNotebookModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className="relative w-full max-w-[360px] mx-4 max-h-[80vh] bg-app-elevated border border-app-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ animation: "contextMenuIn 0.15s ease-out" }}
-      >
+      <div className="relative w-full max-w-[360px] mx-4 max-h-[80vh] bg-app-elevated border border-app-border rounded-xl shadow-2xl flex flex-col overflow-hidden origin-top-left transition-[transform,opacity] duration-micro ease-out opacity-100 scale-100">
         <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
           <div className="flex items-center gap-2 min-w-0">
             <FolderInput size={16} className="text-accent-primary shrink-0" />
@@ -387,8 +376,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
   editingId, editValue, onEditChange, onEditSubmit, onEditCancel,
   onIconChange,
   draggable, onDragStart, onDragOver, onDragEnd, onDrop, dragOverId, dragOverZone,
-  notebookNotes, activeNoteId, onCreateNote, onDeleteNote, onRenameNote, onToggleFavorite, onTogglePin,
-}: {
+  notebookNotes, activeNoteId, onCreateNote, onDeleteNote, onRenameNote, onToggleFavorite, onTogglePin}: {
   notebook: Notebook; depth: number; onSelect: (id: string) => void;
   selectedId: string | null; onToggle: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, id: string) => void;
@@ -469,7 +457,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
           style={{ marginLeft: `${depth * 16 + 16}px` }}
         />
       )}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
         className={cn(
@@ -507,7 +495,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
         onTouchEnd={cancelLongPress}
         onTouchCancel={cancelLongPress}
         draggable={draggable && !isEditing}
-        // framer-motion 的 motion.div 把 onDragStart/onDrag/onDragEnd 的类型
+        // framer-motion 的 Motion.div 把 onDragStart/onDrag/onDragEnd 的类型
         // 重载为手势系统签名（MouseEvent | PointerEvent | TouchEvent + PanInfo），
         // 且没有暴露 React.DragEvent 的重载分支。但只有在 motion 组件显式设置
         // drag prop 时才启用手势；我们没启用，运行时 motion 会把这些 handler
@@ -534,7 +522,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
         <button
           ref={iconRef}
           onClick={(e) => { e.stopPropagation(); setShowIconPicker(true); }}
-          className="text-base hover:scale-125 transition-transform shrink-0"
+          className="text-base [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 transition-transform shrink-0"
           title={t("sidebar.changeIcon")}
         >
           {notebook.icon}
@@ -575,14 +563,14 @@ const NotebookItem = React.memo(function NotebookItemInner({
             )}
           </>
         )}
-      </motion.div>
+      </Motion.div>
       <AnimatePresence>
         {hasChildren && isExpanded && (
-          <motion.div
+          <Motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={springs.modal}
           >
             {notebook.children!.map((child) => (
               <NotebookItem
@@ -651,7 +639,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
                 <span>{t("common.newNote")}</span>
               </button>
             )}
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </>
@@ -660,8 +648,7 @@ const NotebookItem = React.memo(function NotebookItemInner({
 
 /** Inline note item - rendered inside expanded notebook tree */
 const NoteNoteItem = React.memo(function NoteNoteItemInner({
-  note, depth, isActive, onSelect, onDelete, onRename, onToggleFavorite, onTogglePin,
-}: {
+  note, depth, isActive, onSelect, onDelete, onRename, onToggleFavorite, onTogglePin}: {
   note: NoteListItem; depth: number; isActive: boolean;
   onSelect: (noteId: string) => void;
   onDelete: (noteId: string) => void;
@@ -897,8 +884,7 @@ function ProjectSidebar() {
       title: t("projects.createGroup") || "新建分组",
       placeholder: t("projects.groupName") || "分组名称",
       confirmText: t("common.confirm") || "确认",
-      cancelText: t("common.cancel") || "取消",
-    });
+      cancelText: t("common.cancel") || "取消"});
     if (!name) return;
     try {
       await api.createProjectGroup({ name, workspaceId: workspaceId || null });
@@ -915,8 +901,7 @@ function ProjectSidebar() {
       placeholder: t("projects.groupName") || "分组名称",
       defaultValue: oldName,
       confirmText: t("common.confirm") || "确认",
-      cancelText: t("common.cancel") || "取消",
-    });
+      cancelText: t("common.cancel") || "取消"});
     if (!name) return;
     try {
       await api.updateProjectGroup(groupId, { name });
@@ -932,8 +917,7 @@ function ProjectSidebar() {
       title: t("projects.deleteGroup") || "删除分组",
       description: t("projects.confirmDeleteGroup") || "确定要删除该分组吗？此操作不可撤销。",
       confirmText: t("common.confirm") || "确认",
-      cancelText: t("common.cancel") || "取消",
-    });
+      cancelText: t("common.cancel") || "取消"});
     if (!ok) return;
     try {
       await api.deleteProjectGroup(groupId);
@@ -969,7 +953,7 @@ function ProjectSidebar() {
           </div>
           <button
             type="button"
-            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-plans:opacity-100 opacity-100 transition-all"
+            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-plans:opacity-100 opacity-100 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             onClick={(e) => {
               e.stopPropagation();
               actions.setViewMode("projects");
@@ -1002,7 +986,7 @@ function ProjectSidebar() {
           </div>
           <button
             type="button"
-            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-projects:opacity-100 opacity-100 transition-all"
+            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-projects:opacity-100 opacity-100 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
             onClick={(e) => {
               e.stopPropagation();
               actions.setViewMode("projects");
@@ -1159,8 +1143,7 @@ function ProjectSidebar() {
           const ok = await confirmDialog({
             title: t("sidebar.deleteTagTitle"),
             description: t("sidebar.confirmDeleteTag", { name: tagColorPopover.tagName }),
-            danger: true,
-          });
+            danger: true});
           if (!ok) return;
           try {
             await api.deleteTag(tagColorPopover.tagId);
@@ -1555,8 +1538,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     items.push({
       id: "toggle_visibility",
       label: isCurrentlyPublic ? t('sidebar.makePrivate', '设为私有') : t('sidebar.makePublic', '设为所有人可见'),
-      icon: isCurrentlyPublic ? <Lock size={14} /> : <Globe size={14} />,
-    });
+      icon: isCurrentlyPublic ? <Lock size={14} /> : <Globe size={14} />});
     items.push({ id: "sep2", label: "", separator: true });
     items.push({ id: "delete", label: t('sidebar.deleteNotebook'), icon: <Trash2 size={14} />, danger: true });
     return items;
@@ -1856,8 +1838,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
           version: note.version || 1,
           sortOrder: note.sortOrder || 0,
           updatedAt: note.updatedAt,
-          createdAt: note.createdAt,
-        } as any);
+          createdAt: note.createdAt} as any);
         actions.refreshNotebooks();
         break;
       }
@@ -1888,8 +1869,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             version: note.version || 1,
             sortOrder: note.sortOrder || 0,
             updatedAt: note.updatedAt,
-            createdAt: note.createdAt,
-          } as any);
+            createdAt: note.createdAt} as any);
           actions.refreshNotebooks();
           toast.success(t("noteList.bulkMoveSuccess", { count: 1 }));
         } catch (err: any) {
@@ -1923,8 +1903,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             version: note.version || 1,
             sortOrder: note.sortOrder || 0,
             updatedAt: note.updatedAt,
-            createdAt: note.createdAt,
-          } as any);
+            createdAt: note.createdAt} as any);
           actions.refreshNotebooks();
           toast.success("导入成功");
         } catch (err: any) {
@@ -1950,8 +1929,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
               return t('urlImport.unsupportedUrl');
             }
             return null;
-          },
-        });
+          }});
         if (raw == null) break; // 用户取消
         const url = raw.trim();
         const toastId = toast.info(t('urlImport.importing'), 0);
@@ -1976,8 +1954,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             version: note.version || 1,
             sortOrder: note.sortOrder || 0,
             updatedAt: note.updatedAt,
-            createdAt: note.createdAt,
-          } as any);
+            createdAt: note.createdAt} as any);
           actions.refreshNotebooks();
           toast.dismiss(toastId);
           const failedTip = result.images.failed > 0
@@ -2049,8 +2026,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
               notebookId: targetNb.id,
               notebookName: targetNb.name,
               descendantNotebookIds: ids,
-              descendantNotebookNames: names,
-            },
+              descendantNotebookNames: names},
             (p) => {
               if (p.phase === "error") toast.error(p.message);
             }
@@ -2374,11 +2350,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
 
           <AnimatePresence initial={false}>
             {notebooksExpanded && (
-              <motion.div
+              <Motion.div
                 initial={{ height: 0, opacity: 0, overflow: "hidden" }}
                 animate={{ height: "auto", opacity: 1, overflow: "visible", transitionEnd: { overflow: "visible" } }}
                 exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-                transition={{ duration: 0.2 }}
+                transition={springs.modal}
                 className="flex-1 min-h-0 flex flex-col"
               >
           <ScrollArea className="flex-1 min-h-0 px-1">
@@ -2417,7 +2393,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
               ))}
             </div>
           </ScrollArea>
-              </motion.div>
+              </Motion.div>
             )}
           </AnimatePresence>
 
@@ -2452,11 +2428,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             </button>
             <AnimatePresence initial={false}>
               {favoritesExpanded && (
-                <motion.div
+                <Motion.div
                   initial={{ height: 0, opacity: 0, overflow: "hidden" }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-                  transition={{ duration: 0.2 }}
+                  transition={springs.modal}
                   style={{ overflow: "hidden" }}
                 >
                   <div
@@ -2487,7 +2463,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                       ))
                     )}
                   </div>
-                </motion.div>
+                </Motion.div>
               )}
             </AnimatePresence>
           </div>
@@ -2509,11 +2485,11 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             </button>
             <AnimatePresence initial={false}>
               {tagsExpanded && (
-                <motion.div
+                <Motion.div
                   initial={{ height: 0, opacity: 0, overflow: "hidden" }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-                  transition={{ duration: 0.2 }}
+                  transition={springs.modal}
                   style={{ overflow: "hidden" }}
                 >
                   {/* 限制标签区最大高度，超出可滚动 —— 避免与 Notebooks / Footer 重叠 */}
@@ -2554,8 +2530,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                                 tagName: tag.name,
                                 color: tag.color,
                                 x: e.clientX,
-                                y: e.clientY,
-                              });
+                                y: e.clientY});
                             }}
                             onTouchStart={(e) => {
                               const touch = e.touches[0];
@@ -2571,8 +2546,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                                   tagName: tag.name,
                                   color: tag.color,
                                   x: startX,
-                                  y: startY,
-                                });
+                                  y: startY});
                               }, 500);
                             }}
                             onTouchMove={(e) => {
@@ -2603,8 +2577,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                               style={{
                                 width: 6,
                                 height: 6,
-                                backgroundColor: tag.color,
-                              }}
+                                backgroundColor: tag.color}}
                             />
                             <span className="flex-1 truncate text-left">{tag.name}</span>
                             {/* 右侧尾部：固定宽度容器，内部用绝对定位叠放数字与删除按钮，避免 hover 时宽度变化引发抖动 */}
@@ -2631,7 +2604,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                       })
                     )}
                   </div>
-                </motion.div>
+                </Motion.div>
               )}
             </AnimatePresence>
           </div>
@@ -2703,18 +2676,18 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       <AnimatePresence>
         {deleteTarget && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => setDeleteTarget(null)}
             />
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", duration: 0.4, bounce: 0 }}
+              transition={springs.ui}
               className="relative bg-app-elevated w-full max-w-sm p-5 rounded-xl shadow-2xl border border-app-border"
               onClick={(e) => e.stopPropagation()}
             >
@@ -2744,7 +2717,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                   {t('sidebar.confirmDelete')}
                 </button>
               </div>
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -2753,18 +2726,18 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       <AnimatePresence>
         {deleteTagTarget && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => setDeleteTagTarget(null)}
             />
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", duration: 0.4, bounce: 0 }}
+              transition={springs.ui}
               className="relative bg-app-elevated w-full max-w-sm p-5 rounded-xl shadow-2xl border border-app-border"
               onClick={(e) => e.stopPropagation()}
             >
@@ -2811,7 +2784,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                   {t('sidebar.confirmDelete')}
                 </button>
               </div>
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -2821,18 +2794,18 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         <AnimatePresence>
           {emptyTrashOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={() => !emptyingTrash && setEmptyTrashOpen(false)}
               />
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ type: "spring", duration: 0.4, bounce: 0 }}
+                transition={springs.ui}
                 className="relative bg-app-elevated w-full max-w-sm p-5 rounded-xl shadow-2xl border border-app-border"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -2863,7 +2836,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                     {emptyingTrash ? t('common.loading') : t('sidebar.emptyTrash')}
                   </button>
                 </div>
-              </motion.div>
+              </Motion.div>
             </div>
           )}
         </AnimatePresence>,
@@ -2906,8 +2879,7 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             const ok = await confirmDialog({
               title: t("sidebar.deleteTagTitle"),
               description: t("sidebar.confirmDeleteTag", { name: tagColorPopover.tagName }),
-              danger: true,
-            });
+              danger: true});
             if (!ok) return;
             try {
               await api.deleteTag(tagColorPopover.tagId);

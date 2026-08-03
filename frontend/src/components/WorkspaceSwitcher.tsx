@@ -31,6 +31,7 @@ import MembersPanel from "@/components/MembersPanel";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { AppModal } from "@/components/common/AppModal";
+import { springs } from "@/lib/motion";
 
 /** 兼容旧 import：统一走 AppModal（portal + app token），避免 MembersPanel 循环依赖与空白弹窗 */
 export { AppModal as Modal } from "@/components/common/AppModal";
@@ -400,7 +401,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
           <button
             onClick={() => setOpen((v) => !v)}
             onContextMenu={handleEntryContextMenu}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-app-border bg-app-surface hover:bg-app-hover active:scale-95 transition-all text-xs font-semibold text-tx-primary shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-app-border bg-app-surface hover:bg-app-hover active:scale-95 transition-transform duration-press ease-out text-xs font-semibold text-tx-primary shrink-0"
           >
             <span>{displayIcon} {displayName || "选择工作区"}</span>
             <ChevronDown size={14} className={cn("transition-transform duration-200", open && "rotate-180")} />
@@ -436,7 +437,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.15 }}
+                transition={springs.snappy}
                 className="absolute top-full mt-1 left-0 right-0 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden"
               >
                 {renderWorkspaceMenuBody()}
@@ -456,7 +457,7 @@ export default function WorkspaceSwitcher({ onWorkspaceChange, collapsed, varian
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.15 }}
+                transition={springs.snappy}
                 className="fixed bg-popover border border-border rounded-lg shadow-xl z-[200] overflow-hidden"
                 style={{
                   top: headerMenuPos.top,

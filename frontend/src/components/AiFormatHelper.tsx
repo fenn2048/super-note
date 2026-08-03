@@ -66,7 +66,7 @@ export const AiFormatHelper: React.FC<AiFormatHelperProps> = ({ value, onChange,
         <button
           type="button"
           onClick={handleUndo}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold transition-all"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
         >
           <RotateCcw size={10} />
           撤销 AI 整理
@@ -75,7 +75,7 @@ export const AiFormatHelper: React.FC<AiFormatHelperProps> = ({ value, onChange,
         <button
           type="button"
           onClick={handleAIFormat}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary text-[10px] font-semibold transition-all animate-pulse"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary text-[10px] font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out animate-pulse"
         >
           <Sparkles size={10} />
           点击进行 AI 整理

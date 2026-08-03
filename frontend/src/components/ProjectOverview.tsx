@@ -179,11 +179,11 @@ export default function ProjectOverview({ project, stages }: ProjectOverviewProp
                     {/* Double progress bar: Total volume in gray, completed in overlay accent */}
                     <div className="relative w-full h-3 rounded-full bg-app-hover overflow-hidden border border-app-border/10">
                       <div
-                        className="absolute top-0 bottom-0 left-0 bg-accent-primary/20 rounded-full transition-all duration-300"
+                        className="absolute top-0 bottom-0 left-0 bg-accent-primary/20 rounded-full transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                         style={{ width: `${ratio}%` }}
                       />
                       <div
-                        className="absolute top-0 bottom-0 left-0 bg-accent-primary rounded-full transition-all duration-300"
+                        className="absolute top-0 bottom-0 left-0 bg-accent-primary rounded-full transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                         style={{ width: `${(ratio * complRatio) / 100}%` }}
                       />
                     </div>

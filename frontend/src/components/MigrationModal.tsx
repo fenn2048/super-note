@@ -557,7 +557,7 @@ export default function MigrationModal({
                 placeholder="服务器地址（如 http://192.168.1.10:3001）"
                 value={cloudUrl}
                 onChange={(e) => setCloudUrl(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-sm outline-none transition-all focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 disabled:opacity-50"
+                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-sm outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 disabled:opacity-50"
                 disabled={busy}
               />
               <input
@@ -567,7 +567,7 @@ export default function MigrationModal({
                 placeholder="用户名"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-sm outline-none transition-all focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 disabled:opacity-50"
+                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-sm outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 disabled:opacity-50"
                 disabled={busy}
               />
               <input
@@ -578,7 +578,7 @@ export default function MigrationModal({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-sm outline-none transition-all focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 disabled:opacity-50"
+                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-sm outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 disabled:opacity-50"
                 disabled={busy}
               />
             </div>
@@ -601,7 +601,7 @@ export default function MigrationModal({
               <button
                 onClick={handleLogin}
                 disabled={busy}
-                className="px-5 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg shadow-md hover:shadow-lg flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-500 disabled:shadow-md"
+                className="px-5 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg shadow-md hover:shadow-lg flex items-center gap-1.5 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-500 disabled:shadow-md"
               >
                 {busy && <Loader2 size={14} className="animate-spin" />}
                 登录
@@ -720,7 +720,7 @@ export default function MigrationModal({
             <div className="space-y-3">
               <div className="h-2 bg-app-input rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-accent-primary transition-all duration-300"
+                  className="h-full bg-accent-primary transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel"
                   style={{ width: `${Math.round(progress.ratio * 100)}%` }}
                 />
               </div>

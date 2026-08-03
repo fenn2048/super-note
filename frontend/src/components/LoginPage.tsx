@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Motion } from "@/components/common/Motion";
 import { Loader2, Lock, User, CheckCircle2, AlertCircle, Mail, UserPlus, ShieldCheck, Eye, EyeOff, ChevronDown, ChevronUp, QrCode, Fingerprint } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getServerUrl, setServerUrl, clearServerUrl, testServerConnection, fetchRegisterConfig, registerAccount } from "@/lib/api";
@@ -17,6 +18,7 @@ import {
 import QrLoginPanel from "@/components/QrLoginPanel";
 import { normalizeServerOrigin } from "@/lib/qrLogin";
 import { verifyAuthToken } from "@/lib/authVerify";
+import { springs } from "@/lib/motion";
 
 interface LoginPageProps {
   onLogin: (token: string, user: any) => void;
@@ -543,7 +545,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
       (isClientMode && !serverParts.host.trim());
 
   const fieldInputCls =
-    "block w-full pl-11 pr-3 py-3 border border-app-border rounded-xl bg-app-surface/80 text-tx-primary placeholder:text-tx-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary transition-all text-base";
+    "block w-full pl-11 pr-3 py-3 border border-app-border rounded-xl bg-app-surface/80 text-tx-primary placeholder:text-tx-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-base";
   const fieldLabelCls = "text-sm font-medium text-tx-secondary";
   const serverSummary = (() => {
     try {
@@ -642,28 +644,28 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
         <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-accent-primary/[0.04] to-transparent" />
       </div>
 
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
+        transition={springs.soft}
         className={`relative w-full max-w-[420px] px-4 sm:px-5 py-5 sm:py-8 flex-shrink-0 flex flex-col ${
           keyboardHeight > 0 ? "mt-auto" : "my-auto"
         }`}
       >
         {/* —— 品牌 Hero（键盘弹起时压缩） —— */}
         <div
-          className={`text-center transition-all duration-200 ${
+          className={`text-center transition-[transform,margin,opacity] duration-normal ease-out ${
             keyboardHeight > 0 ? "mb-3 scale-[0.92] origin-bottom" : "mb-5 sm:mb-6"
           }`}
         >
-          <motion.div
-            initial={{ scale: 0.85, opacity: 0 }}
+          <Motion.div
+            initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.08, duration: 0.35 }}
+            transition={{ ...springs.ui, delay: 0.08 }}
             className="inline-flex items-center justify-center mb-3"
           >
             <BrandMark size={keyboardHeight > 0 ? 48 : 64} />
-          </motion.div>
+          </Motion.div>
           <h1 className="text-2xl sm:text-[1.65rem] font-bold text-tx-primary tracking-tight">
             {t("auth.appTitle")}
           </h1>
@@ -714,7 +716,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                   switchMode("login");
                   setLoginMethod("password");
                 }}
-                className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   mode === "login"
                     ? "bg-app-elevated text-accent-primary shadow-sm"
                     : "text-tx-tertiary hover:text-tx-primary"
@@ -727,7 +729,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                 onClick={() => allowRegistration && switchMode("register")}
                 disabled={!allowRegistration}
                 title={!allowRegistration ? t("auth.registerDisabled") : undefined}
-                className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`flex-1 min-h-[42px] py-2 rounded-lg text-sm font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   mode === "register"
                     ? "bg-app-elevated text-accent-primary shadow-sm"
                     : "text-tx-tertiary hover:text-tx-primary disabled:opacity-40 disabled:cursor-not-allowed"
@@ -744,7 +746,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
               <button
                 type="button"
                 onClick={() => setLoginMethod("password")}
-                className={`flex-1 min-h-[36px] py-1.5 rounded-md text-xs font-semibold transition-all ${
+                className={`flex-1 min-h-[36px] py-1.5 rounded-md text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                   loginMethod === "password"
                     ? "bg-app-elevated text-tx-primary shadow-sm"
                     : "text-tx-tertiary hover:text-tx-primary"
@@ -755,7 +757,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
               <button
                 type="button"
                 onClick={() => setLoginMethod("qr")}
-                className={`flex-1 min-h-[36px] py-1.5 rounded-md text-xs font-semibold transition-all inline-flex items-center justify-center gap-1 ${
+                className={`flex-1 min-h-[36px] py-1.5 rounded-md text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out inline-flex items-center justify-center gap-1 ${
                   loginMethod === "qr"
                     ? "bg-app-elevated text-tx-primary shadow-sm"
                     : "text-tx-tertiary hover:text-tx-primary"
@@ -834,7 +836,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                 {/* 服务器地址 */}
                 <AnimatePresence>
                   {isClientMode && (
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
@@ -889,7 +891,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                           <p className="text-xs text-tx-tertiary">{t("auth.serverHint")}</p>
                         </>
                       )}
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </AnimatePresence>
 
@@ -920,7 +922,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                 {/* 注册：昵称 + 邮箱 */}
                 <AnimatePresence>
                   {isRegister && (
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
@@ -960,7 +962,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                           />
                         </div>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </AnimatePresence>
 
@@ -1003,7 +1005,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                 {/* 确认密码 */}
                 <AnimatePresence>
                   {isRegister && (
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
@@ -1045,7 +1047,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                           )}
                         </button>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </AnimatePresence>
 
@@ -1123,7 +1125,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             {/* 错误 */}
             <AnimatePresence>
               {error && (
-                <motion.div
+                <Motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
@@ -1131,7 +1133,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                   <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                </motion.div>
+                </Motion.div>
               )}
             </AnimatePresence>
 
@@ -1139,7 +1141,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             <button
               type="submit"
               disabled={submitDisabled}
-              className="btn-primary-glow w-full flex items-center justify-center h-12 px-4 rounded-xl text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:filter-none transition-all mt-1"
+              className="btn-primary-glow w-full flex items-center justify-center h-12 px-4 rounded-xl text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:filter-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out mt-1"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -1214,7 +1216,7 @@ export default function LoginPage({ onLogin, isClientMode = false, onDisconnect 
             {t("auth.clientNote")}
           </motion.p>
         )}
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

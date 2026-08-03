@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { copyText } from "@/lib/clipboard";
 import AttachmentDetailDrawer from "@/components/attachmentDetail/AttachmentDetailDrawer";
+import { springs } from "@/lib/motion";
 
 interface Props {
   noteId: string;
@@ -225,7 +226,7 @@ export default function NoteAttachmentsPanel({ noteId, noteTitle, onClose }: Pro
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.2 }}
+          transition={springs.modal}
           className="w-full max-w-2xl mx-4 bg-app-elevated rounded-xl shadow-2xl border border-app-border overflow-hidden max-h-[85vh] flex flex-col"
         >
           {/* Header */}

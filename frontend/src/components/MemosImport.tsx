@@ -19,6 +19,7 @@ import {
 import { importMemos, ImportProgress } from "@/lib/importService";
 import { toast } from "@/lib/toast";
 import { getCurrentWorkspace, setCurrentWorkspace } from "@/lib/api";
+import { springs } from "@/lib/motion";
 
 export interface MemosImportProps {
   workspaceId?: string;
@@ -184,7 +185,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative border border-dashed rounded-lg p-10 text-center transition-all cursor-pointer ${
+          className={`relative border border-dashed rounded-lg p-10 text-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out cursor-pointer ${
             isDragOver
               ? "border-blue-500 bg-blue-50/30 dark:bg-blue-500/5"
               : "border-zinc-300 dark:border-zinc-850 hover:border-blue-400 dark:hover:border-zinc-600 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30"
@@ -247,7 +248,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
                   <button
                     type="button"
                     onClick={() => setTargetType("diaries")}
-                    className={`flex flex-col items-center p-4 rounded-lg border text-center transition-all ${
+                    className={`flex flex-col items-center p-4 rounded-lg border text-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                       targetType === "diaries"
                         ? "border-blue-500 bg-blue-500/[0.03] dark:bg-blue-500/[0.05] text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20"
                         : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
@@ -263,7 +264,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
                   <button
                     type="button"
                     onClick={() => setTargetType("notes")}
-                    className={`flex flex-col items-center p-4 rounded-lg border text-center transition-all ${
+                    className={`flex flex-col items-center p-4 rounded-lg border text-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                       targetType === "notes"
                         ? "border-blue-500 bg-blue-500/[0.03] dark:bg-blue-500/[0.05] text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20"
                         : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
@@ -289,7 +290,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
                 <button
                   type="button"
                   onClick={handleStartImport}
-                  className="px-4 py-2 rounded-md text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 active:scale-[0.98] transition-all shadow-sm"
+                  className="px-4 py-2 rounded-md text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 active:scale-[0.98] transition-transform duration-press ease-out shadow-sm"
                 >
                   开始导入
                 </button>
@@ -312,7 +313,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
 
               <div className="w-full h-2 rounded-full bg-zinc-150 dark:bg-zinc-800 overflow-hidden relative">
                 <motion.div
-                  className={`h-full rounded-full transition-all ${
+                  className={`h-full rounded-full transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out ${
                     progress.phase === "error"
                       ? "bg-red-500"
                       : progress.phase === "done"
@@ -328,7 +329,7 @@ export function MemosImport({ workspaceId, onImportComplete }: MemosImportProps)
                         ? "10%"
                         : `${(progress.current / Math.max(progress.total, 1)) * 100}%`,
                   }}
-                  transition={{ duration: 0.3 }}
+                  transition={springs.ui}
                 />
               </div>
 
