@@ -158,11 +158,20 @@ module.exports = {
         fab: "var(--shadow-fab)",
       },
       transitionTimingFunction: {
+        // Motion craft — DESIGN.md §12 / lib/motion.ts easings
         soft: "var(--ease-out-soft)",
+        out: "var(--ease-out)",
+        inout: "var(--ease-in-out-strong)",
+        drawer: "var(--ease-drawer)",
       },
       transitionDuration: {
+        instant: "var(--duration-instant)",
+        press: "var(--duration-press)",
+        micro: "var(--duration-micro)",
         fast: "var(--duration-fast)",
         normal: "var(--duration-normal)",
+        panel: "var(--duration-panel)",
+        sheet: "var(--duration-sheet)",
       },
       animation: {
         "fade-in": "fadeIn 0.2s ease-out",

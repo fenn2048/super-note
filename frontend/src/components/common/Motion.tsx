@@ -79,6 +79,7 @@ function createMotionComponent<T extends MotionHTMLTag>(tag: T) {
 export const Motion = {
   div: createMotionComponent("div"),
   span: createMotionComponent("span"),
+  p: createMotionComponent("p"),
   button: createMotionComponent("button"),
   section: createMotionComponent("section"),
   header: createMotionComponent("header"),
