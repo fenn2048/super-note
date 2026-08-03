@@ -80,17 +80,26 @@ app.get("/", (c) => {
         SELECT nb.*, COALESCE(nc.noteCount, 0) AS noteCount
         FROM notebooks nb
         LEFT JOIN (
+          -- noteCount 与 GET /notes 列表可见性一致：
+          -- WORKSPACE 笔记 + 当前用户自己的 PRIVATE 笔记（不含他人私有）
           SELECT t.ancestorId AS notebookId, COUNT(notes.id) AS noteCount
           FROM nb_tree t
           INNER JOIN notes ON notes.notebookId = t.descendantId
-          WHERE notes.isTrashed = 0 AND notes.workspaceId = ?
+          WHERE notes.isTrashed = 0
+            AND notes.workspaceId = ?
+            AND (notes.visibility = 'WORKSPACE' OR notes.userId = ?)
           GROUP BY t.ancestorId
         ) nc ON nb.id = nc.notebookId
         WHERE nb.workspaceId = ? AND nb.isDeleted = 0 AND (nb.visibility = 'WORKSPACE' OR (nb.visibility = 'PRIVATE' AND nb.userId = ?))
         ORDER BY nb.sortOrder ASC
       `,
       )
-      .all(workspaceId, userId, workspaceId, userId, workspaceId, workspaceId, userId);
+      .all(
+        workspaceId, userId, // nb_tree roots
+        workspaceId, userId, // nb_tree recursive
+        workspaceId, userId, // noteCount: workspaceId + current userId for visibility
+        workspaceId, userId, // outer WHERE
+      );
   } else {
     // 兼容模式：个人空间
     rows = db
@@ -292,6 +301,10 @@ app.put("/:id", async (c) => {
     return c.json({ error: "notebook not found" }, 404);
   }
 
+  const prev = db
+    .prepare("SELECT visibility FROM notebooks WHERE id = ?")
+    .get(id) as { visibility: string } | undefined;
+
   db.prepare(
     `
     UPDATE notebooks SET name = COALESCE(?, name), icon = COALESCE(?, icon),
@@ -310,6 +323,47 @@ app.put("/:id", async (c) => {
     body.visibility,
     id,
   );
+
+  // 笔记本公开/私有切换时，级联同步其下（含子笔记本）笔记可见性，
+  // 避免「侧栏显示公开、笔记仍是 PRIVATE 导致其他成员列表对不上」。
+  if (
+    (body.visibility === "WORKSPACE" || body.visibility === "PRIVATE") &&
+    prev?.visibility !== body.visibility
+  ) {
+    try {
+      // 先收集后代 id 再 UPDATE，避免部分 SQLite 对「递归 CTE + UPDATE 触发 FTS」报 unsafe
+      const descendantIds = (
+        db
+          .prepare(
+            `
+            WITH RECURSIVE descendants(id) AS (
+              SELECT id FROM notebooks WHERE id = ?
+              UNION ALL
+              SELECT n.id FROM notebooks n
+              INNER JOIN descendants d ON n.parentId = d.id
+              WHERE n.isDeleted = 0
+            )
+            SELECT id FROM descendants
+          `,
+          )
+          .all(id) as { id: string }[]
+      ).map((r) => r.id);
+      if (descendantIds.length > 0) {
+        const ph = descendantIds.map(() => "?").join(",");
+        db.prepare(
+          `UPDATE notes
+           SET visibility = ?, updatedAt = datetime('now')
+           WHERE notebookId IN (${ph}) AND isTrashed = 0`,
+        ).run(body.visibility, ...descendantIds);
+      }
+    } catch (e) {
+      console.error(
+        "[notebooks.put] cascade note visibility failed:",
+        (e as Error).message,
+      );
+    }
+  }
+
   const notebook = db.prepare("SELECT * FROM notebooks WHERE id = ?").get(id);
   return c.json(notebook);
 });

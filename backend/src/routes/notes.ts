@@ -384,6 +384,21 @@ app.post("/", async (c) => {
   } else {
     id = uuid();
   }
+  // 默认可见性：
+  //   - 客户端显式传入 → 尊重
+  //   - 否则若落在「公开笔记本」(visibility=WORKSPACE) 下 → 继承 WORKSPACE，
+  //     使工作区成员能在列表里看到彼此新建的笔记（与侧栏 noteCount 口径一致）；
+  //   - 其余情况 → PRIVATE
+  let defaultVisibility: "PRIVATE" | "WORKSPACE" = "PRIVATE";
+  if (body.visibility === "WORKSPACE" || body.visibility === "PRIVATE") {
+    defaultVisibility = body.visibility;
+  } else if (body.notebookId) {
+    const nbVis = db
+      .prepare("SELECT visibility FROM notebooks WHERE id = ?")
+      .get(body.notebookId) as { visibility: string } | undefined;
+    if (nbVis?.visibility === "WORKSPACE") defaultVisibility = "WORKSPACE";
+  }
+
   try {
     db.prepare(`
       INSERT INTO notes (id, userId, workspaceId, notebookId, title, content, contentText, visibility)
@@ -391,7 +406,7 @@ app.post("/", async (c) => {
     `).run(
       id, userId, inheritedWorkspaceId, body.notebookId,
       body.title || "无标题笔记", body.content || "{}", body.contentText || "",
-      body.visibility || "PRIVATE",
+      defaultVisibility,
     );
   } catch (e: any) {
     if (String(e?.code || "").startsWith("SQLITE_CONSTRAINT")) {
