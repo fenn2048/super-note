@@ -3,9 +3,12 @@
  * ---------------------------------------------------------------------------
  * - 自定义图：全屏 cover + 右上角圆形半透明跳过（环形倒计时 + 纯数字）
  * - 无图：品牌默认短展示
- * - 出现/消失淡入淡出
+ * - 收起时淡出；**出现必须立即不透明**，否则热恢复时 body 上 portal 的 UI
+ *   （媒体库右上角车载/设置/加号等）会从闪屏「透」出来
+ * - 默认 portal 到 document.body + z-system，盖过任意 createPortal 的 chrome
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import BrandMark from "@/components/BrandMark";
 import useReducedMotion from "@/hooks/useReducedMotion";
 
@@ -13,6 +16,8 @@ const FADE_MS = 320;
 const SKIP_SIZE = 44;
 const RING_STROKE = 2.5;
 const RING_PAD = 2;
+/** 与 --z-system 对齐，盖住 lightbox / toast / 媒体 titlebar portal */
+const DEFAULT_SPLASH_Z = 1000;
 
 export type SplashOverlayProps = {
   /** 自定义闪屏 data URL；null 表示品牌默认 */
@@ -117,7 +122,7 @@ export default function SplashOverlay({
   minMs = 600,
   ready = true,
   onHidden,
-  zIndex = 300,
+  zIndex = DEFAULT_SPLASH_Z,
   showSkip,
 }: SplashOverlayProps) {
   const reduceMotion = useReducedMotion();
@@ -126,7 +131,8 @@ export default function SplashOverlay({
   const hasCustom = !!imageUrl;
   const skipEnabled = showSkip ?? hasCustom;
 
-  const [opacity, setOpacity] = useState(0);
+  // 必须从 1 起：热恢复时若从 0 淡入，body 上 portal 的媒体库 chrome 会整段露出来
+  const [opacity, setOpacity] = useState(1);
   const [remainingSec, setRemainingSec] = useState(() => clampDurationSec(durationSec));
   const [progress, setProgress] = useState(1);
   const [leaving, setLeaving] = useState(false);
@@ -149,18 +155,6 @@ export default function SplashOverlay({
     setOpacity(0);
     window.setTimeout(() => finishHide(), fadeMs);
   }, [fadeMs, finishHide]);
-
-  // 淡入
-  useEffect(() => {
-    if (reduceMotion) {
-      setOpacity(1);
-      return;
-    }
-    const id = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setOpacity(1));
-    });
-    return () => cancelAnimationFrame(id);
-  }, [reduceMotion]);
 
   // 倒计时 / 自动收起
   useEffect(() => {
@@ -197,9 +191,10 @@ export default function SplashOverlay({
     }
   }, [ready, hasCustom, totalMs, leaving, handleDismiss]);
 
-  return (
+  const layer = (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center"
+      data-splash-overlay
       style={{
         zIndex,
         backgroundColor: "#F5F3EE",
@@ -233,4 +228,9 @@ export default function SplashOverlay({
       )}
     </div>
   );
+
+  // portal 到 body：与媒体库 titlebar（createPortal → body）同一层比较 z-index，
+  // 避免被 #root 内 transform/动画产生的层叠上下文压到下面。
+  if (typeof document === "undefined") return layer;
+  return createPortal(layer, document.body);
 }

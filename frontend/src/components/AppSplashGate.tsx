@@ -7,6 +7,7 @@
  * 倒计时不依赖鉴权完成（ready 默认 true）；鉴权 UI 由 AuthGate 在闪屏结束后再展示。
  */
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { getCurrentWorkspace } from "@/lib/api";
 import { getReadySplashForDisplay } from "@/lib/splashCache";
 import { isNativePlatform, hideSplashScreen } from "@/hooks/useCapacitor";
@@ -78,15 +79,18 @@ export default function AppSplashGate({
   if (!native) return null;
   if (gateDone) return null;
 
-  // 读缓存中：纯色遮罩，避免下层「正在验证」露出来
+  // 读缓存中：纯色遮罩（同 SplashOverlay：portal + z-system，盖住媒体库 chrome）
   if (customUrl === undefined) {
-    return (
+    const underlay = (
       <div
-        className="fixed inset-0 z-[300]"
+        className="fixed inset-0 z-system"
+        data-splash-overlay
         style={{ backgroundColor: "#F5F3EE" }}
         aria-hidden
       />
     );
+    if (typeof document === "undefined") return underlay;
+    return createPortal(underlay, document.body);
   }
 
   return (
@@ -95,7 +99,7 @@ export default function AppSplashGate({
       durationSec={durationSec}
       minMs={minMs}
       ready={ready}
-      zIndex={300}
+      zIndex={1000}
       onHidden={() => {
         setGateDone(true);
         onHidden?.();
