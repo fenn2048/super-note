@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import OCRModal from "@/components/OCRModal";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
+import { syncTaskNotification } from "@/hooks/useCapacitor";
 
 interface MobileTaskCreateModalProps {
   isOpen: boolean;
@@ -149,8 +150,13 @@ export default function MobileTaskCreateModal({
       };
 
       // 3. Create project task
-      await api.createProjectTask(selectedProjectId, payload);
+      const newTask = await api.createProjectTask(selectedProjectId, payload);
       toast.success("新建待办成功");
+
+      // 原生端立刻调度本地通知（此前移动端创建路径漏调，导致锁屏永远收不到提醒）
+      if (newTask?.remindAt) {
+        void syncTaskNotification(newTask as any);
+      }
 
       // Reset form
       setTitle("");

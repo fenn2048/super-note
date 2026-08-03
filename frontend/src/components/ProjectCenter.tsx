@@ -1454,8 +1454,29 @@ export default function ProjectCenter() {
         }
       }
 
-      await api.updateProjectTask(taskId, payload);
+      const updated = await api.updateProjectTask(taskId, payload);
       triggerStatsRefresh();
+
+      // 周期任务：后端返回 nextOccurrence 时立刻调度本地通知并提示
+      const nextOcc = (updated as any)?.nextOccurrence;
+      if (nextOcc) {
+        if (nextOcc.remindAt) {
+          void syncTaskNotification(nextOcc as any);
+        }
+        const dueLabel = (nextOcc.endDate || nextOcc.dueDate || "").toString().slice(0, 10);
+        toast.success(dueLabel ? `已生成下期任务（${dueLabel}）` : "已生成下期任务");
+      } else if (
+        isCompleted === 1 &&
+        (updated as any)?.isRecurring &&
+        (updated as any)?.recurrence &&
+        !(updated as any).recurrence.created &&
+        (updated as any).recurrence.reason &&
+        (updated as any).recurrence.reason !== "not_recurring" &&
+        (updated as any).recurrence.reason !== "past_recurrence_end"
+      ) {
+        toast.error(`周期任务未能生成下期：${(updated as any).recurrence.reason}`);
+      }
+
       // Re-fetch project details stages
       if (selectedProject) {
         const stages = await api.getProjectStages(selectedProject.id);

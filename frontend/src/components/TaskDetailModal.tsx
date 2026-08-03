@@ -161,12 +161,24 @@ export default function TaskDetailModal({
         remindAt: activeTask.remindAt || null,
         reminderOffsetValue: activeTask.reminderOffsetValue,
         reminderOffsetUnit: activeTask.reminderOffsetUnit,
+        isRecurring: activeTask.isRecurring,
+        recurrenceRule: activeTask.recurrenceRule,
+        recurrenceEndDate: (activeTask as any).recurrenceEndDate ?? null,
       });
       if (updated.remindAt) {
         syncTaskNotification(updated as any);
       }
+      const nextOcc = (updated as any)?.nextOccurrence;
+      if (nextOcc?.remindAt) {
+        syncTaskNotification(nextOcc as any);
+      }
       if (!isSilent) {
-        toast.success("保存成功");
+        if (nextOcc) {
+          const dueLabel = (nextOcc.endDate || nextOcc.dueDate || "").toString().slice(0, 10);
+          toast.success(dueLabel ? `已保存，并生成下期（${dueLabel}）` : "已保存，并生成下期任务");
+        } else {
+          toast.success("保存成功");
+        }
       }
       try {
         window.dispatchEvent(new CustomEvent("super:task-stats-changed"));

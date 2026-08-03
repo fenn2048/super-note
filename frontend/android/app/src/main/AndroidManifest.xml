@@ -134,6 +134,10 @@
     <!-- 音频锁屏 / 系统媒体控件（MediaSession） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 任务提醒精确闹钟（Android 12+）；无此权限则 LocalNotifications 无法按 remindAt 准时触发 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 开机后由系统/插件恢复已调度的本地通知（与 LocalNotifications 配合） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     
     <!-- Camera & Gallery Permissions -->
     <uses-permission android:name="android.permission.CAMERA" />

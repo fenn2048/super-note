@@ -589,6 +589,11 @@ export default function Dashboard() {
     try {
       const updated = await api.toggleTask(id);
       syncTaskNotification(updated);
+      // 周期续期：为新实例调度本地通知
+      const nextOcc = (updated as any)?.nextOccurrence;
+      if (nextOcc?.remindAt) {
+        syncTaskNotification(nextOcc as any);
+      }
       window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
       api
         .getTaskStats()

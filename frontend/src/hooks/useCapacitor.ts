@@ -759,6 +759,126 @@ function hashStringToInt(str: string): number {
   return Math.abs(hash);
 }
 
+/** 提前量提醒 id（历史兼容：仅 task.id） */
+function taskAdvanceNotifId(taskId: string): number {
+  return hashStringToInt(taskId);
+}
+/** 截止日当天提醒 id */
+function taskDueNotifId(taskId: string): number {
+  return hashStringToInt(`${taskId}#due`);
+}
+
+/**
+ * Parse remindAt / dueDate into a local Date for AlarmManager scheduling.
+ * Supports: YYYY-MM-DD, YYYY-MM-DD HH:mm, ISO T/Z.
+ * Date-only defaults to 09:00 local (same as historical behavior).
+ */
+export function parseRemindAtToLocalDate(remindAt: string): Date | null {
+  if (!remindAt || typeof remindAt !== "string") return null;
+  const s = remindAt.trim();
+  if (!s) return null;
+
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (dateOnly) {
+    const y = Number(dateOnly[1]);
+    const m = Number(dateOnly[2]);
+    const d = Number(dateOnly[3]);
+    return new Date(y, m - 1, d, 9, 0, 0, 0);
+  }
+
+  // Local wall clock without timezone suffix
+  const localDt = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+  if (localDt && !s.endsWith("Z") && !/[+-]\d{2}:?\d{2}$/.test(s)) {
+    return new Date(
+      Number(localDt[1]),
+      Number(localDt[2]) - 1,
+      Number(localDt[3]),
+      Number(localDt[4]),
+      Number(localDt[5]),
+      localDt[6] ? Number(localDt[6]) : 0,
+      0,
+    );
+  }
+
+  // ISO with Z / offset, or other Date-parseable forms
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+/** 兼容 Task / ProjectTask 字段 */
+export type TaskLikeForReminder = {
+  id: string;
+  title: string;
+  isCompleted?: number | boolean;
+  remindAt?: string | null;
+  dueDate?: string | null;
+  endDate?: string | null;
+};
+
+function taskDueField(task: TaskLikeForReminder): string | null {
+  return task.endDate || task.dueDate || null;
+}
+
+function sameMinute(a: Date, b: Date): boolean {
+  return Math.floor(a.getTime() / 60_000) === Math.floor(b.getTime() / 60_000);
+}
+
+/**
+ * 双提醒计划：
+ * 1) 提前量：remindAt（若设置）
+ * 2) 截止日：endDate/dueDate 当天（date-only 默认 09:00；与提前量同一分钟则去重只留一条）
+ */
+export function buildTaskReminderSlots(task: TaskLikeForReminder): Array<{
+  kind: "advance" | "due";
+  at: Date;
+  title: string;
+  body: string;
+  id: number;
+}> {
+  const slots: Array<{
+    kind: "advance" | "due";
+    at: Date;
+    title: string;
+    body: string;
+    id: number;
+  }> = [];
+  if (task.isCompleted) return slots;
+
+  let advanceAt: Date | null = null;
+  if (task.remindAt) {
+    advanceAt = parseRemindAtToLocalDate(task.remindAt);
+    if (advanceAt && !isNaN(advanceAt.getTime()) && advanceAt.getTime() > Date.now()) {
+      slots.push({
+        kind: "advance",
+        at: advanceAt,
+        title: "任务提醒",
+        body: task.title,
+        id: taskAdvanceNotifId(task.id),
+      });
+    }
+  }
+
+  const dueStr = taskDueField(task);
+  if (dueStr) {
+    const dueAt = parseRemindAtToLocalDate(dueStr);
+    if (dueAt && !isNaN(dueAt.getTime()) && dueAt.getTime() > Date.now()) {
+      // 与提前量同一分钟则不再重复调度截止提醒
+      if (!advanceAt || !sameMinute(advanceAt, dueAt)) {
+        slots.push({
+          kind: "due",
+          at: dueAt,
+          title: "截止提醒",
+          body: `【今天截止】${task.title}`,
+          id: taskDueNotifId(task.id),
+        });
+      }
+    }
+  }
+
+  return slots;
+}
+
 async function checkAndRequestPermissions() {
   await ensureNotificationChannels();
   const status = await LocalNotifications.checkPermissions();
@@ -770,48 +890,41 @@ async function checkAndRequestPermissions() {
   return false;
 }
 
-export async function syncTaskNotification(task: Task) {
+export async function syncTaskNotification(task: Task | TaskLikeForReminder) {
   if (!isNativePlatform()) return;
   try {
-    const notificationId = hashStringToInt(task.id);
+    const advanceId = taskAdvanceNotifId(task.id);
+    const dueId = taskDueNotifId(task.id);
     try {
-      await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
+      await LocalNotifications.cancel({
+        notifications: [{ id: advanceId }, { id: dueId }],
+      });
     } catch {}
 
-    if (task.isCompleted || !task.remindAt) {
-      return;
-    }
+    if (task.isCompleted) return;
 
-    const hasTime = task.remindAt.includes(" ");
-    const datePart = hasTime ? task.remindAt.split(" ")[0] : task.remindAt;
-    const timePart = hasTime ? task.remindAt.split(" ")[1] : "09:00";
-    const [year, month, day] = datePart.split("-").map(Number);
-    const [hour, minute] = timePart.split(":").map(Number);
-    const scheduleDate = new Date(year, month - 1, day, hour, minute, 0);
+    const slots = buildTaskReminderSlots(task as TaskLikeForReminder);
+    if (slots.length === 0) return;
 
-    if (scheduleDate.getTime() > Date.now()) {
-      const granted = await checkAndRequestPermissions();
-      if (!granted) return;
+    const granted = await checkAndRequestPermissions();
+    if (!granted) return;
 
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            title: "任务提醒",
-            body: task.title,
-            id: notificationId,
-            channelId: NOTIF_CHANNEL_TASKS,
-            schedule: { at: scheduleDate },
-            extra: { taskId: task.id },
-          },
-        ],
-      });
-    }
+    await LocalNotifications.schedule({
+      notifications: slots.map((s) => ({
+        title: s.title,
+        body: s.body,
+        id: s.id,
+        channelId: NOTIF_CHANNEL_TASKS,
+        schedule: { at: s.at, allowWhileIdle: true },
+        extra: { taskId: task.id, kind: s.kind },
+      })),
+    });
   } catch (err) {
     console.error("syncTaskNotification failed:", err);
   }
 }
 
-export async function syncAllTaskNotifications(tasks: Task[]) {
+export async function syncAllTaskNotifications(tasks: Array<Task | TaskLikeForReminder>) {
   if (!isNativePlatform()) return;
   try {
     const granted = await checkAndRequestPermissions();
@@ -824,35 +937,43 @@ export async function syncAllTaskNotifications(tasks: Task[]) {
     const idsToKeep = new Set<number>();
 
     for (const task of tasks) {
-      const notificationId = hashStringToInt(task.id);
+      const advanceId = taskAdvanceNotifId(task.id);
+      const dueId = taskDueNotifId(task.id);
 
-      if (task.isCompleted || !task.remindAt) {
-        if (pendingIds.has(notificationId)) {
-          await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
+      if (task.isCompleted) {
+        for (const id of [advanceId, dueId]) {
+          if (pendingIds.has(id)) {
+            await LocalNotifications.cancel({ notifications: [{ id }] });
+          }
         }
         continue;
       }
 
-      const hasTime = task.remindAt.includes(" ");
-      const datePart = hasTime ? task.remindAt.split(" ")[0] : task.remindAt;
-      const timePart = hasTime ? task.remindAt.split(" ")[1] : "09:00";
-      const [year, month, day] = datePart.split("-").map(Number);
-      const [hour, minute] = timePart.split(":").map(Number);
-      const scheduleDate = new Date(year, month - 1, day, hour, minute, 0);
+      const slots = buildTaskReminderSlots(task as TaskLikeForReminder);
+      if (slots.length === 0) {
+        for (const id of [advanceId, dueId]) {
+          if (pendingIds.has(id)) {
+            await LocalNotifications.cancel({ notifications: [{ id }] });
+          }
+        }
+        continue;
+      }
 
-      if (scheduleDate.getTime() > Date.now()) {
-        idsToKeep.add(notificationId);
+      for (const s of slots) {
+        idsToKeep.add(s.id);
         notificationsToSchedule.push({
-          title: "任务提醒",
-          body: task.title,
-          id: notificationId,
+          title: s.title,
+          body: s.body,
+          id: s.id,
           channelId: NOTIF_CHANNEL_TASKS,
-          schedule: { at: scheduleDate },
-          extra: { taskId: task.id },
+          schedule: { at: s.at, allowWhileIdle: true },
+          extra: { taskId: task.id, kind: s.kind },
         });
-      } else {
-        if (pendingIds.has(notificationId)) {
-          await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
+      }
+      // cancel orphan of the pair not in slots
+      for (const id of [advanceId, dueId]) {
+        if (!idsToKeep.has(id) && pendingIds.has(id)) {
+          await LocalNotifications.cancel({ notifications: [{ id }] });
         }
       }
     }
@@ -868,6 +989,77 @@ export async function syncAllTaskNotifications(tasks: Task[]) {
     }
   } catch (err) {
     console.error("syncAllTaskNotifications failed:", err);
+  }
+}
+
+export type NotificationDiagnostics = {
+  isNative: boolean;
+  displayPermission: string;
+  exactAlarm: string | null;
+  pendingCount: number;
+  pendingPreview: Array<{ id: number; title?: string; body?: string; at?: string }>;
+  dualReminderNote: string;
+};
+
+/** 设置页「通知诊断」数据 */
+export async function getNotificationDiagnostics(): Promise<NotificationDiagnostics> {
+  const base: NotificationDiagnostics = {
+    isNative: isNativePlatform(),
+    displayPermission: "n/a",
+    exactAlarm: null,
+    pendingCount: 0,
+    pendingPreview: [],
+    dualReminderNote: "每个有截止日的任务会调度：提前量提醒 + 截止日当天提醒（同一时刻去重）",
+  };
+  if (!isNativePlatform()) return base;
+
+  try {
+    await ensureNotificationChannels();
+    const perm = await LocalNotifications.checkPermissions();
+    base.displayPermission = perm.display || "unknown";
+  } catch {
+    base.displayPermission = "error";
+  }
+
+  try {
+    const exact = await LocalNotifications.checkExactNotificationSetting();
+    base.exactAlarm = exact.exact_alarm || "unknown";
+  } catch {
+    base.exactAlarm = "unsupported";
+  }
+
+  try {
+    const pending = await LocalNotifications.getPending();
+    base.pendingCount = pending.notifications?.length || 0;
+    base.pendingPreview = (pending.notifications || []).slice(0, 8).map((n: any) => ({
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      at: n.schedule?.at
+        ? new Date(n.schedule.at).toLocaleString()
+        : undefined,
+    }));
+  } catch {
+    base.pendingCount = -1;
+  }
+
+  return base;
+}
+
+export async function requestNotificationPermission(): Promise<string> {
+  if (!isNativePlatform()) return "n/a";
+  await ensureNotificationChannels();
+  const status = await LocalNotifications.requestPermissions();
+  return status.display || "unknown";
+}
+
+export async function openExactAlarmSettings(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    await LocalNotifications.changeExactNotificationSetting();
+  } catch (e) {
+    console.warn("[notifications] changeExactNotificationSetting failed", e);
+    throw e;
   }
 }
 

@@ -40,7 +40,7 @@ import {
   loadCachedAuthUser,
 } from "@/lib/authVerify";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic, ensureNotificationChannels } from "@/hooks/useCapacitor";
+import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic, ensureNotificationChannels, syncAllTaskNotifications } from "@/hooks/useCapacitor";
 import { useShareReceive } from "@/hooks/useShareReceive";
 import { useShellLayout } from "@/hooks/useShellLayout";
 import { stashSharePayload, subscribeShareReceive } from "@/lib/shareReceive";
@@ -719,11 +719,28 @@ function AppLayout() {
               ? `${actor} 更新了笔记: ${targetTitle}`
               : `${actor} updated note: ${targetTitle}`;
             break;
+          case "task_reminder": {
+            const isDue = notif.kind === "due" || String(targetTitle || "").startsWith("【今天截止】");
+            title = isZh
+              ? isDue
+                ? "截止提醒"
+                : "任务提醒"
+              : isDue
+                ? "Due Today"
+                : "Task Reminder";
+            body = targetTitle
+              ? targetTitle
+              : isZh
+                ? "你有一个待办到点了"
+                : "A task reminder is due";
+            break;
+          }
         }
 
         showLocalNotification(title, body, {
-          sourceType: notif.sourceType,
+          sourceType: notif.sourceType || (notif.type === "task_reminder" ? "task" : undefined),
           sourceId: notif.sourceId,
+          taskId: notif.type === "task_reminder" ? notif.sourceId : undefined,
         });
       }
     });
@@ -763,6 +780,10 @@ function AppLayout() {
         api.getTaskStats().then((stats) => {
           actions.setReminderActiveCount(stats.activeReminders || 0);
         }).catch(console.error);
+        // 回前台：重同步任务本地通知（厂商可能清掉 exact alarm）
+        api.getTasks("all").then((tasks) => {
+          void syncAllTaskNotifications(tasks as any);
+        }).catch(() => {});
         // 热启动：拉最新闪屏元数据并缓存（不弹闪屏门）
         void syncWorkspaceSplash(undefined, { force: true });
       }
@@ -958,10 +979,24 @@ function AppLayout() {
   // P2: 状态栏与主题同步
   useStatusBarSync();
 
-  // Android 通知渠道（任务 / 消息 / 同步）
+  // Android 通知渠道 + 启动时全量重调度任务本地提醒（自愈：重装/清数据/系统取消 exact alarm 后）
   useEffect(() => {
     if (!isNativePlatform()) return;
     void ensureNotificationChannels();
+    const resyncTaskReminders = async () => {
+      try {
+        const tasks = await api.getTasks("all");
+        await syncAllTaskNotifications(tasks as any);
+      } catch (e) {
+        console.warn("[notifications] resync task reminders failed:", e);
+      }
+    };
+    void resyncTaskReminders();
+    const onStats = () => {
+      void resyncTaskReminders();
+    };
+    window.addEventListener("super:task-stats-changed", onStats);
+    return () => window.removeEventListener("super:task-stats-changed", onStats);
   }, []);
 
   // 标签页/Electron 窗口标题同步：
