@@ -1377,6 +1377,25 @@ function initSchema(db: Database.Database) {
 
   try { db.exec("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'pending'"); } catch {}
   try { db.exec("ALTER TABLE project_tasks ADD COLUMN status TEXT DEFAULT 'pending'"); } catch {}
+  // 任务提醒服务端到点兜底（与 migration v42/v43 对齐）
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN reminderFiredAt TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN reminderFiredAt TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL"); } catch {}
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_project_tasks_reminder_due
+        ON project_tasks(isCompleted, remindAt)
+        WHERE isCompleted = 0 AND remindAt IS NOT NULL;
+    `);
+  } catch {}
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_project_tasks_due_reminder
+        ON project_tasks(isCompleted, endDate)
+        WHERE isCompleted = 0 AND endDate IS NOT NULL;
+    `);
+  } catch {}
   // v?? 说说 AI 助手：trigger_user_id 记录谁调起了 AI（用于删除权限判断）
   try { db.exec("ALTER TABLE diary_comments ADD COLUMN trigger_user_id TEXT"); } catch {}
   try { db.exec("ALTER TABLE diaries ADD COLUMN trigger_user_id TEXT"); } catch {}

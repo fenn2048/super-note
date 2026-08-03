@@ -30,6 +30,7 @@ const NOTIFICATION_LABELS: Record<string, { label: string; icon: string }> = {
   diary_posted: { label: "发布了新说说", icon: "diary" },
   note_updated: { label: "更新了笔记", icon: "note" },
   ai_diary_reply: { label: "AI 助手回复了你的说说", icon: "sparkles" },
+  task_reminder: { label: "到点提醒", icon: "task" },
 };
 
 // ---------------------------------------------------------------------------

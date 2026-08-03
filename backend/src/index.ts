@@ -64,6 +64,7 @@ import { createSubClient } from "./services/redis";
 
 import { startAiTaskWorker, stopAiTaskWorker } from "./services/ai-worker";
 import { startFinanceWorker, stopFinanceWorker } from "./services/finance-worker";
+import { startTaskReminderWorker, stopTaskReminderWorker } from "./services/task-reminder-worker";
 
 const app = new Hono();
 
@@ -912,6 +913,12 @@ try {
   console.warn("[init] startFinanceWorker failed:", e);
 }
 
+try {
+  startTaskReminderWorker();
+} catch (e) {
+  console.warn("[init] startTaskReminderWorker failed:", e);
+}
+
 
 console.log(`🚀 蜉蝣 API running on http://localhost:${port}`);
 
@@ -940,6 +947,7 @@ async function gracefulShutdown(signal: string) {
     try { stopEmbeddingWorker(); } catch { /* ignore */ }
     try { stopAiTaskWorker(); } catch { /* ignore */ }
     try { stopFinanceWorker(); } catch { /* ignore */ }
+    try { stopTaskReminderWorker(); } catch { /* ignore */ }
     // 关停 DB 连接：内部会先 wal_checkpoint(TRUNCATE)，把 -wal 中的事务全部
     // 写回主 .db 文件。这样无论用户接下来是 cp 冷备、docker volume snapshot
     // 还是直接关机，拿到的 .db 都是完整的一致快照，不会丢最近事务。

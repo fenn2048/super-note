@@ -2390,6 +2390,48 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  // v42：任务提醒服务端到点兜底（reminderFiredAt 防重复推送）
+  {
+    version: 42,
+    name: "project-tasks-reminder-fired-at",
+    up: (db) => {
+      const ptCols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!ptCols.some((c) => c.name === "reminderFiredAt")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN reminderFiredAt TEXT DEFAULT NULL;");
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_reminder_due
+          ON project_tasks(isCompleted, remindAt)
+          WHERE isCompleted = 0 AND remindAt IS NOT NULL;
+      `);
+      const taskCols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      if (taskCols.length > 0 && !taskCols.some((c) => c.name === "reminderFiredAt")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN reminderFiredAt TEXT DEFAULT NULL;");
+      }
+    },
+  },
+
+  // v43：双提醒 — 截止日当天独立 fired 标记
+  {
+    version: 43,
+    name: "project-tasks-due-reminder-fired-at",
+    up: (db) => {
+      const ptCols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!ptCols.some((c) => c.name === "dueReminderFiredAt")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL;");
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_due_reminder
+          ON project_tasks(isCompleted, endDate)
+          WHERE isCompleted = 0 AND endDate IS NOT NULL;
+      `);
+      const taskCols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      if (taskCols.length > 0 && !taskCols.some((c) => c.name === "dueReminderFiredAt")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL;");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */
