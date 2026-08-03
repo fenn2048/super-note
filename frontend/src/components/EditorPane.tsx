@@ -50,6 +50,7 @@ import {
   type NoteDraft} from "@/lib/draftStorage";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { springs } from "@/lib/motion";
+import { BottomSheet } from "@/components/common/BottomSheet";
 
 // ---------------------------------------------------------------------------
 // 编辑器模式切换（MD vs Tiptap）
@@ -137,7 +138,6 @@ export default function EditorPane() {
   const [showCommentPanel, setShowCommentPanel] = useState(false);
   const [showAttachmentsPanel, setShowAttachmentsPanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
 
   // ── HTML 预览模式 ──
   // 当笔记内容被检测为 HTML 格式（如 clipper 剪藏）时自动启用只读预览，
@@ -151,7 +151,13 @@ export default function EditorPane() {
   const [noteIsHtml, setNoteIsHtml] = useState(false);
   // 完全克隆模式（完整 HTML 文档，如 <!DOCTYPE ...>）不支持编辑，不显示切换按钮。
   const [noteIsFullHtmlDoc, setNoteIsFullHtmlDoc] = useState(false);
-  const [mdPreviewMode, setMdPreviewMode] = useState(false);
+  /**
+   * 阅读/预览模式（相对「编辑模式」）：
+   * - 只读正文、不弹键盘、不显示格式工具栏
+   * - 移动端打开笔记默认进入；桌面默认编辑（HTML 剪藏仍默认预览）
+   * - 三点菜单 / 顶栏可切换
+   */
+  const [readingMode, setReadingMode] = useState(false);
 
   // 编辑器模式（MD / Tiptap）——初值来自 URL / localStorage，运行时可切换
   const [editorMode, setEditorMode] = useState<EditorMode>(() => resolveEditorMode());
@@ -871,18 +877,87 @@ export default function EditorPane() {
     setRemoteDelete(null);
   }, [activeNote?.id]);
 
-  // ── 切换笔记时自动检测 HTML 格式并进入预览模式 ──
-  // 如果笔记内容格式为 "html"，自动启用 HTML 预览；否则回退到常规编辑器。
+  // ── 切换笔记时：检测 HTML + 移动端默认进入阅读模式 ──
   useEffect(() => {
     if (!activeNote) return;
     const fmt = detectFormat(activeNote.content);
     const isHtml = fmt === "html";
     const isFullDoc = isHtml && isFullHtmlDocument(activeNote.content);
-    setHtmlPreviewMode(isHtml);
+    const isMobile =
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches;
+
     setNoteIsHtml(isHtml);
     setNoteIsFullHtmlDoc(isFullDoc);
-    setMdPreviewMode(false);
+    // HTML 剪藏：始终先预览
+    // 移动端：有内容的笔记默认预览；空白新笔记直接进编辑（否则无处落笔）
+    const isBlank = !(activeNote.contentText || "").trim() && !isHtml;
+    if (isHtml) {
+      setHtmlPreviewMode(true);
+      setReadingMode(true);
+    } else if (isMobile && !isBlank) {
+      setHtmlPreviewMode(false);
+      setReadingMode(true);
+    } else {
+      setHtmlPreviewMode(false);
+      setReadingMode(false);
+    }
+    // 预览时收起可能残留的键盘焦点
+    if (isMobile && !isBlank) {
+      try {
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      } catch {
+        /* ignore */
+      }
+    }
   }, [activeNote?.id]); // 只在切换笔记时检测，编辑过程中不再自动切换
+
+  /** 当前是否处于「预览/阅读」（含 HTML 预览） */
+  const isInPreview = readingMode || htmlPreviewMode;
+
+  /** 切换预览 ↔ 编辑（移动端菜单 / 桌面顶栏共用） */
+  const toggleReadingMode = useCallback(async () => {
+    if (noteIsFullHtmlDoc) {
+      // 完整 HTML 文档不可编辑
+      return;
+    }
+    if (isInPreview) {
+      // 预览 → 编辑
+      if (noteIsHtml) {
+        setShowHtmlEditWarning(true);
+        return;
+      }
+      setReadingMode(false);
+      setHtmlPreviewMode(false);
+      return;
+    }
+    // 编辑 → 预览：先落盘，并把当前编辑器 snapshot 回填 activeNote（MD/CRDT 预览依赖 content）
+    try {
+      await editorHandleRef.current?.flushSave();
+    } catch {
+      /* ignore */
+    }
+    try {
+      const cur = activeNoteRef.current;
+      const snap = editorHandleRef.current?.getSnapshot?.();
+      if (cur && snap && typeof snap.content === "string") {
+        actions.setActiveNote({
+          ...cur,
+          content: snap.content,
+          contentText: snap.contentText ?? cur.contentText,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    } catch {
+      /* ignore */
+    }
+    setReadingMode(true);
+    if (noteIsHtml) setHtmlPreviewMode(true);
+  }, [isInPreview, noteIsFullHtmlDoc, noteIsHtml, actions]);
 
   /** 从 presence 中反查用户名（用于横幅显示） */
   const findUsername = useCallback(
@@ -1016,19 +1091,6 @@ export default function EditorPane() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeNote]);
-
-  // 点击外部关闭移动端菜单
-  useEffect(() => {
-    if (!showMobileMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
-        setShowMobileMenu(false);
-        setShowMobileMoveMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showMobileMenu]);
 
   const handleUpdate = useCallback(async (data: { content?: string; contentText?: string; title: string }) => {
     const currentNote = activeNoteRef.current;
@@ -1805,264 +1867,192 @@ export default function EditorPane() {
             aria-label={activeNote.isFavorite ? t('editor.unfavoriteTooltip') : t('editor.favoriteTooltip')}>
             <Star size={17} className={cn(activeNote.isFavorite && "text-amber-400 fill-amber-400")} />
           </Button>
-          {/* 更多操作按钮 */}
-          <div className="relative shrink-0" ref={mobileMenuRef}>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setShowMobileMenu(!showMobileMenu); setShowMobileMoveMenu(false); }}>
-              <MoreHorizontal size={16} />
-            </Button>
-            {/* 更多操作下拉菜单 */}
-            <AnimatePresence>
-              {showMobileMenu && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                  transition={springs.snappy}
-                  className="absolute top-full right-0 mt-1 w-56 bg-app-elevated border border-app-border rounded-lg shadow-xl z-50 py-1 overflow-hidden"
-                >
-                  <button
-                    onClick={() => {
-                      window.dispatchEvent(new CustomEvent("super:open-search"));
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <Search size={15} className="text-tx-tertiary" />
-                    <span>{t("editor.searchInNote") || "文内搜索"}</span>
-                  </button>
-                  {/* 锁定 / 解锁 —— 原顶栏外露按钮，移入菜单避免拥挤 */}
-                  <button
-                    onClick={() => { toggleLock(); setShowMobileMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    {effectiveLocked
-                      ? <Lock size={15} className="text-orange-500" />
-                      : <Unlock size={15} className="text-tx-tertiary" />}
-                    <span>{effectiveLocked ? t('editor.unlockTooltip') : t('editor.lockTooltip')}</span>
-                  </button>
-                  {/* 置顶 / 取消置顶 */}
-                  <button
-                    onClick={() => { togglePin(); setShowMobileMenu(false); }}
-                    disabled={!!activeNote.isLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
-                  >
-                    <Pin size={15} className={cn(activeNote.isPinned ? "text-accent-primary fill-accent-primary" : "text-tx-tertiary")} />
-                    <span>{activeNote.isPinned ? t('editor.unpinTooltip') : t('editor.pinTooltip')}</span>
-                  </button>
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* 移动笔记本 */}
-                  <button
-                    onClick={() => setShowMobileMoveMenu(!showMobileMoveMenu)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <FolderInput size={15} className="text-tx-tertiary" />
-                    <span className="flex-1 text-left">{t('editor.moveToNotebook')}</span>
-                    <ChevronRight size={14} className="text-tx-tertiary" />
-                  </button>
-                  {/* 移动笔记本子菜单 */}
-                  <AnimatePresence>
-                    {showMobileMoveMenu && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={springs.snappy}
-                        className="overflow-hidden border-t border-b border-app-border bg-app-bg/50"
-                      >
-                        <div className="max-h-56 overflow-auto py-1 px-1">
-                          {notebookTree.map((nb) => (
-                            <MoveTreeItem
-                              key={nb.id}
-                              notebook={nb}
-                              depth={0}
-                              currentId={activeNote.notebookId}
-                              onSelect={(id) => {
-                                handleMoveToNotebook(id);
-                                setShowMobileMenu(false);
-                                setShowMobileMoveMenu(false);
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  {/* 大纲 */}
-                  <button
-                    onClick={() => {
-                      setShowMobileOutline(true);
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <ListTree size={15} className="text-tx-tertiary" />
-                    <span>{t('editor.showOutline')}</span>
-                  </button>
-                  {showNoteVisibilityToggle && (
-                    <>
-                      <div className="h-px bg-app-border mx-2 my-0.5" />
-                      {/* 可见性切换（移动端菜单内）——仅所属笔记本公开时显示 */}
-                      <div className="px-3 py-2">
-                        <VisibilityToggle
-                          value={activeNote.visibility || "PRIVATE"}
-                          onChange={(v) => { handleVisibilityChange(v); setShowMobileMenu(false); }}
-                          size="sm"
-                        />
-                      </div>
-                    </>
-                  )}
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* AI 生成标题 */}
-                  <button
-                    onClick={() => {
-                      handleAITitle();
-                      setShowMobileMenu(false);
-                    }}
-                    disabled={aiTitleLoading || !activeNote.contentText || effectiveLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
-                  >
-                    {aiTitleLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <Type size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiGenerateTitle')}</span>
-                  </button>
-                  {/* AI 推荐标签 */}
-                  <button
-                    onClick={() => {
-                      handleAITags();
-                      setShowMobileMenu(false);
-                    }}
-                    disabled={aiTagsLoading || !activeNote.contentText || effectiveLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
-                  >
-                    {aiTagsLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <TagIcon size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiSuggestTags')}</span>
-                  </button>
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* 分享 */}
-                  <button
-                    onClick={() => {
-                      setShowShareModal(true);
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <Share2 size={15} className="text-emerald-500" />
-                    <span>分享</span>
-                  </button>
-                  {/* 版本历史 */}
-                  <button
-                    onClick={() => {
-                      setShowVersionHistory(true);
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <History size={15} className="text-violet-500" />
-                    <span>版本历史</span>
-                  </button>
-                  {/* 评论 */}
-                  <button
-                    onClick={() => {
-                      setShowCommentPanel(true);
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <MessageCircle size={15} className="text-blue-500" />
-                    <span>评论批注</span>
-                  </button>
-                  {/* 附件目录 */}
-                  <button
-                    onClick={() => {
-                      setShowAttachmentsPanel(true);
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                  >
-                    <Paperclip size={15} className="text-amber-500" />
-                    <span>附件目录</span>
-                  </button>
-                  {/* 编辑器模式切换（MD / Tiptap） */}
-                  {SHOW_EDITOR_MODE_TOGGLE && (
-                    <>
-                      <div className="h-px bg-app-border mx-2 my-0.5" />
-                      <button
-                        onClick={async () => {
-                          setShowMobileMenu(false);
-                          await toggleEditorMode();
-                        }}
-                        disabled={modeSwitching}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
-                      >
-                        <FileCode size={15} className="text-violet-500" />
-                        <span>{editorMode === "md" ? "切换为富文本模式" : "切换为 Markdown 模式"}</span>
-                      </button>
-                      <p className="px-3 pb-2 text-[10px] text-tx-tertiary leading-snug">
-                        默认富文本写作。多人实时协同编辑目前在 Markdown 模式可用。
-                      </p>
-                    </>
-                  )}
-                  {/* Markdown 预览 / 编辑切换 */}
-                  {editorMode === "md" && (
-                    <>
-                      <div className="h-px bg-app-border mx-2 my-0.5" />
-                      <button
-                        onClick={async () => {
-                          setShowMobileMenu(false);
-                          if (!mdPreviewMode) {
-                            try { await editorHandleRef.current?.flushSave(); } catch {}
-                            syncEditorSnapshotToActiveNote();
-                          }
-                          setMdPreviewMode(prev => !prev);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                      >
-                        {mdPreviewMode ? <Pencil size={15} className="text-amber-500" /> : <Eye size={15} className="text-blue-500" />}
-                        <span>{mdPreviewMode ? "切换为编辑" : "切换为预览"}</span>
-                      </button>
-                    </>
-                  )}
-                  {/* HTML 预览 / 编辑切换（仅 HTML 片段笔记显示，完全克隆不支持编辑） */}
-                  {noteIsHtml && !noteIsFullHtmlDoc && (
-                    <>
-                      <div className="h-px bg-app-border mx-2 my-0.5" />
-                      <button
-                        onClick={async () => {
-                          setShowMobileMenu(false);
-                          if (htmlPreviewMode) {
-                            setShowHtmlEditWarning(true);
-                          } else {
-                            // 从编辑切回预览——先 flush 编辑器 pending 数据，确保最新内容已保存
-                            try { await editorHandleRef.current?.flushSave(); } catch {}
-                            // 不覆盖 activeNote.content：让预览展示编辑后的最新内容
-                            setHtmlPreviewMode(true);
-                          }
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-tx-secondary active:bg-app-hover transition-colors"
-                      >
-                        {htmlPreviewMode ? <Pencil size={15} className="text-amber-500" /> : <Eye size={15} className="text-blue-500" />}
-                        <span>{htmlPreviewMode ? t("editor.htmlPreview.switchToEdit") : t("editor.htmlPreview.switchToPreview")}</span>
-                      </button>
-                    </>
-                  )}
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* 删除笔记 */}
-                  <button
-                    onClick={() => {
-                      moveToTrash();
-                      setShowMobileMenu(false);
-                    }}
-                    disabled={effectiveLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 active:bg-red-50 dark:active:bg-red-900/20 transition-colors disabled:opacity-40"
-                  >
-                    <Trash2 size={15} />
-                    <span>{t('editor.trashTooltip')}</span>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* 更多操作 → 精简 BottomSheet（方案 A：一级约 7 项） */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => {
+              setShowMobileMenu(true);
+              setShowMobileMoveMenu(false);
+            }}
+            aria-label="更多操作"
+          >
+            <MoreHorizontal size={16} />
+          </Button>
         </div>
       </header>
+
+      {/* 移动端笔记操作：BottomSheet，避免右上角长下拉撑满屏 */}
+      <BottomSheet
+        open={showMobileMenu}
+        onClose={() => {
+          setShowMobileMenu(false);
+          setShowMobileMoveMenu(false);
+        }}
+        title="笔记操作"
+        maxHeight="min(70dvh, 100%)"
+        zClassName="z-[70]"
+      >
+        <div className="px-2 pb-3 flex flex-col gap-0.5">
+          {/* 1. 预览 / 编辑 */}
+          {!noteIsFullHtmlDoc && (
+            <button
+              type="button"
+              onClick={async () => {
+                setShowMobileMenu(false);
+                setShowMobileMoveMenu(false);
+                await toggleReadingMode();
+              }}
+              className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out"
+            >
+              {isInPreview ? (
+                <Pencil size={18} className="text-amber-500 shrink-0" />
+              ) : (
+                <Eye size={18} className="text-blue-500 shrink-0" />
+              )}
+              <span className="font-medium">{isInPreview ? "切换为编辑" : "切换为预览"}</span>
+            </button>
+          )}
+
+          {/* 2. 文内搜索 */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("super:open-search"));
+              setShowMobileMenu(false);
+              setShowMobileMoveMenu(false);
+            }}
+            className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out"
+          >
+            <Search size={18} className="text-tx-tertiary shrink-0" />
+            <span>{t("editor.searchInNote") || "在笔记中搜索"}</span>
+          </button>
+
+          <div className="h-px bg-app-border/60 mx-2 my-1" />
+
+          {/* 3. 移动笔记本 */}
+          <button
+            type="button"
+            onClick={() => setShowMobileMoveMenu((v) => !v)}
+            className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out"
+          >
+            <FolderInput size={18} className="text-tx-tertiary shrink-0" />
+            <span className="flex-1 text-left">{t("editor.moveToNotebook")}</span>
+            <ChevronRight
+              size={16}
+              className={cn(
+                "text-tx-tertiary shrink-0 transition-transform duration-fast ease-out",
+                showMobileMoveMenu && "rotate-90",
+              )}
+            />
+          </button>
+          {showMobileMoveMenu && (
+            <div className="mx-1 mb-1 max-h-48 overflow-y-auto rounded-xl border border-app-border/50 bg-app-bg/50 py-1">
+              {notebookTree.map((nb) => (
+                <MoveTreeItem
+                  key={nb.id}
+                  notebook={nb}
+                  depth={0}
+                  currentId={activeNote.notebookId}
+                  onSelect={(id) => {
+                    handleMoveToNotebook(id);
+                    setShowMobileMenu(false);
+                    setShowMobileMoveMenu(false);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 4. 分享 */}
+          <button
+            type="button"
+            onClick={() => {
+              setShowShareModal(true);
+              setShowMobileMenu(false);
+              setShowMobileMoveMenu(false);
+            }}
+            className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out"
+          >
+            <Share2 size={18} className="text-emerald-500 shrink-0" />
+            <span>分享</span>
+          </button>
+
+          <div className="h-px bg-app-border/60 mx-2 my-1" />
+
+          {/* 5. 置顶 */}
+          <button
+            type="button"
+            onClick={() => {
+              togglePin();
+              setShowMobileMenu(false);
+              setShowMobileMoveMenu(false);
+            }}
+            disabled={!!activeNote.isLocked}
+            className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out disabled:opacity-40"
+          >
+            <Pin
+              size={18}
+              className={cn(
+                "shrink-0",
+                activeNote.isPinned ? "text-accent-primary fill-accent-primary" : "text-tx-tertiary",
+              )}
+            />
+            <span>{activeNote.isPinned ? t("editor.unpinTooltip") : t("editor.pinTooltip")}</span>
+          </button>
+
+          {/* 6. 锁定 */}
+          <button
+            type="button"
+            onClick={() => {
+              toggleLock();
+              setShowMobileMenu(false);
+              setShowMobileMoveMenu(false);
+            }}
+            className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out"
+          >
+            {effectiveLocked ? (
+              <Lock size={18} className="text-orange-500 shrink-0" />
+            ) : (
+              <Unlock size={18} className="text-tx-tertiary shrink-0" />
+            )}
+            <span>{effectiveLocked ? t("editor.unlockTooltip") : t("editor.lockTooltip")}</span>
+          </button>
+
+          {/* 条件：可见性 */}
+          {showNoteVisibilityToggle && (
+            <div className="px-3 py-2">
+              <VisibilityToggle
+                value={activeNote.visibility || "PRIVATE"}
+                onChange={(v) => {
+                  handleVisibilityChange(v);
+                  setShowMobileMenu(false);
+                  setShowMobileMoveMenu(false);
+                }}
+                size="sm"
+              />
+            </div>
+          )}
+
+          <div className="h-px bg-app-border/60 mx-2 my-1" />
+
+          {/* 7. 回收站 */}
+          <button
+            type="button"
+            onClick={() => {
+              moveToTrash();
+              setShowMobileMenu(false);
+              setShowMobileMoveMenu(false);
+            }}
+            disabled={effectiveLocked}
+            className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-accent-danger active:bg-accent-danger/10 transition-colors duration-press ease-out disabled:opacity-40"
+          >
+            <Trash2 size={18} className="shrink-0" />
+            <span>{t("editor.trashTooltip")}</span>
+          </button>
+        </div>
+      </BottomSheet>
 
       {/* Mobile Outline Panel (全屏覆盖) */}
       <AnimatePresence>
@@ -2405,60 +2395,20 @@ export default function EditorPane() {
             </button>
           )}
 
-          {/* Markdown 预览 / 编辑切换 */}
-          {editorMode === "md" && (
+          {/* 预览 / 编辑切换（与移动端三点菜单同源；完整 HTML 不可编辑则隐藏） */}
+          {!noteIsFullHtmlDoc && (
             <button
-              onClick={async () => {
-                if (!mdPreviewMode) {
-                  try { await editorHandleRef.current?.flushSave(); } catch {}
-                  // CRDT 模式下 flush 不写 content，预览依赖 activeNote.content——先 snapshot 回填
-                  syncEditorSnapshotToActiveNote();
-                }
-                setMdPreviewMode(prev => !prev);
-              }}
-              title={mdPreviewMode ? "切换为编辑" : "切换为预览"}
+              onClick={() => void toggleReadingMode()}
+              title={isInPreview ? "切换为编辑" : "切换为预览"}
               className={cn(
                 "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-medium transition-colors border",
-                mdPreviewMode
+                isInPreview
                   ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/15"
-                  : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active"
+                  : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active",
               )}
             >
-              {mdPreviewMode ? <Eye size={12} /> : <Pencil size={12} />}
-              <span>{mdPreviewMode ? "编辑" : "预览"}</span>
-            </button>
-          )}
-
-          {/* HTML 预览 / 编辑切换：仅在笔记原始格式为 HTML 时显示 */}
-          {noteIsHtml && (
-            <button
-              onClick={async () => {
-                if (htmlPreviewMode) {
-                  // 从预览切到编辑——弹确认弹窗
-                  setShowHtmlEditWarning(true);
-                } else {
-                  // 从编辑切回预览——先 flush 编辑器 pending 数据，确保最新内容已保存
-                  try { await editorHandleRef.current?.flushSave(); } catch {}
-                  // 不覆盖 activeNote.content：让 HtmlPreviewPane 展示编辑后的最新内容。
-                  // 如果用户没做任何编辑，content 仍然是原始 HTML（完全克隆模式依旧生效）；
-                  // 如果用户编辑过，content 已变为 MD/HTML 片段，预览组件会用片段模式渲染。
-                  setHtmlPreviewMode(true);
-                }
-              }}
-              title={
-                htmlPreviewMode
-                  ? t("editor.htmlPreview.switchToEditTooltip")
-                  : t("editor.htmlPreview.switchToPreviewTooltip")
-              }
-              className={cn(
-                "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-medium transition-colors border",
-                htmlPreviewMode
-                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/15"
-                  : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active"
-              )}
-            >
-              {htmlPreviewMode ? <Eye size={12} /> : <Pencil size={12} />}
-              <span>{htmlPreviewMode ? t("editor.htmlPreview.switchToEdit") : t("editor.htmlPreview.switchToPreview")}</span>
+              {isInPreview ? <Eye size={12} /> : <Pencil size={12} />}
+              <span>{isInPreview ? "编辑" : "预览"}</span>
             </button>
           )}
 
@@ -2552,7 +2502,7 @@ export default function EditorPane() {
               editable={false}
             />
           ) : editorMode === "md" ? (
-            mdPreviewMode ? (
+            readingMode ? (
               <MarkdownPreviewPane
                 key={`md-preview-${activeNote.id}`}
                 note={activeNote}
@@ -2588,7 +2538,8 @@ export default function EditorPane() {
               onTagsChange={handleTagsChange}
               onHeadingsChange={setHeadings}
               onEditorReady={(fn) => { scrollToRef.current = fn; }}
-              editable={!effectiveLocked && !modeSwitching}
+              // 阅读模式：只读 + 隐藏工具栏（见 Tiptap 内 editable 门禁）
+              editable={!effectiveLocked && !modeSwitching && !readingMode}
             />
           )}
           </EditorErrorBoundary>
@@ -2741,6 +2692,7 @@ export default function EditorPane() {
                   onClick={() => {
                     setShowHtmlEditWarning(false);
                     setHtmlPreviewMode(false);
+                    setReadingMode(false);
                   }}
                   className="px-4 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
                 >

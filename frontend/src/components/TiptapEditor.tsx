@@ -3285,7 +3285,9 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
     <div className="flex flex-col h-full relative">
       {/* Toolbar
           桌面：sticky 顶栏完整格式按钮。
-          移动：隐藏顶栏，仅用底部 MobileEditorToolbar，避免双栏遮挡正文。 */}
+          移动：隐藏顶栏，仅用底部 MobileEditorToolbar，避免双栏遮挡正文。
+          阅读/预览模式（!editable）：整栏不渲染，避免占位与误触。 */}
+      {editable && (
       <div
         className={cn(
           "sticky top-0 z-20 items-center gap-0.5 px-4 py-2 border-b border-app-border bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/70 md:flex-wrap overflow-x-auto hide-scrollbar touch-pan-x transition-shadow duration-200",
@@ -3619,6 +3621,7 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
           </ToolbarButton>
         )}
       </div>
+      )}
 
       {/* 查找替换浮窗：依附最外层 relative，右上角应于序列。
           - editable=false 的只读场景仍可查找，只是隐藏替换输入框 */}
@@ -4261,13 +4264,15 @@ export default forwardRef<NoteEditorHandle, TiptapEditorProps>(function TiptapEd
         )}
       </AnimatePresence>
 
-      {/* PR5 移动端底部工具栏：fixed 贴键盘上方，主排 + 更多 */}
-      <MobileEditorToolbar
-        editor={editor}
-        onImage={handleImageUpload}
-        onAI={openAIAssistant}
-        toggleHeadingSmart={toggleHeadingSmart}
-      />
+      {/* PR5 移动端底部工具栏：仅编辑模式显示（预览/只读不占键盘上方栏） */}
+      {editable && (
+        <MobileEditorToolbar
+          editor={editor}
+          onImage={handleImageUpload}
+          onAI={openAIAssistant}
+          toggleHeadingSmart={toggleHeadingSmart}
+        />
+      )}
     </div>
   );
 });
