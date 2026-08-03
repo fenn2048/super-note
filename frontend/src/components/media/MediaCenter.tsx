@@ -232,8 +232,10 @@ export default function MediaCenter() {
     } else if (actionId === "assign") {
       openAssignForIds([item.id]);
     } else if (actionId === "cache") {
+      if (!isMobile) return;
       cacheItem(item);
     } else if (actionId === "uncache") {
+      if (!isMobile) return;
       await uncacheItem(item);
     } else if (actionId === "delete") {
       if (!isAdmin) return;
@@ -1069,41 +1071,43 @@ export default function MediaCenter() {
                   <div className="flex items-center gap-4 text-[10px] text-tx-tertiary select-none flex-wrap">
                     <span className="flex items-center gap-1"><Play size={12} /> 播放次数: {selectedItem.play_count}</span>
                     <span className="flex items-center gap-1"><Clock size={12} /> 时长: {formatDuration(selectedItem.duration)}</span>
-                    {cachedIds.has(selectedItem.id) && (
+                    {isMobile && cachedIds.has(selectedItem.id) && (
                       <span className="flex items-center gap-1 text-accent-primary font-semibold">
                         <HardDrive size={12} /> 已本地缓存
                       </span>
                     )}
                   </div>
 
-                  {/* 本地缓存操作（移动端优先展示） */}
-                  <div className="flex items-center gap-2 md:hidden">
-                    {cachedIds.has(selectedItem.id) ? (
-                      <button
-                        type="button"
-                        onClick={() => void uncacheItem(selectedItem)}
-                        className="min-h-11 flex-1 px-3 rounded-xl border border-app-border text-xs font-semibold text-tx-secondary flex items-center justify-center gap-1.5 active:bg-app-hover"
-                      >
-                        <HardDrive size={14} />
-                        删除本地缓存
-                      </button>
-                    ) : getMediaCacheJob(selectedItem.id)?.status === "downloading" ||
-                      getMediaCacheJob(selectedItem.id)?.status === "queued" ? (
-                      <div className="min-h-11 flex-1 px-3 rounded-xl border border-accent-primary/30 bg-accent-primary/5 text-xs font-semibold text-accent-primary flex items-center justify-center gap-1.5">
-                        <Loader2 size={14} className="animate-spin" />
-                        缓存中…
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => cacheItem(selectedItem)}
-                        className="min-h-11 flex-1 px-3 rounded-xl bg-accent-primary text-white text-xs font-bold flex items-center justify-center gap-1.5 active:opacity-90"
-                      >
-                        <DownloadCloud size={14} />
-                        缓存到本地
-                      </button>
-                    )}
-                  </div>
+                  {/* 本地缓存操作（仅移动端） */}
+                  {isMobile && (
+                    <div className="flex items-center gap-2">
+                      {cachedIds.has(selectedItem.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => void uncacheItem(selectedItem)}
+                          className="min-h-11 flex-1 px-3 rounded-xl border border-app-border text-xs font-semibold text-tx-secondary flex items-center justify-center gap-1.5 active:bg-app-hover"
+                        >
+                          <HardDrive size={14} />
+                          删除本地缓存
+                        </button>
+                      ) : getMediaCacheJob(selectedItem.id)?.status === "downloading" ||
+                        getMediaCacheJob(selectedItem.id)?.status === "queued" ? (
+                        <div className="min-h-11 flex-1 px-3 rounded-xl border border-accent-primary/30 bg-accent-primary/5 text-xs font-semibold text-accent-primary flex items-center justify-center gap-1.5">
+                          <Loader2 size={14} className="animate-spin" />
+                          缓存中…
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => cacheItem(selectedItem)}
+                          className="min-h-11 flex-1 px-3 rounded-xl bg-accent-primary text-white text-xs font-bold flex items-center justify-center gap-1.5 active:opacity-90"
+                        >
+                          <DownloadCloud size={14} />
+                          缓存到本地
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. Reviews Section (Moved here, taking full width of the container) */}
@@ -1942,17 +1946,6 @@ export default function MediaCenter() {
                     <option value="title">拼音</option>
                   </select>
 
-                  {/* 桌面：缓存管理入口 */}
-                  <button
-                    type="button"
-                    onClick={() => setShowCacheSheet(true)}
-                    className="hidden md:flex items-center gap-1.5 px-2.5 py-2 bg-app-sidebar border border-app-border text-sm rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover shrink-0"
-                    title="缓存管理"
-                  >
-                    <HardDrive size={16} />
-                    <span className="text-xs font-semibold">缓存</span>
-                  </button>
-
                   {/* Layout Switcher */}
                   <div className="flex items-center bg-app-sidebar border border-app-border rounded-xl p-0.5 shrink-0">
                     <button
@@ -1982,25 +1975,27 @@ export default function MediaCenter() {
                   </div>
                 </div>
 
-                {/* 批量选择（全员可用：缓存）；导入仅 admin */}
+                {/* 批量选择：桌面仅 admin（合入/删除）；缓存仅移动端 */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => {
-                      setIsBatchMode(!isBatchMode);
-                      setSelectedItemIds(new Set());
-                    }}
-                    className={cn(
-                      "text-sm font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-colors border",
-                      isBatchMode 
-                        ? "bg-accent-danger/10 border-accent-danger/25 text-accent-danger hover:bg-accent-danger/20"
-                        : "bg-app-sidebar border-app-border hover:bg-app-hover text-tx-secondary"
-                    )}
-                    title={isBatchMode ? "退出选择" : "批量选择"}
-                    aria-label={isBatchMode ? "退出选择" : "批量选择"}
-                  >
-                    <SlidersHorizontal size={15} />
-                    <span>{isBatchMode ? "退出选择" : "批量选择"}</span>
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setIsBatchMode(!isBatchMode);
+                        setSelectedItemIds(new Set());
+                      }}
+                      className={cn(
+                        "text-sm font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-colors border",
+                        isBatchMode
+                          ? "bg-accent-danger/10 border-accent-danger/25 text-accent-danger hover:bg-accent-danger/20"
+                          : "bg-app-sidebar border-app-border hover:bg-app-hover text-tx-secondary",
+                      )}
+                      title={isBatchMode ? "退出选择" : "批量选择"}
+                      aria-label={isBatchMode ? "退出选择" : "批量选择"}
+                    >
+                      <SlidersHorizontal size={15} />
+                      <span>{isBatchMode ? "退出选择" : "批量选择"}</span>
+                    </button>
+                  )}
                   {isAdmin && (
                     <>
                       <button
@@ -2576,17 +2571,22 @@ export default function MediaCenter() {
         items={
           [
             { id: "detail", label: "详情", icon: <Info size={14} /> },
-            ctxMenu.item && cachedIds.has(ctxMenu.item.id)
-              ? {
-                  id: "uncache",
-                  label: "删除本地缓存",
-                  icon: <HardDrive size={14} />,
-                }
-              : {
-                  id: "cache",
-                  label: "缓存到本地",
-                  icon: <DownloadCloud size={14} />,
-                },
+            // 本地缓存仅移动端
+            ...(isMobile
+              ? [
+                  ctxMenu.item && cachedIds.has(ctxMenu.item.id)
+                    ? {
+                        id: "uncache",
+                        label: "删除本地缓存",
+                        icon: <HardDrive size={14} />,
+                      }
+                    : {
+                        id: "cache",
+                        label: "缓存到本地",
+                        icon: <DownloadCloud size={14} />,
+                      },
+                ]
+              : []),
             ...(isAdmin
               ? ([
                   { id: "assign", label: "合入", icon: <FolderInput size={14} /> },
@@ -2603,8 +2603,9 @@ export default function MediaCenter() {
         }
       />
 
+      {/* 缓存管理仅移动端 */}
       <MediaCacheSheet
-        open={showCacheSheet}
+        open={showCacheSheet && isMobile}
         onClose={() => setShowCacheSheet(false)}
         filterType={mediaType}
       />
@@ -2865,38 +2866,42 @@ export default function MediaCenter() {
                     {selectedItemIds.size === items.length ? "取消全选" : "全选"}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => batchCacheSelected()}
-                    disabled={selectedItemIds.size === 0}
-                    className={cn(
-                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
-                      selectedItemIds.size > 0
-                        ? "bg-accent-primary hover:bg-accent-primary-hover text-white"
-                        : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
-                    )}
-                    title="缓存到本地"
-                  >
-                    <DownloadCloud size={13} />
-                    缓存
-                  </button>
+                  {/* 批量缓存仅移动端 */}
+                  {isMobile && (
+                    <button
+                      type="button"
+                      onClick={() => batchCacheSelected()}
+                      disabled={selectedItemIds.size === 0}
+                      className={cn(
+                        "py-1.5 px-2.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
+                        selectedItemIds.size > 0
+                          ? "bg-accent-primary hover:bg-accent-primary-hover text-white"
+                          : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
+                      )}
+                      title="缓存到本地"
+                    >
+                      <DownloadCloud size={13} />
+                      缓存
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => void batchUncacheSelected()}
-                    disabled={selectedItemIds.size === 0}
-                    className={cn(
-                      "py-1.5 px-2.5 md:px-3.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
-                      selectedItemIds.size > 0
-                        ? "bg-app-sidebar border border-app-border text-tx-primary hover:bg-app-hover"
-                        : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
-                    )}
-                    title="删除本地缓存"
-                  >
-                    <HardDrive size={13} />
-                    <span className="max-md:hidden">移除</span>
-                    缓存
-                  </button>
+                  {isMobile && (
+                    <button
+                      type="button"
+                      onClick={() => void batchUncacheSelected()}
+                      disabled={selectedItemIds.size === 0}
+                      className={cn(
+                        "py-1.5 px-2.5 text-[11px] font-bold rounded-xl transition-colors flex items-center gap-1 shadow whitespace-nowrap",
+                        selectedItemIds.size > 0
+                          ? "bg-app-sidebar border border-app-border text-tx-primary hover:bg-app-hover"
+                          : "bg-app-sidebar border border-app-border/40 text-tx-tertiary cursor-not-allowed",
+                      )}
+                      title="删除本地缓存"
+                    >
+                      <HardDrive size={13} />
+                      缓存
+                    </button>
+                  )}
 
                   {isAdmin && (
                     <button
