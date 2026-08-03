@@ -145,3 +145,126 @@ export function syncReferences(
 
   return { added, removed };
 }
+
+/**
+ * 收集「不在 notes.content 正文里、但仍在被业务使用」的 attachment id。
+ *
+ * 背景：
+ *   文件管理「孤儿 / 未引用」与 cleanup-orphans 历史上只扫 notes.content。
+ *   书籍文件、封面等通过 books 表引用 attachments，从不写入笔记正文，
+ *   会被误判为孤儿并在一键清理时删掉仍在读的书。
+ *
+ * 当前纳入：
+ *   1) books.attachmentId —— 书文件本体（uploadSource='book'）
+ *   2) books.metadata.coverAttachmentId —— 书籍封面（uploadSource='book_cover'）
+ *   3) media_items / media_collections.cover_url 若指向 /api/attachments/<uuid>
+ *      （媒体封面若走 diary_attachments 则不在 attachments 表，此处无影响）
+ *
+ * id 统一小写，与 extractAttachmentIdsFromContent 一致；调用方比较时应对
+ * candidate id 做 toLowerCase。
+ */
+export function collectStructuralAttachmentIds(
+  db: Database.Database,
+): Set<string> {
+  const out = new Set<string>();
+
+  try {
+    const bookRows = db
+      .prepare("SELECT attachmentId, metadata FROM books")
+      .all() as { attachmentId: string | null; metadata: string | null }[];
+    for (const r of bookRows) {
+      if (r.attachmentId) out.add(String(r.attachmentId).toLowerCase());
+      if (!r.metadata) continue;
+      try {
+        const meta = JSON.parse(r.metadata) as { coverAttachmentId?: string | null };
+        if (meta?.coverAttachmentId) {
+          out.add(String(meta.coverAttachmentId).toLowerCase());
+        }
+      } catch {
+        // metadata 非 JSON 时忽略
+      }
+    }
+  } catch {
+    // books 表不存在等极端情况：跳过，不影响其它判定
+  }
+
+  try {
+    const coverRows = db
+      .prepare(
+        `SELECT cover_url AS u FROM media_items
+          WHERE cover_url IS NOT NULL AND cover_url <> ''
+         UNION ALL
+         SELECT cover_url AS u FROM media_collections
+          WHERE cover_url IS NOT NULL AND cover_url <> ''`,
+      )
+      .all() as { u: string }[];
+    for (const r of coverRows) {
+      for (const id of extractAttachmentIdsFromContent(r.u)) {
+        out.add(id);
+      }
+    }
+  } catch {
+    // media 表未迁移时跳过
+  }
+
+  return out;
+}
+
+/**
+ * 收集 ATTACHMENTS_DIR 里「已被任意附件表登记」的 path（相对文件名）。
+ *
+ * 用途：
+ *   cleanup-orphans 的「磁盘孤儿」扫描不能只查 attachments 表——
+ *   task_attachments / diary_attachments 共用同一目录，若漏掉它们，
+ *   任务图、说说图会被当成无主文件删掉。
+ *
+ * 容错：某表不存在时跳过该源。
+ */
+export function collectKnownAttachmentPaths(db: Database.Database): Set<string> {
+  const out = new Set<string>();
+  const tables = ["attachments", "task_attachments", "diary_attachments"] as const;
+  for (const table of tables) {
+    try {
+      const rows = db.prepare(`SELECT path FROM ${table}`).all() as { path: string | null }[];
+      for (const r of rows) {
+        if (r?.path) out.add(r.path);
+      }
+    } catch {
+      // 表不存在等
+    }
+  }
+  return out;
+}
+
+/**
+ * 判断某个相对 path 是否仍被「非本批 attachments 孤儿」占用，不能 unlink。
+ *
+ * @param excludingAttachmentIds 即将删除的 attachments.id 集合；这些行本身不算「仍占用」
+ */
+export function isAttachmentPathStillInUse(
+  db: Database.Database,
+  filePath: string,
+  excludingAttachmentIds?: Set<string>,
+): boolean {
+  try {
+    const rows = db
+      .prepare("SELECT id FROM attachments WHERE path = ?")
+      .all(filePath) as { id: string }[];
+    for (const r of rows) {
+      if (!excludingAttachmentIds || !excludingAttachmentIds.has(r.id)) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  for (const table of ["task_attachments", "diary_attachments"] as const) {
+    try {
+      const hit = db
+        .prepare(`SELECT 1 AS ok FROM ${table} WHERE path = ? LIMIT 1`)
+        .get(filePath) as { ok: number } | undefined;
+      if (hit) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}

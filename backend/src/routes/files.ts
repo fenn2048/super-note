@@ -51,6 +51,7 @@ import {
   getUserWorkspaceRole,
   requireWorkspaceFeature,
 } from "../middleware/acl";
+import { collectStructuralAttachmentIds } from "../lib/attachmentRefs";
 
 const app = new Hono();
 
@@ -245,8 +246,10 @@ function resolveFilesScope(
 /**
  * 计算"无引用"（unreferenced / 孤儿）附件 id 集合。
  *
- * 定义：attachments 行存在、noteId 对应的 note 也存在，但 `/api/attachments/<id>`
- * 这个 URL 在 scope 内**所有 notes.content** 里都扫不到。
+ * 定义：attachments 行存在、noteId 对应的 note 也存在，且同时满足：
+ *   1) `/api/attachments/<id>` 在 scope 内**所有 notes.content** 里都扫不到；
+ *   2) 也不在「结构性引用」里（书籍文件/封面、媒体库 cover 等，见
+ *      collectStructuralAttachmentIds）——这些从不写进笔记正文，不能当孤儿删。
  *
  * 与 `/api/data-file/cleanup-orphans` 的"内容孤儿"定义保持一致（包含 24h 宽限期），
  * 这样用户在"文件管理 → 孤儿"tab 里看到的集合 ≈ "清理孤儿"按钮会回收的那批。
@@ -281,6 +284,9 @@ function buildUnreferencedSet(
         .all(userId)) as { content: string }[];
   const haystack = contentRows.map((r) => r.content).join("\n");
 
+  // 1b) 书籍 / 媒体封面等非笔记正文引用（必须排除，否则书与封面会被当孤儿）
+  const structuralIds = collectStructuralAttachmentIds(db);
+
   // 2) 拉 scope 内的候选附件（只要 noteId 对应 note 还在）
   const candidates = (scope.scope === "workspace"
     ? db
@@ -308,6 +314,7 @@ function buildUnreferencedSet(
     ).getTime();
     if (Number.isFinite(created) && created > cutoffMs) continue;
     if (haystack.indexOf(`/api/attachments/${r.id}`) >= 0) continue;
+    if (structuralIds.has(String(r.id).toLowerCase())) continue;
     orphanIds.add(r.id);
   }
   return orphanIds;

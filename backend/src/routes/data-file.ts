@@ -28,6 +28,11 @@ import crypto from "crypto";
 import Database from "better-sqlite3";
 import { getDb, getDbPath, closeDb } from "../db/schema.js";
 import { verifySudoFromRequest } from "../lib/auth-security.js";
+import {
+  collectStructuralAttachmentIds,
+  collectKnownAttachmentPaths,
+  isAttachmentPathStillInUse,
+} from "../lib/attachmentRefs.js";
 import { getAttachmentsDir } from "./attachments.js";
 
 const app = new Hono();
@@ -314,14 +319,15 @@ app.post("/import", async (c) => {
 //   1) DB 孤儿：attachments 行的 noteId 已经不存在（笔记早被永久删除，但历史
 //      版本遗留了行），CASCADE 场景下正常不会出现；为兼容老数据仍然扫一次。
 //   2) 内容孤儿：attachments 行在 DB 里、noteId 对应的 note 还活着，但**该附件
-//      的 URL（/api/attachments/<id>）不再出现在任何 notes.content 里**。这类
-//      在"文件管理→上传"场景尤其常见：上传时会落到一个 isArchived=1 的 holder
-//      笔记兜底外键，之后用户把编辑器里的图删了，笔记不会消失，于是旧逻辑永远
-//      识别不出来。
+//      的 URL（/api/attachments/<id>）不再出现在任何 notes.content 里**，且也
+//      不在 books / 媒体封面等结构性引用中（见 collectStructuralAttachmentIds）。
+//      这类在"文件管理→上传"场景尤其常见：上传时会落到一个 isArchived=1 的
+//      holder 笔记兜底外键，之后用户把编辑器里的图删了，笔记不会消失。
 //      为避免误杀"刚上传还没保存引用"的新附件，使用 24h 宽限期——createdAt 距
 //      今不足该窗口的附件不参与。
-//   3) 磁盘孤儿：文件系统里存在、但 attachments 表里已经没有对应行的物理文件
-//      （来自之前"清空回收站"未清理物理文件的历史残留）。
+//   3) 磁盘孤儿：文件系统里存在、但 attachments / task_attachments /
+//      diary_attachments 任一表都未登记的物理文件（任务图、说说图与笔记附件
+//      共用目录，必须三表都查，否则会误删任务/说说文件）。
 //
 // 查询参数：
 //   ?dryRun=1  — 只返回"将要清理"的统计，不真动磁盘和 DB（前端可用来显示
@@ -378,8 +384,8 @@ app.post("/cleanup-orphans", (c) => {
     }
     const pathsSafeToUnlink = new Set<string>();
     for (const [p] of pathToRows.entries()) {
-      const rows = db.prepare("SELECT id FROM attachments WHERE path = ?").all(p) as { id: string }[];
-      if (!rows.some((r) => !orphanIds.has(r.id))) pathsSafeToUnlink.add(p);
+      // 其它 attachments 行、任务附件、说说附件仍占用该 path 时不能 unlink
+      if (!isAttachmentPathStillInUse(db, p, orphanIds)) pathsSafeToUnlink.add(p);
     }
 
     const delStmt = db.prepare("DELETE FROM attachments WHERE id = ?");
@@ -417,6 +423,8 @@ app.post("/cleanup-orphans", (c) => {
     .prepare(`SELECT content FROM notes WHERE content IS NOT NULL AND content <> ''`)
     .all() as { content: string }[];
   const haystack = allContents.map((n) => n.content).join("\n");
+  // 书籍文件/封面、媒体封面等结构性引用：不能当内容孤儿删
+  const structuralIds = collectStructuralAttachmentIds(db);
 
   const contentCandidates = (isAdmin
     ? db.prepare(
@@ -440,6 +448,7 @@ app.post("/cleanup-orphans", (c) => {
     if (Number.isFinite(created) && created > cutoffMs) continue;
     // 引用判定：搜 `/api/attachments/<id>`（uuid 本身不会与其他随机字符串冲突）
     if (haystack.indexOf(`/api/attachments/${r.id}`) >= 0) continue;
+    if (structuralIds.has(String(r.id).toLowerCase())) continue;
     contentOrphanRows.push({ id: r.id, path: r.path, size: r.size || 0 });
   }
 
@@ -459,8 +468,7 @@ app.post("/cleanup-orphans", (c) => {
     }
     const pathsSafeToUnlink = new Set<string>();
     for (const [p] of pathToRows.entries()) {
-      const rows = db.prepare("SELECT id FROM attachments WHERE path = ?").all(p) as { id: string }[];
-      if (!rows.some((r) => !orphanIds.has(r.id))) pathsSafeToUnlink.add(p);
+      if (!isAttachmentPathStillInUse(db, p, orphanIds)) pathsSafeToUnlink.add(p);
     }
 
     const delStmt = db.prepare("DELETE FROM attachments WHERE id = ?");
@@ -496,12 +504,8 @@ app.post("/cleanup-orphans", (c) => {
   let diskScanSkipped = false;
   if (isAdmin) {
     try {
-      // 收集 DB 中已登记的全部 path（刚刚删的 DB 孤儿已经不在这批里，这正是我们要的）
-      const rows = db.prepare("SELECT path FROM attachments").all() as { path: string }[];
-      const knownPaths = new Set<string>();
-      for (const r of rows) {
-        if (r?.path) knownPaths.add(r.path);
-      }
+      // 三表登记过的 path 都算「有主」：笔记 / 任务 / 说说附件共用目录
+      const knownPaths = collectKnownAttachmentPaths(db);
       // 扫描目录
       if (fs.existsSync(attachmentsDir)) {
         const entries = fs.readdirSync(attachmentsDir, { withFileTypes: true });
