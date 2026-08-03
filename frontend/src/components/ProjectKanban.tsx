@@ -290,7 +290,9 @@ export default function ProjectKanban({
         startDate: activeTask.startDate || null,
         endDate: activeTask.endDate || null,
         checklists: activeTask.checklists || [],
-        participants: activeTask.participants?.map((p) => p.userId) || [],
+        participants: (activeTask.participants || [])
+          .map((p) => p.userId || (p as { id?: string }).id)
+          .filter((id): id is string => !!id),
         tags: activeTask.tags?.map((t) => t.id) || [],
         titleColor: activeTask.titleColor || null,
         dependencies: activeTask.dependencies?.map((d) => d.id) || [],
@@ -406,14 +408,16 @@ export default function ProjectKanban({
     });
   };
 
+  const participantId = (p: { userId?: string; id?: string }) => p.userId || p.id || "";
+
   const toggleTaskParticipant = (user: { userId: string; username: string; displayName: string | null; avatarUrl: string | null }) => {
     if (!activeTask) return;
-    const isParticipant = activeTask.participants?.some((p) => p.userId === user.userId);
+    const isParticipant = activeTask.participants?.some((p) => participantId(p) === user.userId);
     setActiveTask((prev) => {
       if (!prev) return null;
       const current = prev.participants || [];
       const updated = isParticipant
-        ? current.filter((p) => p.userId !== user.userId)
+        ? current.filter((p) => participantId(p) !== user.userId)
         : [...current, user];
       return {
         ...prev,

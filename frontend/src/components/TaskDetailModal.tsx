@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
+import RecurrenceConfigurator, { RecurrenceRule } from "@/components/common/RecurrenceConfigurator";
 import { toast } from "@/lib/toast";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,19 @@ import { syncTaskNotification } from "@/hooks/useCapacitor";
 import { TASK_COLOR_MAP } from "./ProjectKanban";
 import { BottomSheet } from "@/components/common/BottomSheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+
+const DEFAULT_RECURRENCE_RULE: RecurrenceRule = { type: "monthly", day: 1 };
+
+function parseRecurrenceRule(raw: string | RecurrenceRule | null | undefined): RecurrenceRule {
+  if (!raw) return { ...DEFAULT_RECURRENCE_RULE };
+  try {
+    const rule = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (rule && typeof rule === "object" && rule.type) return rule as RecurrenceRule;
+  } catch {
+    /* ignore */
+  }
+  return { ...DEFAULT_RECURRENCE_RULE };
+}
 
 interface TaskDetailModalProps {
   task: ProjectTask;
@@ -157,15 +171,21 @@ export default function TaskDetailModal({
         startDate: activeTask.startDate || null,
         endDate: activeTask.endDate || null,
         checklists: activeTask.checklists || [],
-        participants: activeTask.participants?.map((p) => p.userId) || [],
+        participants: (activeTask.participants || [])
+          .map((p) => p.userId || (p as { id?: string }).id)
+          .filter((id): id is string => !!id),
         tags: activeTask.tags?.map((t) => t.id) || [],
         titleColor: activeTask.titleColor || null,
         dependencies: activeTask.dependencies?.map((d) => d.id) || [],
         remindAt: activeTask.remindAt || null,
         reminderOffsetValue: activeTask.reminderOffsetValue,
         reminderOffsetUnit: activeTask.reminderOffsetUnit,
-        isRecurring: activeTask.isRecurring,
-        recurrenceRule: activeTask.recurrenceRule,
+        isRecurring: activeTask.isRecurring ? 1 : 0,
+        recurrenceRule: activeTask.isRecurring
+          ? (typeof activeTask.recurrenceRule === "string"
+              ? activeTask.recurrenceRule
+              : JSON.stringify(activeTask.recurrenceRule || DEFAULT_RECURRENCE_RULE))
+          : null,
         recurrenceEndDate: (activeTask as any).recurrenceEndDate ?? null,
       });
       if (updated.remindAt) {
@@ -291,14 +311,16 @@ export default function TaskDetailModal({
     });
   };
 
+  const participantId = (p: { userId?: string; id?: string }) => p.userId || p.id || "";
+
   const toggleTaskParticipant = (user: { userId: string; username: string; displayName: string | null; avatarUrl: string | null }) => {
     if (!activeTask) return;
-    const isParticipant = activeTask.participants?.some((p) => p.userId === user.userId);
+    const isParticipant = activeTask.participants?.some((p) => participantId(p) === user.userId);
     setActiveTask((prev) => {
       if (!prev) return null;
       const current = prev.participants || [];
       const updated = isParticipant
-        ? current.filter((p) => p.userId !== user.userId)
+        ? current.filter((p) => participantId(p) !== user.userId)
         : [...current, user];
       return {
         ...prev,
@@ -659,6 +681,38 @@ export default function TaskDetailModal({
               </div>
             ) : null}
 
+            {/* Recurrence */}
+            <div className="md:col-span-2 border-t border-app-border/40 pt-3">
+              <RecurrenceConfigurator
+                isRecurring={!!activeTask.isRecurring}
+                onChangeRecurring={(val) =>
+                  setActiveTask((prev) => {
+                    if (!prev) return null;
+                    const nextRule = val
+                      ? prev.recurrenceRule || JSON.stringify(DEFAULT_RECURRENCE_RULE)
+                      : prev.recurrenceRule;
+                    return {
+                      ...prev,
+                      isRecurring: val ? 1 : 0,
+                      recurrenceRule: nextRule ?? null,
+                    };
+                  })
+                }
+                rule={parseRecurrenceRule(activeTask.recurrenceRule)}
+                onChangeRule={(rule) =>
+                  setActiveTask((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          isRecurring: 1,
+                          recurrenceRule: JSON.stringify(rule),
+                        }
+                      : null
+                  )
+                }
+              />
+            </div>
+
             {/* Task Tags */}
             <div className="flex items-center gap-3 relative md:col-span-2">
               <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5">
@@ -683,21 +737,29 @@ export default function TaskDetailModal({
                 <span>参与用户</span>
               </div>
               <div className="flex-1 flex items-center flex-wrap gap-1.5">
-                {activeTask.participants?.map((p) => (
+                {activeTask.participants?.map((p) => {
+                  const pid = participantId(p);
+                  return (
                   <span
-                    key={p.userId}
+                    key={pid}
                     className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-app-border bg-app-sidebar/30 text-tx-secondary font-semibold text-[10px]"
                   >
                     <span>{p.displayName || p.username}</span>
                     <button
                       type="button"
-                      onClick={() => toggleTaskParticipant(p)}
+                      onClick={() => toggleTaskParticipant({
+                        userId: pid,
+                        username: p.username,
+                        displayName: p.displayName,
+                        avatarUrl: p.avatarUrl,
+                      })}
                       className="hover:text-red-500 rounded p-0.5"
                     >
                       <X size={8} />
                     </button>
                   </span>
-                ))}
+                  );
+                })}
                 <button
                   type="button"
                   onClick={() => setShowParticipantDropdown(!showParticipantDropdown)}
@@ -713,7 +775,7 @@ export default function TaskDetailModal({
                   {membersList
                     .filter((m) => m.userId !== activeTask.assigneeId)
                     .map((m) => {
-                      const isPart = activeTask.participants?.some((p) => p.userId === m.userId);
+                      const isPart = activeTask.participants?.some((p) => participantId(p) === m.userId);
                       return (
                         <button
                           key={m.userId}

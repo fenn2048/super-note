@@ -186,7 +186,7 @@ projectsRouter.get("/my-tasks", (c) => {
     t.participants = db
       .prepare(
         `
-      SELECT u.id, u.username, u.displayName, u.avatarUrl
+      SELECT u.id as userId, u.username, u.displayName, u.avatarUrl
       FROM project_task_members ptm
       JOIN users u ON ptm.userId = u.id
       WHERE ptm.taskId = ?
@@ -469,7 +469,7 @@ projectsRouter.get("/:id/stages", (c) => {
 
   for (const t of tasks) {
     t.participants = db.prepare(`
-      SELECT u.id, u.username, u.displayName, u.avatarUrl
+      SELECT u.id as userId, u.username, u.displayName, u.avatarUrl
       FROM project_task_members ptm
       JOIN users u ON ptm.userId = u.id
       WHERE ptm.taskId = ?
@@ -603,7 +603,7 @@ projectsRouter.get("/:id/tasks", (c) => {
 
   for (const t of tasks) {
     t.participants = db.prepare(`
-      SELECT u.id, u.username, u.displayName, u.avatarUrl
+      SELECT u.id as userId, u.username, u.displayName, u.avatarUrl
       FROM project_task_members ptm
       JOIN users u ON ptm.userId = u.id
       WHERE ptm.taskId = ?
@@ -651,7 +651,7 @@ function getFullProjectTask(db: any, taskId: string) {
   if (!t) return null;
 
   t.participants = db.prepare(`
-    SELECT u.id, u.username, u.displayName, u.avatarUrl
+    SELECT u.id as userId, u.username, u.displayName, u.avatarUrl
     FROM project_task_members ptm
     JOIN users u ON ptm.userId = u.id
     WHERE ptm.taskId = ?
@@ -759,9 +759,11 @@ projectsRouter.post("/:id/tasks", async (c) => {
 
   logAudit(userId, "task", "create_task", `创建任务「${title}」`, { targetType: "project_task", targetId: taskId });
 
-  // Add participants
+  // Add participants (accept id string or { userId | id })
   if (Array.isArray(participants)) {
-    for (const pId of participants) {
+    for (const p of participants) {
+      const pId = typeof p === "string" ? p : (p?.userId || p?.id);
+      if (!pId) continue;
       db.prepare("INSERT OR IGNORE INTO project_task_members (taskId, userId) VALUES (?, ?)").run(taskId, pId);
     }
   }
@@ -948,11 +950,13 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
     }
   }
 
-  // Sync participants
+  // Sync participants (accept id string or { userId | id }; skip falsy)
   if (participants && Array.isArray(participants)) {
     db.prepare("DELETE FROM project_task_members WHERE taskId = ?").run(taskId);
-    for (const pId of participants) {
-      db.prepare("INSERT INTO project_task_members (taskId, userId) VALUES (?, ?)").run(taskId, pId);
+    for (const p of participants) {
+      const pId = typeof p === "string" ? p : (p?.userId || p?.id);
+      if (!pId) continue;
+      db.prepare("INSERT OR IGNORE INTO project_task_members (taskId, userId) VALUES (?, ?)").run(taskId, pId);
     }
   }
 
