@@ -1,78 +1,42 @@
-import { useCallback, useEffect, useState } from "react";
-
 /**
- * "外观风格"（Skin）与 next-themes 的"明暗模式"（Theme）是**正交**的两个维度：
- *
- *   Skin  ∈  { "default", "macos" }        → 写到 <html data-skin="...">
- *   Theme ∈  { "light", "dark", "system" } → 写到 <html class="dark" | "">
- *
- * 这样组合出 default-light / default-dark / macos-light / macos-dark 四种视觉，
- * 增加新皮肤（nord / solarized …）时只需要多一组 CSS 变量，不动 next-themes。
- *
- * 存储在 localStorage("super-note-skin")；FOUC 防护由 index.html 里的同步内联脚本完成。
+ * Skin system removed (v2.5+): only light/dark theme remains (next-themes).
+ * This module stays as a no-op shim so old imports don't crash.
+ * Prefer ThemeToggle / useTheme from next-themes.
  */
 
-export type Skin = "obsidian" | "eink" | "claude" | "mono";
+import { useCallback, useEffect } from "react";
+
+/** @deprecated skins removed — only light/dark */
+export type Skin = "default";
 
 export const SKIN_STORAGE_KEY = "super-note-skin";
-const ALL_SKINS: readonly Skin[] = ["obsidian", "eink", "claude", "mono"] as const;
 
-function readSkin(): Skin {
+function clearSkinDom() {
   try {
-    const raw = localStorage.getItem(SKIN_STORAGE_KEY);
-    if (raw && (ALL_SKINS as readonly string[]).includes(raw)) {
-      return raw as Skin;
-    }
+    document.documentElement.removeAttribute("data-skin");
+    localStorage.removeItem(SKIN_STORAGE_KEY);
+    // legacy values
+    localStorage.removeItem("super-note-skin");
   } catch {
-    /* localStorage 被禁：走默认 */
-  }
-  return "obsidian";
-}
-
-function applySkin(skin: Skin) {
-  const root = document.documentElement;
-  if (skin === "obsidian") {
-    // Obsidian 为默认底层风格，不写 data-skin，让原有 :root 变量生效
-    root.removeAttribute("data-skin");
-  } else {
-    root.setAttribute("data-skin", skin);
+    /* ignore */
   }
 }
 
 /**
- * 订阅并修改当前皮肤。
- * - 跨标签页同步：通过 storage 事件
- * - 首次挂载时读取 localStorage 并确保 DOM 属性一致（索引脚本已经设过，但
- *   SPA 多入口下稳妥起见再兜底一次）
+ * @deprecated No-op. Skins removed; use next-themes light/dark only.
  */
 export function useSkin(): {
   skin: Skin;
   setSkin: (next: Skin) => void;
   skins: readonly Skin[];
 } {
-  const [skin, setSkinState] = useState<Skin>(() => readSkin());
-
   useEffect(() => {
-    applySkin(skin);
-  }, [skin]);
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== SKIN_STORAGE_KEY) return;
-      setSkinState(readSkin());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    clearSkinDom();
   }, []);
 
-  const setSkin = useCallback((next: Skin) => {
-    try {
-      localStorage.setItem(SKIN_STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
-    setSkinState(next);
+  const setSkin = useCallback((_next: Skin) => {
+    clearSkinDom();
   }, []);
 
-  return { skin, setSkin, skins: ALL_SKINS };
+  return { skin: "default", setSkin, skins: ["default"] as const };
 }

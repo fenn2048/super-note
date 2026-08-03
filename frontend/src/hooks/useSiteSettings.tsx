@@ -96,58 +96,20 @@ function applyToDOM(title: string, faviconUrl: string) {
   document.head.appendChild(apple);
 }
 
-function applyEditorFont(fontId: string, customFontName?: string) {
-  const builtin = BUILTIN_FONTS.find(f => f.id === fontId);
-  if (builtin) {
-    document.documentElement.style.setProperty("--editor-font-family", builtin.family);
-    return;
-  }
+/** System UI stack only — product no longer exposes custom editor fonts / 霞鹜文楷. */
+const SYSTEM_EDITOR_FONT =
+  'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
 
-  // 自定义字体：注入 @font-face 并设置 CSS 变量
-  if (fontId && customFontName) {
-    const fontFaceName = `CustomFont-${fontId.slice(0, 8)}`;
-    const styleId = `font-face-${fontId}`;
-
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement("style");
-      style.id = styleId;
-      style.textContent = `@font-face { font-family: '${fontFaceName}'; src: url('${api.getFontFileUrl(fontId)}'); font-display: swap; }`;
-      document.head.appendChild(style);
-    }
-
-    document.documentElement.style.setProperty(
-      "--editor-font-family",
-      `'${fontFaceName}', system-ui, sans-serif`
-    );
-    return;
-  }
-
-  // 回退默认
-  document.documentElement.style.setProperty(
-    "--editor-font-family",
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-  );
+function applyEditorFont(_fontId?: string, _customFontName?: string) {
+  document.documentElement.style.setProperty("--editor-font-family", SYSTEM_EDITOR_FONT);
 }
 
-function applyWenkaiFont(enabled: boolean) {
+/** Always off — removes legacy class/link if present. */
+function applyWenkaiFont(_enabled?: boolean) {
   const linkId = "lxgw-wenkai-font-style";
-  let link = document.getElementById(linkId) as HTMLLinkElement | null;
-  
-  if (enabled) {
-    if (!link) {
-      link = document.createElement("link");
-      link.id = linkId;
-      link.rel = "stylesheet";
-      link.href = "/fonts/lxgw/style.css";
-      document.head.appendChild(link);
-    }
-    document.documentElement.classList.add("font-lxgw");
-  } else {
-    if (link) {
-      link.parentNode?.removeChild(link);
-    }
-    document.documentElement.classList.remove("font-lxgw");
-  }
+  const link = document.getElementById(linkId);
+  if (link) link.parentNode?.removeChild(link);
+  document.documentElement.classList.remove("font-lxgw");
 }
 
 export function SiteSettingsProvider({ children }: { children: React.ReactNode }) {
@@ -162,23 +124,10 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
         editorFontFamily: data.editor_font_family || "",
         lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true",
       };
-      setSiteConfig(config);
+      setSiteConfig({ ...config, editorFontFamily: "", lxgwWenkaiEnabled: false });
       applyToDOM(config.title, config.favicon);
-      applyWenkaiFont(config.lxgwWenkaiEnabled);
-
-      // 加载自定义字体名
-      if (config.editorFontFamily && !BUILTIN_FONTS.find(f => f.id === config.editorFontFamily)) {
-        try {
-          const fonts = await api.getFontsPublic();
-          const font = fonts.find(f => f.id === config.editorFontFamily);
-          applyEditorFont(config.editorFontFamily, font?.name);
-        } catch {
-          applyEditorFont(config.editorFontFamily);
-        }
-      } else {
-        applyEditorFont(config.editorFontFamily);
-      }
-
+      applyWenkaiFont(false);
+      applyEditorFont();
       setIsLoaded(true);
     }).catch(() => {
       applyToDOM(DEFAULT_CONFIG.title, DEFAULT_CONFIG.favicon);
@@ -203,37 +152,17 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     applyToDOM(config.title, config.favicon);
   }, [siteConfig.editorFontFamily, siteConfig.lxgwWenkaiEnabled]);
 
-  const updateEditorFont = useCallback(async (fontId: string) => {
-    const data = await api.updateSiteSettings({ editor_font_family: fontId });
-    const config: SiteConfig = {
-      ...siteConfig,
-      editorFontFamily: data.editor_font_family || "",
-    };
-    setSiteConfig(config);
+  /** @deprecated Font settings removed — always system stack. */
+  const updateEditorFont = useCallback(async (_fontId: string) => {
+    applyEditorFont();
+    setSiteConfig((prev) => ({ ...prev, editorFontFamily: "" }));
+  }, []);
 
-    // 获取自定义字体名用于 @font-face
-    if (fontId && !BUILTIN_FONTS.find(f => f.id === fontId)) {
-      try {
-        const fonts = await api.getFonts();
-        const font = fonts.find(f => f.id === fontId);
-        applyEditorFont(fontId, font?.name);
-      } catch {
-        applyEditorFont(fontId);
-      }
-    } else {
-      applyEditorFont(fontId);
-    }
-  }, [siteConfig]);
-
-  const updateLxgwWenkaiEnabled = useCallback(async (enabled: boolean) => {
-    const data = await api.updateSiteSettings({ editor_lxgw_wenkai_enabled: enabled ? "true" : "false" });
-    const config: SiteConfig = {
-      ...siteConfig,
-      lxgwWenkaiEnabled: data.editor_lxgw_wenkai_enabled === "true",
-    };
-    setSiteConfig(config);
-    applyWenkaiFont(config.lxgwWenkaiEnabled);
-  }, [siteConfig]);
+  /** @deprecated 霞鹜文楷 toggle removed. */
+  const updateLxgwWenkaiEnabled = useCallback(async (_enabled: boolean) => {
+    applyWenkaiFont(false);
+    setSiteConfig((prev) => ({ ...prev, lxgwWenkaiEnabled: false }));
+  }, []);
 
   return (
     <SiteSettingsContext.Provider value={{ siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled, isLoaded }}>

@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal, Bell, Activity, AlarmClock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
-import SkinSwitcher from "@/components/SkinSwitcher";
 import SecuritySettings from "@/components/SecuritySettings";
 import TokenManagement from "@/components/TokenManagement";
 import DataManager from "@/components/DataManager";
@@ -13,7 +12,7 @@ import AIPromptPanel from "@/components/AIPromptPanel";
 import UserManagement from "@/components/UserManagement";
 import WorkspaceManagement from "@/components/WorkspaceManagement";
 import ManualPanel from "@/components/ManualPanel";
-import { useSiteSettings, BUILTIN_FONTS, getBuiltinFontName } from "@/hooks/useSiteSettings";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import {
   getCustomScreensaverDataUrl,
@@ -39,6 +38,7 @@ import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPorta
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
 import { registerPlugin } from "@capacitor/core";
+import { springs } from "@/lib/motion";
 
 export type TabId = "appearance" | "switches" | "ai" | "prompts" | "security" | "tokens" | "data" | "users" | "workspaces" | "developer" | "download" | "about" | "manual";
 
@@ -578,7 +578,7 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
                   toast.error(err?.message || "请求权限失败");
                 }
               }}
-              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98]"
+              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-transform duration-press ease-out active:scale-[0.98]"
             >
               请求通知权限
             </button>
@@ -596,7 +596,7 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
                   toast.error(err?.message || "无法打开精确闹钟设置");
                 }
               }}
-              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98]"
+              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-transform duration-press ease-out active:scale-[0.98]"
             >
               打开精确闹钟设置
             </button>
@@ -619,7 +619,7 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
                   setResyncing(false);
                 }
               }}
-              className="py-2.5 rounded-lg bg-accent-primary text-white text-xs font-semibold hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+              className="py-2.5 rounded-lg bg-accent-primary text-white text-xs font-semibold hover:opacity-90 transition-transform duration-press ease-out active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
               {resyncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
               重新同步任务提醒
@@ -627,7 +627,7 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
             <button
               type="button"
               onClick={() => void refresh()}
-              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-transform duration-press ease-out active:scale-[0.98] flex items-center justify-center gap-1.5"
             >
               <RefreshCw size={12} />
               刷新诊断
@@ -792,7 +792,7 @@ function AboutPanel() {
                   toast.error(err?.message || "无法打开通知设置");
                 }
               }}
-              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98]"
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-transform duration-press ease-out active:scale-[0.98]"
             >
               打开系统通知设置
             </button>
@@ -886,7 +886,7 @@ function AboutPanel() {
                         toast.error(err?.message || "无法打开电池优化设置");
                       }
                     }}
-                    className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+                    className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-transform duration-press ease-out active:scale-[0.98]"
                   >
                     去关闭电池优化
                   </button>
@@ -921,7 +921,7 @@ function AboutPanel() {
                   toast.error(err?.message || "导出日志失败");
                 }
               }}
-              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg bg-accent-primary hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-transform duration-press ease-out active:scale-[0.98]"
             >
               <Download size={14} />
               导出运行日志
@@ -1590,7 +1590,7 @@ function WorkspaceSplashSettingsCard() {
 
 function AppearancePanel() {
   const { t, i18n } = useTranslation();
-  const { siteConfig, updateSiteConfig, updateEditorFont, updateLxgwWenkaiEnabled } = useSiteSettings();
+  const { siteConfig, updateSiteConfig } = useSiteSettings();
   const { prefs: userPrefs, setPref: setUserPref, cloudSynced } = useUserPreferences();
   const [title, setTitle] = useState(siteConfig.title);
   const [ssPreview, setSsPreview] = useState<string | null>(null);
@@ -1619,36 +1619,7 @@ function AppearancePanel() {
     return () => { cancelled = true; };
   }, []);
 
-  // 字体状态
-  const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
-  const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState("");
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [isSwitchingFont, setIsSwitchingFont] = useState(false);
-  const fontFileRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 加载自定义字体列表
-  const loadFonts = useCallback(async () => {
-    try {
-      const fonts = await api.getFonts();
-      setCustomFonts(fonts);
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => { loadFonts(); }, [loadFonts]);
-
-  // 点击外部关闭下拉
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setFontDropdownOpen(false);
-      }
-    };
-    if (fontDropdownOpen) document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [fontDropdownOpen]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1687,57 +1658,7 @@ function AppearancePanel() {
 
   const hasChanges = title !== siteConfig.title || previewIcon !== siteConfig.favicon;
 
-  // 当前字体的显示名
-  const currentFontName = (() => {
-    const builtin = BUILTIN_FONTS.find(f => f.id === siteConfig.editorFontFamily);
-    if (builtin) return getBuiltinFontName(builtin);
-    const custom = customFonts.find(f => f.id === siteConfig.editorFontFamily);
-    return custom ? custom.name : t('settings.interDefault');
-  })();
 
-  const handleSelectFont = async (fontId: string) => {
-    setIsSwitchingFont(true);
-    setFontDropdownOpen(false);
-    try {
-      await updateEditorFont(fontId);
-    } catch { /* ignore */ }
-    setIsSwitchingFont(false);
-  };
-
-  const handleUploadFonts = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setIsUploading(true);
-    setUploadMessage("");
-    setUploadSuccess(false);
-    try {
-      const result = await api.uploadFonts(files);
-      const msgs: string[] = [];
-      if (result.uploaded.length > 0) msgs.push(t('settings.fontUploadSuccess', { count: result.uploaded.length }));
-      if (result.errors.length > 0) msgs.push(result.errors.join("; "));
-      setUploadMessage(msgs.join(" · "));
-      setUploadSuccess(result.uploaded.length > 0);
-      await loadFonts();
-      setTimeout(() => { setUploadMessage(""); setUploadSuccess(false); }, 4000);
-    } catch (err: any) {
-      setUploadMessage(err.message || t('settings.fontUploadFailed'));
-      setUploadSuccess(false);
-    } finally {
-      setIsUploading(false);
-      if (fontFileRef.current) fontFileRef.current.value = "";
-    }
-  };
-
-  const handleDeleteFont = async (fontId: string) => {
-    try {
-      await api.deleteFont(fontId);
-      // 如果删的是当前字体，回退默认
-      if (siteConfig.editorFontFamily === fontId) {
-        await updateEditorFont("");
-      }
-      await loadFonts();
-    } catch { /* ignore */ }
-  };
 
   return (
     <div className="space-y-6">
@@ -1818,7 +1739,7 @@ function AppearancePanel() {
                   onChange={(e) => { setTitle(e.target.value); setSaveMessage(""); }}
                   maxLength={20}
                   disabled={!isAdmin}
-                  className="w-full px-3 py-2 bg-app-bg border border-app-border dark:border-app-border rounded-lg text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-all placeholder:text-tx-tertiary disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 bg-app-bg border border-app-border dark:border-app-border rounded-lg text-sm text-tx-primary focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary outline-none transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out placeholder:text-tx-tertiary disabled:opacity-60 disabled:cursor-not-allowed"
                   placeholder={t('settings.siteNamePlaceholder')}
                 />
                 <p className="text-[10px] text-tx-tertiary dark:text-tx-tertiary text-right">{title.length} / 20</p>
@@ -1830,7 +1751,7 @@ function AppearancePanel() {
                     type="button"
                     onClick={handleSave}
                     disabled={isSaving || !title.trim() || !hasChanges}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-accent-primary hover:bg-accent-primary/90 text-white rounded-lg text-xs font-medium transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                   >
                     {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     {t('settings.saveChanges')}
@@ -1941,169 +1862,17 @@ function AppearancePanel() {
       </div>
 
       <div className="space-y-sys-lg">
-        {/* 外观风格（Skin）：默认 / macOS —— 与下方明暗模式正交 */}
-        <div className="p-sys-lg rounded-xl border border-app-border dark:border-app-border bg-app-surface/50 dark:bg-app-surface space-y-sys-md">
-          <div>
-            <span className="text-sys-body-md font-medium text-tx-primary dark:text-tx-secondary">
-              {t('appearance.skinTitle', { defaultValue: '外观风格' })}
-            </span>
-            <p className="text-sys-body-sm text-tx-secondary dark:text-tx-tertiary mt-sys-xs">
-              {t('appearance.skinDesc', { defaultValue: '选择整体视觉语言。' })}
-            </p>
-          </div>
-          <SkinSwitcher />
-        </div>
-
         <div className="flex items-center justify-between p-sys-lg rounded-xl border border-app-border dark:border-app-border bg-app-surface/50 dark:bg-app-surface">
           <div>
             <span className="text-sys-body-md font-medium text-tx-primary dark:text-tx-secondary">{t('settings.themeMode')}</span>
-            <p className="text-sys-body-sm text-tx-secondary dark:text-tx-tertiary mt-sys-xs">{t('settings.themeModeDesc')}</p>
+            <p className="text-sys-body-sm text-tx-secondary dark:text-tx-tertiary mt-sys-xs">
+              {t('settings.themeModeDesc', { defaultValue: '仅浅色 / 深色两种模式' })}
+            </p>
           </div>
           <ThemeToggle />
         </div>
 
-        {/* 编辑器字体 - 可交互 */}
-        <div className="p-sys-lg rounded-xl border border-app-border dark:border-app-border bg-app-surface/50 dark:bg-app-surface space-y-sys-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-sys-body-md font-medium text-tx-primary dark:text-tx-secondary">{t('settings.editorFont')}</span>
-              <p className="text-sys-body-sm text-tx-secondary dark:text-tx-tertiary mt-sys-xs">{t('settings.editorFontDesc')}</p>
-            </div>
-            {isSwitchingFont && <Loader2 size={14} className="animate-spin text-accent-primary" />}
-          </div>
-
-          {/* 字体选择器下拉 */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setFontDropdownOpen(!fontDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 border border-app-border dark:border-app-border rounded-lg bg-app-elevated dark:bg-app-elevated text-sm text-tx-primary hover:border-accent-primary/50 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Type size={14} className="text-tx-tertiary" />
-                {currentFontName}
-              </span>
-              <ChevronDown size={14} className={cn("text-tx-tertiary transition-transform", fontDropdownOpen && "rotate-180")} />
-            </button>
-
-            <AnimatePresence>
-              {fontDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute z-50 top-full left-0 mt-1 w-full max-h-64 overflow-y-auto bg-app-elevated dark:bg-app-elevated border border-app-border dark:border-app-border rounded-lg shadow-xl"
-                >
-                  {/* 内置字体 */}
-                  <div className="px-2 pt-2 pb-1">
-                    <span className="text-[10px] font-medium text-tx-tertiary dark:text-tx-tertiary uppercase tracking-wider px-2">{t('settings.builtinFonts')}</span>
-                  </div>
-                  {BUILTIN_FONTS.map(font => (
-                    <button
-                      key={font.id}
-                      onClick={() => handleSelectFont(font.id)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm text-tx-primary dark:text-tx-secondary hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
-                    >
-                      <span style={{ fontFamily: font.family }}>{getBuiltinFontName(font)}</span>
-                      {siteConfig.editorFontFamily === font.id && <Check size={14} className="text-accent-primary" />}
-                    </button>
-                  ))}
-
-                  {/* 自定义字体 */}
-                  {customFonts.length > 0 && (
-                    <>
-                      <div className="h-px bg-app-surface dark:bg-app-surface mx-2 my-1" />
-                      <div className="px-2 pt-1 pb-1">
-                        <span className="text-[10px] font-medium text-tx-tertiary dark:text-tx-tertiary uppercase tracking-wider px-2">{t('settings.importedFonts')}</span>
-                      </div>
-                      {customFonts.map(font => (
-                        <div
-                          key={font.id}
-                          className="flex items-center justify-between px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors group"
-                        >
-                          <button
-                            onClick={() => handleSelectFont(font.id)}
-                            className="flex-1 text-left text-sm text-tx-primary dark:text-tx-secondary"
-                          >
-                            {font.name}
-                            <span className="ml-2 text-[10px] text-tx-tertiary">.{font.format}</span>
-                          </button>
-                          <div className="flex items-center gap-1.5">
-                            {siteConfig.editorFontFamily === font.id && <Check size={14} className="text-accent-primary" />}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteFont(font.id); }}
-                              className="opacity-0 group-hover:opacity-100 p-0.5 text-tx-tertiary hover:text-red-500 transition-all"
-                              title={t('settings.deleteFont')}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* 字体导入 */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => fontFileRef.current?.click()}
-              disabled={isUploading}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-app-border dark:border-app-border rounded-lg text-xs text-tx-secondary dark:text-tx-tertiary hover:border-accent-primary/50 hover:text-accent-primary transition-colors disabled:opacity-50"
-            >
-              {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-              {t('settings.importFont')}
-            </button>
-            <span className="text-[10px] text-tx-tertiary dark:text-tx-tertiary">{t('settings.importFontHint')}</span>
-            <input
-              type="file"
-              ref={fontFileRef}
-              onChange={handleUploadFonts}
-              accept=".otf,.otc,.ttc,.ttf,.woff,.woff2"
-              multiple
-              className="hidden"
-            />
-          </div>
-
-          {uploadMessage && (
-            <p className={cn("text-xs", uploadSuccess ? "text-emerald-500" : "text-amber-500")}>{uploadMessage}</p>
-          )}
-
-          {/* 字体预览 */}
-          <div
-            className="px-3 py-3 rounded-lg border border-app-border bg-app-elevated"
-            style={{ fontFamily: "var(--editor-font-family)" }}
-          >
-            <p className="text-sm text-tx-primary dark:text-tx-secondary leading-relaxed">
-              {t('settings.fontPreviewEn')}
-            </p>
-            <p className="text-sm text-tx-secondary dark:text-tx-tertiary leading-relaxed mt-1">
-              {t('settings.fontPreviewZh')}
-            </p>
-          </div>
-        </div>
-
-        {/* 霞鹜文楷字体开关 */}
-        <div className="flex items-center justify-between p-4 rounded-xl border border-app-border dark:border-app-border bg-app-surface/50 dark:bg-app-surface">
-          <div className="flex items-center gap-2">
-            <Type size={16} className="text-tx-secondary dark:text-tx-tertiary" />
-            <div>
-              <span className="text-sm font-medium text-tx-primary dark:text-tx-secondary">{t('settings.lxgwWenkaiFont')}</span>
-              <p className="text-xs text-tx-secondary dark:text-tx-tertiary mt-0.5">{t('settings.lxgwWenkaiFontDesc')}</p>
-            </div>
-          </div>
-          <input
-            type="checkbox"
-            checked={siteConfig.lxgwWenkaiEnabled}
-            onChange={(e) => updateLxgwWenkaiEnabled(e.target.checked)}
-            className="w-4 h-4 accent-indigo-600 cursor-pointer"
-          />
-        </div>
-
-          {/* 语言切换 */}
+        {/* 语言切换 */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-app-border dark:border-app-border bg-app-surface/50 dark:bg-app-surface">
           <div className="flex items-center gap-2">
             <Globe size={16} className="text-tx-secondary dark:text-tx-tertiary" />
@@ -2305,7 +2074,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
         initial={{ opacity: 0, scale: isPage ? 1 : 0.95, y: isPage ? 0 : 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: isPage ? 1 : 0.95, y: isPage ? 0 : 10 }}
-        transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+        transition={springs.soft}
         className={cn(
           "relative flex flex-col md:flex-row overflow-hidden bg-app-bg border-app-border",
           isPage
@@ -2514,7 +2283,7 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
                     initial={{ opacity: 0, x: 12 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
-                    transition={{ duration: 0.15 }}
+                    transition={springs.snappy}
                   >
                     <PanelErrorBoundary
                       key={activeTab}
