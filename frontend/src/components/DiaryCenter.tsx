@@ -1522,9 +1522,9 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
 // ============================================================
 /**
  * 朋友圈风格的图片网格：
- *   1 张  → 单张大图（最大宽度，按比例显示）
- *   2~4 张 → 2 列
- *   5+ 张 → 3 列
+ *   1 张  → 按图片原始宽高比展示；宽度不超过列表内容区，超宽则等比缩放
+ *   2~4 张 → 2 列正方形宫格
+ *   5+ 张 → 3 列正方形宫格
  * 点击任意一张打开 Lightbox 大图查看，支持左右切换 / Esc 关闭。
  */
 function ImageGrid({
@@ -1538,12 +1538,58 @@ function ImageGrid({
 }) {
   if (!ids.length) return null;
   const count = ids.length;
-  const cols = count === 1 ? 1 : (count === 2 || count === 4) ? 2 : 3;
+
+  // 单图：自然尺寸 + max-width 适配列表宽度，不做强制裁切 / 定高
+  if (count === 1) {
+    const id = ids[0];
+    const att = attachments.find((a) => a.id === id);
+    const isVideo = !!(att?.mimeType && att.mimeType.startsWith("video/"));
+    return (
+      <div className="mt-3 max-w-full">
+        <button
+          type="button"
+          onClick={() => onOpen(0)}
+          className={cn(
+            "relative inline-block max-w-full overflow-hidden rounded-lg",
+            "border border-app-border bg-app-hover/30",
+            "hover:opacity-90 transition-opacity duration-fast ease-out",
+            "text-left align-top",
+          )}
+        >
+          {isVideo ? (
+            <span className="relative block max-w-full">
+              <video
+                src={api.diaryImages.urlFor(id)}
+                className="block max-w-full h-auto w-auto pointer-events-none"
+                muted
+                playsInline
+                preload="metadata"
+              />
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="w-10 h-10 rounded-full bg-black/55 flex items-center justify-center text-white">
+                  <Play size={18} fill="white" className="ml-0.5" />
+                </span>
+              </span>
+            </span>
+          ) : (
+            <img
+              src={api.diaryImages.urlFor(id)}
+              alt=""
+              loading="lazy"
+              className="block max-w-full h-auto w-auto"
+              draggable={false}
+            />
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  const cols = count === 2 || count === 4 ? 2 : 3;
   return (
     <div
       className={cn(
         "mt-3 grid gap-1.5 max-w-[66.7%]",
-        cols === 1 && "grid-cols-1",
         cols === 2 && "grid-cols-2",
         cols === 3 && "grid-cols-3",
       )}
@@ -1554,21 +1600,18 @@ function ImageGrid({
         return (
           <button
             key={id}
+            type="button"
             onClick={() => onOpen(i)}
             className={cn(
-              "relative overflow-hidden rounded-lg border border-app-border bg-app-hover/30 hover:opacity-90 transition-opacity",
-              // 单图按宽高自然比；多图统一正方形避免参差
-              count === 1 ? "max-h-[213px]" : "aspect-square",
+              "relative overflow-hidden rounded-lg border border-app-border bg-app-hover/30",
+              "aspect-square hover:opacity-90 transition-opacity duration-fast ease-out",
             )}
           >
             {isVideo ? (
               <div className="w-full h-full relative flex items-center justify-center bg-black">
                 <video
                   src={api.diaryImages.urlFor(id)}
-                  className={cn(
-                    "w-full h-full pointer-events-none",
-                    count === 1 ? "object-contain" : "object-cover",
-                  )}
+                  className="w-full h-full object-cover pointer-events-none"
                   muted
                   playsInline
                 />
@@ -1581,10 +1624,7 @@ function ImageGrid({
                 src={api.diaryImages.urlFor(id)}
                 alt=""
                 loading="lazy"
-                className={cn(
-                  "w-full h-full",
-                  count === 1 ? "object-contain" : "object-cover",
-                )}
+                className="w-full h-full object-cover"
                 draggable={false}
               />
             )}
