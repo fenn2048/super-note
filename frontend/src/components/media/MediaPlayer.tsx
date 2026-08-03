@@ -18,6 +18,7 @@ import {
   updateNativeMediaSession,
 } from "@/lib/nativeMedia";
 import { isNativePlatform } from "@/hooks/useCapacitor";
+import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import {
   acquireLocalPlayUrl,
   releaseLocalPlayUrl,
@@ -43,37 +44,101 @@ interface MediaPlayerProps {
   onExitFullscreen?: () => void;
 }
 
-async function lockLandscape() {
-  try {
+/** 全屏：强制横屏（Android 原生优先 Capacitor；失败再试 Screen Orientation API） */
+async function lockLandscape(): Promise<void> {
+  const tryNative = async (orientation: "landscape" | "landscape-primary") => {
     const { ScreenOrientation } = await import("@capacitor/screen-orientation");
-    await ScreenOrientation.lock({ orientation: "landscape" });
-    return;
-  } catch {
-    /* 插件未安装或非原生：继续 fallback */
+    await ScreenOrientation.lock({ orientation });
+  };
+  if (isNativePlatform()) {
+    try {
+      await tryNative("landscape");
+      return;
+    } catch {
+      try {
+        await tryNative("landscape-primary");
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
   }
   try {
-    const orient = (screen as any).orientation;
+    const orient = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } })
+      .orientation;
     if (orient?.lock) {
       await orient.lock("landscape");
     }
   } catch {
-    /* 部分浏览器仅允许全屏上下文，失败则忽略 */
+    /* 部分 WebView 仅允许全屏手势上下文 */
   }
 }
 
-async function unlockOrientation() {
+/**
+ * 退出全屏：先锁回竖屏（详情页固定竖屏），稍后再 unlock 恢复系统自动旋转。
+ * 仅 unlock 时，Android 常会停在横屏，直到用户物理转手机。
+ */
+async function restorePortraitOrientation(): Promise<void> {
+  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  if (isNativePlatform()) {
+    try {
+      const { ScreenOrientation } = await import("@capacitor/screen-orientation");
+      try {
+        await ScreenOrientation.lock({ orientation: "portrait" });
+      } catch {
+        try {
+          await ScreenOrientation.lock({ orientation: "portrait-primary" });
+        } catch {
+          /* ignore */
+        }
+      }
+      await delay(400);
+      try {
+        await ScreenOrientation.unlock();
+      } catch {
+        /* ignore */
+      }
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
   try {
-    const { ScreenOrientation } = await import("@capacitor/screen-orientation");
-    await ScreenOrientation.unlock();
-    return;
+    const orient = (screen as Screen & {
+      orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void };
+    }).orientation;
+    if (orient?.lock) {
+      try {
+        await orient.lock("portrait");
+      } catch {
+        /* ignore */
+      }
+      await delay(400);
+      try {
+        orient.unlock?.();
+      } catch {
+        /* ignore */
+      }
+    }
   } catch {
     /* ignore */
   }
-  try {
-    const orient = (screen as any).orientation;
-    if (orient?.unlock) {
-      orient.unlock();
+}
+
+/** 组件卸载：解除方向锁，避免离开详情后仍锁横/竖屏 */
+async function unlockOrientation(): Promise<void> {
+  if (isNativePlatform()) {
+    try {
+      const { ScreenOrientation } = await import("@capacitor/screen-orientation");
+      await ScreenOrientation.unlock();
+      return;
+    } catch {
+      /* ignore */
     }
+  }
+  try {
+    const orient = (screen as Screen & { orientation?: { unlock?: () => void } }).orientation;
+    orient?.unlock?.();
   } catch {
     /* ignore */
   }
@@ -152,14 +217,25 @@ export default function MediaPlayer({
     }
   };
 
-  /** 退出全屏：暂停视频，留在详情页（不再退回媒体列表） */
-  const exitFullscreenAndPause = () => {
+  /**
+   * 退出全屏（横屏返回）：
+   * 1) 暂停播放并同步 store 意图
+   * 2) 退出 Artplayer / 浏览器全屏
+   * 3) 强制竖屏再恢复自动旋转 → 回到详情竖屏布局
+   */
+  const exitFullscreenAndPause = useCallback(() => {
     const player = playerRef.current;
+    intentPlayingRef.current = false;
     try {
       if (player) {
         player.pause();
         if (player.fullscreen) player.fullscreen = false;
       }
+    } catch {
+      /* ignore */
+    }
+    try {
+      pauseMedia();
     } catch {
       /* ignore */
     }
@@ -170,11 +246,22 @@ export default function MediaPlayer({
     } catch {
       /* ignore */
     }
-    void unlockOrientation();
+    void restorePortraitOrientation();
     setIsFullscreen(false);
     isFullscreenRef.current = false;
     onExitFullscreen?.();
-  };
+  }, [onExitFullscreen, pauseMedia]);
+
+  const exitFullscreenAndPauseRef = useRef(exitFullscreenAndPause);
+  exitFullscreenAndPauseRef.current = exitFullscreenAndPause;
+
+  // Android 系统返回键：全屏时先退出全屏并暂停，而不是直接离开详情
+  useRegisterBackLayer(
+    `media-video-fs-${mediaId}`,
+    isFullscreen,
+    () => exitFullscreenAndPauseRef.current(),
+    400,
+  );
 
   const buildArmedMeta = useCallback((): MediaPlayItem => {
     const player = playerRef.current;
@@ -656,9 +743,17 @@ export default function MediaPlayer({
           /* ignore */
         }
         if (fs) {
+          // 立即锁横屏 + 短延迟重试（Android 全屏动画结束后再锁更稳）
           void lockLandscape();
+          window.setTimeout(() => {
+            if (isFullscreenRef.current) void lockLandscape();
+          }, 120);
+          window.setTimeout(() => {
+            if (isFullscreenRef.current) void lockLandscape();
+          }, 360);
         } else {
-          void unlockOrientation();
+          // 非「返回并暂停」路径（点播放器自带退出全屏）也回到竖屏
+          void restorePortraitOrientation();
         }
       };
 
@@ -694,8 +789,9 @@ export default function MediaPlayer({
             const btn = el.querySelector("button") as HTMLButtonElement | null;
             if (!btn) return;
             btn.addEventListener("click", (ev) => {
+              ev.preventDefault();
               ev.stopPropagation();
-              exitFullscreenAndPause();
+              exitFullscreenAndPauseRef.current();
             });
           },
         });
@@ -895,14 +991,14 @@ export default function MediaPlayer({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              exitFullscreenAndPause();
+              exitFullscreenAndPauseRef.current();
             }}
             onPointerUp={(e) => {
               e.preventDefault();
             }}
-            className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-[10000] w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
-            title="退出全屏"
-            aria-label="退出全屏"
+            className="fixed top-[max(12px,env(safe-area-inset-top))] left-3 z-system w-11 h-11 min-w-11 min-h-11 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur border border-white/15 active:scale-95"
+            title="退出全屏并返回竖屏"
+            aria-label="退出全屏并返回竖屏"
           >
             <ChevronLeft size={22} />
           </button>
