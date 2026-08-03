@@ -39,6 +39,7 @@ import {
   deleteBookGroup,
   getAllBookGroups
 } from "@/lib/localStore";
+import { setMediaCacheUser } from "@/lib/mediaFileCache";
 import { getQueue as getOfflineQueue } from "@/lib/offlineQueue";
 import type { Note, User, Book, BookGroup } from "@/types";
 
@@ -81,6 +82,7 @@ export function subscribeSyncState(fn: (s: SyncState) => void): () => void {
  */
 export async function bootstrap(user: User): Promise<void> {
   setCurrentUser(user.id);
+  setMediaCacheUser(user.id);
 
   // 没联网时：直接走"使用本地缓存"路径，不发请求
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -186,6 +188,7 @@ async function getQueuedNoteIds(): Promise<Set<string>> {
  */
 export function teardown(): void {
   setCurrentUser(null);
+  setMediaCacheUser(null);
   setState("idle");
 }
 
