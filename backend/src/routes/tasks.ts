@@ -294,8 +294,9 @@ tasks.post("/", async (c) => {
       ? workspaceId
       : null;
 
+  // 周期任务：用户已指定首期 dueDate 则尊重；否则按规则从今天推算
   let calculatedDueDate = dueDate;
-  if (isRecurring && recurrenceRule) {
+  if (isRecurring && recurrenceRule && !dueDate) {
     try {
       const rule =
         typeof recurrenceRule === "string"
@@ -522,6 +523,10 @@ tasks.put("/:id", (c) => {
       const progress = isCompleted ? 100 : pt.progress === 100 ? 0 : pt.progress;
 
       try {
+        const remindChanged =
+          String(calculatedRemindAt ?? "") !== String(pt.remindAt ?? "");
+        const dueChanged =
+          String(endDate ?? "") !== String(pt.endDate ?? "");
         db.prepare(
           `
           UPDATE project_tasks SET
@@ -530,6 +535,8 @@ tasks.put("/:id", (c) => {
             isRecurring = ?, recurrenceRule = ?,
             reminderOffsetValue = ?, reminderOffsetUnit = ?,
             recurrenceEndDate = ?, progress = ?,
+            reminderFiredAt = CASE WHEN ? THEN NULL ELSE reminderFiredAt END,
+            dueReminderFiredAt = CASE WHEN ? THEN NULL ELSE dueReminderFiredAt END,
             modifierId = ?, updatedAt = datetime('now')
           WHERE id = ?
         `,
@@ -551,6 +558,8 @@ tasks.put("/:id", (c) => {
           finalOffsetUnit,
           recurrenceEndDate,
           progress,
+          remindChanged ? 1 : 0,
+          dueChanged ? 1 : 0,
           userId,
           id,
         );
@@ -576,34 +585,57 @@ tasks.put("/:id", (c) => {
           }
         }
 
+        let nextOccurrence: any = null;
+        let recurrenceMeta: { created: boolean; reason?: string } | null = null;
         if (
           (body.isCompleted === 1 || body.isCompleted === true) &&
           pt.isCompleted === 0
         ) {
-          handleRecurringTask(db, id, true);
+          const rec = handleRecurringTask(db, id, true);
+          recurrenceMeta = { created: rec.created, reason: rec.reason };
+          if (rec.created && rec.newTaskId) {
+            nextOccurrence = loadProjectTaskLegacy(db, rec.newTaskId);
+          } else if (
+            pt.isRecurring &&
+            !rec.created &&
+            rec.reason &&
+            rec.reason !== "not_recurring"
+          ) {
+            console.warn(
+              `[recurrence] failed to spawn next for task ${id}: ${rec.reason}`,
+            );
+          }
         }
+
+        if (body.title) {
+          try {
+            createMentions(
+              "task",
+              id,
+              body.title.trim().slice(0, 80),
+              body.title,
+              userId,
+            );
+          } catch (e) {
+            console.warn("[tasks.put] createMentions failed:", e);
+          }
+        }
+
+        const result = loadProjectTaskLegacy(db, id);
+        if (nextOccurrence || recurrenceMeta) {
+          return c.json({
+            ...result,
+            nextOccurrence: nextOccurrence || undefined,
+            recurrence: recurrenceMeta || undefined,
+          });
+        }
+        return c.json(result);
       } catch (err: any) {
         return c.json(
           { error: `更新失败：${err?.message || err}` },
           500,
         );
       }
-
-      if (body.title) {
-        try {
-          createMentions(
-            "task",
-            id,
-            body.title.trim().slice(0, 80),
-            body.title,
-            userId,
-          );
-        } catch (e) {
-          console.warn("[tasks.put] createMentions failed:", e);
-        }
-      }
-
-      return c.json(loadProjectTaskLegacy(db, id));
     }
 
     // ---------- legacy tasks 表兜底 ----------
@@ -802,13 +834,19 @@ tasks.put("/:id", (c) => {
       }
     });
 
+    let nextOccurrence: any = null;
+    let recurrenceMeta: { created: boolean; reason?: string } | null = null;
     try {
       tx();
       if (
         (body.isCompleted === 1 || body.isCompleted === true) &&
         existing.isCompleted === 0
       ) {
-        handleRecurringTask(db, id, false);
+        const rec = handleRecurringTask(db, id, false);
+        recurrenceMeta = { created: rec.created, reason: rec.reason };
+        if (rec.created && rec.newTaskId) {
+          nextOccurrence = loadLegacyTask(db, rec.newTaskId);
+        }
       }
     } catch (err: any) {
       return c.json({ error: `更新失败：${err?.message || err}` }, 500);
@@ -828,7 +866,15 @@ tasks.put("/:id", (c) => {
       }
     }
 
-    return c.json(loadLegacyTask(db, id));
+    const legacyResult = loadLegacyTask(db, id);
+    if (nextOccurrence || recurrenceMeta) {
+      return c.json({
+        ...legacyResult,
+        nextOccurrence: nextOccurrence || undefined,
+        recurrence: recurrenceMeta || undefined,
+      });
+    }
+    return c.json(legacyResult);
   });
 });
 
@@ -887,8 +933,23 @@ tasks.patch("/:id/toggle", (c) => {
       { targetType: "project_task", targetId: id },
     );
 
+    let nextOccurrence: any = null;
+    let recurrenceMeta: { created: boolean; reason?: string } | null = null;
     if (newStatus === 1) {
-      handleRecurringTask(db, id, true);
+      const rec = handleRecurringTask(db, id, true);
+      recurrenceMeta = { created: rec.created, reason: rec.reason };
+      if (rec.created && rec.newTaskId) {
+        nextOccurrence = loadProjectTaskLegacy(db, rec.newTaskId);
+      } else if (
+        pt.isRecurring &&
+        !rec.created &&
+        rec.reason &&
+        rec.reason !== "not_recurring"
+      ) {
+        console.warn(
+          `[recurrence] toggle failed to spawn next for task ${id}: ${rec.reason}`,
+        );
+      }
       if (pt.projectWorkspaceId) {
         try {
           broadcastToWorkspace(
@@ -906,12 +967,20 @@ tasks.patch("/:id/toggle", (c) => {
       }
     }
 
-    return c.json(loadProjectTaskLegacy(db, id));
+    const toggleResult = loadProjectTaskLegacy(db, id);
+    if (nextOccurrence || recurrenceMeta) {
+      return c.json({
+        ...toggleResult,
+        nextOccurrence: nextOccurrence || undefined,
+        recurrence: recurrenceMeta || undefined,
+      });
+    }
+    return c.json(toggleResult);
   }
 
   // legacy 兜底
   const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as
-    | { userId: string; workspaceId: string | null; isCompleted: number }
+    | { userId: string; workspaceId: string | null; isCompleted: number; isRecurring?: number }
     | undefined;
   if (!task) return c.json({ error: "Task not found" }, 404);
 
@@ -954,8 +1023,14 @@ tasks.patch("/:id/toggle", (c) => {
     { targetType: "task", targetId: id },
   );
 
+  let nextOccurrence: any = null;
+  let recurrenceMeta: { created: boolean; reason?: string } | null = null;
   if (newStatus === 1) {
-    handleRecurringTask(db, id, false);
+    const rec = handleRecurringTask(db, id, false);
+    recurrenceMeta = { created: rec.created, reason: rec.reason };
+    if (rec.created && rec.newTaskId) {
+      nextOccurrence = loadLegacyTask(db, rec.newTaskId);
+    }
   }
 
   if (newStatus === 1 && task.workspaceId) {
@@ -974,7 +1049,15 @@ tasks.patch("/:id/toggle", (c) => {
     }
   }
 
-  return c.json(loadLegacyTask(db, id));
+  const legacyToggle = loadLegacyTask(db, id);
+  if (nextOccurrence || recurrenceMeta) {
+    return c.json({
+      ...legacyToggle,
+      nextOccurrence: nextOccurrence || undefined,
+      recurrence: recurrenceMeta || undefined,
+    });
+  }
+  return c.json(legacyToggle);
 });
 
 // 删除任务（project_tasks 优先）

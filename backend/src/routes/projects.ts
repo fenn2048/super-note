@@ -721,8 +721,9 @@ projectsRouter.post("/:id/tasks", async (c) => {
   const maxSort = db.prepare("SELECT MAX(sortOrder) as max FROM project_tasks WHERE stageId = ?").get(stageId) as { max: number | null };
   const sortOrder = (maxSort.max ?? -1) + 1;
 
+  // 周期任务：若用户已指定首期截止日期则尊重；否则按规则从今天推算下一期
   let calculatedEndDate = endDate;
-  if (isRecurring && recurrenceRule) {
+  if (isRecurring && recurrenceRule && !endDate) {
     try {
        let rule = typeof recurrenceRule === 'string' ? JSON.parse(recurrenceRule) : recurrenceRule;
        const now = new Date();
@@ -903,6 +904,13 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (sortOrder !== undefined) { updates.push("sortOrder = ?"); params.push(sortOrder); }
   if (priority !== undefined) { updates.push("priority = ?"); params.push(priority); }
   updates.push("remindAt = ?"); params.push(calculatedRemindAt);
+  // remindAt / endDate 变更后允许服务端再次到点推送（双提醒各自重置）
+  if (String(calculatedRemindAt ?? "") !== String(task.remindAt ?? "")) {
+    updates.push("reminderFiredAt = NULL");
+  }
+  if (endDate !== undefined && String(endDate ?? "") !== String(task.endDate ?? "")) {
+    updates.push("dueReminderFiredAt = NULL");
+  }
   if (titleColor !== undefined) { updates.push("titleColor = ?"); params.push(titleColor); }
   if (finalProgress !== undefined) { updates.push("progress = ?"); params.push(finalProgress); }
   if (isRecurring !== undefined) { updates.push("isRecurring = ?"); params.push((isRecurring === 1 || isRecurring === true) ? 1 : 0); }
@@ -967,11 +975,28 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   }
 
   const compVal = (finalIsCompleted === 1 || finalIsCompleted === true) ? 1 : 0;
+  let nextOccurrence: any = null;
+  let recurrenceMeta: { created: boolean; reason?: string } | null = null;
   if (compVal === 1 && task.isCompleted === 0) {
-    handleRecurringTask(db, taskId, true);
+    const rec = handleRecurringTask(db, taskId, true);
+    recurrenceMeta = { created: rec.created, reason: rec.reason };
+    if (rec.created && rec.newTaskId) {
+      nextOccurrence = getFullProjectTask(db, rec.newTaskId);
+    } else if (task.isRecurring && !rec.created && rec.reason && rec.reason !== "not_recurring") {
+      console.warn(
+        `[recurrence] failed to spawn next for project_task ${taskId}: ${rec.reason}`,
+      );
+    }
   }
 
   const updatedTask = getFullProjectTask(db, taskId);
+  if (nextOccurrence || recurrenceMeta) {
+    return c.json({
+      ...updatedTask,
+      nextOccurrence: nextOccurrence || undefined,
+      recurrence: recurrenceMeta || undefined,
+    });
+  }
   return c.json(updatedTask);
 });
 
