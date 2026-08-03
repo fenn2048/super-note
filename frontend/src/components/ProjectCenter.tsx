@@ -979,7 +979,10 @@ export default function ProjectCenter() {
       }
     }
     if (activeFilter.type === "calendar") {
-      setLoadingWorkspaceStages(true);
+      // Soft refresh: keep calendar mounted so cut/copy clipboard is not wiped
+      // by swapping the whole view for a loading spinner.
+      const isInitial = workspaceStages.length === 0;
+      if (isInitial) setLoadingWorkspaceStages(true);
       try {
         const allProjs = await api.getProjects(workspaceId, "active");
         const promises = allProjs.map(async (p) => {
@@ -1000,7 +1003,7 @@ export default function ProjectCenter() {
       } catch (err) {
         console.error(err);
       } finally {
-        setLoadingWorkspaceStages(false);
+        if (isInitial) setLoadingWorkspaceStages(false);
       }
     }
   };
@@ -1972,6 +1975,9 @@ export default function ProjectCenter() {
               <ProjectCalendar
                 stages={filteredProjectStages}
                 onTaskClick={(task) => window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }))}
+                onRefresh={refreshCurrentView}
+                defaultProjectId={selectedProject?.id}
+                projects={selectedProject ? [{ id: selectedProject.id, name: selectedProject.name }] : undefined}
               />
             )}
             {detailTab === "gantt" && (
@@ -2929,6 +2935,9 @@ export default function ProjectCenter() {
               onTaskClick={(task) => {
                 window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: task.id }));
               }}
+              onRefresh={refreshCurrentView}
+              defaultProjectId={personalTodoProject?.id}
+              projects={projects.map((p) => ({ id: p.id, name: p.name }))}
             />
           )}
         </div>
