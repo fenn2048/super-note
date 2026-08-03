@@ -15,7 +15,7 @@ import MediaCacheSheet from "./MediaCacheSheet";
 import ContextMenu, { type ContextMenuItem } from "@/components/ContextMenu";
 import {
   Film, Music, Plus, Search, Grid, List as ListIcon, Trash2, Edit3, Play, Pause, Info,
-  Settings, ChevronRight, Download, Upload, CheckCircle, MessageSquare, Clock,
+  Settings, ChevronRight, CheckCircle, MessageSquare, Clock,
   User, Tag, ChevronLeft, PlusCircle, Globe, Lock, ShieldAlert, SlidersHorizontal,
   X, AlertTriangle, Disc, Loader2, Check, MoreHorizontal, FolderInput, Car,
   HardDrive, DownloadCloud
@@ -136,7 +136,6 @@ export default function MediaCenter() {
   // Modals
   const [showAlistBrowser, setShowAlistBrowser] = useState<boolean>(false);
   const [showAlistSettings, setShowAlistSettings] = useState<boolean>(false);
-  const [showImportJson, setShowImportJson] = useState<boolean>(false);
   const [showAddCollection, setShowAddCollection] = useState<boolean>(false);
   const [showAddItem, setShowAddItem] = useState<boolean>(false);
   
@@ -145,9 +144,6 @@ export default function MediaCenter() {
   const [alistToken, setAlistToken] = useState<string>("");
   const [testStatus, setTestStatus] = useState<{ status: string; message: string } | null>(null);
   const [testing, setTesting] = useState<boolean>(false);
-  
-  const [jsonImportText, setJsonImportText] = useState<string>("");
-  const [importError, setImportError] = useState<string>("");
 
   // Batch deletion states
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
@@ -589,26 +585,6 @@ export default function MediaCenter() {
       setTestStatus({ status: "error", message: err.message || "连接失败" });
     } finally {
       setTesting(false);
-    }
-  };
-
-  // Handle JSON batch import
-  const handleJsonImport = async () => {
-    setImportError("");
-    try {
-      const parsed = JSON.parse(jsonImportText);
-      const q = workspaceId ? `?workspaceId=${workspaceId}` : "";
-      const res = await api.request<{ success: boolean; message: string }>(`/media/import/json${q}`, {
-        method: "POST",
-        body: JSON.stringify(parsed)
-      });
-      if (res && res.success) {
-        setShowImportJson(false);
-        setJsonImportText("");
-        fetchData();
-      }
-    } catch (err: any) {
-      setImportError(err.message || "JSON 格式解析错误");
     }
   };
 
@@ -1460,17 +1436,6 @@ export default function MediaCenter() {
                                         <Plus size={15} className="text-accent-primary" />
                                         网盘导入
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="w-full px-3.5 py-2.5 text-left text-sm text-tx-primary hover:bg-app-hover flex items-center gap-2"
-                                        onClick={() => {
-                                          setShowItemsMenu(false);
-                                          setShowImportJson(true);
-                                        }}
-                                      >
-                                        <Upload size={15} />
-                                        JSON 导入
-                                      </button>
                                       <div className="my-1 border-t border-app-border/60" />
                                     </>
                                   )}
@@ -2007,21 +1972,6 @@ export default function MediaCenter() {
                         <Plus size={15} />
                         <span>网盘导入</span>
                       </button>
-                      <button
-                        onClick={() => setShowImportJson(true)}
-                        className="flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-colors"
-                      >
-                        <Upload size={16} />
-                        JSON 导入
-                      </button>
-                      <a
-                        href="/api/media/import/template"
-                        download="template.json"
-                        className="flex bg-app-sidebar border border-app-border hover:bg-app-hover text-tx-secondary text-sm font-semibold py-2 px-3.5 rounded-xl items-center gap-1.5 transition-colors"
-                      >
-                        <Download size={16} />
-                        下载模板
-                      </a>
                     </>
                   )}
                 </div>
@@ -2672,54 +2622,6 @@ export default function MediaCenter() {
                   className="flex-1 py-2 bg-accent-primary text-white text-xs rounded-xl font-bold hover:bg-accent-primary-hover shadow"
                 >
                   确定
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: JSON Import */}
-      <AnimatePresence>
-        {showImportJson && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="border border-app-border rounded-2xl w-full max-w-lg p-6 flex flex-col gap-4 shadow-2xl"
-              style={{ backgroundColor: "var(--color-elevated-solid, #181824)" }}
-            >
-              <div>
-                <h3 className="text-md font-bold text-tx-primary">JSON 批量导入</h3>
-                <p className="text-xs text-tx-tertiary">粘贴按合集和单品数组构造的 JSON 字符串进行批量录入</p>
-              </div>
-
-              <textarea
-                value={jsonImportText}
-                onChange={(e) => setJsonImportText(e.target.value)}
-                placeholder='{\n  "collection": { "title": "系列合集", "type": "video" },\n  "items": [\n    { "title": "电影1", "alist_path": "/path1.mp4" }\n  ]\n}'
-                className="w-full min-h-[250px] font-mono text-xs p-3 bg-app-sidebar border border-app-border rounded-xl focus:border-accent-primary outline-none text-tx-primary resize-y"
-              />
-
-              {importError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-xl leading-relaxed">
-                  {importError}
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowImportJson(false)}
-                  className="flex-1 py-2 bg-app-sidebar border border-app-border text-xs rounded-xl hover:bg-app-hover"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleJsonImport}
-                  className="flex-1 py-2 bg-accent-primary text-white text-xs rounded-xl font-bold hover:bg-accent-primary-hover shadow"
-                >
-                  导入
                 </button>
               </div>
             </motion.div>
