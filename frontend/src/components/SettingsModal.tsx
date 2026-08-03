@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal, Bell } from "lucide-react";
+import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal, Bell, Activity, AlarmClock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import SkinSwitcher from "@/components/SkinSwitcher";
@@ -455,6 +455,190 @@ function DeveloperPanel() {
   );
 }
 
+function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
+  const [loading, setLoading] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
+  const [diag, setDiag] = useState<{
+    displayPermission: string;
+    exactAlarm: string | null;
+    pendingCount: number;
+    pendingPreview: Array<{ id: number; title?: string; body?: string; at?: string }>;
+    dualReminderNote: string;
+  } | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!isNative) return;
+    setLoading(true);
+    try {
+      const { getNotificationDiagnostics } = await import("@/hooks/useCapacitor");
+      const d = await getNotificationDiagnostics();
+      setDiag({
+        displayPermission: d.displayPermission,
+        exactAlarm: d.exactAlarm,
+        pendingCount: d.pendingCount,
+        pendingPreview: d.pendingPreview,
+        dualReminderNote: d.dualReminderNote,
+      });
+    } catch (e) {
+      console.warn("[NotificationDiagnostics]", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [isNative]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const statusColor = (v: string | null | undefined) => {
+    if (!v) return "text-tx-tertiary";
+    if (v === "granted") return "text-emerald-500";
+    if (v === "denied" || v === "prompt-with-rationale") return "text-amber-500";
+    if (v === "unsupported" || v === "n/a") return "text-tx-tertiary";
+    return "text-tx-secondary";
+  };
+
+  return (
+    <div className="rounded-xl border border-app-border bg-app-surface/50 p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-tx-primary flex items-center gap-2">
+        <Activity size={15} className="text-accent-primary" />
+        通知诊断
+      </h3>
+      <p className="text-xs text-tx-tertiary leading-relaxed">
+        检查通知权限、精确闹钟与已调度的本地任务提醒。
+        双提醒：提前 N 到点一次，截止日当天再提醒一次（同一时刻自动去重）。
+        服务端每分钟也会兜底推送（需在线或开启后台消息）。
+      </p>
+
+      {!isNative ? (
+        <p className="text-xs text-tx-tertiary p-2.5 rounded-lg bg-app-elevated border border-app-border">
+          当前为 Web/桌面环境，本地任务闹钟仅在 Android/iOS 客户端生效。服务端到点兜底仍可用。
+        </p>
+      ) : (
+        <>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-app-elevated border border-app-border">
+              <span className="text-tx-secondary">通知权限</span>
+              <span className={cn("font-semibold", statusColor(diag?.displayPermission))}>
+                {loading && !diag ? "…" : diag?.displayPermission || "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-app-elevated border border-app-border">
+              <span className="text-tx-secondary flex items-center gap-1">
+                <AlarmClock size={12} />
+                精确闹钟
+              </span>
+              <span className={cn("font-semibold", statusColor(diag?.exactAlarm))}>
+                {loading && !diag ? "…" : diag?.exactAlarm || "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-app-elevated border border-app-border">
+              <span className="text-tx-secondary">待触发本地通知</span>
+              <span className="font-semibold text-tx-primary">
+                {loading && !diag
+                  ? "…"
+                  : diag?.pendingCount === -1
+                    ? "读取失败"
+                    : `${diag?.pendingCount ?? 0} 条`}
+              </span>
+            </div>
+          </div>
+
+          {diag && diag.pendingPreview.length > 0 && (
+            <div className="rounded-lg border border-app-border bg-app-bg/60 p-2 space-y-1 max-h-36 overflow-y-auto">
+              <div className="text-[10px] font-semibold text-tx-tertiary uppercase tracking-wide px-1">
+                最近待触发
+              </div>
+              {diag.pendingPreview.map((p) => (
+                <div
+                  key={p.id}
+                  className="text-[11px] px-1.5 py-1 rounded bg-app-elevated/80 border border-app-border/60"
+                >
+                  <div className="font-medium text-tx-primary truncate">
+                    {p.title || "通知"} · {p.body || ""}
+                  </div>
+                  {p.at && <div className="text-tx-tertiary mt-0.5">{p.at}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { requestNotificationPermission } = await import("@/hooks/useCapacitor");
+                  const s = await requestNotificationPermission();
+                  const { toast } = await import("@/lib/toast");
+                  toast.success(s === "granted" ? "通知权限已授予" : `权限状态：${s}`);
+                  await refresh();
+                } catch (err: any) {
+                  const { toast } = await import("@/lib/toast");
+                  toast.error(err?.message || "请求权限失败");
+                }
+              }}
+              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98]"
+            >
+              请求通知权限
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { openExactAlarmSettings } = await import("@/hooks/useCapacitor");
+                  await openExactAlarmSettings();
+                  const { toast } = await import("@/lib/toast");
+                  toast.info("请在系统页开启「闹钟与提醒」后返回");
+                  setTimeout(() => void refresh(), 1500);
+                } catch (err: any) {
+                  const { toast } = await import("@/lib/toast");
+                  toast.error(err?.message || "无法打开精确闹钟设置");
+                }
+              }}
+              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98]"
+            >
+              打开精确闹钟设置
+            </button>
+            <button
+              type="button"
+              disabled={resyncing}
+              onClick={async () => {
+                setResyncing(true);
+                try {
+                  const { syncAllTaskNotifications } = await import("@/hooks/useCapacitor");
+                  const tasks = await api.getTasks("all");
+                  await syncAllTaskNotifications(tasks as any);
+                  const { toast } = await import("@/lib/toast");
+                  toast.success("已重新同步全部任务提醒");
+                  await refresh();
+                } catch (err: any) {
+                  const { toast } = await import("@/lib/toast");
+                  toast.error(err?.message || "同步失败");
+                } finally {
+                  setResyncing(false);
+                }
+              }}
+              className="py-2.5 rounded-lg bg-accent-primary text-white text-xs font-semibold hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              {resyncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              重新同步任务提醒
+            </button>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+            >
+              <RefreshCw size={12} />
+              刷新诊断
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function AboutPanel() {
   const { t } = useTranslation();
   const server = getServerUrl() || (typeof window !== "undefined" ? window.location.origin : "");
@@ -467,6 +651,9 @@ function AboutPanel() {
     typeof window !== "undefined" &&
     (window as any).Capacitor &&
     (window as any).Capacitor.getPlatform?.() === "android";
+  const isNative =
+    typeof window !== "undefined" &&
+    !!(window as any).Capacitor?.isNativePlatform?.();
 
   useEffect(() => {
     if (!isAndroid) return;
@@ -578,6 +765,9 @@ function AboutPanel() {
           })}
         </div>
       </div>
+
+      {/* 通知诊断（原生全功能；Web 显示说明） */}
+      <NotificationDiagnosticsCard isNative={!!isNative} />
 
       {/* Android 专属功能 */}
       {isAndroid && (
