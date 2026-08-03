@@ -75,6 +75,17 @@ export default function AppSplashGate({
     onContentReady?.();
   }, [native, customUrl, onContentReady]);
 
+  // 闪屏展示期间：html[data-splash-active] 强制藏媒体 titlebar portal / 迷你播放器
+  // （仅靠 z-index 在 Android WebView 上仍会被后挂载的 fixed 层压住）
+  useEffect(() => {
+    if (!native || gateDone) return;
+    const root = document.documentElement;
+    root.setAttribute("data-splash-active", "true");
+    return () => {
+      root.removeAttribute("data-splash-active");
+    };
+  }, [native, gateDone]);
+
   // 桌面 Web / Electron：不展示
   if (!native) return null;
   if (gateDone) return null;
@@ -83,9 +94,9 @@ export default function AppSplashGate({
   if (customUrl === undefined) {
     const underlay = (
       <div
-        className="fixed inset-0 z-system"
+        className="fixed inset-0 isolate"
         data-splash-overlay
-        style={{ backgroundColor: "#F5F3EE" }}
+        style={{ backgroundColor: "#F5F3EE", zIndex: 1100 }}
         aria-hidden
       />
     );

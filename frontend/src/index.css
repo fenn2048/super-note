@@ -639,6 +639,21 @@ html[data-app-locked] [data-global-music-ui] {
   pointer-events: none !important;
 }
 
+/*
+ * 冷启动 / 热恢复闪屏期间：强制藏 body 上 portal 的 UI，避免压在闪屏图上。
+ * 典型漏出：媒体库右上角搜索/更多（data-media-chrome）、迷你播放器、Tab/FAB。
+ * AppSplashGate 挂载时写 data-splash-active，卸层时移除。
+ */
+html[data-splash-active] [data-media-chrome],
+html[data-splash-active] [data-global-music-ui],
+html[data-splash-active] .mobile-music-mini,
+html[data-splash-active] .mobile-tab-bar,
+html[data-splash-active] .mobile-fab-anchor {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* 全屏播放器展开时隐藏媒体页 portal 到 titlebar 的搜索/更多等 chrome */
 html[data-global-player-expanded] [data-media-chrome] {
   display: none !important;

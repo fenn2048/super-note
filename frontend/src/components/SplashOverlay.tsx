@@ -16,8 +16,11 @@ const FADE_MS = 320;
 const SKIP_SIZE = 44;
 const RING_STROKE = 2.5;
 const RING_PAD = 2;
-/** 与 --z-system 对齐，盖住 lightbox / toast / 媒体 titlebar portal */
-const DEFAULT_SPLASH_Z = 1000;
+/**
+ * 高于 --z-system(1000)：部分 Android WebView 对后挂载的 fixed 层层叠异常，
+ * 再配合 html[data-splash-active] 隐藏 chrome（见 index.css）。
+ */
+const DEFAULT_SPLASH_Z = 1100;
 
 export type SplashOverlayProps = {
   /** 自定义闪屏 data URL；null 表示品牌默认 */
@@ -193,7 +196,7 @@ export default function SplashOverlay({
 
   const layer = (
     <div
-      className="fixed inset-0 flex flex-col items-center justify-center"
+      className="fixed inset-0 flex flex-col items-center justify-center isolate"
       data-splash-overlay
       style={{
         zIndex,
