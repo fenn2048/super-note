@@ -123,11 +123,16 @@ export default function MediaCacheSheet({
       open={open}
       onClose={onClose}
       title="缓存管理"
+      // 必须给面板明确高度：仅 maxHeight 时 flex-1/min-h-0 子项会塌成 0，
+      // 只剩标题条贴在底部（用户看到「一片黑 + 底栏一条」）。
       maxHeight="min(88dvh, 100%)"
-      bodyClassName="px-0 pb-0"
+      className="h-[min(72dvh,100%)]"
+      bodyClassName="px-0 pb-0 flex flex-col min-h-0 overflow-hidden"
+      zClassName="z-[80]"
       headerRight={
         <button
           type="button"
+          data-no-drag
           onClick={() => void handleClearAll()}
           disabled={busy || stats.count === 0}
           className={cn(
@@ -141,9 +146,9 @@ export default function MediaCacheSheet({
         </button>
       }
     >
-      <div className="flex flex-col min-h-0 flex-1">
+      <div className="flex flex-col flex-1 min-h-0 h-full">
         {/* Stats */}
-        <div className="px-4 pb-3 flex items-center gap-3">
+        <div className="px-4 pb-3 flex items-center gap-3 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-accent-primary/10 text-accent-primary flex items-center justify-center shrink-0">
             <HardDrive size={18} />
           </div>
@@ -159,7 +164,7 @@ export default function MediaCacheSheet({
 
         {/* Active downloads */}
         {activeJobs.length > 0 && (
-          <div className="px-4 pb-3 space-y-2 border-b border-app-border/60">
+          <div className="px-4 pb-3 space-y-2 border-b border-app-border/60 shrink-0">
             <p className="text-[10px] font-bold uppercase tracking-wider text-tx-tertiary">
               正在缓存
             </p>
@@ -195,8 +200,8 @@ export default function MediaCacheSheet({
           </div>
         )}
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 pb-[calc(5.5rem+var(--safe-area-bottom,0px))]">
+        {/* List：占满中间可滚动区 */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
           {loading && items.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-tx-tertiary text-sm gap-2">
               <Loader2 size={16} className="animate-spin" />
@@ -218,7 +223,7 @@ export default function MediaCacheSheet({
                       onClick={() => toggle(item.mediaId)}
                       className={cn(
                         "w-full flex items-center gap-3 min-h-12 px-3 py-2.5 rounded-xl border text-left",
-                        "active:bg-app-hover transition-colors duration-fast",
+                        "active:bg-app-hover transition-colors duration-fast ease-out",
                         checked
                           ? "border-accent-primary/40 bg-accent-primary/5"
                           : "border-app-border/50 bg-app-sidebar/20",
@@ -266,14 +271,13 @@ export default function MediaCacheSheet({
           )}
         </div>
 
-        {/* Bottom bar */}
+        {/* Bottom bar：固定在 sheet 底部，不进列表滚动 */}
         {items.length > 0 && (
           <div
             className={cn(
-              "sticky bottom-0 shrink-0 border-t border-app-border",
+              "shrink-0 border-t border-app-border",
               "bg-app-elevated/95 backdrop-blur-md",
               "px-4 py-3 flex items-center gap-2",
-              "pb-[calc(0.75rem+var(--safe-area-bottom,0px))]",
             )}
           >
             <button
