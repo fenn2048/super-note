@@ -91,6 +91,10 @@ interface SuperCacheSchema extends DBSchema {
       bookHash: string;
       blob: Blob;
       updatedAt: number;
+      /** 可选元数据（缓存管理 UI） */
+      title?: string;
+      format?: string;
+      size?: number;
     };
   };
 }
@@ -561,7 +565,19 @@ export async function deleteBookNote(id: string): Promise<void> {
 
 // ─── Book Files (Blobs) ────────────────────────────────────────────────────────
 
-export async function putBookFile(bookHash: string, blob: Blob): Promise<void> {
+export type BookFileMeta = {
+  bookHash: string;
+  title: string;
+  format: string;
+  size: number;
+  cachedAt: number;
+};
+
+export async function putBookFile(
+  bookHash: string,
+  blob: Blob,
+  meta?: { title?: string; format?: string },
+): Promise<void> {
   const p = getDb();
   if (!p) return;
   await safe(async () => {
@@ -569,7 +585,10 @@ export async function putBookFile(bookHash: string, blob: Blob): Promise<void> {
     await db.put("bookFiles", {
       bookHash,
       blob,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      title: meta?.title,
+      format: meta?.format,
+      size: blob.size,
     });
   }, undefined, "putBookFile");
 }
@@ -584,6 +603,43 @@ export async function getBookFile(bookHash: string): Promise<Blob | undefined> {
   }, undefined, "getBookFile");
 }
 
+export async function hasBookFile(bookHash: string): Promise<boolean> {
+  const p = getDb();
+  if (!p) return false;
+  return safe(async () => {
+    const db = await p;
+    const row = await db.get("bookFiles", bookHash);
+    return !!(row?.blob && row.blob.size > 0);
+  }, false, "hasBookFile");
+}
+
+export async function listBookFileMeta(): Promise<BookFileMeta[]> {
+  const p = getDb();
+  if (!p) return [];
+  return safe(async () => {
+    const db = await p;
+    const rows = await db.getAll("bookFiles");
+    return rows
+      .filter((r) => r?.blob && r.blob.size > 0)
+      .map((r) => ({
+        bookHash: r.bookHash,
+        title: r.title || r.bookHash,
+        format: r.format || "",
+        size: r.size ?? r.blob.size,
+        cachedAt: r.updatedAt || Date.now(),
+      }))
+      .sort((a, b) => b.cachedAt - a.cachedAt);
+  }, [], "listBookFileMeta");
+}
+
+export async function getBookFileStats(): Promise<{ count: number; totalBytes: number }> {
+  const list = await listBookFileMeta();
+  return {
+    count: list.length,
+    totalBytes: list.reduce((s, x) => s + (x.size || 0), 0),
+  };
+}
+
 export async function deleteBookFile(bookHash: string): Promise<void> {
   const p = getDb();
   if (!p) return;
@@ -591,4 +647,19 @@ export async function deleteBookFile(bookHash: string): Promise<void> {
     const db = await p;
     await db.delete("bookFiles", bookHash);
   }, undefined, "deleteBookFile");
+}
+
+export async function deleteBookFiles(hashes: string[]): Promise<void> {
+  for (const h of hashes) {
+    await deleteBookFile(h);
+  }
+}
+
+export async function clearAllBookFiles(): Promise<void> {
+  const p = getDb();
+  if (!p) return;
+  await safe(async () => {
+    const db = await p;
+    await db.clear("bookFiles");
+  }, undefined, "clearAllBookFiles");
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import { api, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
 import { Book, BookGroup } from "@/types";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,9 @@ import {
   Tags,
   Share2,
   Plus,
+  HardDrive,
+  DownloadCloud,
+  Pause,
 } from "lucide-react";
 import {
   EmptyState,
@@ -36,6 +39,20 @@ import {
 import ReadingDashboard, {
   BOOK_COVER_WIDTH_CLASS,
 } from "@/components/books/ReadingDashboard";
+import BookCacheSheet from "@/components/books/BookCacheSheet";
+import {
+  enqueueBookCache,
+  removeLocalBookCache,
+  getBookCacheJob,
+  getCachedBookHashSet,
+  refreshCachedBookHashSet,
+  subscribeBookCacheQueue,
+  getBookCacheQueueVersion,
+  pauseBookCacheJob,
+  resumeBookCacheJob,
+} from "@/lib/bookCacheQueue";
+import { toast } from "@/lib/toast";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface BookCenterProps {
   onOpenBook: (bookHash: string) => void;
@@ -53,6 +70,12 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showCacheSheet, setShowCacheSheet] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+
+  // 本地书籍缓存（移动端）
+  useSyncExternalStore(subscribeBookCacheQueue, getBookCacheQueueVersion, () => 0);
+  const cachedBookHashes = getCachedBookHashSet();
 
   // Edit Modal State
   const [editingBook, setEditingBook] = useState<Book | null>(null);
@@ -67,6 +90,30 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
   useEffect(() => {
     fetchData();
   }, [workspaceId, selectedFilter]);
+
+  useEffect(() => {
+    if (isMobile) void refreshCachedBookHashSet();
+  }, [isMobile, books.length]);
+
+  const cacheBook = useCallback((book: Book) => {
+    if (!book.attachmentId) {
+      toast.error("该书缺少附件，无法缓存");
+      return;
+    }
+    enqueueBookCache({
+      bookHash: book.bookHash,
+      attachmentId: book.attachmentId,
+      title: book.title,
+      format: book.format,
+      size: book.size,
+    });
+  }, []);
+
+  const uncacheBook = useCallback(async (book: Book, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    await removeLocalBookCache(book.bookHash);
+    toast.success(`已删除「${book.title}」的本地缓存`);
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -596,6 +643,17 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
               className="w-full pl-8 pr-3 py-2 h-9 bg-app-bg border border-app-border rounded-xl text-xs focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/30 transition-colors text-tx-primary"
             />
           </div>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setShowCacheSheet(true)}
+              className="p-2 rounded-xl border border-app-border bg-app-bg text-tx-secondary hover:text-accent-primary shrink-0 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+              title="缓存管理"
+              aria-label="书籍缓存管理"
+            >
+              <HardDrive size={16} />
+            </button>
+          )}
           <input
             type="file"
             ref={fileInputRef}
@@ -700,6 +758,99 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                           <Trash2 size={12} />
                         </button>
                       </div>
+
+                      {/* 移动端：缓存角标 / 进度 */}
+                      {isMobile && (() => {
+                        const job = getBookCacheJob(book.bookHash);
+                        const cached = cachedBookHashes.has(book.bookHash);
+                        if (job?.status === "downloading") {
+                          const pct =
+                            job.progress >= 0
+                              ? Math.round(job.progress * 100)
+                              : null;
+                          return (
+                            <div className="absolute bottom-0 inset-x-0 z-[3] bg-black/70 px-1.5 py-1">
+                              <div className="h-1 rounded-full bg-white/20 overflow-hidden">
+                                <div
+                                  className={cn(
+                                    "h-full bg-accent-primary rounded-full",
+                                    job.progress < 0 && "w-1/3 animate-pulse",
+                                  )}
+                                  style={
+                                    pct != null ? { width: `${pct}%` } : undefined
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-center justify-between mt-0.5">
+                                <span className="text-[9px] text-white/90 tabular-nums">
+                                  {pct != null ? `${pct}%` : "…"}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="p-0.5 text-white/90"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    pauseBookCacheJob(book.bookHash);
+                                  }}
+                                  aria-label="暂停缓存"
+                                >
+                                  <Pause size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (job?.status === "paused") {
+                          const pct =
+                            job.progress >= 0
+                              ? Math.round(job.progress * 100)
+                              : 0;
+                          return (
+                            <button
+                              type="button"
+                              className="absolute bottom-1.5 right-1.5 z-[3] min-h-8 px-2 rounded-md bg-amber-500/90 text-white text-[10px] font-bold flex items-center gap-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                resumeBookCacheJob(book.bookHash);
+                              }}
+                            >
+                              继续 {pct > 0 ? `${pct}%` : ""}
+                            </button>
+                          );
+                        }
+                        if (job?.status === "queued") {
+                          return (
+                            <div className="absolute bottom-1.5 right-1.5 z-[3] min-h-8 px-2 rounded-md bg-black/70 text-white text-[10px] font-semibold flex items-center gap-1">
+                              <Loader2 size={10} className="animate-spin" />
+                              排队
+                            </div>
+                          );
+                        }
+                        if (cached) {
+                          return (
+                            <div
+                              className="absolute top-1.5 right-1.5 z-[3] w-7 h-7 rounded-full bg-accent-primary/90 text-white flex items-center justify-center shadow"
+                              title="已本地缓存"
+                            >
+                              <HardDrive size={12} />
+                            </div>
+                          );
+                        }
+                        return (
+                          <button
+                            type="button"
+                            className="absolute bottom-1.5 right-1.5 z-[3] w-8 h-8 rounded-full bg-black/65 text-white flex items-center justify-center shadow active:scale-95"
+                            title="缓存到本地"
+                            aria-label="缓存到本地"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cacheBook(book);
+                            }}
+                          >
+                            <DownloadCloud size={14} />
+                          </button>
+                        );
+                      })()}
                     </div>
 
                     <div className="mt-2 px-0.5">
@@ -709,6 +860,15 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
                       <div className="text-[10px] text-tx-tertiary truncate mt-0.5 hidden md:block">
                         {book.author || "未知作者"}
                       </div>
+                      {isMobile && cachedBookHashes.has(book.bookHash) && (
+                        <button
+                          type="button"
+                          className="text-[10px] text-tx-tertiary mt-0.5"
+                          onClick={(e) => void uncacheBook(book, e)}
+                        >
+                          删除缓存
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -745,6 +905,13 @@ export default function BookCenter({ onOpenBook, workspaceId }: BookCenterProps)
         </div>
         )}
       </div>
+
+      {isMobile && (
+        <BookCacheSheet
+          open={showCacheSheet}
+          onClose={() => setShowCacheSheet(false)}
+        />
+      )}
 
       {/* Edit Metadata Modal */}
       {editingBook && (

@@ -4,9 +4,17 @@ import { BottomSheet } from "@/components/common/BottomSheet";
  * 桌面与移动端共用同一套页面；移动端做触控与窄屏适配。
  * 样式走 app token，布局参考产品截图功能，不抄扁平黑白皮。
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { BookOpen, SlidersHorizontal, X } from "lucide-react";
+import {
+  BookOpen,
+  SlidersHorizontal,
+  X,
+  HardDrive,
+  DownloadCloud,
+  Loader2,
+  Pause,
+} from "lucide-react";
 import type { Book } from "@/types";
 import { cn } from "@/lib/utils";
 import { resolveAttachmentUrl } from "@/lib/api";
@@ -24,6 +32,16 @@ import {
   MAX_DAILY_READING_GOAL,
 } from "@/lib/readingGoal";
 import { api } from "@/lib/api";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  enqueueBookCache,
+  getBookCacheJob,
+  getCachedBookHashSet,
+  subscribeBookCacheQueue,
+  getBookCacheQueueVersion,
+  pauseBookCacheJob,
+  resumeBookCacheJob,
+} from "@/lib/bookCacheQueue";
 
 function getHashColor(str: string): string {
   let hash = 0;
@@ -53,45 +71,133 @@ export const BOOK_COVER_WIDTH_CLASS = "w-28 sm:w-32";
 function BookCoverCard({
   book,
   onOpen,
+  showCache = false,
 }: {
   book: Book;
   onOpen: (hash: string) => void;
+  showCache?: boolean;
 }) {
   const coverUrl = coverUrlOf(book);
   const bg = getHashColor(book.title);
+  // 订阅队列以刷新角标
+  useSyncExternalStore(subscribeBookCacheQueue, getBookCacheQueueVersion, () => 0);
+  const job = showCache ? getBookCacheJob(book.bookHash) : undefined;
+  const cached = showCache && getCachedBookHashSet().has(book.bookHash);
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(book.bookHash)}
+    <div
       className={cn(
-        "group/cover flex flex-col text-left shrink-0 active:scale-[0.98] transition-transform",
+        "group/cover flex flex-col text-left shrink-0",
         BOOK_COVER_WIDTH_CLASS,
       )}
     >
-      <div
-        className="aspect-[3/4] w-full relative overflow-hidden rounded-lg shadow-md border border-app-border/40"
-        style={{ backgroundColor: bg }}
+      <button
+        type="button"
+        onClick={() => onOpen(book.bookHash)}
+        className="active:scale-[0.98] transition-transform w-full text-left"
       >
-        <div className="absolute left-0 top-0 bottom-0 w-1.5 z-[1] bg-gradient-to-r from-black/25 via-white/10 to-transparent pointer-events-none" />
-        <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-2 text-center pointer-events-none">
-          <span className="text-[11px] font-bold text-white leading-tight font-serif line-clamp-4 drop-shadow">
-            {book.title}
-          </span>
+        <div
+          className="aspect-[3/4] w-full relative overflow-hidden rounded-lg shadow-md border border-app-border/40"
+          style={{ backgroundColor: bg }}
+        >
+          <div className="absolute left-0 top-0 bottom-0 w-1.5 z-[1] bg-gradient-to-r from-black/25 via-white/10 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-2 text-center pointer-events-none">
+            <span className="text-[11px] font-bold text-white leading-tight font-serif line-clamp-4 drop-shadow">
+              {book.title}
+            </span>
+          </div>
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt={book.title}
+              className="absolute inset-0 z-[2] w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          ) : null}
+
+          {showCache && job?.status === "downloading" && (
+            <div className="absolute bottom-0 inset-x-0 z-[3] bg-black/70 px-1.5 py-1">
+              <div className="h-1 rounded-full bg-white/20 overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full bg-accent-primary rounded-full",
+                    job.progress < 0 && "w-1/3 animate-pulse",
+                  )}
+                  style={
+                    job.progress >= 0
+                      ? { width: `${Math.round(job.progress * 100)}%` }
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className="text-[9px] text-white/90 tabular-nums">
+                  {job.progress >= 0 ? `${Math.round(job.progress * 100)}%` : "…"}
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="p-0.5 text-white/90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pauseBookCacheJob(book.bookHash);
+                  }}
+                >
+                  <Pause size={12} />
+                </span>
+              </div>
+            </div>
+          )}
+          {showCache && job?.status === "paused" && (
+            <span
+              role="button"
+              tabIndex={0}
+              className="absolute bottom-1.5 right-1.5 z-[3] min-h-8 px-2 rounded-md bg-amber-500/90 text-white text-[10px] font-bold"
+              onClick={(e) => {
+                e.stopPropagation();
+                resumeBookCacheJob(book.bookHash);
+              }}
+            >
+              继续
+            </span>
+          )}
+          {showCache && job?.status === "queued" && (
+            <div className="absolute bottom-1.5 right-1.5 z-[3] min-h-8 px-2 rounded-md bg-black/70 text-white text-[10px] font-semibold flex items-center gap-1">
+              <Loader2 size={10} className="animate-spin" />
+              排队
+            </div>
+          )}
+          {showCache && !job && cached && (
+            <div className="absolute top-1.5 right-1.5 z-[3] w-7 h-7 rounded-full bg-accent-primary/90 text-white flex items-center justify-center shadow">
+              <HardDrive size={12} />
+            </div>
+          )}
+          {showCache && !job && !cached && (
+            <span
+              role="button"
+              tabIndex={0}
+              className="absolute bottom-1.5 right-1.5 z-[3] w-8 h-8 rounded-full bg-black/65 text-white flex items-center justify-center shadow"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!book.attachmentId) return;
+                enqueueBookCache({
+                  bookHash: book.bookHash,
+                  attachmentId: book.attachmentId,
+                  title: book.title,
+                  format: book.format,
+                  size: book.size,
+                });
+              }}
+            >
+              <DownloadCloud size={14} />
+            </span>
+          )}
         </div>
-        {coverUrl ? (
-          <img
-            src={coverUrl}
-            alt={book.title}
-            className="absolute inset-0 z-[2] w-full h-full object-cover"
-            loading="lazy"
-            decoding="async"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
-          />
-        ) : null}
-      </div>
+      </button>
       <div className="mt-2 px-0.5">
         <div className="text-xs font-medium text-tx-primary line-clamp-2 leading-snug group-hover/cover:text-accent-primary transition-colors">
           {book.title}
@@ -100,7 +206,7 @@ function BookCoverCard({
           <div className="text-[10px] text-tx-tertiary truncate mt-0.5">{book.author}</div>
         ) : null}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -162,6 +268,7 @@ export default function ReadingDashboard({
   variant = "page",
 }: ReadingDashboardProps) {
   const isSection = variant === "section";
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const sorted = useMemo(() => {
     return [...books].sort((a, b) => {
       const ta = Date.parse(a.updatedAt || a.createdAt || "") || 0;
@@ -340,54 +447,43 @@ export default function ReadingDashboard({
           </p>
         </header>
 
-        {/* 当前 / 最近：窄屏上下堆叠，宽屏横排 */}
-        <section className="space-y-4">
-          <div className="flex flex-col md:flex-row md:items-start gap-6 md:gap-8">
-            <div className="shrink-0">
-              <h2 className="text-sm font-semibold text-tx-primary mb-3">当前图书</h2>
-              {currentBook ? (
-                <BookCoverCard book={currentBook} onOpen={onOpenBook} />
-              ) : (
-                <div
-                  className={cn(
-                    BOOK_COVER_WIDTH_CLASS,
-                    "aspect-[3/4] rounded-lg border border-dashed border-app-border bg-app-surface/40 flex flex-col items-center justify-center text-tx-tertiary text-xs gap-2 px-3 text-center",
-                  )}
-                >
-                  <BookOpen size={22} className="opacity-50" />
-                  暂无在读
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <h2 className="text-sm font-semibold text-tx-primary mb-3">最近读过</h2>
-              {recentBooks.length > 0 ? (
-                <div
-                  className={cn(
-                    "flex gap-3 sm:gap-4 overflow-x-auto overflow-y-hidden pb-2 -mx-1 px-1",
-                    "overscroll-x-contain scroll-smooth",
-                    // 移动端隐藏滚动条；桌面保留细滚动条便于鼠标拖动
-                    "max-md:no-scrollbar",
-                    "md:[scrollbar-width:thin] md:[&::-webkit-scrollbar]:h-1.5",
-                    "md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-app-border",
-                  )}
-                  onWheel={(e) => {
-                    // 桌面触控板/滚轮：纵向滚动映射为横向，避免被外层首页吃掉
-                    const el = e.currentTarget;
-                    if (el.scrollWidth <= el.clientWidth + 2) return;
-                    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-                    e.preventDefault();
-                    el.scrollLeft += e.deltaY;
-                  }}
-                >
-                  {recentBooks.map((b) => (
-                    <BookCoverCard key={b.bookHash} book={b} onOpen={onOpenBook} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-tx-tertiary py-6 md:py-8">开始阅读更多书籍后会出现在这里</p>
-              )}
-            </div>
+        {/* 当前图书 / 最近读过：始终分行（桌面首页与书库「阅读中」一致，不再横排挤一行） */}
+        <section className="space-y-6 md:space-y-8">
+          <div>
+            <h2 className="text-sm font-semibold text-tx-primary mb-3">当前图书</h2>
+            {currentBook ? (
+              <BookCoverCard book={currentBook} onOpen={onOpenBook} showCache={isMobile} />
+            ) : (
+              <div
+                className={cn(
+                  BOOK_COVER_WIDTH_CLASS,
+                  "aspect-[3/4] rounded-lg border border-dashed border-app-border bg-app-surface/40 flex flex-col items-center justify-center text-tx-tertiary text-xs gap-2 px-3 text-center",
+                )}
+              >
+                <BookOpen size={22} className="opacity-50" />
+                暂无在读
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-tx-primary mb-3">最近读过</h2>
+            {recentBooks.length > 0 ? (
+              <div
+                className={cn(
+                  // 独立成行后用换行铺开；窄屏仍可横向轻滑
+                  "flex flex-wrap gap-3 sm:gap-4",
+                  "max-md:flex-nowrap max-md:overflow-x-auto max-md:overflow-y-hidden max-md:pb-2 max-md:-mx-1 max-md:px-1",
+                  "max-md:overscroll-x-contain max-md:scroll-smooth max-md:no-scrollbar",
+                )}
+              >
+                {recentBooks.map((b) => (
+                  <BookCoverCard key={b.bookHash} book={b} onOpen={onOpenBook} showCache={isMobile} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-tx-tertiary py-6 md:py-8">开始阅读更多书籍后会出现在这里</p>
+            )}
           </div>
         </section>
 

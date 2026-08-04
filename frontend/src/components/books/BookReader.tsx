@@ -639,7 +639,16 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
         });
         if (!res.ok) throw new Error("下载书籍失败");
         const blob = await res.blob();
-        await putBookFile(bookHash, blob);
+        await putBookFile(bookHash, blob, {
+          title: bookData.title,
+          format: bookData.format,
+        });
+        try {
+          const { refreshCachedBookHashSet } = await import("@/lib/bookCacheQueue");
+          await refreshCachedBookHashSet();
+        } catch {
+          /* ignore */
+        }
         return blob;
       });
       const file = new File([fileBlob], `${bookData.title}.${bookData.format}`, { type: fileBlob.type });
