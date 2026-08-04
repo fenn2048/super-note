@@ -1483,18 +1483,20 @@ export default function GlobalMusicPlayer() {
             onClose={() => setIsExpanded(false)}
             hideClose
             hideHandle
-            maxHeight="100dvh"
+            // 全屏：贴 visualViewport，避免 Android 100dvh 重开不满屏 / 手势弹回
+            fullscreen
             zClassName="z-[160]"
             // 全屏播放器：内容区可下拉跟手关闭（DESIGN §13 流体手势）
             dragFromContent
             dismissFraction={0.2}
             dismissVelocity={720}
             className={cn(
-              "h-[100dvh] max-h-[100dvh] rounded-none border-0",
+              "rounded-none border-0",
               "bg-black md:bg-[var(--color-bg)]",
+              // 桌面仍可限制宽度居中；移动端由 fullscreen 撑满
               "md:max-w-[520px] md:mx-auto md:rounded-t-window md:border-x md:border-app-border",
             )}
-            bodyClassName="flex flex-col min-h-0 p-0 overflow-hidden"
+            bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden"
             scrimClassName="hidden md:block bg-black/45 dark:bg-black/60"
           >
             <div
