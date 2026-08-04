@@ -41,6 +41,8 @@ import {
   getMediaCacheJob,
   subscribeMediaCacheQueue,
   getMediaCacheQueueVersion,
+  pauseMediaCacheJob,
+  resumeMediaCacheJob,
 } from "@/lib/mediaCacheQueue";
 import { toast } from "@/lib/toast";
 
@@ -710,9 +712,11 @@ export default function MediaCenter() {
     content: "",
     editorProps: {
       attributes: {
-        class: "prose prose-sm dark:prose-invert focus:outline-none min-h-[100px] max-h-[200px] overflow-y-auto bg-app-bg border border-app-border rounded-xl p-3 text-xs text-tx-primary",
-      }
-    }
+        // 移动端评论 sheet 高度有限：编辑区适中即可，过大易把底栏挤出
+        class:
+          "prose prose-sm dark:prose-invert focus:outline-none min-h-[7.5rem] max-h-[min(40vh,220px)] overflow-y-auto bg-app-bg border border-app-border rounded-xl p-3 text-xs text-tx-primary",
+      },
+    },
   });
 
   const [reviewType, setReviewType] = useState<"long_review" | "short_comment" | "recommendation">("short_comment");
@@ -1066,22 +1070,76 @@ export default function MediaCenter() {
                           <HardDrive size={14} />
                           删除本地缓存
                         </button>
-                      ) : getMediaCacheJob(selectedItem.id)?.status === "downloading" ||
-                        getMediaCacheJob(selectedItem.id)?.status === "queued" ? (
-                        <div className="min-h-11 flex-1 px-3 rounded-xl border border-accent-primary/30 bg-accent-primary/5 text-xs font-semibold text-accent-primary flex items-center justify-center gap-1.5">
-                          <Loader2 size={14} className="animate-spin" />
-                          缓存中…
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => cacheItem(selectedItem)}
-                          className="min-h-11 flex-1 px-3 rounded-xl bg-accent-primary text-white text-xs font-bold flex items-center justify-center gap-1.5 active:opacity-90"
-                        >
-                          <DownloadCloud size={14} />
-                          缓存到本地
-                        </button>
-                      )}
+                      ) : (() => {
+                        const job = getMediaCacheJob(selectedItem.id);
+                        if (job?.status === "downloading" || job?.status === "queued") {
+                          const pct =
+                            job.progress >= 0
+                              ? Math.round(job.progress * 100)
+                              : null;
+                          return (
+                            <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                              <div className="min-h-11 px-3 rounded-xl border border-accent-primary/30 bg-accent-primary/5 text-xs font-semibold text-accent-primary flex items-center gap-2">
+                                <Loader2 size={14} className="animate-spin shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex justify-between gap-2">
+                                    <span>
+                                      {job.status === "queued"
+                                        ? "排队中"
+                                        : pct != null
+                                          ? `缓存中 ${pct}%`
+                                          : "缓存中…"}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 h-1 rounded-full bg-accent-primary/15 overflow-hidden">
+                                    <div
+                                      className={cn(
+                                        "h-full bg-accent-primary rounded-full",
+                                        job.progress < 0 && "w-1/3 animate-pulse",
+                                      )}
+                                      style={
+                                        pct != null ? { width: `${pct}%` } : undefined
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="shrink-0 px-2 py-1 rounded-lg text-tx-secondary"
+                                  onClick={() => pauseMediaCacheJob(selectedItem.id)}
+                                >
+                                  暂停
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (job?.status === "paused") {
+                          const pct =
+                            job.progress >= 0
+                              ? Math.round(job.progress * 100)
+                              : 0;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => resumeMediaCacheJob(selectedItem.id)}
+                              className="min-h-11 flex-1 px-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5"
+                            >
+                              继续缓存{pct > 0 ? ` ${pct}%` : ""}
+                            </button>
+                          );
+                        }
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => cacheItem(selectedItem)}
+                            className="min-h-11 flex-1 px-3 rounded-xl bg-accent-primary text-white text-xs font-bold flex items-center justify-center gap-1.5 active:opacity-90"
+                          >
+                            <DownloadCloud size={14} />
+                            缓存到本地
+                          </button>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1629,11 +1687,23 @@ export default function MediaCenter() {
                                 />
                               )}
                               {getMediaCacheJob(item.id)?.status === "downloading" && (
-                                <Loader2
-                                  size={12}
-                                  className="shrink-0 text-accent-primary animate-spin"
-                                  aria-label="缓存中"
-                                />
+                                <span className="shrink-0 text-[10px] font-bold text-accent-primary tabular-nums flex items-center gap-0.5">
+                                  <Loader2 size={11} className="animate-spin" />
+                                  {getMediaCacheJob(item.id)!.progress >= 0
+                                    ? `${Math.round(getMediaCacheJob(item.id)!.progress * 100)}%`
+                                    : "…"}
+                                </span>
+                              )}
+                              {getMediaCacheJob(item.id)?.status === "paused" && (
+                                <span className="shrink-0 text-[10px] font-bold text-amber-500 tabular-nums">
+                                  暂停
+                                  {getMediaCacheJob(item.id)!.progress > 0
+                                    ? ` ${Math.round(getMediaCacheJob(item.id)!.progress * 100)}%`
+                                    : ""}
+                                </span>
+                              )}
+                              {getMediaCacheJob(item.id)?.status === "queued" && (
+                                <span className="shrink-0 text-[10px] text-tx-tertiary">排队</span>
                               )}
                             </p>
                             <p className="text-[11px] text-tx-tertiary truncate">
@@ -1670,7 +1740,11 @@ export default function MediaCenter() {
                         >
                           <div
                             className={cn(
-                              "relative aspect-square rounded-xl overflow-hidden border border-app-border/40 bg-app-sidebar",
+                              // 与桌面网格一致：视频 16:9，音频方图
+                              "relative rounded-xl overflow-hidden border border-app-border/40",
+                              item.type === "video"
+                                ? "aspect-video bg-black/20"
+                                : "aspect-square bg-app-sidebar",
                               isBatchMode && selectedItemIds.has(item.id) && "ring-2 ring-accent-primary",
                             )}
                           >
@@ -2346,7 +2420,9 @@ export default function MediaCenter() {
         }}
       />
 
-      {/* 写评论 / 影评 */}
+      {/* 写评论 / 影评
+          移动端必须给 panel 明确高度，否则仅 maxHeight 时 flex 底栏会被裁切
+          （用户看到编辑区后无「取消 / 发布」）。结构：可滚表单 + 固定底栏。 */}
       {showReviewInput && reviewEditor && (
         <BottomSheet
           open
@@ -2356,17 +2432,21 @@ export default function MediaCenter() {
             setReviewTitle("");
           }}
           title="写评论 / 影评"
-          maxHeight="min(90dvh, 640px)"
-          zClassName="z-[70]"
-          className="sm:max-w-lg sm:mx-auto"
-          bodyClassName="flex flex-col min-h-0"
+          maxHeight="min(88dvh, 100%)"
+          zClassName="z-[80]"
+          className={cn(
+            // 明确高度：flex 子项才不会把底栏挤出可视区
+            "h-[min(72dvh,100%)]",
+            "sm:max-w-lg sm:mx-auto sm:h-[min(640px,85dvh)]",
+          )}
+          bodyClassName="flex flex-col min-h-0 overflow-hidden p-0"
         >
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pt-1 pb-3 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={reviewType}
                 onChange={(e) => setReviewType(e.target.value as any)}
-                className="bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-secondary outline-none min-h-[36px]"
+                className="bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-secondary outline-none min-h-11"
               >
                 <option value="short_comment">短评</option>
                 <option value="long_review">影评 / 乐评</option>
@@ -2378,14 +2458,14 @@ export default function MediaCenter() {
                   placeholder="影评标题..."
                   value={reviewTitle}
                   onChange={(e) => setReviewTitle(e.target.value)}
-                  className="flex-1 min-w-[8rem] bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-primary outline-none focus:border-accent-primary min-h-[36px]"
+                  className="flex-1 min-w-[8rem] bg-app-bg border border-app-border text-xs rounded-lg p-2 text-tx-primary outline-none focus:border-accent-primary min-h-11"
                 />
               )}
               {selectedItem?.type === "video" && isPlaying && (
                 <button
                   type="button"
                   onClick={handleInsertTimestamp}
-                  className="text-xs font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-1.5 rounded-lg transition-colors ml-auto"
+                  className="text-xs font-bold text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-2 rounded-lg transition-colors ml-auto min-h-11"
                 >
                   打点 {formatDuration(currentTime)}
                 </button>
@@ -2393,7 +2473,7 @@ export default function MediaCenter() {
             </div>
             <EditorContent editor={reviewEditor} />
           </div>
-          <div className="px-4 py-3 border-t border-app-border flex items-center justify-end gap-2 shrink-0">
+          <div className="shrink-0 px-4 py-3 border-t border-app-border bg-app-card flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => {
@@ -2401,14 +2481,14 @@ export default function MediaCenter() {
                 reviewEditor.commands.setContent("");
                 setReviewTitle("");
               }}
-              className="px-5 py-2.5 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl min-h-[40px]"
+              className="px-5 py-2.5 bg-app-sidebar hover:bg-app-hover border border-app-border text-tx-secondary text-xs font-semibold rounded-xl min-h-11"
             >
               取消
             </button>
             <button
               type="button"
               onClick={handlePostReview}
-              className="px-6 py-2.5 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow min-h-[40px]"
+              className="px-6 py-2.5 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold text-sm rounded-xl shadow min-h-11"
             >
               发布互动
             </button>

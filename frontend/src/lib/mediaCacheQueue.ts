@@ -20,6 +20,7 @@ export const MEDIA_CACHE_MAX_BYTES = Math.floor(1.5 * 1024 * 1024 * 1024);
 export type MediaCacheJobStatus =
   | "queued"
   | "downloading"
+  | "paused"
   | "done"
   | "error"
   | "cancelled";
@@ -33,7 +34,12 @@ export interface MediaCacheJobInput {
 
 export interface MediaCacheJob extends MediaCacheJobInput {
   status: MediaCacheJobStatus;
-  progress: number; // 0–1，未知长度时下载中为 -1
+  /** 0–1；未知 Content-Length 时下载中为 -1 */
+  progress: number;
+  /** 已接收字节（展示用） */
+  receivedBytes?: number;
+  /** 总字节（若已知） */
+  totalBytes?: number;
   error?: string;
   addedAt: number;
 }
@@ -44,9 +50,12 @@ const jobs = new Map<string, MediaCacheJob>();
 const queue: string[] = [];
 const listeners = new Set<Listener>();
 let running = false;
+/** 全局暂停：pump 不再取新任务；进行中的任务会被 abort 并标 paused */
+let queueGloballyPaused = false;
 const abortControllers = new Map<string, AbortController>();
 /** 单调版本号，供 useSyncExternalStore 快照 */
 let queueVersion = 0;
+let lastProgressEmit = 0;
 
 function emit() {
   queueVersion += 1;
@@ -57,6 +66,14 @@ function emit() {
       /* ignore */
     }
   });
+}
+
+/** 进度更新节流，避免每个 chunk 都触发 React 重渲 */
+function emitProgress() {
+  const now = Date.now();
+  if (now - lastProgressEmit < 120) return;
+  lastProgressEmit = now;
+  emit();
 }
 
 export function subscribeMediaCacheQueue(fn: Listener): () => void {
@@ -100,6 +117,12 @@ export function enqueueMediaCache(
     if (existing && (existing.status === "queued" || existing.status === "downloading")) {
       continue;
     }
+    // 已暂停：恢复
+    if (existing && existing.status === "paused") {
+      resumeMediaCacheJob(item.mediaId);
+      added += 1;
+      continue;
+    }
     if (existing && existing.status === "done" && !opts?.force) {
       skippedCached += 1;
       continue;
@@ -112,12 +135,15 @@ export function enqueueMediaCache(
       ...item,
       status: "queued",
       progress: 0,
+      receivedBytes: 0,
+      totalBytes: undefined,
       addedAt: Date.now(),
     });
     if (!queue.includes(item.mediaId)) queue.push(item.mediaId);
     added += 1;
   }
   if (added > 0) {
+    queueGloballyPaused = false;
     emit();
     void pump();
     if (added === 1) {
@@ -133,18 +159,81 @@ export function enqueueMediaCache(
 export function cancelMediaCacheJob(mediaId: string): void {
   const job = jobs.get(mediaId);
   if (!job) return;
-  if (job.status === "queued") {
+  if (job.status === "queued" || job.status === "paused") {
     const idx = queue.indexOf(mediaId);
     if (idx >= 0) queue.splice(idx, 1);
     job.status = "cancelled";
+    job.progress = 0;
     emit();
     return;
   }
   if (job.status === "downloading") {
-    abortControllers.get(mediaId)?.abort();
     job.status = "cancelled";
+    abortControllers.get(mediaId)?.abort();
     emit();
   }
+}
+
+/** 暂停单项：队列中移除；下载中 abort 并保留进度 */
+export function pauseMediaCacheJob(mediaId: string): void {
+  const job = jobs.get(mediaId);
+  if (!job) return;
+  if (job.status === "queued") {
+    const idx = queue.indexOf(mediaId);
+    if (idx >= 0) queue.splice(idx, 1);
+    job.status = "paused";
+    emit();
+    return;
+  }
+  if (job.status === "downloading") {
+    job.status = "paused";
+    abortControllers.get(mediaId)?.abort();
+    emit();
+  }
+}
+
+/** 继续单项 */
+export function resumeMediaCacheJob(mediaId: string): void {
+  const job = jobs.get(mediaId);
+  if (!job || job.status !== "paused") return;
+  job.status = "queued";
+  job.error = undefined;
+  // 暂停后重新拉流（服务端未必支持 Range 续传）
+  if (!queue.includes(mediaId)) queue.push(mediaId);
+  queueGloballyPaused = false;
+  emit();
+  void pump();
+}
+
+export function isMediaCacheQueuePaused(): boolean {
+  return queueGloballyPaused;
+}
+
+/** 暂停全部：进行中 + 排队全部标 paused */
+export function pauseAllMediaCache(): void {
+  queueGloballyPaused = true;
+  for (const id of [...queue]) {
+    pauseMediaCacheJob(id);
+  }
+  for (const [id, job] of jobs) {
+    if (job.status === "downloading") pauseMediaCacheJob(id);
+  }
+  emit();
+  toast.info("已暂停缓存");
+}
+
+/** 恢复全部 paused 任务 */
+export function resumeAllMediaCache(): void {
+  queueGloballyPaused = false;
+  let n = 0;
+  for (const [id, job] of jobs) {
+    if (job.status === "paused") {
+      resumeMediaCacheJob(id);
+      n += 1;
+    }
+  }
+  if (n === 0) emit();
+  else toast.info(`继续缓存 ${n} 项`);
 }
 
 export async function removeLocalMediaCache(mediaId: string): Promise<void> {
@@ -182,23 +271,28 @@ async function pump(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    while (queue.length > 0) {
+    while (queue.length > 0 && !queueGloballyPaused) {
       const mediaId = queue.shift()!;
       const job = jobs.get(mediaId);
-      if (!job || job.status === "cancelled") continue;
+      if (!job || job.status === "cancelled" || job.status === "paused") continue;
       await runOne(job);
+      if (queueGloballyPaused) break;
     }
   } finally {
     running = false;
     // 泵结束后可能又有入队
-    if (queue.length > 0) void pump();
+    if (queue.length > 0 && !queueGloballyPaused) void pump();
   }
 }
 
 async function runOne(job: MediaCacheJob): Promise<void> {
+  if (queueGloballyPaused || job.status === "paused" || job.status === "cancelled") {
+    return;
+  }
   job.status = "downloading";
-  job.progress = 0;
+  job.progress = job.progress > 0 && job.progress < 1 ? job.progress : 0;
   job.error = undefined;
+  job.receivedBytes = 0;
   emit();
 
   const ac = new AbortController();
@@ -257,6 +351,9 @@ async function runOne(job: MediaCacheJob): Promise<void> {
         `文件过大（${(total / (1024 * 1024 * 1024)).toFixed(2)} GB），超过缓存上限`,
       );
     }
+    if (Number.isFinite(total) && total > 0) {
+      job.totalBytes = total;
+    }
 
     const mimeType =
       contentType && !contentType.includes("application/json")
@@ -267,17 +364,24 @@ async function runOne(job: MediaCacheJob): Promise<void> {
     if (!response.body) {
       blob = await response.blob();
       job.progress = 1;
+      job.receivedBytes = blob.size;
+      job.totalBytes = blob.size;
       emit();
     } else {
       const reader = response.body.getReader();
       const chunks: BlobPart[] = [];
       let received = 0;
       for (;;) {
+        if (ac.signal.aborted) {
+          reader.cancel().catch(() => {});
+          throw new DOMException("Aborted", "AbortError");
+        }
         const { done, value } = await reader.read();
         if (done) break;
         if (value) {
           chunks.push(value);
           received += value.byteLength;
+          job.receivedBytes = received;
           if (received > MEDIA_CACHE_MAX_BYTES) {
             reader.cancel().catch(() => {});
             throw new Error("文件过大，超过缓存上限");
@@ -287,11 +391,13 @@ async function runOne(job: MediaCacheJob): Promise<void> {
           } else {
             job.progress = -1;
           }
-          emit();
+          emitProgress();
         }
       }
       blob = new Blob(chunks, { type: mimeType || undefined });
       job.progress = 1;
+      job.receivedBytes = blob.size;
+      job.totalBytes = blob.size;
       emit();
     }
 
@@ -324,13 +430,21 @@ async function runOne(job: MediaCacheJob): Promise<void> {
     emit();
     toast.success(`「${job.title}」已缓存`);
   } catch (e: any) {
+    const current = jobs.get(job.mediaId);
     const aborted =
       e?.name === "AbortError" ||
       ac.signal.aborted ||
-      (jobs.get(job.mediaId)?.status === "cancelled");
+      current?.status === "cancelled" ||
+      current?.status === "paused";
     if (aborted) {
+      // pause 路径已把 status 设为 paused，保留 progress；cancel 则清零
+      if (current?.status === "paused") {
+        emit();
+        return;
+      }
       job.status = "cancelled";
       job.progress = 0;
+      job.receivedBytes = 0;
       emit();
       return;
     }

@@ -1,9 +1,19 @@
 /**
- * MediaCacheSheet — 移动端媒体本地缓存管理
+ * MediaCacheSheet — 移动端媒体本地缓存管理（进度 + 暂停/继续）
  */
 import React, { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { BottomSheet } from "@/components/common/BottomSheet";
-import { Film, Music, Trash2, Check, HardDrive, Loader2 } from "lucide-react";
+import {
+  Film,
+  Music,
+  Trash2,
+  Check,
+  HardDrive,
+  Loader2,
+  Pause,
+  Play,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   listMediaCacheMeta,
@@ -19,6 +29,11 @@ import {
   removeLocalMediaCaches,
   clearLocalMediaCache,
   cancelMediaCacheJob,
+  pauseMediaCacheJob,
+  resumeMediaCacheJob,
+  pauseAllMediaCache,
+  resumeAllMediaCache,
+  isMediaCacheQueuePaused,
   type MediaCacheJob,
 } from "@/lib/mediaCacheQueue";
 
@@ -27,10 +42,30 @@ function useQueueJobs(): MediaCacheJob[] {
   return getMediaCacheJobs();
 }
 
+function progressLabel(job: MediaCacheJob): string {
+  if (job.status === "queued") return "排队中";
+  if (job.status === "paused") {
+    if (job.progress > 0 && job.progress <= 1) {
+      return `已暂停 ${Math.round(job.progress * 100)}%`;
+    }
+    return "已暂停";
+  }
+  if (job.progress < 0) {
+    if (job.receivedBytes && job.receivedBytes > 0) {
+      return `下载中 ${formatBytes(job.receivedBytes)}`;
+    }
+    return "下载中…";
+  }
+  const pct = Math.round(Math.max(0, Math.min(1, job.progress)) * 100);
+  if (job.receivedBytes != null && job.totalBytes != null && job.totalBytes > 0) {
+    return `${pct}% · ${formatBytes(job.receivedBytes)} / ${formatBytes(job.totalBytes)}`;
+  }
+  return `${pct}%`;
+}
+
 export type MediaCacheSheetProps = {
   open: boolean;
   onClose: () => void;
-  /** 过滤：仅视频 / 仅音频 / 全部 */
   filterType?: "video" | "audio" | "all";
 };
 
@@ -45,9 +80,13 @@ export default function MediaCacheSheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const jobs = useQueueJobs();
+  const globallyPaused = isMediaCacheQueuePaused();
 
   const activeJobs = jobs.filter(
-    (j) => j.status === "queued" || j.status === "downloading",
+    (j) =>
+      j.status === "queued" ||
+      j.status === "downloading" ||
+      j.status === "paused",
   );
 
   const reload = useCallback(async () => {
@@ -122,9 +161,7 @@ export default function MediaCacheSheet({
     <BottomSheet
       open={open}
       onClose={onClose}
-      title="缓存管理"
-      // 必须给面板明确高度：仅 maxHeight 时 flex-1/min-h-0 子项会塌成 0，
-      // 只剩标题条贴在底部（用户看到「一片黑 + 底栏一条」）。
+      title="媒体缓存"
       maxHeight="min(88dvh, 100%)"
       className="h-[min(72dvh,100%)]"
       bodyClassName="px-0 pb-0 flex flex-col min-h-0 overflow-hidden"
@@ -147,7 +184,6 @@ export default function MediaCacheSheet({
       }
     >
       <div className="flex flex-col flex-1 min-h-0 h-full">
-        {/* Stats */}
         <div className="px-4 pb-3 flex items-center gap-3 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-accent-primary/10 text-accent-primary flex items-center justify-center shrink-0">
             <HardDrive size={18} />
@@ -160,47 +196,101 @@ export default function MediaCacheSheet({
               占用 {formatBytes(stats.totalBytes)}
             </p>
           </div>
+          {activeJobs.length > 0 && (
+            <button
+              type="button"
+              data-no-drag
+              onClick={() =>
+                globallyPaused || activeJobs.every((j) => j.status === "paused")
+                  ? resumeAllMediaCache()
+                  : pauseAllMediaCache()
+              }
+              className="min-h-11 px-3 rounded-xl border border-app-border text-xs font-semibold text-tx-secondary flex items-center gap-1.5"
+            >
+              {globallyPaused || activeJobs.every((j) => j.status === "paused") ? (
+                <>
+                  <Play size={14} /> 全部继续
+                </>
+              ) : (
+                <>
+                  <Pause size={14} /> 全部暂停
+                </>
+              )}
+            </button>
+          )}
         </div>
 
-        {/* Active downloads */}
         {activeJobs.length > 0 && (
-          <div className="px-4 pb-3 space-y-2 border-b border-app-border/60 shrink-0">
+          <div className="px-4 pb-3 space-y-2 border-b border-app-border/60 shrink-0 max-h-[40%] overflow-y-auto">
             <p className="text-[10px] font-bold uppercase tracking-wider text-tx-tertiary">
-              正在缓存
+              缓存任务 · {activeJobs.length}
             </p>
             {activeJobs.map((job) => (
               <div
                 key={job.mediaId}
-                className="flex items-center gap-3 min-h-11 rounded-xl bg-app-sidebar/40 border border-app-border/50 px-3 py-2"
+                className="flex items-center gap-2 min-h-11 rounded-xl bg-app-sidebar/40 border border-app-border/50 px-3 py-2"
               >
-                <Loader2 size={16} className="text-accent-primary animate-spin shrink-0" />
+                {job.status === "downloading" ? (
+                  <Loader2 size={16} className="text-accent-primary animate-spin shrink-0" />
+                ) : job.status === "paused" ? (
+                  <Pause size={16} className="text-amber-500 shrink-0" />
+                ) : (
+                  <HardDrive size={16} className="text-tx-tertiary shrink-0" />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-tx-primary truncate">{job.title}</p>
-                  <div className="mt-1 h-1 rounded-full bg-app-hover overflow-hidden">
+                  <div className="mt-1 h-1.5 rounded-full bg-app-hover overflow-hidden">
                     <div
-                      className="h-full bg-accent-primary rounded-full transition-[width] duration-fast ease-out"
-                      style={{
-                        width:
-                          job.progress < 0
-                            ? "30%"
-                            : `${Math.round(job.progress * 100)}%`,
-                      }}
+                      className={cn(
+                        "h-full rounded-full transition-[width] duration-fast ease-out",
+                        job.status === "paused" ? "bg-amber-500" : "bg-accent-primary",
+                        job.progress < 0 && job.status === "downloading" && "animate-pulse w-[35%]",
+                      )}
+                      style={
+                        job.progress < 0
+                          ? undefined
+                          : {
+                              width: `${Math.round(Math.max(0, Math.min(1, job.progress)) * 100)}%`,
+                            }
+                      }
                     />
                   </div>
+                  <p className="text-[10px] text-tx-tertiary mt-0.5 tabular-nums">
+                    {progressLabel(job)}
+                  </p>
                 </div>
+                {job.status === "paused" ? (
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 text-xs font-semibold text-accent-primary"
+                    onClick={() => resumeMediaCacheJob(job.mediaId)}
+                    aria-label="继续"
+                  >
+                    <Play size={16} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 text-xs font-semibold text-tx-secondary"
+                    onClick={() => pauseMediaCacheJob(job.mediaId)}
+                    aria-label="暂停"
+                  >
+                    <Pause size={16} />
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="min-h-11 min-w-11 text-xs font-semibold text-tx-secondary"
+                  className="min-h-11 min-w-11 text-xs font-semibold text-tx-tertiary"
                   onClick={() => cancelMediaCacheJob(job.mediaId)}
+                  aria-label="取消"
                 >
-                  取消
+                  <X size={16} />
                 </button>
               </div>
             ))}
           </div>
         )}
 
-        {/* List：占满中间可滚动区 */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
           {loading && items.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-tx-tertiary text-sm gap-2">
@@ -271,7 +361,6 @@ export default function MediaCacheSheet({
           )}
         </div>
 
-        {/* Bottom bar：固定在 sheet 底部，不进列表滚动 */}
         {items.length > 0 && (
           <div
             className={cn(
