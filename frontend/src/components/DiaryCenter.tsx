@@ -3063,6 +3063,7 @@ function DiaryEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const moodRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showFormatToolbar, setShowFormatToolbar] = useState(false);
 
   // 切换到另一条说说时重置（同 id 不覆盖用户正在编辑的草稿）
   useEffect(() => {
@@ -3070,6 +3071,7 @@ function DiaryEditor({
     setMood(item.mood || "");
     setVisibility(item.visibility || "PRIVATE");
     setEditorTags(item.tags || []);
+    setShowFormatToolbar(false);
     setImages(
       (item.images || []).map((id) => ({
         localKey: id,
@@ -3335,6 +3337,18 @@ function DiaryEditor({
           </button>
         </div>
 
+        {showFormatToolbar && (
+          <TextareaFormatToolbar
+            textareaRef={textareaRef}
+            value={text}
+            onChange={(val) => {
+              setText(val);
+              // 格式化后内容变长，跟一下高度
+              requestAnimationFrame(() => autoResize());
+            }}
+            className="mb-2"
+          />
+        )}
         <textarea
           ref={textareaRef}
           value={text}
@@ -3475,6 +3489,23 @@ function DiaryEditor({
           }
         >
           <ImagePlus size={18} />
+        </button>
+
+        {/* 格式 A 按钮（与新建说说一致） */}
+        <button
+          type="button"
+          onClick={() => setShowFormatToolbar((v) => !v)}
+          className={cn(
+            "flex items-center justify-center w-9 h-9 rounded-full text-xs font-bold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out shrink-0",
+            showFormatToolbar
+              ? "bg-accent-primary/15 text-accent-primary"
+              : "text-tx-tertiary hover:text-tx-secondary hover:bg-app-hover",
+          )}
+          title="排版格式"
+          aria-pressed={showFormatToolbar}
+          aria-label="排版格式"
+        >
+          A
         </button>
 
         {/* 超链接 */}

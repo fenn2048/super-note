@@ -40,6 +40,33 @@ export default function TextareaFormatToolbar({
   
   const formatMenuRef = useRef<HTMLDivElement>(null);
   const colorMenuRef = useRef<HTMLDivElement>(null);
+  /** 缓存选区：点工具栏时部分环境会先清空 selectionStart/End */
+  const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+
+  // 持续跟踪 textarea 选区
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const capture = () => {
+      selectionRef.current = {
+        start: el.selectionStart ?? 0,
+        end: el.selectionEnd ?? 0,
+      };
+    };
+    capture();
+    el.addEventListener("select", capture);
+    el.addEventListener("keyup", capture);
+    el.addEventListener("mouseup", capture);
+    el.addEventListener("touchend", capture);
+    el.addEventListener("input", capture);
+    return () => {
+      el.removeEventListener("select", capture);
+      el.removeEventListener("keyup", capture);
+      el.removeEventListener("mouseup", capture);
+      el.removeEventListener("touchend", capture);
+      el.removeEventListener("input", capture);
+    };
+  }, [textareaRef, value]);
 
   // Click outside to close menus
   useEffect(() => {
@@ -62,7 +89,26 @@ export default function TextareaFormatToolbar({
     };
   }, []);
 
+  const getSelection = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const liveStart = textarea.selectionStart ?? 0;
+      const liveEnd = textarea.selectionEnd ?? 0;
+      // 仍有非空选区时优先用 live；否则回退缓存（点工具栏后常被清空）
+      if (liveStart !== liveEnd) {
+        selectionRef.current = { start: liveStart, end: liveEnd };
+        return selectionRef.current;
+      }
+      if (selectionRef.current.start !== selectionRef.current.end) {
+        return selectionRef.current;
+      }
+      return { start: liveStart, end: liveEnd };
+    }
+    return selectionRef.current;
+  };
+
   const focusTextarea = (selStart: number, selEnd: number) => {
+    selectionRef.current = { start: selStart, end: selEnd };
     setTimeout(() => {
       const textarea = textareaRef.current;
       if (textarea) {
@@ -76,8 +122,7 @@ export default function TextareaFormatToolbar({
   const handleBold = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     const selected = value.substring(start, end);
     
     let newValue = "";
@@ -102,8 +147,7 @@ export default function TextareaFormatToolbar({
   const handleItalic = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     const selected = value.substring(start, end);
     
     let newValue = "";
@@ -128,8 +172,7 @@ export default function TextareaFormatToolbar({
   const handleMonospace = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     const selected = value.substring(start, end);
     
     let newValue = "";
@@ -154,8 +197,7 @@ export default function TextareaFormatToolbar({
   const handleLink = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     const selected = value.substring(start, end);
 
     let linkText = selected;
@@ -179,8 +221,7 @@ export default function TextareaFormatToolbar({
   const handleColor = (color: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     const selected = value.substring(start, end);
     
     const tagOpen = `<span style="color: ${color}">`;
@@ -198,8 +239,7 @@ export default function TextareaFormatToolbar({
   const handleClearColor = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     const selected = value.substring(start, end);
     
     const spanMatch = selected.match(/^<span style="color:\s*[^"]+">(.*)<\/span>$/s);
@@ -218,8 +258,7 @@ export default function TextareaFormatToolbar({
   ) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { start, end } = getSelection();
     
     // Find the full line boundary containing the selection
     const lineStart = value.lastIndexOf("\n", start - 1) + 1;
@@ -295,13 +334,24 @@ export default function TextareaFormatToolbar({
     { type: "checked", label: t("format.checkedList", "标记为已勾选"), icon: <Check size={14} /> },
   ] as const;
 
+  // 防止点工具栏时 textarea 失焦、选区被清空（移动端尤其明显）
+  const keepSelection = (e: React.MouseEvent | React.PointerEvent) => {
+    e.preventDefault();
+  };
+
   return (
-    <div className={cn("flex items-center gap-1.5 p-1 bg-app-elevated border border-app-border rounded-lg select-none relative w-fit mb-1.5", className)}>
-      
+    <div
+      className={cn(
+        "flex items-center gap-1.5 p-1 bg-app-elevated border border-app-border rounded-lg select-none relative w-fit mb-1.5",
+        className,
+      )}
+      onMouseDown={keepSelection}
+    >
       {/* Block Format Dropdown */}
       <div ref={formatMenuRef} className="relative">
         <button
           type="button"
+          onMouseDown={keepSelection}
           onClick={() => {
             setIsFormatOpen(!isFormatOpen);
             setIsColorOpen(false);
@@ -314,11 +364,15 @@ export default function TextareaFormatToolbar({
         </button>
 
         {isFormatOpen && (
-          <div className="absolute top-full left-0 mt-1.5 z-[150] w-[160px] p-1 bg-app-elevated border border-app-border rounded-lg shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
+          <div
+            className="absolute top-full left-0 mt-1.5 z-[150] w-[160px] p-1 bg-app-elevated border border-app-border rounded-lg shadow-xl animate-in fade-in slide-in-from-top-1 duration-100"
+            onMouseDown={keepSelection}
+          >
             {blockMenuItems.map((item) => (
               <button
                 key={item.type}
                 type="button"
+                onMouseDown={keepSelection}
                 onClick={() => handleBlockFormat(item.type)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-tx-primary hover:bg-app-hover rounded transition-colors text-left"
               >
@@ -335,6 +389,7 @@ export default function TextareaFormatToolbar({
       {/* Bold */}
       <button
         type="button"
+        onMouseDown={keepSelection}
         onClick={handleBold}
         className="p-1 rounded-md text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors"
         title={t("format.bold", "加粗")}
@@ -345,6 +400,7 @@ export default function TextareaFormatToolbar({
       {/* Italic */}
       <button
         type="button"
+        onMouseDown={keepSelection}
         onClick={handleItalic}
         className="p-1 rounded-md text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors"
         title={t("format.italic", "斜体")}
@@ -355,6 +411,7 @@ export default function TextareaFormatToolbar({
       {/* Monospace (等宽样式) */}
       <button
         type="button"
+        onMouseDown={keepSelection}
         onClick={handleMonospace}
         className="p-1 rounded-md text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors"
         title={t("format.monospace", "等宽样式")}
@@ -365,6 +422,7 @@ export default function TextareaFormatToolbar({
       {/* Link (超链接) */}
       <button
         type="button"
+        onMouseDown={keepSelection}
         onClick={handleLink}
         className="p-1 rounded-md text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors"
         title={t("format.link", "插入超链接")}
@@ -376,6 +434,7 @@ export default function TextareaFormatToolbar({
       <div ref={colorMenuRef} className="relative">
         <button
           type="button"
+          onMouseDown={keepSelection}
           onClick={() => {
             setIsColorOpen(!isColorOpen);
             setIsFormatOpen(false);
@@ -387,7 +446,10 @@ export default function TextareaFormatToolbar({
         </button>
 
         {isColorOpen && (
-          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-[150] w-[160px] p-2 bg-app-elevated border border-app-border rounded-lg shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
+          <div
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-[150] w-[160px] p-2 bg-app-elevated border border-app-border rounded-lg shadow-xl animate-in fade-in slide-in-from-top-1 duration-100"
+            onMouseDown={keepSelection}
+          >
             <p className="text-[10px] text-tx-tertiary mb-1.5 px-0.5 truncate">
               {t("format.selectColor", "选择字体颜色")}
             </p>
@@ -396,6 +458,7 @@ export default function TextareaFormatToolbar({
                 <button
                   key={color}
                   type="button"
+                  onMouseDown={keepSelection}
                   onClick={() => handleColor(color)}
                   style={{ backgroundColor: color }}
                   className="w-5 h-5 rounded-full [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 active:scale-95 shadow-sm border border-black/10 transition-transform"
@@ -405,6 +468,7 @@ export default function TextareaFormatToolbar({
             </div>
             <button
               type="button"
+              onMouseDown={keepSelection}
               onClick={handleClearColor}
               className="w-full text-center py-1 text-[10px] text-tx-secondary hover:text-tx-primary hover:bg-app-hover rounded border border-app-border transition-colors font-medium"
             >
@@ -413,7 +477,6 @@ export default function TextareaFormatToolbar({
           </div>
         )}
       </div>
-
     </div>
   );
 }

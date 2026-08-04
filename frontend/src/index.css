@@ -2876,7 +2876,136 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   margin: 0.4em 0;
 }
 
-/* ===== 说说渲染内容中 iframe (音视频嵌套) 样式 ===== */
+/* ===== 说说渲染内容（不依赖 @tailwindcss/typography） =====
+ * prose 类在本项目不生效；preflight 会清掉 list-style / 标题字重。
+ * 与 .shared-note-content 同思路，自给自足补回 MD 排版。
+ */
+.diary-rendered-content {
+  line-height: 1.8;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+.diary-rendered-content > :first-child {
+  margin-top: 0;
+}
+.diary-rendered-content > :last-child {
+  margin-bottom: 0;
+}
+.diary-rendered-content p {
+  margin: 0.55em 0;
+  line-height: 1.8;
+}
+/* 中文系统字体下仅靠 weight 常不明显：与 author-story 一致，用品牌色拉开对比 */
+.diary-rendered-content strong,
+.diary-rendered-content b {
+  font-weight: 700;
+  color: var(--color-accent-primary, #4f46e5);
+}
+.dark .diary-rendered-content strong,
+.dark .diary-rendered-content b {
+  color: #a5b4fc; /* indigo-300，深色下略提亮 */
+}
+.diary-rendered-content em,
+.diary-rendered-content i {
+  font-style: italic;
+}
+.diary-rendered-content h1,
+.diary-rendered-content h2,
+.diary-rendered-content h3,
+.diary-rendered-content h4,
+.diary-rendered-content h5,
+.diary-rendered-content h6 {
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0.9em 0 0.4em;
+  color: var(--color-text-primary, inherit);
+}
+.diary-rendered-content h1 { font-size: 1.35em; }
+.diary-rendered-content h2 { font-size: 1.2em; }
+.diary-rendered-content h3 { font-size: 1.1em; }
+.diary-rendered-content h4,
+.diary-rendered-content h5,
+.diary-rendered-content h6 { font-size: 1em; }
+.diary-rendered-content ul,
+.diary-rendered-content ol {
+  margin: 0.55em 0;
+  padding-left: 1.5em;
+}
+.diary-rendered-content ul {
+  list-style: disc;
+}
+.diary-rendered-content ol {
+  list-style: decimal;
+}
+.diary-rendered-content ul ul {
+  list-style: circle;
+}
+.diary-rendered-content li {
+  margin: 0.2em 0;
+  line-height: 1.8;
+  display: list-item;
+}
+.diary-rendered-content li > p {
+  margin: 0.15em 0;
+}
+.diary-rendered-content blockquote {
+  margin: 0.7em 0;
+  padding: 0.35em 0.9em;
+  border-left: 3px solid var(--color-accent-primary, #6366f1);
+  background: color-mix(in srgb, var(--color-accent-primary, #6366f1) 8%, transparent);
+  border-radius: 0 6px 6px 0;
+  color: var(--color-text-secondary, inherit);
+}
+.diary-rendered-content :not(pre) > code {
+  background: color-mix(in srgb, var(--color-accent-primary, #6366f1) 12%, transparent);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.diary-rendered-content pre {
+  margin: 0.7em 0;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--color-elevated, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--color-border);
+  font-size: 0.88em;
+}
+.diary-rendered-content pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+.diary-rendered-content a {
+  color: var(--color-accent-primary, #4f46e5);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.diary-rendered-content hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
+}
+.diary-rendered-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 0.5em 0;
+}
+/* GFM 任务列表 */
+.diary-rendered-content input[type="checkbox"] {
+  margin-right: 0.4em;
+  vertical-align: middle;
+}
+.diary-rendered-content li:has(> input[type="checkbox"]:checked),
+.diary-rendered-content li.task-list-item:has(input:checked) {
+  color: var(--color-text-tertiary, #a1a1aa);
+  text-decoration: line-through;
+}
+
+/* 说说渲染内容中 iframe (音视频嵌套) 样式 */
 .diary-rendered-content iframe {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -2892,12 +3021,6 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-/* 说说及说说评论行间距优化 */
-.diary-rendered-content,
-.diary-rendered-content p,
-.diary-rendered-content li {
-  line-height: 1.8 !important;
-}
 .diary-comment-text {
   line-height: 1.75 !important;
 }

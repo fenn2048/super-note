@@ -69,7 +69,7 @@ import {
 import { useWorkspaceFeaturesBootstrap } from "@/store/workspaceFeaturesStore";
 import type { TabId } from "@/components/SettingsModal";
 import AppSplashGate from "@/components/AppSplashGate";
-import { CreateFabButton } from "@/components/common/CreateMenu";
+import { CreateFabButton, DraggableFabAnchor } from "@/components/common/CreateMenu";
 import { syncWorkspaceSplash } from "@/lib/splashSync";
 import { getBackgroundResumeThresholdMs } from "@/lib/appResume";
 
@@ -1536,75 +1536,91 @@ function AppLayout() {
 
       {showMobileTabBar && <MobileTabBar visible={barsVisuallyVisible} />}
 
-      {/* 移动 FAB：根页；滚动隐栏时只藏视觉，不卸载 */}
+      {/* 移动 FAB：可拖拽；滚动隐栏时只藏视觉，不卸载 */}
       {showMobileFAB && (
-        <>
-          <div
-            className={cn(
-              "mobile-fab-anchor fixed right-4 z-rail-fab md:hidden transition-[transform,opacity,bottom] duration-panel ease-out",
-              barsVisuallyVisible
-                ? "opacity-100 translate-y-0 pointer-events-auto"
-                : "opacity-0 translate-y-4 pointer-events-none",
-            )}
-          >
-            <CreateFabButton
-              open={createMenuOpen}
-              onClick={() => setCreateMenuOpen(true)}
-            />
-          </div>
-          {createMenuOpen && (
-            <Suspense fallback={null}>
-              <CreateMenu
-                open={createMenuOpen && barsVisuallyVisible}
-                onClose={() => setCreateMenuOpen(false)}
-                className="right-4 bottom-[calc(5.5rem+var(--safe-area-bottom))] md:hidden"
-                showCamera={isNativePlatform()}
-                onAction={(action) => {
-                  if (action === "note") void quickCreateNote();
-                  else if (action === "diary") {
-                    setComposerInitialImages([]);
-                    setShowDiaryComposer(true);
-                  } else if (action === "task") {
-                    setShowTaskComposer(true);
-                  } else if (action === "camera") {
-                    setShowCameraModal(true);
-                  }
-                }}
+        <DraggableFabAnchor
+          storageKey="super-fab-pos-mobile"
+          sizePx={56}
+          variant="mobile"
+          className="md:hidden"
+          visuallyHidden={!barsVisuallyVisible}
+          onClick={() => setCreateMenuOpen(true)}
+        >
+          {({ dragging, onFabPointerDown, onFabClick }) => (
+            <>
+              {createMenuOpen && barsVisuallyVisible && (
+                <Suspense fallback={null}>
+                  <CreateMenu
+                    open={createMenuOpen && barsVisuallyVisible}
+                    onClose={() => setCreateMenuOpen(false)}
+                    className="absolute right-0 bottom-full mb-3 w-56"
+                    showCamera={isNativePlatform()}
+                    onAction={(action) => {
+                      if (action === "note") void quickCreateNote();
+                      else if (action === "diary") {
+                        setComposerInitialImages([]);
+                        setShowDiaryComposer(true);
+                      } else if (action === "task") {
+                        setShowTaskComposer(true);
+                      } else if (action === "camera") {
+                        setShowCameraModal(true);
+                      }
+                    }}
+                  />
+                </Suspense>
+              )}
+              <CreateFabButton
+                open={createMenuOpen}
+                dragging={dragging}
+                onPointerDown={onFabPointerDown}
+                onClick={onFabClick}
               />
-            </Suspense>
+            </>
           )}
-        </>
+        </DraggableFabAnchor>
       )}
 
-      {/* 桌面全局「+」：屏幕右下角常驻；书籍阅读 / 影院模式隐藏 */}
+      {/* 桌面全局「+」：可拖拽常驻；书籍阅读 / 影院模式隐藏 */}
       {showDesktopFAB && (
-        <div className="hidden md:flex fixed bottom-6 right-6 z-rail-fab flex-col items-end gap-3">
-          {createMenuOpen && (
-            <Suspense fallback={null}>
-              <CreateMenu
+        <DraggableFabAnchor
+          storageKey="super-fab-pos-desktop"
+          sizePx={72}
+          variant="desktop"
+          className="max-md:hidden"
+          onClick={() => setCreateMenuOpen((v) => !v)}
+        >
+          {({ dragging, onFabPointerDown, onFabClick }) => (
+            <>
+              {createMenuOpen && (
+                <Suspense fallback={null}>
+                  <CreateMenu
+                    open={createMenuOpen}
+                    onClose={() => setCreateMenuOpen(false)}
+                    className="absolute right-0 bottom-full mb-3"
+                    showCamera={false}
+                    onAction={(action) => {
+                      if (action === "note") void quickCreateNote();
+                      else if (action === "diary") {
+                        setComposerInitialImages([]);
+                        setShowDiaryComposer(true);
+                      } else if (action === "task") {
+                        setShowTaskComposer(true);
+                      }
+                    }}
+                  />
+                </Suspense>
+              )}
+              <CreateFabButton
+                size="lg"
+                jelly
                 open={createMenuOpen}
-                onClose={() => setCreateMenuOpen(false)}
-                className="absolute right-0 bottom-full mb-3"
-                showCamera={false}
-                onAction={(action) => {
-                  if (action === "note") void quickCreateNote();
-                  else if (action === "diary") {
-                    setComposerInitialImages([]);
-                    setShowDiaryComposer(true);
-                  } else if (action === "task") {
-                    setShowTaskComposer(true);
-                  }
-                }}
+                dragging={dragging}
+                onPointerDown={onFabPointerDown}
+                onClick={onFabClick}
               />
-            </Suspense>
+            </>
           )}
-          <CreateFabButton
-            size="lg"
-            jelly
-            open={createMenuOpen}
-            onClick={() => setCreateMenuOpen((v) => !v)}
-          />
-        </div>
+        </DraggableFabAnchor>
       )}
 
       {showCameraModal && (
