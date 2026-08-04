@@ -11,6 +11,7 @@ import {
   ClipboardPaste,
   ExternalLink,
   Palette,
+  Clock,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -31,17 +32,21 @@ import {
   extractTimeHm,
   shiftFieldByDays,
   shiftWallClock,
+  taskDateOnly,
+  taskDurationMinutes,
   toLocalYmd,
   ymdToDate,
 } from "./dateUtils";
 import { filterTasksByProjectStatus, flattenStageTasks } from "./taskUtils";
 import { useTaskClipboard } from "./clipboard";
 import CreateTaskModal from "./CreateTaskModal";
+import SetTaskScheduleModal, { type ScheduleSavePayload } from "./SetTaskScheduleModal";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import MonthView from "./views/MonthView";
 import DayView from "./views/DayView";
 import WeekView from "./views/WeekView";
 import YearView from "./views/YearView";
+import type { DayDropPayload, TaskTimeChangePayload } from "./TimeGrid";
 import { DEFAULT_CAL_COLOR, nextCreateColorKey, resolveTaskColorKey } from "./taskColors";
 
 function loadViewMode(): CalendarViewMode {
@@ -93,6 +98,8 @@ export default function ProjectCalendar({
   const [dragOverYmd, setDragOverYmd] = useState<string | null>(null);
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
   const suppressDayClickRef = useRef(false);
+  const [scheduleTask, setScheduleTask] = useState<CalendarTask | null>(null);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
 
   useEffect(() => {
     try {
@@ -230,6 +237,9 @@ export default function ProjectCalendar({
     }
   };
 
+  /**
+   * 按天平移（月视图 / 全天行）：保留原有时刻，整体挪日期。
+   */
   const moveTaskToDate = async (task: ProjectTask, sourceYmd: string, targetYmd: string) => {
     if (!targetYmd || sourceYmd === targetYmd) return;
     const dayDelta = daysBetweenYmd(sourceYmd, targetYmd);
@@ -267,6 +277,120 @@ export default function ProjectCalendar({
     }
   };
 
+  /**
+   * 日/周时间格落点：设定新开始时刻，保持原时长同步挪截止时间。
+   */
+  const moveTaskToDateTime = async (
+    task: ProjectTask,
+    targetYmd: string,
+    dropHm: string,
+  ) => {
+    const duration = taskDurationMinutes(task.startDate, task.endDate) || 60;
+    const nextStart = combineDateTime(targetYmd, dropHm);
+    const nextEnd = shiftWallClock(nextStart, duration);
+
+    let nextRemind: string | null = null;
+    if (task.remindAt && task.startDate) {
+      const oldStart = task.startDate.includes("T")
+        ? task.startDate
+        : task.startDate.includes(" ")
+          ? task.startDate
+          : `${taskDateOnly(task.startDate)} 09:00`;
+      const oldRemind = task.remindAt.includes(" ") || task.remindAt.includes("T")
+        ? task.remindAt
+        : `${taskDateOnly(task.remindAt)} 09:00`;
+      try {
+        const a = Date.parse(oldStart.replace(" ", "T"));
+        const b = Date.parse(oldRemind.replace(" ", "T"));
+        if (Number.isFinite(a) && Number.isFinite(b)) {
+          const offsetMin = Math.round((b - a) / 60000);
+          nextRemind = shiftWallClock(nextStart, offsetMin);
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    if (!nextRemind) {
+      nextRemind = shiftWallClock(nextStart, -5);
+    }
+
+    setMovingTaskId(task.id);
+    try {
+      await api.updateProjectTask(task.id, {
+        startDate: nextStart,
+        endDate: nextEnd,
+        remindAt: nextRemind,
+      });
+      toast.success(`已调整为 ${nextStart} – ${extractTimeHm(nextEnd) || ""}`);
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(err?.message || "调整时间失败");
+    } finally {
+      setMovingTaskId(null);
+    }
+  };
+
+  /** 边缘拖拽：直接写死起止时刻（同日） */
+  const applyTaskTimeChange = async (payload: TaskTimeChangePayload) => {
+    const { task, ymd, startHm, endHm } = payload;
+    const nextStart = combineDateTime(ymd, startHm);
+    const nextEnd = combineDateTime(ymd, endHm);
+    if (nextEnd < nextStart) {
+      toast.error("截止时间不能早于开始时间");
+      return;
+    }
+    let nextRemind = task.remindAt
+      ? shiftWallClock(nextStart, -5)
+      : shiftWallClock(nextStart, -5);
+    // 尽量保留相对开始的提醒偏移
+    if (task.remindAt && task.startDate && extractTimeHm(task.startDate)) {
+      try {
+        const a = Date.parse(String(task.startDate).replace(" ", "T"));
+        const b = Date.parse(String(task.remindAt).replace(" ", "T"));
+        if (Number.isFinite(a) && Number.isFinite(b)) {
+          nextRemind = shiftWallClock(nextStart, Math.round((b - a) / 60000));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    setMovingTaskId(task.id);
+    try {
+      await api.updateProjectTask(task.id, {
+        startDate: nextStart,
+        endDate: nextEnd,
+        remindAt: nextRemind,
+      });
+      toast.success(`时间已更新 ${startHm}–${endHm}`);
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(err?.message || "更新时间失败");
+    } finally {
+      setMovingTaskId(null);
+    }
+  };
+
+  const saveTaskSchedule = async (payload: ScheduleSavePayload) => {
+    if (!scheduleTask) return;
+    setScheduleSaving(true);
+    try {
+      const nextRemind = shiftWallClock(payload.startDate, -5);
+      await api.updateProjectTask(scheduleTask.id, {
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        remindAt: nextRemind,
+      });
+      toast.success(`已设置 ${payload.startDate} – ${payload.endDate}`);
+      setScheduleTask(null);
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(err?.message || "设置时间失败");
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
   const onTaskDragStart = (e: React.DragEvent, task: CalendarTask, sourceYmd: string) => {
     e.stopPropagation();
     const payload = JSON.stringify({ taskId: task.id, sourceYmd });
@@ -299,11 +423,14 @@ export default function ProjectCalendar({
     if (dragOverYmd === ymd) setDragOverYmd(null);
   };
 
-  const onDayDrop = async (e: React.DragEvent, targetYmd: string) => {
+  const onDayDrop = async (e: React.DragEvent, payload: DayDropPayload) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverYmd(null);
     suppressDayClickRef.current = true;
+
+    const { targetYmd, dropHm } = payload;
+    if (!targetYmd) return;
 
     let raw = e.dataTransfer.getData(CAL_TASK_DRAG_MIME);
     if (!raw) raw = e.dataTransfer.getData("text/plain");
@@ -311,13 +438,24 @@ export default function ProjectCalendar({
 
     try {
       const { taskId, sourceYmd } = JSON.parse(raw) as { taskId: string; sourceYmd: string };
-      if (!taskId || !sourceYmd || sourceYmd === targetYmd) return;
+      if (!taskId || !sourceYmd) return;
       const task = tasks.find((t) => t.id === taskId);
       if (!task) {
         toast.error("找不到要移动的任务");
         return;
       }
-      await moveTaskToDate(task, sourceYmd, targetYmd);
+
+      if (dropHm) {
+        // 日/周时间格：改开始 + 保持时长
+        const curStartYmd = taskDateOnly(task.startDate) || sourceYmd;
+        const curStartHm = extractTimeHm(task.startDate) || extractTimeHm(task.endDate);
+        if (curStartYmd === targetYmd && curStartHm === dropHm) return;
+        await moveTaskToDateTime(task, targetYmd, dropHm);
+      } else {
+        // 月视图 / 全天行：仅改日期
+        if (sourceYmd === targetYmd) return;
+        await moveTaskToDate(task, sourceYmd, targetYmd);
+      }
     } catch {
       toast.error("拖拽数据无效");
     } finally {
@@ -441,6 +579,7 @@ export default function ProjectCalendar({
     if (menu.targetType === "task" && ctxTask) {
       return [
         { id: "open", label: "打开详情", icon: <ExternalLink size={14} /> },
+        { id: "schedule", label: "设置时间…", icon: <Clock size={14} /> },
         { id: "color", label: "更改颜色", icon: <Palette size={14} /> },
         { id: "sep1", label: "", separator: true },
         { id: "copy", label: "复制", icon: <Copy size={14} /> },
@@ -476,6 +615,10 @@ export default function ProjectCalendar({
     if (targetType === "task" && task) {
       if (actionId === "open") {
         onTaskClick?.(task);
+        return;
+      }
+      if (actionId === "schedule") {
+        setScheduleTask(task);
         return;
       }
       if (actionId === "color") {
@@ -574,6 +717,7 @@ export default function ProjectCalendar({
     onDayDrop,
     onTaskDragStart,
     onTaskDragEnd,
+    onTaskTimeChange: (p: TaskTimeChangePayload) => void applyTaskTimeChange(p),
     draggingTaskId,
     dragOverYmd,
     onDayDragOver,
@@ -746,6 +890,14 @@ export default function ProjectCalendar({
         onEndTimeChange={setCreateEndTime}
         onProjectChange={setCreateProjectId}
         onColorChange={setCreateColor}
+      />
+
+      <SetTaskScheduleModal
+        open={!!scheduleTask}
+        task={scheduleTask}
+        saving={scheduleSaving}
+        onClose={() => !scheduleSaving && setScheduleTask(null)}
+        onSave={(p) => void saveTaskSchedule(p)}
       />
 
       {colorPicker &&

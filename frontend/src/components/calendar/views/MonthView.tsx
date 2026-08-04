@@ -30,7 +30,7 @@ interface MonthViewProps {
   onTaskDragEnd: () => void;
   onDayDragOver: (e: React.DragEvent, ymd: string) => void;
   onDayDragLeave: (e: React.DragEvent, ymd: string) => void;
-  onDayDrop: (e: React.DragEvent, targetYmd: string) => void;
+  onDayDrop: (e: React.DragEvent, payload: { targetYmd: string; dropHm?: string }) => void;
   onPaste?: (ymd: string) => void;
   onDrillDay?: (d: Date) => void;
 }
@@ -137,7 +137,7 @@ export default function MonthView({
               onContextMenu={(e) => onDayContextMenu(e, cell.date)}
               onDragOver={(e) => onDayDragOver(e, cellYmd)}
               onDragLeave={(e) => onDayDragLeave(e, cellYmd)}
-              onDrop={(e) => void onDayDrop(e, cellYmd)}
+              onDrop={(e) => void onDayDrop(e, { targetYmd: cellYmd })}
               className={cn(
                 "min-h-0 flex flex-col p-1.5 space-y-1 transition-colors cursor-pointer",
                 cell.isCurrentMonth ? "bg-app-bg" : "bg-app-sidebar/45 opacity-55",

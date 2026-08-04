@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import type { CalendarTask } from "../types";
-import TimeGrid from "../TimeGrid";
+import TimeGrid, { type DayDropPayload, type TaskTimeChangePayload } from "../TimeGrid";
 import { weekDaysFrom } from "../dateUtils";
 
 interface WeekViewProps {
@@ -10,9 +10,10 @@ interface WeekViewProps {
   onTaskContextMenu: (e: React.MouseEvent, task: CalendarTask) => void;
   onEmptyClick: (ymd: string, startHm: string, endHm: string) => void;
   onEmptyContextMenu: (e: React.MouseEvent, ymd: string) => void;
-  onDayDrop: (e: React.DragEvent, targetYmd: string) => void;
+  onDayDrop: (e: React.DragEvent, payload: DayDropPayload) => void;
   onTaskDragStart: (e: React.DragEvent, task: CalendarTask, sourceYmd: string) => void;
   onTaskDragEnd: () => void;
+  onTaskTimeChange?: (payload: TaskTimeChangePayload) => void;
   draggingTaskId: string | null;
   dragOverYmd: string | null;
   onDayDragOver: (e: React.DragEvent, ymd: string) => void;
@@ -36,6 +37,7 @@ export default function WeekView(props: WeekViewProps) {
           onDayDrop={props.onDayDrop}
           onTaskDragStart={props.onTaskDragStart}
           onTaskDragEnd={props.onTaskDragEnd}
+          onTaskTimeChange={props.onTaskTimeChange}
           draggingTaskId={props.draggingTaskId}
           dragOverYmd={props.dragOverYmd}
           onDayDragOver={props.onDayDragOver}

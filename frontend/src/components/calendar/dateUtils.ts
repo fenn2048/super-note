@@ -93,6 +93,53 @@ export function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+/** 分钟数（0–1439）→ HH:mm */
+export function minutesToHm(totalMins: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, Math.round(totalMins)));
+  return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`;
+}
+
+/** 对齐到 step 分钟（默认 15） */
+export function snapMinutes(totalMins: number, step = 15): number {
+  const s = Math.max(1, step);
+  return Math.round(totalMins / s) * s;
+}
+
+/**
+ * 任务时长（分钟）。若缺 end 或 end≤start，默认 60。
+ * 跨天时按墙钟差；仅日期无时间时视为 0（全天）。
+ */
+export function taskDurationMinutes(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+): number {
+  const startHm = extractTimeHm(startDate);
+  const endHm = extractTimeHm(endDate);
+  if (!startHm && !endHm) return 0;
+  const s = minutesFromMidnight(startHm || endHm || "09:00") ?? 9 * 60;
+  const e = minutesFromMidnight(endHm || startHm || "10:00") ?? s + 60;
+  if (e > s) return e - s;
+  // 跨日或 end≤start：用完整 datetime 差值
+  if (startDate && endDate) {
+    const a = Date.parse(startDate.replace(" ", "T"));
+    const b = Date.parse(endDate.replace(" ", "T"));
+    if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
+      return Math.round((b - a) / 60000);
+    }
+  }
+  return 60;
+}
+
+/** 把 field 的日期/时间换成新 ymd + 可选 hm；无 hm 则保留原时刻或仅日期 */
+export function replaceDateKeepingTime(
+  field: string | null | undefined,
+  ymd: string,
+  hm?: string | null,
+): string {
+  const time = hm || extractTimeHm(field);
+  return time ? combineDateTime(ymd, time) : ymd;
+}
+
 /** Default short slot for create: snap today to next half-hour, else 09:00–10:00. */
 export function defaultSlotForYmd(ymd: string): { start: string; end: string } {
   const now = new Date();
