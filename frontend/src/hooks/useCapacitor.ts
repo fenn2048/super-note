@@ -214,6 +214,60 @@ function applyAndroidSystemBarsColors(statusHex: string, navHex: string, lightIc
   }
 }
 
+type AndroidSystemBarsBridge = {
+  setColors?: (s: string, n: string, light: boolean) => void;
+  setLight?: (light: boolean) => void;
+  /** 视频全屏：隐藏状态栏 + 导航栏 */
+  setImmersive?: (immersive: boolean) => void;
+};
+
+function getAndroidSystemBarsBridge(): AndroidSystemBarsBridge | undefined {
+  try {
+    return (window as unknown as { AndroidSystemBarsBridge?: AndroidSystemBarsBridge })
+      .AndroidSystemBarsBridge;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Android 视频全屏沉浸态：隐藏系统状态栏与导航栏。
+ * - 优先原生 WindowInsetsController（targetSdk 35 可靠）
+ * - 并调用 Capacitor StatusBar.hide/show 双保险
+ * 退出全屏时务必 setNativeImmersive(false) 恢复。
+ */
+export function setNativeImmersive(immersive: boolean) {
+  if (!isNativePlatform()) return;
+  try {
+    if (immersive) {
+      document.documentElement.setAttribute("data-video-immersive", "true");
+    } else {
+      document.documentElement.removeAttribute("data-video-immersive");
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const bridge = getAndroidSystemBarsBridge();
+  try {
+    bridge?.setImmersive?.(immersive);
+  } catch {
+    /* ignore */
+  }
+
+  if (immersive) {
+    StatusBar.hide().catch(() => {});
+  } else {
+    StatusBar.show().catch(() => {});
+    // 恢复主题色系统栏（hide 之后颜色/图标可能被系统重置）
+    window.setTimeout(() => {
+      if (!document.documentElement.hasAttribute("data-video-immersive")) {
+        syncStatusBarToAppTheme();
+      }
+    }, 80);
+  }
+}
+
 /**
  * 同步原生状态栏图标/背景色。
  * - isDarkSurface=true（深色背景）→ 白色时间/信号/电量（Style.Dark）
@@ -329,13 +383,18 @@ export function useStatusBarSync() {
     syncStatusBarToAppTheme();
 
     // 监听 <html> 的 class 变化（next-themes 通过修改 class 切换主题）
-    // 阅读器占用期间 html[data-reader-status-bar] 存在则跳过，避免覆盖阅读主题
+    // 阅读器 / 视频全屏沉浸态期间跳过，避免刷系统栏把 hide 顶掉
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          if (!document.documentElement.hasAttribute("data-reader-status-bar")) {
-            syncStatusBarToAppTheme();
+          const root = document.documentElement;
+          if (
+            root.hasAttribute("data-reader-status-bar") ||
+            root.hasAttribute("data-video-immersive")
+          ) {
+            return;
           }
+          syncStatusBarToAppTheme();
         }
       }
     });

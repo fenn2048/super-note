@@ -17,7 +17,7 @@ import {
   updateNativeMediaPosition,
   updateNativeMediaSession,
 } from "@/lib/nativeMedia";
-import { isNativePlatform } from "@/hooks/useCapacitor";
+import { isNativePlatform, setNativeImmersive } from "@/hooks/useCapacitor";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import {
   acquireLocalPlayUrl,
@@ -247,6 +247,8 @@ export default function MediaPlayer({
       /* ignore */
     }
     void restorePortraitOrientation();
+    // 退出全屏：恢复 Android 状态栏/导航栏
+    setNativeImmersive(false);
     setIsFullscreen(false);
     isFullscreenRef.current = false;
     onExitFullscreen?.();
@@ -745,15 +747,24 @@ export default function MediaPlayer({
         if (fs) {
           // 立即锁横屏 + 短延迟重试（Android 全屏动画结束后再锁更稳）
           void lockLandscape();
+          // Android：隐藏状态栏/导航栏进入真正沉浸（点击收起控件后也保持）
+          setNativeImmersive(true);
           window.setTimeout(() => {
-            if (isFullscreenRef.current) void lockLandscape();
+            if (isFullscreenRef.current) {
+              void lockLandscape();
+              setNativeImmersive(true);
+            }
           }, 120);
           window.setTimeout(() => {
-            if (isFullscreenRef.current) void lockLandscape();
+            if (isFullscreenRef.current) {
+              void lockLandscape();
+              setNativeImmersive(true);
+            }
           }, 360);
         } else {
-          // 非「返回并暂停」路径（点播放器自带退出全屏）也回到竖屏
+          // 非「返回并暂停」路径（点播放器自带退出全屏）也回到竖屏 + 恢复系统栏
           void restorePortraitOrientation();
+          setNativeImmersive(false);
         }
       };
 
@@ -889,6 +900,14 @@ export default function MediaPlayer({
       player.on("fullscreenWeb", (state: boolean) => {
         applyFullscreenUi(!!state);
       });
+      // 全屏下控件显示/隐藏（点击进入沉浸态）：再次确保系统栏隐藏
+      // art-control-show 去掉后仍可能被主题 sync 顶出状态栏，这里跟一次
+      player.on("control", (shown: boolean) => {
+        if (!isFullscreenRef.current || !isNativePlatform()) return;
+        if (!shown) {
+          setNativeImmersive(true);
+        }
+      });
     } catch (err: any) {
       if (!active.current) return;
       setError(err.message || "获取播放链接失败，请检查 /fs/get 接口是否正常。");
@@ -904,6 +923,8 @@ export default function MediaPlayer({
     return () => {
       active.current = false;
       void unlockOrientation();
+      // 组件卸载时务必恢复系统栏，避免卡在沉浸态
+      setNativeImmersive(false);
       if (playerRef.current) {
         const time = playerRef.current.currentTime;
         if (time > 0) {

@@ -48,6 +48,8 @@ public class MainActivity extends BridgeActivity {
     private int statusBarColor = Color.parseColor("#F3EFE6");
     private int navigationBarColor = Color.parseColor("#FFFAF2");
     private boolean lightSystemBars = true;
+    /** 视频全屏等：隐藏状态栏 + 导航栏；主题色变更后需重新 hide */
+    private boolean immersiveMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,6 +128,21 @@ public class MainActivity extends BridgeActivity {
         if (controller != null) {
             controller.setAppearanceLightStatusBars(lightSystemBars);
             controller.setAppearanceLightNavigationBars(lightSystemBars);
+            // 沉浸态：真正隐藏系统栏（非透明叠在视频上）
+            if (immersiveMode) {
+                controller.hide(
+                    WindowInsetsCompat.Type.statusBars()
+                        | WindowInsetsCompat.Type.navigationBars()
+                );
+                controller.setSystemBarsBehavior(
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                );
+            } else {
+                controller.show(
+                    WindowInsetsCompat.Type.statusBars()
+                        | WindowInsetsCompat.Type.navigationBars()
+                );
+            }
         }
     }
 
@@ -152,6 +169,7 @@ public class MainActivity extends BridgeActivity {
     /**
      * 前端主题切换时同步系统栏颜色（浅色纸感 / 深色墨底）。
      * 入参为 #RRGGBB 或 #AARRGGBB。
+     * setImmersive：视频全屏横屏时隐藏状态栏/导航栏；退出后恢复。
      */
     public class AndroidSystemBarsBridge {
         @JavascriptInterface
@@ -184,6 +202,22 @@ public class MainActivity extends BridgeActivity {
                     navigationBarColor = Color.parseColor("#252033");
                 }
                 applySystemBars();
+            });
+        }
+
+        /**
+         * @param immersive true = 隐藏状态栏 + 导航栏（边缘轻扫可短暂唤出）
+         */
+        @JavascriptInterface
+        public void setImmersive(boolean immersive) {
+            runOnUiThread(() -> {
+                try {
+                    immersiveMode = immersive;
+                    applySystemBars();
+                    AppLogger.i(TAG, "setImmersive=" + immersive);
+                } catch (Exception e) {
+                    AppLogger.w(TAG, "setImmersive failed: " + e.getMessage());
+                }
             });
         }
     }
