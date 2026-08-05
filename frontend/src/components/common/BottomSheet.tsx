@@ -29,8 +29,6 @@ import {
   rubberband,
   springs,
   springWithVelocity,
-  easings,
-  durations,
 } from "@/lib/motion";
 import useReducedMotion from "@/hooks/useReducedMotion";
 
@@ -378,13 +376,14 @@ export function BottomSheet({
           }
           // 根节点只做 opacity exit；y 由 panel 的 motion value 负责，避免双重 y
           initial={false}
-          exit={
-            reduce
-              ? { opacity: 0 }
+          exit={{
+            opacity: 0,
+            transition: reduce
+              ? { duration: 0 }
               : dismissedOffscreen.current
-                ? { opacity: 0, transition: { duration: 0.12, ease: easings.out } }
-                : { opacity: 0, transition: { duration: durations.fast } }
-          }
+                ? { duration: 0.12, ease: [0.23, 1, 0.32, 1] as const }
+                : { duration: 0.15 },
+          }}
         >
           <motion.button
             type="button"
@@ -430,8 +429,8 @@ export function BottomSheet({
               boxSizing: "border-box",
             }}
             initial={false}
-            // panel 的 y 已由 dismiss tween 推到屏外 → exit 不再动 y
-            exit={false}
+            // panel 的 y 已由 dismiss tween 推到屏外 → exit 不再动 y（保持当前 transform）
+            exit={{ opacity: 1, transition: { duration: 0 } }}
             drag={dragEnabled ? "y" : false}
             dragControls={dragControls}
             dragListener={false}
