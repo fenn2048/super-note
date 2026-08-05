@@ -2432,6 +2432,87 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+
+  // v44：任务统计地基 — 事务分类树 / completedAt / 状态事件
+  {
+    version: 44,
+    name: "task-analytics-foundation",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_categories (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT,
+          ownerUserId TEXT NOT NULL,
+          parentId TEXT,
+          code TEXT NOT NULL,
+          name TEXT NOT NULL,
+          color TEXT DEFAULT NULL,
+          sortOrder INTEGER DEFAULT 0,
+          isActive INTEGER DEFAULT 1,
+          isPreset INTEGER DEFAULT 0,
+          kind TEXT DEFAULT 'normal',
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (parentId) REFERENCES task_categories(id) ON DELETE SET NULL,
+          FOREIGN KEY (ownerUserId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_categories_ws
+          ON task_categories(workspaceId, ownerUserId);
+        CREATE INDEX IF NOT EXISTS idx_task_categories_parent
+          ON task_categories(parentId);
+        CREATE INDEX IF NOT EXISTS idx_task_categories_code
+          ON task_categories(workspaceId, ownerUserId, code);
+
+        CREATE TABLE IF NOT EXISTS task_status_events (
+          id TEXT PRIMARY KEY,
+          taskId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          fromStatus TEXT,
+          toStatus TEXT NOT NULL,
+          at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (taskId) REFERENCES project_tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_status_events_task
+          ON task_status_events(taskId, at);
+        CREATE INDEX IF NOT EXISTS idx_task_status_events_at
+          ON task_status_events(at);
+      `);
+
+      const ptCols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!ptCols.some((c) => c.name === "categoryId")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN categoryId TEXT DEFAULT NULL;");
+      }
+      if (!ptCols.some((c) => c.name === "completedAt")) {
+        db.exec("ALTER TABLE project_tasks ADD COLUMN completedAt TEXT DEFAULT NULL;");
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_category
+          ON project_tasks(categoryId);
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_completed_at
+          ON project_tasks(completedAt);
+      `);
+
+      // 已完成任务回填 completedAt（用 updatedAt 近似，便于历史 Cycle 降级）
+      db.exec(`
+        UPDATE project_tasks
+        SET completedAt = COALESCE(completedAt, updatedAt)
+        WHERE COALESCE(isCompleted, 0) = 1 AND completedAt IS NULL;
+      `);
+    },
+  },
+
+  // v45：任务分类说明（小类释义，供选择器气泡 / 管理页展示）
+  {
+    version: 45,
+    name: "task-categories-description",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(task_categories)").all() as { name: string }[];
+      if (!cols.some((c) => c.name === "description")) {
+        db.exec("ALTER TABLE task_categories ADD COLUMN description TEXT DEFAULT NULL;");
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

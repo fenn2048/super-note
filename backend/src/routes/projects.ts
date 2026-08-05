@@ -11,6 +11,7 @@ import {
   ensurePersonalTodoProject,
   PERSONAL_TODO,
 } from "../lib/defaultTodoProject.js";
+import { applyTaskLifecycleHooks, recordTaskStatusEvent } from "../services/task-status-events.js";
 
 const projectsRouter = new Hono();
 
@@ -707,6 +708,7 @@ projectsRouter.post("/:id/tasks", async (c) => {
     reminderOffsetValue = 1,
     reminderOffsetUnit = "day",
     recurrenceEndDate = null,
+    categoryId = null,
   } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
@@ -744,9 +746,16 @@ projectsRouter.post("/:id/tasks", async (c) => {
   }
 
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, status, assigneeId, startDate, calculatedEndDate, description, cover, sortOrder, userId, userId, priority, calculatedRemindAt, titleColor, progress, isRecurring, typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule), reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate);
+    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, categoryId)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(taskId, id, stageId, title, status, assigneeId, startDate, calculatedEndDate, description, cover, sortOrder, userId, userId, priority, calculatedRemindAt, titleColor, progress, isRecurring, typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule), reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, categoryId || null);
+
+  recordTaskStatusEvent(db, {
+    taskId,
+    userId,
+    fromStatus: null,
+    toStatus: status || "pending",
+  });
 
   // Add dependencies
   if (Array.isArray(dependencies)) {
@@ -792,7 +801,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, dependencies } = body;
+  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, dependencies, categoryId } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -920,6 +929,21 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (reminderOffsetValue !== undefined) { updates.push("reminderOffsetValue = ?"); params.push(reminderOffsetValue); }
   if (reminderOffsetUnit !== undefined) { updates.push("reminderOffsetUnit = ?"); params.push(reminderOffsetUnit); }
   if (recurrenceEndDate !== undefined) { updates.push("recurrenceEndDate = ?"); params.push(recurrenceEndDate); }
+  if (categoryId !== undefined) { updates.push("categoryId = ?"); params.push(categoryId || null); }
+
+  // 生命周期：completedAt + status events
+  const life = applyTaskLifecycleHooks(db, {
+    taskId,
+    userId,
+    prev: { status: task.status, isCompleted: task.isCompleted },
+    next: {
+      status: status !== undefined ? status : task.status,
+      isCompleted: finalIsCompleted !== undefined ? finalIsCompleted : task.isCompleted,
+    },
+  });
+  if (life.completedAtSql) {
+    updates.push(life.completedAtSql);
+  }
 
   if (updates.length > 0) {
     updates.push("modifierId = ?");

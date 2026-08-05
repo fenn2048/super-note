@@ -2,13 +2,25 @@ import { Hono } from "hono";
 import { getDb } from "../db/schema.js";
 import { v4 as uuid } from "uuid";
 import { logAudit } from "../services/audit.js";
-import { canManageResource } from "../middleware/acl.js";
+import { canManageResource, getUserWorkspaceRole } from "../middleware/acl.js";
 import { handleRecurringTask } from "../lib/recurrence.js";
 import { broadcastToWorkspace } from "../lib/mentions.js";
 import { createMentions } from "../lib/mentions.js";
 import { calculateRemindAt } from "../lib/reminders.js";
 import { getNextOccurrenceString } from "../lib/recurrence.js";
 import { ensureDefaultTodoProject } from "../lib/defaultTodoProject.js";
+import {
+  applyFamilyTaxonomyPreset,
+  backfillPresetDescriptions,
+  buildCategoryTree,
+  createTaskCategory,
+  listTaskCategories,
+} from "../services/task-taxonomy.js";
+import {
+  buildTaskAnalyticsMarkdown,
+  computeTaskAnalytics,
+  resolvePeriod,
+} from "../services/task-analytics.js";
 
 const tasks = new Hono();
 
@@ -221,6 +233,407 @@ tasks.get("/", (c) => {
   }
 
   return c.json(rows.map(mapProjectTaskToLegacy));
+});
+
+// ─── 静态路径必须在 /:id 之前注册，否则会被当成任务 id ────────────────
+
+function normalizeWs(raw: string | null | undefined): string | null {
+  if (!raw || raw === "personal") return null;
+  return raw;
+}
+
+// 任务统计摘要（project_tasks 为主）
+tasks.get("/stats/summary", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const workspaceId = c.req.query("workspaceId") || null;
+  const ws = workspaceId && workspaceId !== "personal" ? workspaceId : null;
+
+  const projectScope = ws
+    ? `p.isDeleted = 0 AND p.workspaceId = ?
+       AND (pt.assigneeId = ? OR pt.creatorId = ? OR p.ownerId = ?
+            OR EXISTS(SELECT 1 FROM project_members pm WHERE pm.projectId = p.id AND pm.userId = ?))`
+    : `p.isDeleted = 0 AND (p.workspaceId IS NULL OR p.workspaceId = '')
+       AND (pt.assigneeId = ? OR pt.creatorId = ? OR p.ownerId = ?)`;
+  const projectParams = ws
+    ? [ws, userId, userId, userId, userId]
+    : [userId, userId, userId];
+
+  const countPt = (extra: string) => {
+    try {
+      const row = db
+        .prepare(
+          `
+        SELECT COUNT(*) as count
+        FROM project_tasks pt
+        JOIN projects p ON p.id = pt.projectId
+        WHERE ${projectScope} AND ${extra}
+      `,
+        )
+        .get(...projectParams) as { count: number } | undefined;
+      return row?.count ?? 0;
+    } catch {
+      return 0;
+    }
+  };
+
+  let total = 0;
+  let completed = 0;
+  try {
+    total =
+      (
+        db
+          .prepare(
+            `
+        SELECT COUNT(*) as count
+        FROM project_tasks pt
+        JOIN projects p ON p.id = pt.projectId
+        WHERE ${projectScope}
+      `,
+          )
+          .get(...projectParams) as { count: number } | undefined
+      )?.count ?? 0;
+    completed = countPt("COALESCE(pt.isCompleted, 0) = 1");
+  } catch (e) {
+    console.error("[tasks.stats] project_tasks count failed:", e);
+  }
+
+  const pending = total - completed;
+  const today = countPt(
+    `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) = date('now')`,
+  );
+  const overdue = countPt(
+    `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) < date('now')`,
+  );
+  const week = countPt(
+    `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) >= date('now') AND date(pt.endDate) <= date('now', '+7 days')`,
+  );
+  const activeReminders = countPt(
+    `COALESCE(pt.isCompleted, 0) = 0 AND pt.remindAt IS NOT NULL AND pt.remindAt <= datetime('now', 'localtime')`,
+  );
+
+  return c.json({
+    total,
+    completed,
+    pending,
+    today,
+    overdue,
+    week,
+    activeReminders,
+  });
+});
+
+/** GET /api/tasks/categories?workspaceId= */
+tasks.get("/categories", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const ws = normalizeWs(c.req.query("workspaceId"));
+  if (ws) {
+    const role = getUserWorkspaceRole(ws, userId);
+    if (!role) return c.json({ error: "无权访问该工作区" }, 403);
+  }
+  // 先补全空说明（历史导入的预设没有 description）
+  try {
+    if (ws) {
+      // 工作区：用当前用户做 owner 作用域补全不够；按 workspaceId 直接补
+      const codes = db
+        .prepare(
+          `SELECT code FROM task_categories WHERE workspaceId = ? AND (description IS NULL OR TRIM(description) = '')`,
+        )
+        .all(ws) as { code: string }[];
+      if (codes.length > 0) {
+        backfillPresetDescriptions(db, ws, userId, { force: false });
+      }
+    } else {
+      backfillPresetDescriptions(db, null, userId, { force: false });
+    }
+  } catch (e) {
+    console.warn("[tasks.categories] backfill:", e);
+  }
+
+  let rows = listTaskCategories(db, ws, userId, {
+    includeInactive: true,
+    backfillDescriptions: false,
+  });
+  if (ws) {
+    rows = db
+      .prepare(
+        `SELECT * FROM task_categories WHERE workspaceId = ? ORDER BY sortOrder ASC, code ASC`,
+      )
+      .all(ws) as typeof rows;
+  }
+  const active = rows.filter((r) => r.isActive === 1);
+  return c.json({
+    items: rows,
+    tree: buildCategoryTree(active),
+    /** 含停用节点，供管理页展示 */
+    treeAll: buildCategoryTree(rows),
+    count: rows.length,
+    activeCount: active.length,
+  });
+});
+
+/** POST /api/tasks/categories  body: { workspaceId?, parentId?, code, name, color?, kind? } */
+tasks.post("/categories", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const body = await c.req.json().catch(() => ({}));
+  const ws = normalizeWs(body.workspaceId ?? c.req.query("workspaceId"));
+  if (ws) {
+    const role = getUserWorkspaceRole(ws, userId);
+    if (!role) return c.json({ error: "无权访问该工作区" }, 403);
+  }
+  try {
+    const row = createTaskCategory(db, {
+      workspaceId: ws,
+      ownerUserId: userId,
+      parentId: body.parentId ?? null,
+      code: String(body.code || ""),
+      name: String(body.name || ""),
+      description: body.description ?? null,
+      color: body.color ?? null,
+      kind: body.kind || "normal",
+    });
+    logAudit(userId, "task", "create_task_category", `创建任务分类「${row.name}」`, {
+      targetType: "task_category",
+      targetId: row.id,
+    });
+    return c.json(row, 201);
+  } catch (e: any) {
+    return c.json({ error: e?.message || "创建失败" }, 400);
+  }
+});
+
+/** POST /api/tasks/categories/apply-preset */
+tasks.post("/categories/apply-preset", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const body = await c.req.json().catch(() => ({}));
+  const ws = normalizeWs(body.workspaceId ?? c.req.query("workspaceId"));
+  if (ws) {
+    const role = getUserWorkspaceRole(ws, userId);
+    if (!role) return c.json({ error: "无权访问该工作区" }, 403);
+  }
+  const result = applyFamilyTaxonomyPreset(db, ws, userId);
+  logAudit(userId, "task", "apply_task_taxonomy_preset", `应用家庭事务分类预设（+${result.created}/~${result.updated}）`, {
+    targetType: "task_taxonomy",
+    targetId: ws || userId,
+  });
+  const rows = ws
+    ? (db
+        .prepare(`SELECT * FROM task_categories WHERE workspaceId = ? ORDER BY sortOrder`)
+        .all(ws) as ReturnType<typeof listTaskCategories>)
+    : listTaskCategories(db, null, userId, { includeInactive: true });
+  return c.json({ ...result, items: rows, tree: buildCategoryTree(rows.filter((r) => r.isActive === 1)) });
+});
+
+/** PATCH /api/tasks/categories/:id */
+tasks.patch("/categories/:id", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  const row = db.prepare("SELECT * FROM task_categories WHERE id = ?").get(id) as
+    | { id: string; workspaceId: string | null; ownerUserId: string; code: string }
+    | undefined;
+  if (!row) return c.json({ error: "分类不存在" }, 404);
+  if (row.workspaceId) {
+    const role = getUserWorkspaceRole(row.workspaceId, userId);
+    if (!role) return c.json({ error: "无权修改" }, 403);
+  } else if (row.ownerUserId !== userId) {
+    return c.json({ error: "无权修改" }, 403);
+  }
+  const updates: string[] = [];
+  const params: any[] = [];
+  if (body.name !== undefined) {
+    updates.push("name = ?");
+    params.push(String(body.name).trim() || row.code);
+  }
+  if (body.description !== undefined) {
+    updates.push("description = ?");
+    const d = body.description == null ? null : String(body.description).trim();
+    params.push(d || null);
+  }
+  if (body.color !== undefined) {
+    updates.push("color = ?");
+    params.push(body.color);
+  }
+  if (body.isActive !== undefined) {
+    updates.push("isActive = ?");
+    params.push(body.isActive ? 1 : 0);
+  }
+  if (!updates.length) return c.json({ error: "无更新字段" }, 400);
+  updates.push("updatedAt = datetime('now')");
+  params.push(id);
+  db.prepare(`UPDATE task_categories SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+  const updated = db.prepare("SELECT * FROM task_categories WHERE id = ?").get(id);
+  return c.json(updated);
+});
+
+function parseAnalyticsQuery(c: any, userId: string) {
+  const ws = normalizeWs(c.req.query("workspaceId"));
+  if (ws) {
+    const role = getUserWorkspaceRole(ws, userId);
+    if (!role) return { error: "无权访问该工作区" as const, status: 403 as const };
+  }
+  const scopeRaw = c.req.query("scope") || "self";
+  const scope = scopeRaw === "workspace" && ws ? "workspace" : "self";
+  const period = c.req.query("period") || "week";
+  const weekStartsOn = c.req.query("weekStartsOn") === "0" ? 0 : 1;
+  const range = resolvePeriod(period, c.req.query("from"), c.req.query("to"), weekStartsOn as 0 | 1);
+  const memberId = c.req.query("memberId") || null;
+  return {
+    q: {
+      workspaceId: ws,
+      userId,
+      scope: scope as "self" | "workspace",
+      memberId,
+      ...range,
+    },
+  };
+}
+
+/** GET /api/tasks/analytics */
+tasks.get("/analytics", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const parsed = parseAnalyticsQuery(c, userId);
+  if ("error" in parsed && parsed.error) {
+    return c.json({ error: parsed.error }, parsed.status || 403);
+  }
+
+  try {
+    const result = computeTaskAnalytics(db, parsed.q!);
+    return c.json(result);
+  } catch (e: any) {
+    console.error("[tasks.analytics]", e);
+    return c.json({ error: e?.message || "统计失败" }, 500);
+  }
+});
+
+/** GET /api/tasks/analytics/report — Markdown 周报/周期报告 */
+tasks.get("/analytics/report", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const parsed = parseAnalyticsQuery(c, userId);
+  if ("error" in parsed && parsed.error) {
+    return c.json({ error: parsed.error }, parsed.status || 403);
+  }
+  try {
+    const data = computeTaskAnalytics(db, parsed.q!);
+    const markdown = buildTaskAnalyticsMarkdown(data);
+    const filename = `task-review-${data.range.from}_${data.range.to}.md`;
+    return c.json({ markdown, filename, range: data.range });
+  } catch (e: any) {
+    console.error("[tasks.analytics.report]", e);
+    return c.json({ error: e?.message || "报告生成失败" }, 500);
+  }
+});
+
+/**
+ * POST /api/tasks/analytics/advice
+ * 基于规则洞察 + KPI 调用系统 AI 润色为家庭向可执行建议。
+ * body 可选：{ includeReport?: boolean } — 为 true 时一并返回带 AI 段落的 markdown
+ */
+tasks.post("/analytics/advice", async (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const parsed = parseAnalyticsQuery(c, userId);
+  if ("error" in parsed && parsed.error) {
+    return c.json({ error: parsed.error }, parsed.status || 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+
+  let data: ReturnType<typeof computeTaskAnalytics>;
+  try {
+    data = computeTaskAnalytics(db, parsed.q!);
+  } catch (e: any) {
+    return c.json({ error: e?.message || "统计失败" }, 500);
+  }
+
+  const settings = db
+    .prepare(
+      `SELECT key, value FROM system_settings WHERE key IN ('ai_provider','ai_api_url','ai_api_key','ai_model')`,
+    )
+    .all() as { key: string; value: string }[];
+  const map: Record<string, string> = {};
+  for (const s of settings) map[s.key] = s.value;
+
+  if (!map.ai_api_url || !map.ai_model) {
+    const markdown = body.includeReport
+      ? buildTaskAnalyticsMarkdown(data)
+      : null;
+    return c.json({
+      insights: data.insights,
+      aiText: null,
+      message: "未配置 AI，仅返回规则建议。请在设置中配置 AI 服务。",
+      markdown,
+    });
+  }
+
+  const k = data.kpis.current;
+  const prompt = `你是家庭任务复盘顾问（双职工+孩子场景）。请根据下列结构化数据，用中文写 3～6 条简洁、可执行的反思建议。
+要求：
+- 语气温暖务实，禁止 KPI 压榨式说教（不要说「效率低下」）
+- 结合分类占比、积压、突发、成员负载（若有）给出具体动作
+- 每条 1～3 句；可用 Markdown 小标题或编号
+- 不要编造数据中不存在的数字
+
+周期：${data.range.from} ~ ${data.range.to}（对比 ${data.range.prevFrom} ~ ${data.range.prevTo}）
+范围：${data.scope === "workspace" ? "全家" : "个人"}
+KPI：完成 ${k.completed}，创建 ${k.created}，完成率 ${k.completionRate}，按时率 ${k.onTimeRate}，中位耗时分钟 ${k.medianCycleMinutes}，未安排积压 ${k.unscheduledOpen}，归类率 ${k.categorizeRate}，突发占比 ${k.urgentShare}
+环比：${JSON.stringify(data.kpis.deltas)}
+大类完成：${JSON.stringify(data.categories.root.slice(0, 12))}
+成员：${JSON.stringify(data.members.slice(0, 8))}
+规则洞察：${JSON.stringify(data.insights)}
+未安排 Top：${JSON.stringify(data.openLists.unscheduled.slice(0, 8).map((t) => t.title))}
+逾期 Top：${JSON.stringify(data.openLists.overdue.slice(0, 8).map((t) => t.title))}
+`;
+
+  try {
+    const url = map.ai_api_url.replace(/\/+$/, "");
+    const endpoint = url.endsWith("/chat/completions") ? url : `${url}/chat/completions`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(map.ai_api_key ? { Authorization: `Bearer ${map.ai_api_key}` } : {}),
+      },
+      body: JSON.stringify({
+        model: map.ai_model,
+        messages: [
+          {
+            role: "system",
+            content: "你是简洁务实的家庭任务复盘顾问，用中文回答，面向夫妻共同生活。",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.45,
+      }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      return c.json({
+        insights: data.insights,
+        aiText: null,
+        message: `AI 调用失败: ${t.slice(0, 200)}`,
+        markdown: body.includeReport ? buildTaskAnalyticsMarkdown(data) : null,
+      });
+    }
+    const raw = (await res.json()) as any;
+    const aiText = raw?.choices?.[0]?.message?.content || null;
+    const markdown = body.includeReport
+      ? buildTaskAnalyticsMarkdown(data, { aiText })
+      : null;
+    return c.json({ insights: data.insights, aiText, markdown });
+  } catch (e: any) {
+    return c.json({
+      insights: data.insights,
+      aiText: null,
+      message: e?.message || "AI 调用异常",
+      markdown: body.includeReport ? buildTaskAnalyticsMarkdown(data) : null,
+    });
+  }
 });
 
 // 获取单个任务（project_tasks 优先，legacy 兜底）
@@ -1102,88 +1515,6 @@ tasks.delete("/:id", (c) => {
 
   db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
   return c.json({ success: true });
-});
-
-// 任务统计摘要（project_tasks 为主）
-tasks.get("/stats/summary", (c) => {
-  const db = getDb();
-  const userId = c.req.header("X-User-Id")!;
-  const workspaceId = c.req.query("workspaceId") || null;
-  const ws = workspaceId && workspaceId !== "personal" ? workspaceId : null;
-
-  const projectScope = ws
-    ? `p.isDeleted = 0 AND p.workspaceId = ?
-       AND (pt.assigneeId = ? OR pt.creatorId = ? OR p.ownerId = ?
-            OR EXISTS(SELECT 1 FROM project_members pm WHERE pm.projectId = p.id AND pm.userId = ?))`
-    : `p.isDeleted = 0 AND (p.workspaceId IS NULL OR p.workspaceId = '')
-       AND (pt.assigneeId = ? OR pt.creatorId = ? OR p.ownerId = ?)`;
-  const projectParams = ws
-    ? [ws, userId, userId, userId, userId]
-    : [userId, userId, userId];
-
-  const countPt = (extra: string) => {
-    try {
-      const row = db
-        .prepare(
-          `
-        SELECT COUNT(*) as count
-        FROM project_tasks pt
-        JOIN projects p ON p.id = pt.projectId
-        WHERE ${projectScope} AND ${extra}
-      `,
-        )
-        .get(...projectParams) as { count: number } | undefined;
-      return row?.count ?? 0;
-    } catch {
-      return 0;
-    }
-  };
-
-  let total = 0;
-  let completed = 0;
-  try {
-    total =
-      (
-        db
-          .prepare(
-            `
-        SELECT COUNT(*) as count
-        FROM project_tasks pt
-        JOIN projects p ON p.id = pt.projectId
-        WHERE ${projectScope}
-      `,
-          )
-          .get(...projectParams) as { count: number } | undefined
-      )?.count ?? 0;
-    completed = countPt("COALESCE(pt.isCompleted, 0) = 1");
-  } catch (e) {
-    console.error("[tasks.stats] project_tasks count failed:", e);
-  }
-
-  const pending = total - completed;
-  // endDate 可能是 ISO 或 date 字符串，用 date() 截断比较
-  const today = countPt(
-    `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) = date('now')`,
-  );
-  const overdue = countPt(
-    `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) < date('now')`,
-  );
-  const week = countPt(
-    `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) >= date('now') AND date(pt.endDate) <= date('now', '+7 days')`,
-  );
-  const activeReminders = countPt(
-    `COALESCE(pt.isCompleted, 0) = 0 AND pt.remindAt IS NOT NULL AND pt.remindAt <= datetime('now', 'localtime')`,
-  );
-
-  return c.json({
-    total,
-    completed,
-    pending,
-    today,
-    overdue,
-    week,
-    activeReminders,
-  });
 });
 
 export default tasks;

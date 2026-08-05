@@ -1382,6 +1382,9 @@ function initSchema(db: Database.Database) {
   try { db.exec("ALTER TABLE tasks ADD COLUMN reminderFiredAt TEXT DEFAULT NULL"); } catch {}
   try { db.exec("ALTER TABLE project_tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN categoryId TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN completedAt TEXT DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE task_categories ADD COLUMN description TEXT DEFAULT NULL"); } catch {}
   try {
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_project_tasks_reminder_due
@@ -1394,6 +1397,42 @@ function initSchema(db: Database.Database) {
       CREATE INDEX IF NOT EXISTS idx_project_tasks_due_reminder
         ON project_tasks(isCompleted, endDate)
         WHERE isCompleted = 0 AND endDate IS NOT NULL;
+    `);
+  } catch {}
+  // 任务统计地基（与 migration v44 对齐；新库也走 IF NOT EXISTS）
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS task_categories (
+        id TEXT PRIMARY KEY,
+        workspaceId TEXT,
+        ownerUserId TEXT NOT NULL,
+        parentId TEXT,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        color TEXT DEFAULT NULL,
+        sortOrder INTEGER DEFAULT 0,
+        isActive INTEGER DEFAULT 1,
+        isPreset INTEGER DEFAULT 0,
+        kind TEXT DEFAULT 'normal',
+        createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+        updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_task_categories_ws ON task_categories(workspaceId, ownerUserId);
+      CREATE INDEX IF NOT EXISTS idx_task_categories_parent ON task_categories(parentId);
+      CREATE INDEX IF NOT EXISTS idx_task_categories_code ON task_categories(workspaceId, ownerUserId, code);
+
+      CREATE TABLE IF NOT EXISTS task_status_events (
+        id TEXT PRIMARY KEY,
+        taskId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        fromStatus TEXT,
+        toStatus TEXT NOT NULL,
+        at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_task_status_events_task ON task_status_events(taskId, at);
+      CREATE INDEX IF NOT EXISTS idx_task_status_events_at ON task_status_events(at);
+      CREATE INDEX IF NOT EXISTS idx_project_tasks_category ON project_tasks(categoryId);
+      CREATE INDEX IF NOT EXISTS idx_project_tasks_completed_at ON project_tasks(completedAt);
     `);
   } catch {}
   // v?? 说说 AI 助手：trigger_user_id 记录谁调起了 AI（用于删除权限判断）
