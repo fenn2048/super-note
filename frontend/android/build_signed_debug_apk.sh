@@ -12,7 +12,7 @@ set -euo pipefail
 #     --storepass PASS  默认 android
 #     --keypass PASS    默认 android
 #     --out DIR         默认 frontend/android/output
-#     --no-bump         不改 package.json / versionCode（Docker 镜像构建必开）
+#     --no-bump         不改 package.json / versionCode（CI 重复构建同一提交时用）
 #     --skip-clipper    不打包浏览器扩展
 #     --skip-apk        只打扩展，不编 Android
 #
@@ -73,7 +73,7 @@ Usage: $0 [options]
   --storepass P    store password
   --keypass P      key password
   --out DIR        intermediate output dir
-  --no-bump        do not bump package.json / versionCode (for Docker)
+  --no-bump        do not bump package.json / versionCode
   --skip-clipper   skip browser extension packaging
   --skip-apk       skip Android APK build
   -h, --help

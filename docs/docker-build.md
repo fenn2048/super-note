@@ -7,7 +7,11 @@
 ./build_docker.sh
 
 # 推荐自托管 / 云端：内置剪藏插件 + 固定签名 Android APK
+# （默认 patch 递增根 package.json 与 Android versionCode/versionName）
 ./build_docker.sh --with-assets
+
+# 打包资源但不递增版本（CI 重复构建同一提交）
+./build_docker.sh --with-assets --no-bump
 
 # 官方源
 ./build_docker.sh --no-mirror
@@ -24,8 +28,10 @@
 
 1. 打包浏览器剪藏 → `frontend/public/downloads/super-clipper-*.zip`
 2. 用**固定** `frontend/android/debug.keystore` 签名 APK → `frontend/public/downloads/super-note-debug.apk`
-3. **不**自动 bump `package.json` 版本
-4. 再执行 `docker build`，Vite 将 `public/downloads` 复制进 `frontend/dist/downloads`
+3. **默认** patch 递增 `package.json` 版本，并同步 `app/build.gradle` 的 `versionCode` / `versionName`  
+   - 需要关闭时加 `--no-bump`
+4. 递增后重新读取版本，写入 Docker `APP_VERSION` build-arg
+5. 再执行 `docker build`，Vite 将 `public/downloads` 复制进 `frontend/dist/downloads`
 
 构建机需要：JDK + Android SDK（`zipalign` / `apksigner`）+ Node。
 
@@ -45,8 +51,8 @@ docker compose build
 
 ```bash
 ./build_docker.sh --with-assets
-# 或仅预生成资源后再 compose
-cd frontend/android && ./build_signed_debug_apk.sh --no-bump
+# 或仅预生成资源后再 compose（不递增版本时用 --no-bump）
+cd frontend/android && ./build_signed_debug_apk.sh
 ```
 
 正式发布到 Docker Hub / 多架构见 `scripts/release.sh`。

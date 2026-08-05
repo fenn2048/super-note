@@ -6,6 +6,7 @@
 #   ./build_docker.sh                      # 默认：小镜像，不含 APK
 #   ./build_docker.sh --with-assets        # 先编剪藏 zip + 固定签名 APK，再打进镜像
 #   ./build_docker.sh --build-assets       # 同上（旧别名）
+#   ./build_docker.sh --with-assets --no-bump  # 打包资源但不递增版本号
 #   ./build_docker.sh --no-mirror          # 官方源
 #   ./build_docker.sh --tag NAME           # 主 tag（默认 super-note）
 #   ./build_docker.sh --no-sha-tag         # 不额外打 git short SHA tag
@@ -15,7 +16,8 @@
 # --with-assets 说明：
 #   - 剪藏：packages/supernote-clipper → frontend/public/downloads/*.zip
 #   - APK：固定 keystore（frontend/android/debug.keystore）签名，可覆盖安装
-#   - 不自动 bump 版本号（--no-bump）
+#   - 默认 patch 递增根 package.json 与 Android versionCode/versionName
+#   - 加 --no-bump 可关闭递增（CI 重复构建同一提交时用）
 #   - 构建后网页「关于」与 Android「下载更新」均可直链 /downloads/...
 # =============================================================================
 set -euo pipefail
@@ -29,11 +31,17 @@ IMAGE_TAG="super-note"
 SHA_TAG=true
 PLATFORM=""
 CHECK_ONLY=false
+# --with-assets 时默认 bump；可用 --no-bump 关闭
+NO_BUMP=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --build-assets|-a|--with-apk|--with-assets)
       BUILD_ASSETS=true
+      shift
+      ;;
+    --no-bump)
+      NO_BUMP=true
       shift
       ;;
     --no-mirror)
@@ -57,7 +65,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,22p' "$0"
+      sed -n '2,25p' "$0"
       exit 0
       ;;
     *)
@@ -70,13 +78,17 @@ done
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
+read_app_version() {
+  node -e 'try{console.log(require("./package.json").version)}catch(e){console.log("")}' 2>/dev/null || true
+}
+
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-APP_VERSION="$(node -e 'try{console.log(require("./package.json").version)}catch(e){console.log("")}' 2>/dev/null || true)"
+APP_VERSION="$(read_app_version)"
 BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
 
 echo "==> Phase 3 docker build"
 echo "    tag=${IMAGE_TAG}  git=${GIT_SHA}  version=${APP_VERSION:-n/a}"
-echo "    with-assets=${BUILD_ASSETS}"
+echo "    with-assets=${BUILD_ASSETS}  no-bump=${NO_BUMP}"
 
 # --- 可选：客户端安装包（必须在 context gate 之前生成，才能进镜像）---
 CLIPPER_ZIPS=(
@@ -88,13 +100,24 @@ APK_PATH="frontend/public/downloads/super-note-debug.apk"
 ASSET_SCRIPT="frontend/android/build_signed_debug_apk.sh"
 
 if [[ "$BUILD_ASSETS" == true ]]; then
-  echo "==> Building clipper + signed APK for image (stable keystore, --no-bump)..."
+  ASSET_ARGS=()
+  if [[ "$NO_BUMP" == true ]]; then
+    ASSET_ARGS+=(--no-bump)
+    echo "==> Building clipper + signed APK (stable keystore, --no-bump)..."
+  else
+    echo "==> Building clipper + signed APK (stable keystore, bump patch version)..."
+  fi
   if [[ ! -x "$ASSET_SCRIPT" ]]; then
     echo "ERROR: missing executable $ASSET_SCRIPT" >&2
     exit 1
   fi
   # 固定签名：使用仓库内 debug.keystore（若不存在脚本会生成并提示提交）
-  (cd frontend/android && ./build_signed_debug_apk.sh --no-bump)
+  # 默认会递增根 package.json patch 与 app/build.gradle versionCode/versionName
+  (cd frontend/android && ./build_signed_debug_apk.sh ${ASSET_ARGS[@]+"${ASSET_ARGS[@]}"})
+
+  # bump 发生在资源构建阶段，镜像 APP_VERSION / 标签必须读回新版本
+  APP_VERSION="$(read_app_version)"
+  echo "    app version after assets: ${APP_VERSION:-n/a}"
 
   missing=0
   for f in "${CLIPPER_ZIPS[@]}"; do
