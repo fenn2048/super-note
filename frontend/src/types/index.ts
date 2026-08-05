@@ -669,6 +669,23 @@ export interface ProjectStage {
   tasks?: ProjectTask[];
 }
 
+export interface TaskCategory {
+  id: string;
+  workspaceId: string | null;
+  ownerUserId: string;
+  parentId: string | null;
+  code: string;
+  name: string;
+  /** 小类说明，选择器气泡 / 管理页小字 */
+  description?: string | null;
+  color: string | null;
+  sortOrder: number;
+  isActive: number;
+  isPreset: number;
+  kind: string;
+  children?: TaskCategory[];
+}
+
 export interface ProjectTask {
   id: string;
   projectId: string;
@@ -679,6 +696,9 @@ export interface ProjectTask {
   assigneeId: string | null;
   startDate: string | null;
   endDate: string | null;
+  /** 事务主分类（小类 id） */
+  categoryId?: string | null;
+  completedAt?: string | null;
   description: string;
   cover: string;
   sortOrder: number;

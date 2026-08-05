@@ -41,6 +41,8 @@ import ProjectDiscussion from "./ProjectDiscussion";
 import ProjectCalendar from "./ProjectCalendar";
 import ProjectGantt from "./ProjectGantt";
 import TaskDetailModal from "./TaskDetailModal";
+import TaskCategoryPicker from "./TaskCategoryPicker";
+const TaskAnalytics = React.lazy(() => import("./TaskAnalytics"));
 import {
   EmptyState,
   EmptyActionButton,
@@ -503,10 +505,19 @@ export default function ProjectCenter() {
 
   // Navigation Filter State (synced with Sidebar / 底栏任务入口)
   // 默认 my-tasks：移动底栏「任务」语义是待办列表，不是项目网格
+  // 「事务分类」已并入「任务复盘」面板
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
       const val = sessionStorage.getItem("super-active-project-filter");
-      return val ? JSON.parse(val) : { type: "my-tasks" };
+      const parsed = val ? JSON.parse(val) : { type: "my-tasks" };
+      if (parsed?.type === "task-categories") {
+        try {
+          sessionStorage.setItem("super-analytics-panel", "categories");
+          sessionStorage.setItem("super-active-project-filter", JSON.stringify({ type: "analytics" }));
+        } catch { /* ignore */ }
+        return { type: "analytics" };
+      }
+      return parsed?.type ? parsed : { type: "my-tasks" };
     } catch {
       return { type: "my-tasks" };
     }
@@ -549,7 +560,8 @@ export default function ProjectCenter() {
     activeFilter.type !== "my-tasks" &&
       activeFilter.type !== "detail" &&
       activeFilter.type !== "plans" &&
-      activeFilter.type !== "calendar",
+      activeFilter.type !== "calendar" &&
+      activeFilter.type !== "analytics",
     [activeFilter.type, projects.length],
   );
 
@@ -593,6 +605,8 @@ export default function ProjectCenter() {
   const [quickAddProjId, setQuickAddProjId] = useState("");
   const [quickAddAssigneeId, setQuickAddAssigneeId] = useState("");
   const [quickAddDueDate, setQuickAddDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [quickAddCategoryId, setQuickAddCategoryId] = useState<string | null>(null);
+  const [taskCategoryId, setTaskCategoryId] = useState<string | null>(null);
   const [quickAddIsPersonal, setQuickAddIsPersonal] = useState(true);
   const [quickAddTags, setQuickAddTags] = useState<Tag[]>([]);
 
@@ -775,18 +789,31 @@ export default function ProjectCenter() {
   // Sync state filter from Sidebar / 底栏；挂载时再读 sessionStorage，
   // 避免冷启动懒加载时错过 openTasksEntry 派发的事件。
   useEffect(() => {
+    const normalizeFilter = (raw: { type: string; groupId?: string; projectId?: string }) => {
+      if (raw?.type === "task-categories") {
+        try {
+          sessionStorage.setItem("super-analytics-panel", "categories");
+        } catch { /* ignore */ }
+        window.dispatchEvent(
+          new CustomEvent("super:analytics-panel", { detail: { panel: "categories" } }),
+        );
+        return { type: "analytics" };
+      }
+      return raw;
+    };
+
     try {
       const val = sessionStorage.getItem("super-active-project-filter");
       if (val) {
         const parsed = JSON.parse(val);
-        if (parsed?.type) setActiveFilter(parsed);
+        if (parsed?.type) setActiveFilter(normalizeFilter(parsed));
       }
     } catch { /* ignore */ }
 
     const handler = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail) {
-        setActiveFilter(customEvent.detail);
+        setActiveFilter(normalizeFilter(customEvent.detail));
       }
     };
     window.addEventListener("super:project-filter-changed", handler);
@@ -1602,6 +1629,7 @@ export default function ProjectCenter() {
         isRecurring: quickAddIsRecurring ? 1 : 0,
         recurrenceRule: quickAddIsRecurring ? JSON.stringify(quickAddRecurrenceRule) : null,
         tags: quickAddTags.map((t) => t.id),
+        categoryId: quickAddCategoryId,
       };
 
       const newTask = await api.createProjectTask(targetProjectId, payload);
@@ -1619,6 +1647,7 @@ export default function ProjectCenter() {
       setQuickAddIsRecurring(false);
       setQuickAddRecurrenceRule({ type: "weekday" });
       setQuickAddTags([]);
+      // 保留 quickAddCategoryId，方便连续录入同类任务
 
       // 立即乐观插入，再拉服务端列表，避免刷新竞态导致「创建成功但列表没有」
       if (activeFilter.type === "my-tasks" && newTask) {
@@ -1654,6 +1683,7 @@ export default function ProjectCenter() {
     setTaskIsRecurring(quickAddIsRecurring);
     setTaskRecurrenceRule(quickAddRecurrenceRule);
     setTaskTags(quickAddTags);
+    setTaskCategoryId(quickAddCategoryId);
     setShowTaskCreateModal(true);
   };
 
@@ -1700,6 +1730,7 @@ export default function ProjectCenter() {
         isRecurring: taskIsRecurring ? 1 : 0,
         recurrenceRule: taskIsRecurring ? JSON.stringify(taskRecurrenceRule) : null,
         tags: taskTags.map((t) => t.id),
+        categoryId: taskCategoryId,
       };
 
       const newTask = await api.createProjectTask(taskProjId, payload);
@@ -1890,21 +1921,19 @@ export default function ProjectCenter() {
             }
           />
 
-          {/* Inner Project Tabs Switcher — layoutId pill (ThemeToggle pattern) */}
+          {/* Inner Project Tabs：看板/列表/讨论/日历/概况；甘特降入「更多」仅桌面 */}
           <div className="px-3 md:px-4 py-2 border-b border-app-border bg-app-bg shrink-0 overflow-x-auto">
-            <div className="flex items-center bg-app-hover/50 p-0.5 rounded-button border border-app-border/40 text-[11px] font-semibold w-max min-w-full md:min-w-0 md:w-auto">
-              {(
-                [
-                  { id: "kanban" as const, icon: Grid, label: t("projects.kanban") || "看板", desktopOnly: false },
-                  { id: "list" as const, icon: ListIcon, label: t("projects.list") || "列表", desktopOnly: false },
-                  { id: "discussion" as const, icon: MessageSquare, label: t("projects.discussion") || "讨论", desktopOnly: false },
-                  { id: "calendar" as const, icon: Calendar, label: t("projects.calendar") || "日历", desktopOnly: false },
-                  { id: "gantt" as const, icon: Clock, label: t("projects.gantt") || "甘特图", desktopOnly: true },
-                  { id: "overview" as const, icon: Award, label: t("projects.overview") || "概况", desktopOnly: false },
-                ] as const
-              )
-                .filter((tab) => !tab.desktopOnly || (typeof window !== "undefined" && window.innerWidth >= 768))
-                .map((tab) => {
+            <div className="flex items-center gap-1 w-max min-w-full md:min-w-0 md:w-auto">
+              <div className="flex items-center bg-app-hover/50 p-0.5 rounded-button border border-app-border/40 text-[11px] font-semibold flex-1">
+                {(
+                  [
+                    { id: "kanban" as const, icon: Grid, label: t("projects.kanban") || "看板" },
+                    { id: "list" as const, icon: ListIcon, label: t("projects.list") || "列表" },
+                    { id: "discussion" as const, icon: MessageSquare, label: t("projects.discussion") || "讨论" },
+                    { id: "calendar" as const, icon: Calendar, label: t("projects.calendar") || "日历" },
+                    { id: "overview" as const, icon: Award, label: t("projects.overview") || "概况" },
+                  ] as const
+                ).map((tab) => {
                   const Icon = tab.icon;
                   const active = detailTab === tab.id;
                   return (
@@ -1912,7 +1941,7 @@ export default function ProjectCenter() {
                       key={tab.id}
                       type="button"
                       className={cn(
-                        "relative px-3 py-1.5 rounded-md transition-colors duration-fast ease-out flex items-center gap-1 z-0",
+                        "relative px-3 py-1.5 min-h-9 rounded-md transition-colors duration-fast ease-out flex items-center gap-1 z-0",
                         active ? "text-tx-primary" : "text-tx-secondary hover:text-tx-primary",
                       )}
                       onClick={() => setDetailTab(tab.id)}
@@ -1929,6 +1958,23 @@ export default function ProjectCenter() {
                     </button>
                   );
                 })}
+              </div>
+              {/* 甘特：桌面次要视图，不占主 Tab */}
+              <button
+                type="button"
+                className={cn(
+                  "hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 min-h-9 rounded-button text-[11px] font-semibold border shrink-0",
+                  "transition-colors duration-fast ease-out active:scale-[0.97]",
+                  detailTab === "gantt"
+                    ? "bg-app-active text-tx-primary border-app-border"
+                    : "text-tx-tertiary border-transparent hover:bg-app-hover hover:text-tx-secondary",
+                )}
+                onClick={() => setDetailTab("gantt")}
+                title={t("projects.gantt") || "甘特图"}
+              >
+                <Clock size={12} />
+                <span className="hidden lg:inline">{t("projects.gantt") || "甘特"}</span>
+              </button>
             </div>
           </div>
 
@@ -1999,6 +2045,18 @@ export default function ProjectCenter() {
             }
           >
             <PlanCenter />
+          </React.Suspense>
+        </div>
+      ) : activeFilter.type === "analytics" ? (
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+          <React.Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 size={20} className="animate-spin text-accent-primary" />
+              </div>
+            }
+          >
+            <TaskAnalytics />
           </React.Suspense>
         </div>
       ) : activeFilter.type === "my-tasks" ? (
@@ -2227,6 +2285,11 @@ export default function ProjectCenter() {
                                 className="w-full"
                               />
                             </div>
+
+                            <TaskCategoryPicker
+                              value={quickAddCategoryId}
+                              onChange={setQuickAddCategoryId}
+                            />
                           </div>
 
                           {/* Row 2: Tag Input & Submission */}
@@ -3645,6 +3708,13 @@ export default function ProjectCenter() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">
+                  事务分类 <span className="normal-case font-normal text-tx-tertiary">（可选）</span>
+                </label>
+                <TaskCategoryPicker value={taskCategoryId} onChange={setTaskCategoryId} className="w-full max-w-md" />
+              </div>
+
               {/* Timeline & Reminder Date Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
                 {/* Due Date */}
@@ -3863,6 +3933,13 @@ export default function ProjectCenter() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-tx-secondary uppercase tracking-wider block">
+                  事务分类 <span className="normal-case font-normal text-tx-tertiary">（可选）</span>
+                </label>
+                <TaskCategoryPicker value={taskCategoryId} onChange={setTaskCategoryId} className="w-full max-w-md" />
               </div>
 
               {/* Timeline & Reminder Date Row */}

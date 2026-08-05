@@ -1223,6 +1223,136 @@ export const api = {
   updateTask: (id: string, data: Partial<Task> & { tagIds?: string[] }) => request<Task>(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   toggleTask: (id: string) => request<Task>(`/tasks/${id}/toggle`, { method: "PATCH" }),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: "DELETE" }),
+  /** 任务事务分类（家庭 6 大类树） */
+  getTaskCategories: (workspaceId?: string | null) => {
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    const qs = ws && ws !== "personal" ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+    return request<{ items: import("@/types").TaskCategory[]; tree: import("@/types").TaskCategory[]; count: number }>(
+      `/tasks/categories${qs}`,
+    );
+  },
+  applyTaskCategoryPreset: (workspaceId?: string | null) => {
+    const ws = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
+    return request<{
+      created: number;
+      updated: number;
+      total: number;
+      items: import("@/types").TaskCategory[];
+      tree: import("@/types").TaskCategory[];
+    }>(`/tasks/categories/apply-preset`, {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: ws && ws !== "personal" ? ws : null }),
+    });
+  },
+  updateTaskCategory: (
+    id: string,
+    data: { name?: string; description?: string | null; color?: string | null; isActive?: boolean },
+  ) =>
+    request<import("@/types").TaskCategory>(`/tasks/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  createTaskCategory: (data: {
+    workspaceId?: string | null;
+    parentId?: string | null;
+    code: string;
+    name: string;
+    description?: string | null;
+    color?: string | null;
+    kind?: string;
+  }) => {
+    const ws = data.workspaceId !== undefined ? data.workspaceId : getCurrentWorkspace();
+    return request<import("@/types").TaskCategory>(`/tasks/categories`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...data,
+        workspaceId: ws && ws !== "personal" ? ws : null,
+      }),
+    });
+  },
+  /** 任务复盘统计看板 */
+  getTaskAnalytics: (params?: {
+    workspaceId?: string | null;
+    scope?: "self" | "workspace";
+    period?: "today" | "week" | "month" | "custom";
+    from?: string;
+    to?: string;
+    memberId?: string | null;
+    weekStartsOn?: 0 | 1;
+  }) => {
+    const ws =
+      params?.workspaceId !== undefined ? params.workspaceId : getCurrentWorkspace();
+    const q = new URLSearchParams();
+    if (ws && ws !== "personal") q.set("workspaceId", ws);
+    if (params?.scope) q.set("scope", params.scope);
+    if (params?.period) q.set("period", params.period);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.memberId) q.set("memberId", params.memberId);
+    if (params?.weekStartsOn != null) q.set("weekStartsOn", String(params.weekStartsOn));
+    const qs = q.toString();
+    return request<any>(`/tasks/analytics${qs ? `?${qs}` : ""}`);
+  },
+  /** 导出 Markdown 复盘报告 */
+  getTaskAnalyticsReport: (params?: {
+    workspaceId?: string | null;
+    scope?: "self" | "workspace";
+    period?: "today" | "week" | "month" | "custom";
+    from?: string;
+    to?: string;
+    memberId?: string | null;
+    weekStartsOn?: 0 | 1;
+  }) => {
+    const ws =
+      params?.workspaceId !== undefined ? params.workspaceId : getCurrentWorkspace();
+    const q = new URLSearchParams();
+    if (ws && ws !== "personal") q.set("workspaceId", ws);
+    if (params?.scope) q.set("scope", params.scope);
+    if (params?.period) q.set("period", params.period);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.memberId) q.set("memberId", params.memberId);
+    if (params?.weekStartsOn != null) q.set("weekStartsOn", String(params.weekStartsOn));
+    const qs = q.toString();
+    return request<{ markdown: string; filename: string; range: { from: string; to: string } }>(
+      `/tasks/analytics/report${qs ? `?${qs}` : ""}`,
+    );
+  },
+  /** AI 润色复盘建议 */
+  getTaskAnalyticsAdvice: (
+    params?: {
+      workspaceId?: string | null;
+      scope?: "self" | "workspace";
+      period?: "today" | "week" | "month" | "custom";
+      from?: string;
+      to?: string;
+      memberId?: string | null;
+      weekStartsOn?: 0 | 1;
+    },
+    opts?: { includeReport?: boolean },
+  ) => {
+    const ws =
+      params?.workspaceId !== undefined ? params.workspaceId : getCurrentWorkspace();
+    const q = new URLSearchParams();
+    if (ws && ws !== "personal") q.set("workspaceId", ws);
+    if (params?.scope) q.set("scope", params.scope);
+    if (params?.period) q.set("period", params.period);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.memberId) q.set("memberId", params.memberId);
+    if (params?.weekStartsOn != null) q.set("weekStartsOn", String(params.weekStartsOn));
+    const qs = q.toString();
+    return request<{
+      insights: any[];
+      aiText: string | null;
+      message?: string;
+      markdown?: string | null;
+    }>(`/tasks/analytics/advice${qs ? `?${qs}` : ""}`, {
+      method: "POST",
+      body: JSON.stringify({ includeReport: !!opts?.includeReport }),
+    });
+  },
+
   getTaskStats: () => {
     const ws = getCurrentWorkspace();
     const qs = ws && ws !== "" ? `?workspaceId=${encodeURIComponent(ws)}` : "";

@@ -10,6 +10,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import GenericTagInput from "@/components/GenericTagInput";
+import TaskCategoryPicker from "@/components/TaskCategoryPicker";
 import { AiFormatHelper } from "@/components/AiFormatHelper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,6 +176,7 @@ export default function TaskDetailModal({
           .map((p) => p.userId || (p as { id?: string }).id)
           .filter((id): id is string => !!id),
         tags: activeTask.tags?.map((t) => t.id) || [],
+        categoryId: activeTask.categoryId ?? null,
         titleColor: activeTask.titleColor || null,
         dependencies: activeTask.dependencies?.map((d) => d.id) || [],
         remindAt: activeTask.remindAt || null,
@@ -711,6 +713,22 @@ export default function TaskDetailModal({
                   )
                 }
               />
+            </div>
+
+            {/* 事务主分类（完全可选 · 复盘维度） */}
+            <div className="flex items-center gap-3 relative md:col-span-2">
+              <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 shrink-0">
+                <Compass size={13} />
+                <span>分类</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <TaskCategoryPicker
+                  value={activeTask.categoryId}
+                  onChange={(categoryId) =>
+                    setActiveTask((prev) => (prev ? { ...prev, categoryId } : null))
+                  }
+                />
+              </div>
             </div>
 
             {/* Task Tags */}
