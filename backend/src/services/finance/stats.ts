@@ -338,10 +338,12 @@ export function statsExpenseStructure(
       )
     ) {
       key = "fixed";
-    } else if (/Family:|Parents:|Childcare:|Social|Kids:/.test(n)) {
+    } else if (
+      /Family:|Parents:|Childcare:|Social|Kids:|Healthcare:Kids|Healthcare:Elderly/.test(n)
+    ) {
       key = "family";
     } else if (
-      /DailyLiving:|Transportation:|Entertainment:|HouseholdGoods:|Subscriptions|Meals|Groceries/.test(
+      /DailyLiving:|Transportation:|Entertainment:|HouseholdGoods:|Subscriptions|Meals|Groceries|Healthcare:Adults/.test(
         n,
       )
     ) {

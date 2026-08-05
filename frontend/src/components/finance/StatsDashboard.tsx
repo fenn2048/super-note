@@ -70,8 +70,9 @@ function parentPath(name: string, depth = 2): string {
 function parentLabel(path: string): string {
   const map: Record<string, string> = {
     "Expenses:DailyLiving": "日常生活",
+    "Expenses:Healthcare": "医疗",
     "Expenses:Transportation": "交通出行",
-    "Expenses:Family": "家庭",
+    "Expenses:Family": "家庭与育儿",
     "Expenses:Insurance": "保险",
     "Expenses:Entertainment": "娱乐人情",
     "Expenses:HouseholdGoods": "耐用家居",

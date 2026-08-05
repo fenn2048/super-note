@@ -1,6 +1,2506 @@
 [
   {
-    "name": "日常工作及外出餐饮",
+    "name": "加油",
+    "peer": "石油|石化|壳牌|加油站|中石油|中石化|油站|加油",
+    "item": "石油|石化|壳牌|加油站|中石油|中石化|油站|加油",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Car:Fuel:加油",
+    "tags": [
+      "加油"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "停车费",
+    "peer": "停车|停车场|停车费|临停|咪表",
+    "item": "停车|停车场|停车费|临停|咪表",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Car:Parking:停车费",
+    "tags": [
+      "停车"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "网约车",
+    "peer": "滴滴|出租车|打车|高德打车|花小猪|阳光出行|曹操出行|T3出行|网约车|快车|专车",
+    "item": "滴滴|出租车|打车|高德打车|花小猪|阳光出行|曹操出行|T3出行|网约车|快车|专车",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:RideHailing:网约车",
+    "tags": [
+      "网约车"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "火车旅行",
+    "peer": "12306|中铁网络|中国铁路|火车票|铁路12306|广铁|动车|高铁",
+    "item": "12306|中铁网络|中国铁路|火车票|铁路12306|广铁|动车|高铁",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Travel:旅行返乡交通住宿",
+    "tags": [
+      "火车旅行"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "车险",
+    "peer": "车险|交强险|商业车险|机动车保险|车辆保险",
+    "item": "车险|交强险|商业车险|机动车保险|车辆保险",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Car:Insurance:车险",
+    "tags": [
+      "车险"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "车辆维护",
+    "peer": "洗车|保养|维修|4S|轮胎|美容洗车|汽车保养|机油",
+    "item": "洗车|保养|维修|4S|轮胎|美容洗车|汽车保养|机油",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Car:Maintenance:保养维修",
+    "tags": [
+      "车辆维护"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "违章罚款",
+    "peer": "违章|罚单|交通罚款|电子警察|违章缴费",
+    "item": "违章|罚单|交通罚款|电子警察|违章缴费",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Car:Violation:违章罚款",
+    "tags": [
+      "违章"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "电费",
+    "peer": "电费|国网|国家电网|供电|电费缴纳",
+    "item": "电费|国网|国家电网|供电|电费缴纳",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Utilities:Electric:电费",
+    "tags": [
+      "电费"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "水费",
+    "peer": "水费|自来水|水务|供水",
+    "item": "水费|自来水|水务|供水",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Utilities:Water:水费",
+    "tags": [
+      "水费"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "燃气费",
+    "peer": "燃气费|燃气|天然气|港华燃气|华润燃气",
+    "item": "燃气费|燃气|天然气|港华燃气|华润燃气",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Utilities:Gas:燃气费",
+    "tags": [
+      "燃气费"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "物业费",
+    "peer": "物业费|物业|九龙仓|物业管理|物管",
+    "item": "物业费|物业|九龙仓|物业管理|物管",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Utilities:Property:物业费",
+    "tags": [
+      "物业费"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "手机通讯",
+    "peer": "中国移动|中国联通|中国电信|话费|通讯费|手机费|充值交费|四川联通|移动支付",
+    "item": "话费|通讯费|手机费|充值|套餐",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Utilities:Telecom:手机通讯费",
+    "tags": [
+      "手机通讯"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "宽带",
+    "peer": "宽带|宽带费|电信宽带|联通宽带|移动宽带|有线电视|光纤",
+    "item": "宽带|宽带费|电信宽带|联通宽带|移动宽带|有线电视|光纤",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Utilities:Internet:宽带",
+    "tags": [
+      "宽带"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "快递物流",
+    "peer": "快递|快递费|顺丰|中通|圆通|韵达|申通|极兔|京东物流|寄件|运费",
+    "item": "快递|快递费|顺丰|中通|圆通|韵达|申通|极兔|京东物流|寄件|运费",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Logistics:快递物流",
+    "tags": [
+      "快递"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "母婴耗材",
+    "peer": "奶粉|尿裤|拉拉裤|纸尿裤|嘎嘎裤|奶瓶|母婴|中亿孕婴|辅食|成长裤|湿巾|婴儿",
+    "item": "奶粉|尿裤|拉拉裤|纸尿裤|嘎嘎裤|奶瓶|母婴|中亿孕婴|辅食|成长裤|湿巾|婴儿",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Family:Kids:Tian:Consumables:添添母婴耗材",
+    "tags": [
+      "母婴耗材"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "幼儿园教育",
+    "peer": "幼儿园|学费|保教费|园所|学前班|早教中心|兴趣班",
+    "item": "幼儿园|学费|保教费|园所|学前班|早教中心|兴趣班",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Family:Kids:Tao:Education:陶陶学费杂费教育",
+    "tags": [
+      "幼儿园教育"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "孩子医疗",
+    "peer": "儿科|儿童医院|妇幼|保健院|儿童保健|疫苗|接种|小儿",
+    "item": "儿科|儿童|保健院|疫苗|接种|小儿",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Healthcare:Kids:Tao:陶陶医疗",
+    "tags": [
+      "孩子医疗"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      },
+      {
+        "method": "医保",
+        "accountName": "Assets:SocialSecurity:Hubby:老公医保账户"
+      }
+    ]
+  },
+  {
+    "name": "孩子衣物玩乐",
+    "peer": "玩具|童鞋|童装|儿童|宝宝|合金车|不退不换|亲子乐园|儿童乐园",
+    "item": "玩具|童鞋|童装|儿童|宝宝|合金车|高乐高",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Family:Kids:Tao:Goods:陶陶衣物玩具玩乐",
+    "tags": [
+      "孩子衣物玩乐"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "看护工资",
+    "peer": "看护|育儿嫂|保姆|月嫂|带娃|照料费",
+    "item": "看护|育儿嫂|保姆|月嫂|带娃|照料费",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Family:Childcare:Salary:看护工资",
+    "tags": [
+      "看护"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "孝敬父母",
+    "peer": "中老年健步鞋",
+    "item": "中老年健步鞋",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Family:Parents:孝敬双方父母",
+    "tags": [
+      "孝敬父母"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "保险-夫妻",
+    "peer": "保险|人寿|重疾|医疗险|平安保险|中国人寿|太平洋保险|人保",
+    "item": "保险|人寿|重疾|医疗险|平安保险|中国人寿|太平洋保险|人保",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Insurance:Adults:夫妻保险",
+    "tags": [
+      "保险"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "订阅会员",
+    "peer": "Apple|苹果订阅|App Store|爱奇艺|腾讯视频|优酷|芒果TV|bilibili|哔哩哔哩大会员|网易云音乐|QQ音乐|Spotify|iCloud|微软|Office365|ChatGPT|Cursor|会员连续包月|自动续费",
+    "item": "会员|连续包月|自动续费|订阅|App Store",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Subscriptions:电子订阅服务",
+    "tags": [
+      "订阅"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "人情礼金",
+    "peer": "红包|份子|随礼|礼金|人情|结婚礼|乔迁|满月酒|白事|奠仪",
+    "item": "红包|份子|随礼|礼金|人情|结婚礼|乔迁|满月酒|白事|奠仪",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Entertainment:Social:人情往来（红包份子）",
+    "tags": [
+      "人情"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "节日置办",
+    "peer": "年货|春节|中秋|端午|元宵|圣诞|生日蛋糕|派对|装饰",
+    "item": "年货|春节|中秋|端午|元宵|圣诞|生日蛋糕|派对|装饰",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Entertainment:Festivals:节日生日置办",
+    "tags": [
+      "节日置办"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "家庭维修",
+    "peer": "维修|管道|电路|锁业|开锁|疏通|家电维修|上门维修",
+    "item": "维修|管道|电路|锁业|开锁|疏通|家电维修|上门维修",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Household:Repair:家庭维修保养",
+    "tags": [
+      "维修"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "日用品",
+    "peer": "日用品|洗衣液|抽纸|卷纸|垃圾袋|清洁剂|消毒液|收纳",
+    "item": "日用品|洗衣液|抽纸|卷纸|垃圾袋|清洁剂|消毒液|收纳",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:Supplies:日用品耗材",
+    "tags": [
+      "日用品"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "大人医疗",
+    "peer": "医院|挂号|诊所|卫生服务中心|卫生所|药房|医药|医疗|输液|海王星辰|泉源堂|亿康堂|医馆|大圣驾到|药店",
+    "item": "医院|挂号|诊所|药房|医药|医疗|输液|钙片|维生素|保健",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Healthcare:Adults:大人医疗",
+    "tags": [
+      "医疗健康"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      },
+      {
+        "method": "医保",
+        "accountName": "Assets:SocialSecurity:Hubby:老公医保账户"
+      }
+    ]
+  },
+  {
+    "name": "日常出行-公交地铁单车",
+    "peer": "天府通|地铁|公交|单车|青桔|哈啰|哈出行|共享单车",
+    "item": "天府通|地铁|公交|单车|青桔|哈啰|哈出行|共享单车",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:Transportation:Public:公共交通（地铁公交）",
+    "tags": [
+      "日常交通"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "日常餐饮",
     "peer": "食堂|豌杂面|饺子|副食|饭店|美团点餐|成都陕西老碗面|华莱士|生态超市|宜宾燃面|煲仔饭|麻辣烫|小面|小吃|快餐|盖饭|炒饭|炒菜|炒粉|炒米粉|包子|串串|饼|蓉|馒头|商户祝万斌|烤羊肉|你想干嘛|烧烤|火锅|广龙王大包|奶茶|大饼|包子|崔维勤|冯记蓉城鲜卤|海鲜|牛排|烤肉|家佳面|不二小笼包|剁椒面筋|饿了么|欣瑞|姜鸭面|手工面|面馆|牛肉面|黄师傅鲜拌面|商户陈祖运|姜鸭面|段记农家手工面|面馆|外卖|美食|安德鲁森|好利来|爱达乐|面包新语|罗莎|老碗面|七若滋烘焙 |餐饮|牛肉拉面|武胜猪肝面|蜜雪冰城",
     "item": "食堂|豌杂面|饺子|副食|饭店|美团点餐|成都陕西老碗面|华莱士|生态超市|宜宾燃面|煲仔饭|麻辣烫|小面|小吃|快餐|盖饭|炒饭|炒菜|炒粉|炒米粉|包子|串串|饼|蓉|馒头|商户祝万斌|烤羊肉|你想干嘛|烧烤|火锅|广龙王大包|奶茶|大饼|包子|崔维勤|冯记蓉城鲜卤|海鲜|牛排|烤肉|家佳面|不二小笼包|剁椒面筋|饿了么|欣瑞|姜鸭面|手工面|面馆|牛肉面|黄师傅鲜拌面|商户陈祖运|姜鸭面|段记农家手工面|面馆|外卖|美食|好利来|爱达乐|面包新语|罗莎|蜜雪冰城",
     "separator": "|",
@@ -89,278 +2589,7 @@
     ]
   },
   {
-    "name": "医疗健康",
-    "peer": "大圣驾到|挂号|医院|保健院|泉源堂|亿康堂|海王星辰|医馆|诊所|卫生服务中心|卫生所|药房|医药|医疗|输液",
-    "item": "大圣驾到|挂号|医院|保健院|泉源堂|亿康堂|海王星辰|医馆|诊所|卫生服务中心|钙片|维生素|卫生所|药房|医药|医疗|输液",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:DailyLiving:Healthcare:医疗（大人宝宝）",
-    "tags": [
-      "医疗健康"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      },
-      {
-        "method": "医保",
-        "accountName": "Assets:SocialSecurity:Hubby:老公医保账户"
-      }
-    ]
-  },
-  {
-    "name": "日常出行",
-    "peer": "天府通|地铁|公交|单车|青桔|哈啰|哈出行",
-    "item": "天府通|地铁|公交|单车|青桔|哈啰|哈出行",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:Transportation:Public:公共交通（地铁公交）",
-    "tags": [
-      "日常交通"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "车辆出行",
-    "peer": "9B41N|石油|石化|壳牌|停车|滴滴|出租车|打车|高德打车|花小猪|中铁网络|12306|阳光出行|火车票|中国铁路|车险",
-    "item": "9B41N|石油|石化|壳牌|停车|滴滴|出租车|打车|高德打车|花小猪|中铁网络|12306|阳光出行|火车票|中国铁路|车险",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:Transportation:Car:Fuel:加油",
-    "tags": [
-      "车辆出行"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "日常买菜米面粮油",
+    "name": "买菜粮油",
     "peer": "菜|果果李|红旗连锁|舞东风|商户廖伟志|诚信果业|杨记超市|山姆|生鲜|猩农人产地甄选|胖妹妹豆页|钱大妈|老邻居|海豚购|张小张|鲜肉铺|甜皮鸭|米|商户_亢海英|面粉|油|盐|酱|醋|红|糖|鸡蛋|牛奶|纯净水|商户蒲乾龙|货郎先生好物集合馆|辣条|零食|饮料|水果|蔬菜|肉类|海鲜|鲜果店|豆制品|粮油|调味品|矿泉水|调料|面包|饼干|果蔬|鲜切面|水产|糕点|糖果|坚果|速冻食品|熟食|冷冻食品|速食面|泡面|罐头|保健品|营养品|棕叶|云潮优选生活超市|双流区猩农人优选生鲜超市|果品|冰淇淋|黑龙滩生态鱼南湖店|谊品生鲜华府天骄店|成都盒马|上海盒马网络科技有限公司|棉童装|盒马鲜生|超市",
     "item": "菜|果果李|红旗连锁|舞东风|商户廖伟志|诚信果业|杨记超市|山姆|生鲜|猩农人产地甄选|胖妹妹豆页|钱大妈|老邻居|海豚购|张小张|鲜肉铺|甜皮鸭|米|商户_亢海英|面粉|油|盐|酱|醋|红|糖|鸡蛋|牛奶|纯净水|商户蒲乾龙|货郎先生好物集合馆|辣条|零食|饮料|水果|蔬菜|肉类|海鲜|鲜果店|豆制品|粮油|调味品|矿泉水|调料|面包|饼干|果蔬|鲜切面|水产|糕点|糖果|坚果|速冻食品|熟食|冷冻食品|速食面|泡面|罐头|保健品|营养品|棕叶|云潮优选生活超市|双流区猩农人优选生鲜超市|果品|冰淇淋|黑龙滩生态鱼南湖店|谊品生鲜华府天骄店|成都盒马|上海盒马网络科技有限公司|棉童装|盒马鲜生|超市",
     "separator": "|",
@@ -368,6 +2597,95 @@
     "targetAccountName": "Expenses:DailyLiving:Groceries:食品杂货（菜米面粮油）",
     "tags": [
       "日常买菜米面粮油"
+    ],
+    "methodMappings": [
+      {
+        "method": "5231",
+        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
+      },
+      {
+        "method": "2945",
+        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
+      },
+      {
+        "method": "白条",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "3010",
+        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
+      },
+      {
+        "method": "5059",
+        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
+      },
+      {
+        "method": "1997",
+        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
+      },
+      {
+        "method": "花呗",
+        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
+      },
+      {
+        "method": "零钱",
+        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
+      },
+      {
+        "method": "余额",
+        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
+      },
+      {
+        "method": "5137",
+        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
+      },
+      {
+        "method": "3554",
+        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
+      },
+      {
+        "method": "2648",
+        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
+      },
+      {
+        "method": "5917",
+        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
+      },
+      {
+        "method": "8138",
+        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
+      },
+      {
+        "method": "0552",
+        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
+      },
+      {
+        "method": "5535",
+        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
+      },
+      {
+        "method": "账户余额",
+        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
+      },
+      {
+        "method": "余额宝",
+        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
+      },
+      {
+        "method": "零钱通",
+        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
+      }
+    ]
+  },
+  {
+    "name": "个人洗护",
+    "peer": "牙膏|牙刷|淘特100官方旗舰店|洗发水|沐浴露|护肤品|化妆品|面膜|洗面奶|护发素|香皂|卫生巾|驱蚊|美发|剃须刀|洗手液|洗衣液|洗洁精|纸巾|湿巾|口罩|消毒液|护手霜|润唇膏|防晒霜|指甲油|睫毛膏|口红|粉底液|眼影|眉笔|腮红|睫毛夹|化妆刷|卸妆水|护发精油|发膜|染发剂|美甲用品|美容仪器|理发|美容|造型设计|快剪|卷纸|抽纸|快剪|剪指甲",
+    "item": "牙膏|牙刷|淘特100官方旗舰店|洗发水|沐浴露|护肤品|化妆品|面膜|洗面奶|护发素|香皂|卫生巾|驱蚊|美发|剃须刀|洗手液|洗衣液|洗洁精|纸巾|湿巾|口罩|消毒液|护手霜|润唇膏|防晒霜|指甲油|睫毛膏|口红|粉底液|眼影|眉笔|腮红|睫毛夹|化妆刷|卸妆水|护发精油|发膜|染发剂|美甲用品|美容仪器|理发|美容|造型设计|快剪|卷纸|抽纸|快剪|剪指甲|造型设计|快剪|卷纸|抽纸|快剪|剪指甲|造型设计|快剪|卷纸|抽纸|精华液|保湿|面霜|洗澡|蟑螂",
+    "separator": "|",
+    "logic": "OR",
+    "targetAccountName": "Expenses:DailyLiving:PersonalCare:个人洗护",
+    "tags": [
+      "个人洗护"
     ],
     "methodMappings": [
       {
@@ -627,95 +2945,6 @@
     ]
   },
   {
-    "name": "学习",
-    "peer": "书籍|文具|办公用品",
-    "item": "书籍|文具|办公用品",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:Professional:Learning:书籍课程服务器",
-    "tags": [
-      "学习"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
     "name": "家具家电",
     "peer": "家具|家电|装修|建材",
     "item": "家具|家电|装修|建材|雅迪",
@@ -805,14 +3034,14 @@
     ]
   },
   {
-    "name": "保险",
-    "peer": "惠蓉保|保险|好医保|意外险",
-    "item": "惠蓉保|保险|好医保|意外险",
+    "name": "学习",
+    "peer": "书籍|文具|办公用品",
+    "item": "书籍|文具|办公用品",
     "separator": "|",
     "logic": "OR",
-    "targetAccountName": "Expenses:Insurance:Adults:夫妻保险",
+    "targetAccountName": "Expenses:Professional:Learning:书籍课程服务器",
     "tags": [
-      "保险"
+      "学习"
     ],
     "methodMappings": [
       {
@@ -902,451 +3131,6 @@
     "targetAccountName": "Expenses:Entertainment:Leisure:娱乐游玩",
     "tags": [
       "娱乐消费"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "宝宝花销",
-    "peer": "奶粉|尿裤|奶瓶|玩具|宝宝|儿童|嘎嘎裤|童鞋|拉拉裤|母婴|中亿孕婴|个体户杨末意|圣辉超市|不退不换|合金车|教育|高乐高|幼儿园",
-    "item": "奶粉|尿裤|奶瓶|玩具|宝宝|儿童|嘎嘎裤|童鞋|拉拉裤|母婴|中亿孕婴|个体户杨末意|圣辉超市|不退不换|合金车|教育|成长裤|高乐高|幼儿园",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:Family:Kids:Tao:陶陶（衣物玩具学费等）",
-    "tags": [
-      "宝宝花销"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "日常生活费用",
-    "peer": "电费|水费|燃气费|物业费|通讯费|宽带费|中国移动|中国联通|中国电信|电信宽带|联通宽带|移动宽带|有线电视|国网|自来水|快递费|九龙仓|顺丰速运|生活缴费|移动支付|四川联通",
-    "item": "电费|水费|燃气费|物业费|通讯费|宽带费|中国移动|中国联通|中国电信|电信宽带|联通宽带|移动宽带|有线电视|国网|自来水|快递费|九龙仓|顺丰速运|生活缴费|移动支付|寄件",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:DailyLiving:Utilities:Electric:电费",
-    "tags": [
-      "日常生活费用"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "个人洗护",
-    "peer": "牙膏|牙刷|淘特100官方旗舰店|洗发水|沐浴露|护肤品|化妆品|面膜|洗面奶|护发素|香皂|卫生巾|驱蚊|美发|剃须刀|洗手液|洗衣液|洗洁精|纸巾|湿巾|口罩|消毒液|护手霜|润唇膏|防晒霜|指甲油|睫毛膏|口红|粉底液|眼影|眉笔|腮红|睫毛夹|化妆刷|卸妆水|护发精油|发膜|染发剂|美甲用品|美容仪器|理发|美容|造型设计|快剪|卷纸|抽纸|快剪|剪指甲",
-    "item": "牙膏|牙刷|淘特100官方旗舰店|洗发水|沐浴露|护肤品|化妆品|面膜|洗面奶|护发素|香皂|卫生巾|驱蚊|美发|剃须刀|洗手液|洗衣液|洗洁精|纸巾|湿巾|口罩|消毒液|护手霜|润唇膏|防晒霜|指甲油|睫毛膏|口红|粉底液|眼影|眉笔|腮红|睫毛夹|化妆刷|卸妆水|护发精油|发膜|染发剂|美甲用品|美容仪器|理发|美容|造型设计|快剪|卷纸|抽纸|快剪|剪指甲|造型设计|快剪|卷纸|抽纸|快剪|剪指甲|造型设计|快剪|卷纸|抽纸|精华液|保湿|面霜|洗澡|蟑螂",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:HouseholdGoods:PersonalCare:个人洗护",
-    "tags": [
-      "个人洗护"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "看护",
-    "peer": "老毛|母亲节|父亲节",
-    "item": "老毛|母亲节|父亲节",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:Family:Childcare:Salary:丈母娘看护工资",
-    "tags": [
-      "看护"
-    ],
-    "methodMappings": [
-      {
-        "method": "5231",
-        "accountName": "Liabilities:CreditCard:CMB2:招商银行信用卡5231"
-      },
-      {
-        "method": "2945",
-        "accountName": "Liabilities:CreditCard:CMB1:招商银行信用卡2945"
-      },
-      {
-        "method": "白条",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "3010",
-        "accountName": "Liabilities:CreditCard:ICBC:工商银行信用卡3010"
-      },
-      {
-        "method": "5059",
-        "accountName": "Liabilities:CreditCard:GFBank:广发银行信用卡5059"
-      },
-      {
-        "method": "1997",
-        "accountName": "Liabilities:CreditCard:CITIC:中信银行信用卡1997"
-      },
-      {
-        "method": "花呗",
-        "accountName": "Liabilities:AliPay:Huabei:Hubby:老公支付宝花呗"
-      },
-      {
-        "method": "零钱",
-        "accountName": "Assets:EBank:Wechat:Hubby:老公微信零钱"
-      },
-      {
-        "method": "余额",
-        "accountName": "Assets:EBank:JdPay:Hubby:老公京东余额"
-      },
-      {
-        "method": "5137",
-        "accountName": "Assets:Bank:CCBC:Hubby:老公建设银行储蓄卡5137"
-      },
-      {
-        "method": "3554",
-        "accountName": "Liabilities:JdPay:Baitiao:Hubby:老公京东白条"
-      },
-      {
-        "method": "2648",
-        "accountName": "Assets:Bank:CDYH:Wife:妻子成都银行储蓄卡2648"
-      },
-      {
-        "method": "5917",
-        "accountName": "Assets:Bank:CMB:Hubby:老公招商银行储蓄卡5917"
-      },
-      {
-        "method": "8138",
-        "accountName": "Assets:Bank:ICBC:Wife:妻子工商银行储蓄卡8138"
-      },
-      {
-        "method": "0552",
-        "accountName": "Assets:Bank:SCB:Wife:四川银行储蓄卡0552"
-      },
-      {
-        "method": "5535",
-        "accountName": "Assets:Bank:Traffic:Hubby:老公交通银行储蓄卡5535"
-      },
-      {
-        "method": "账户余额",
-        "accountName": "Assets:EBank:AliPay:Hubby:老公支付宝余额"
-      },
-      {
-        "method": "余额宝",
-        "accountName": "Assets:EBank:AliPay:Investment:支付宝余额宝"
-      },
-      {
-        "method": "零钱通",
-        "accountName": "Assets:EBank:Wechat:Investment:微信零钱通"
-      }
-    ]
-  },
-  {
-    "name": "孝敬父母",
-    "peer": "中老年健步鞋",
-    "item": "中老年健步鞋",
-    "separator": "|",
-    "logic": "OR",
-    "targetAccountName": "Expenses:Family:Parents:孝敬双方父母",
-    "tags": [
-      "孝敬父母"
     ],
     "methodMappings": [
       {

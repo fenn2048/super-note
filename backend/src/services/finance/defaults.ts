@@ -84,29 +84,47 @@ export const DEFAULT_ACCOUNTS: Array<{
   // ── Expenses: 日常生活 ──
   { name: "Expenses:DailyLiving:Meals:餐饮（早午晚）", type: "EXPENSES", icon: "Meal" },
   { name: "Expenses:DailyLiving:Groceries:食品杂货（菜米面粮油）", type: "EXPENSES", icon: "Shopping" },
+  { name: "Expenses:DailyLiving:Supplies:日用品耗材", type: "EXPENSES", icon: "Shopping" },
+  { name: "Expenses:DailyLiving:Clothing:成人衣物", type: "EXPENSES", icon: "Clothes" },
+  { name: "Expenses:DailyLiving:PersonalCare:个人洗护", type: "EXPENSES", icon: "Shopping" },
   { name: "Expenses:DailyLiving:Utilities:Electric:电费", type: "EXPENSES", icon: "House" },
   { name: "Expenses:DailyLiving:Utilities:Gas:燃气费", type: "EXPENSES", icon: "House" },
+  { name: "Expenses:DailyLiving:Utilities:Water:水费", type: "EXPENSES", icon: "House" },
   { name: "Expenses:DailyLiving:Utilities:Property:物业费", type: "EXPENSES", icon: "House" },
   { name: "Expenses:DailyLiving:Utilities:Telecom:手机通讯费", type: "EXPENSES", icon: "Phone" },
-  { name: "Expenses:DailyLiving:Healthcare:医疗（大人宝宝）", type: "EXPENSES", icon: "Insurance" },
+  { name: "Expenses:DailyLiving:Utilities:Internet:宽带", type: "EXPENSES", icon: "Phone" },
   { name: "Expenses:DailyLiving:Subscriptions:电子订阅服务", type: "EXPENSES", icon: "Subscribe" },
+  { name: "Expenses:DailyLiving:Logistics:快递物流", type: "EXPENSES", icon: "Shopping" },
+
+  // ── Expenses: 医疗（按人拆，独立一级） ──
+  { name: "Expenses:Healthcare:Adults:大人医疗", type: "EXPENSES", icon: "Insurance" },
+  { name: "Expenses:Healthcare:Kids:Tao:陶陶医疗", type: "EXPENSES", icon: "Baby" },
+  { name: "Expenses:Healthcare:Kids:Tian:添添医疗", type: "EXPENSES", icon: "Baby" },
+  { name: "Expenses:Healthcare:Elderly:长辈医疗", type: "EXPENSES", icon: "Family" },
 
   // ── Expenses: 交通 ──
   { name: "Expenses:Transportation:Public:公共交通（地铁公交）", type: "EXPENSES", icon: "Bus" },
   { name: "Expenses:Transportation:Bike:共享单车（月季年卡）", type: "EXPENSES", icon: "Bike" },
+  { name: "Expenses:Transportation:RideHailing:网约车", type: "EXPENSES", icon: "Car" },
   { name: "Expenses:Transportation:Car:Fuel:加油", type: "EXPENSES", icon: "Car" },
   { name: "Expenses:Transportation:Car:Parking:停车费", type: "EXPENSES", icon: "Car" },
+  { name: "Expenses:Transportation:Car:Wash:洗车", type: "EXPENSES", icon: "Car" },
   { name: "Expenses:Transportation:Car:Maintenance:保养维修", type: "EXPENSES", icon: "Car" },
   { name: "Expenses:Transportation:Car:Insurance:车险", type: "EXPENSES", icon: "Insurance" },
   { name: "Expenses:Transportation:Car:Inspection:年检", type: "EXPENSES", icon: "Car" },
+  { name: "Expenses:Transportation:Car:Violation:违章罚款", type: "EXPENSES", icon: "Car" },
+  { name: "Expenses:Transportation:Travel:旅行返乡交通住宿", type: "EXPENSES", icon: "Bus" },
 
-  // ── Expenses: 家庭与代际 ──
-  { name: "Expenses:Family:Kids:Tao:陶陶（衣物玩具学费等）", type: "EXPENSES", icon: "Baby" },
-  { name: "Expenses:Family:Kids:Tian:添添（衣物玩具学费等）", type: "EXPENSES", icon: "Baby" },
+  // ── Expenses: 家庭与代际 / 育儿（每孩 2～3 叶） ──
+  { name: "Expenses:Family:Kids:Tao:Education:陶陶学费杂费教育", type: "EXPENSES", icon: "Baby" },
+  { name: "Expenses:Family:Kids:Tao:Goods:陶陶衣物玩具玩乐", type: "EXPENSES", icon: "Baby" },
+  { name: "Expenses:Family:Kids:Tian:Education:添添早教绘本", type: "EXPENSES", icon: "Baby" },
+  { name: "Expenses:Family:Kids:Tian:Consumables:添添母婴耗材", type: "EXPENSES", icon: "Baby" },
+  { name: "Expenses:Family:Kids:Tian:Goods:添添衣物玩具", type: "EXPENSES", icon: "Baby" },
   { name: "Expenses:Family:Parents:孝敬双方父母", type: "EXPENSES", icon: "Family" },
-  { name: "Expenses:Family:Childcare:Salary:丈母娘看护工资", type: "EXPENSES", icon: "Salary" },
-  { name: "Expenses:Family:Childcare:Living:丈母娘生活补贴（菜药衣）", type: "EXPENSES", icon: "Family" },
-  { name: "Expenses:Family:Clothing:成人衣物", type: "EXPENSES", icon: "Clothes" },
+  { name: "Expenses:Family:Childcare:Salary:看护工资", type: "EXPENSES", icon: "Salary" },
+  { name: "Expenses:Family:Childcare:Living:看护生活补贴", type: "EXPENSES", icon: "Family" },
+  { name: "Expenses:Family:Childcare:Travel:看护返乡交通", type: "EXPENSES", icon: "Bus" },
 
   // ── Expenses: 保险 ──
   { name: "Expenses:Insurance:Adults:夫妻保险", type: "EXPENSES", icon: "Insurance" },
@@ -117,10 +135,10 @@ export const DEFAULT_ACCOUNTS: Array<{
   { name: "Expenses:Entertainment:Dining:外出吃饭", type: "EXPENSES", icon: "Meal" },
   { name: "Expenses:Entertainment:Leisure:娱乐游玩", type: "EXPENSES", icon: "Movie" },
   { name: "Expenses:Entertainment:Social:人情往来（红包份子）", type: "EXPENSES", icon: "Gift" },
+  { name: "Expenses:Entertainment:Festivals:节日生日置办", type: "EXPENSES", icon: "Gift" },
 
   // ── Expenses: 耐用家居 / 维修 ──
   { name: "Expenses:HouseholdGoods:Kitchen:厨房用品", type: "EXPENSES", icon: "Shopping" },
-  { name: "Expenses:HouseholdGoods:PersonalCare:个人洗护", type: "EXPENSES", icon: "Shopping" },
   { name: "Expenses:HouseholdGoods:Digital:数码电子", type: "EXPENSES", icon: "Digital" },
   { name: "Expenses:HouseholdGoods:Furniture:家具家电", type: "EXPENSES", icon: "House" },
   { name: "Expenses:HouseholdGoods:Bedding:家纺", type: "EXPENSES", icon: "House" },
@@ -176,8 +194,9 @@ export const ACCOUNT_GROUP_LABELS: Record<string, string> = {
   "Assets:Investment": "投资",
   "Assets:HouseProvidingFund": "公积金",
   "Expenses:DailyLiving": "日常生活",
+  "Expenses:Healthcare": "医疗",
   "Expenses:Transportation": "交通出行",
-  "Expenses:Family": "家庭",
+  "Expenses:Family": "家庭与育儿",
   "Expenses:Insurance": "保险支出",
   "Expenses:Entertainment": "娱乐及人情",
   "Expenses:HouseholdGoods": "耐用消耗品",
