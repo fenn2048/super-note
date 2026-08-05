@@ -44,33 +44,61 @@ interface MediaPlayerProps {
   onExitFullscreen?: () => void;
 }
 
-/** 全屏：强制横屏（Android 原生优先 Capacitor；失败再试 Screen Orientation API） */
+/** Android MainActivity.AndroidOrientationBridge（不依赖 Capacitor 插件注册表） */
+type AndroidOrientationBridge = {
+  lockLandscape?: () => void;
+  lockPortrait?: () => void;
+  unlock?: () => void;
+};
+
+function getAndroidOrientationBridge(): AndroidOrientationBridge | undefined {
+  try {
+    return (window as unknown as { AndroidOrientationBridge?: AndroidOrientationBridge })
+      .AndroidOrientationBridge;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 全屏：强制横屏。
+ * 顺序：Android JS Bridge（最稳）→ Capacitor ScreenOrientation → Screen Orientation API。
+ * 注意：仅靠 @capacitor/screen-orientation 时，若未写入 capacitor.plugins.json 会静默走 Web 实现并失败。
+ */
 async function lockLandscape(): Promise<void> {
-  const tryNative = async (orientation: "landscape" | "landscape-primary") => {
-    const { ScreenOrientation } = await import("@capacitor/screen-orientation");
-    await ScreenOrientation.lock({ orientation });
-  };
-  if (isNativePlatform()) {
+  const bridge = getAndroidOrientationBridge();
+  if (bridge?.lockLandscape) {
     try {
-      await tryNative("landscape");
+      bridge.lockLandscape();
       return;
-    } catch {
-      try {
-        await tryNative("landscape-primary");
-        return;
-      } catch {
-        /* fall through */
-      }
+    } catch (e) {
+      console.warn("[MediaPlayer] AndroidOrientationBridge.lockLandscape failed", e);
     }
   }
+
+  if (isNativePlatform()) {
+    try {
+      const { ScreenOrientation } = await import("@capacitor/screen-orientation");
+      try {
+        await ScreenOrientation.lock({ orientation: "landscape" });
+        return;
+      } catch {
+        await ScreenOrientation.lock({ orientation: "landscape-primary" });
+        return;
+      }
+    } catch (e) {
+      console.warn("[MediaPlayer] Capacitor ScreenOrientation.lock failed", e);
+    }
+  }
+
   try {
     const orient = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } })
       .orientation;
     if (orient?.lock) {
       await orient.lock("landscape");
     }
-  } catch {
-    /* 部分 WebView 仅允许全屏手势上下文 */
+  } catch (e) {
+    console.warn("[MediaPlayer] screen.orientation.lock failed", e);
   }
 }
 
@@ -80,6 +108,22 @@ async function lockLandscape(): Promise<void> {
  */
 async function restorePortraitOrientation(): Promise<void> {
   const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const bridge = getAndroidOrientationBridge();
+  if (bridge?.lockPortrait) {
+    try {
+      bridge.lockPortrait();
+      await delay(420);
+      try {
+        bridge.unlock?.();
+      } catch {
+        /* ignore */
+      }
+      return;
+    } catch (e) {
+      console.warn("[MediaPlayer] AndroidOrientationBridge portrait restore failed", e);
+    }
+  }
+
   if (isNativePlatform()) {
     try {
       const { ScreenOrientation } = await import("@capacitor/screen-orientation");
@@ -127,6 +171,15 @@ async function restorePortraitOrientation(): Promise<void> {
 
 /** 组件卸载：解除方向锁，避免离开详情后仍锁横/竖屏 */
 async function unlockOrientation(): Promise<void> {
+  const bridge = getAndroidOrientationBridge();
+  if (bridge?.unlock) {
+    try {
+      bridge.unlock();
+      return;
+    } catch {
+      /* ignore */
+    }
+  }
   if (isNativePlatform()) {
     try {
       const { ScreenOrientation } = await import("@capacitor/screen-orientation");
@@ -745,22 +798,18 @@ export default function MediaPlayer({
           /* ignore */
         }
         if (fs) {
-          // 立即锁横屏 + 短延迟重试（Android 全屏动画结束后再锁更稳）
+          // 立即锁横屏 + 多次重试（全屏动画 / 系统栏变化后部分 ROM 会吞掉第一次 setRequestedOrientation）
           void lockLandscape();
           // Android：隐藏状态栏/导航栏进入真正沉浸（点击收起控件后也保持）
           setNativeImmersive(true);
-          window.setTimeout(() => {
-            if (isFullscreenRef.current) {
-              void lockLandscape();
-              setNativeImmersive(true);
-            }
-          }, 120);
-          window.setTimeout(() => {
-            if (isFullscreenRef.current) {
-              void lockLandscape();
-              setNativeImmersive(true);
-            }
-          }, 360);
+          for (const ms of [50, 150, 350, 700]) {
+            window.setTimeout(() => {
+              if (isFullscreenRef.current) {
+                void lockLandscape();
+                setNativeImmersive(true);
+              }
+            }, ms);
+          }
         } else {
           // 非「返回并暂停」路径（点播放器自带退出全屏）也回到竖屏 + 恢复系统栏
           void restorePortraitOrientation();

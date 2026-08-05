@@ -175,11 +175,18 @@ export default function GlobalMusicPlayer() {
     currentMedia?.type,
     { parse: currentMedia?.type === "audio" },
   );
-  const coverToUse = id3Cover || currentMedia?.cover_url;
-  /** 全屏模糊背景用：与 AudioCover 一致解析，避免相对路径/鉴权导致 CSS 背景加载失败 */
+  // ID3 blob 优先（本曲内嵌封面），否则 DB cover
+  const coverToUse = id3Cover || currentMedia?.cover_url || null;
+  /**
+   * 氛围底 / 主色采样用 URL：
+   * - blob: / data: 原样
+   * - 相对 /api 或带 token 的附件走 resolveAttachmentUrl
+   * - 纯相对路径（如 /media/...）保留，避免二次加工丢鉴权
+   */
   const blurCoverSrc = React.useMemo(() => {
     const raw = coverToUse;
     if (!raw) return "";
+    if (raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
     if (raw.startsWith("/") && !raw.startsWith("/api")) return raw;
     return resolveAttachmentUrl(raw) || raw;
   }, [coverToUse]);
@@ -1098,38 +1105,45 @@ export default function GlobalMusicPlayer() {
         <>
         <div
         data-global-music-ui
+        style={playerAccentStyle}
         className={cn(
           "z-40 select-none transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel overflow-hidden flex flex-col",
-          // 移动 / 桌面统一：悬浮圆角条；桌面宽度≈主内容区，两侧留边
+          // 移动 / 桌面统一：悬浮圆角 glass 条
           "fixed left-3 right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] mobile-music-mini rounded-2xl",
-          "bg-app-elevated border border-app-border/60 shadow-xl",
+          "bg-app-elevated/92 backdrop-blur-md border border-app-border/50 shadow-xl",
+          "supports-[backdrop-filter]:bg-app-elevated/78",
           "md:left-[calc(var(--nav-rail-width,0px)+var(--media-sidebar-width,0px)+1rem)] md:right-4 md:bottom-3",
           "md:rounded-2xl md:border md:border-app-border/60",
           "md:bg-[var(--color-elevated-solid,var(--color-elevated))] md:backdrop-blur-md",
           "md:shadow-[0_8px_32px_rgba(0,0,0,0.12)]",
         )}
       >
-        {/* 顶进度：移动端 / 桌面一致，贴播放器上沿 */}
+        {/* 顶进度：accent 来自封面主色 */}
         <div
           className="relative w-full h-3 shrink-0 group/seek touch-none"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 视觉轨道：贴顶；圆角条上沿裁切 */}
           <div className="absolute left-0 right-0 top-0 h-[3px] bg-app-border/70 dark:bg-white/10 overflow-hidden">
             <div
-              className="h-full bg-accent-primary transition-[width] duration-75 ease-linear"
-              style={{ width: `${progressPct}%` }}
+              className="h-full transition-[width] duration-75 ease-linear"
+              style={{
+                width: `${progressPct}%`,
+                backgroundColor: coverAccent.solid,
+              }}
             />
           </div>
-          {/* 拖动手柄指示（拖动时更明显） */}
           <div
             className={cn(
               "pointer-events-none absolute top-0 z-[1] -translate-x-1/2 -translate-y-[3px]",
-              "w-2.5 h-2.5 rounded-full bg-accent-primary shadow-sm shadow-accent-primary/40",
+              "w-2.5 h-2.5 rounded-full shadow-sm",
               "opacity-0 group-active/seek:opacity-100 md:group-hover/seek:opacity-100 transition-opacity",
               scrubTime != null && "opacity-100",
             )}
-            style={{ left: `${progressPct}%` }}
+            style={{
+              left: `${progressPct}%`,
+              backgroundColor: coverAccent.solid,
+              boxShadow: `0 0 0 2px ${coverAccent.shadow}`,
+            }}
           />
           <input
             type="range"
@@ -1153,37 +1167,45 @@ export default function GlobalMusicPlayer() {
           />
         </div>
 
-        {/* 单行：封面 | 控件 | 音量 垂直居中对齐（与 ID3 封面同轴） */}
+        {/* 单行：封面 | 控件 | 音量 */}
         <div className="flex items-center justify-between px-3 py-2.5 md:h-[64px] md:py-0 md:px-4 lg:px-5 gap-2 md:gap-3 min-w-0">
-          {/* Left: 圆形旋转封面 + 曲目信息 */}
-          <div className="flex items-center gap-3 min-w-0 shrink-0 max-w-[46%] md:max-w-[30%] lg:max-w-[32%] md:min-w-[180px]">
-            <div 
+          {/* Left: 圆角方封面（移动更清晰）+ 曲目信息 */}
+          <div className="flex items-center gap-3 min-w-0 flex-1 md:max-w-[30%] lg:max-w-[32%] md:min-w-[180px] md:flex-none md:shrink-0">
+            <button
+              type="button"
               onClick={() => setIsExpanded(true)}
-              className="relative shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-full border border-app-border/50 bg-app-elevated flex items-center justify-center overflow-hidden cursor-pointer shadow-md group"
+              className={cn(
+                "relative shrink-0 w-11 h-11 md:w-12 md:h-12 overflow-hidden cursor-pointer shadow-md",
+                "rounded-xl md:rounded-full border border-app-border/50 bg-app-elevated",
+                "active:scale-[0.97] transition-transform duration-press ease-out",
+              )}
               title="展开播放器"
+              aria-label="展开正在播放"
             >
               <AudioCover
                 item={currentMedia}
                 className={cn(
-                  "w-full h-full object-cover rounded-full select-none media-disc-spin",
-                  !isPlaying && "media-disc-spin-paused",
+                  "w-full h-full object-cover select-none",
+                  "md:rounded-full md:media-disc-spin",
+                  !isPlaying && "md:media-disc-spin-paused",
                 )}
                 fallbackIconSize={16}
               />
-              <div className="absolute w-2.5 h-2.5 md:w-3 md:h-3 bg-app-elevated border border-app-border/60 shadow" />
-            </div>
+              <div className="hidden md:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-app-elevated border border-app-border/60 shadow" />
+            </button>
 
-            <div 
+            <button
+              type="button"
               onClick={() => setIsExpanded(true)}
-              className="flex flex-col min-w-0 cursor-pointer gap-0.5 justify-center"
+              className="flex flex-col min-w-0 cursor-pointer gap-0.5 justify-center text-left flex-1"
             >
-              <span className="text-xs md:text-sm font-semibold text-tx-primary truncate hover:text-accent-primary transition-colors">
+              <span className="text-xs md:text-sm font-semibold text-tx-primary truncate">
                 {currentMedia.title}
               </span>
               <span className="text-[10px] md:text-xs text-tx-tertiary truncate">
                 {[displayArtist || "未知歌手", displayAlbum].filter(Boolean).join(" · ")}
               </span>
-            </div>
+            </button>
           </div>
 
           {/* Center: 仅播放控件，与封面垂直居中对齐 */}
@@ -1235,27 +1257,35 @@ export default function GlobalMusicPlayer() {
 
           {/* Right: 音量 | 播放列表 | 最小化 | 关闭 — 与封面垂直居中 */}
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-1.5 shrink-0 md:min-w-0 justify-end">
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex md:hidden items-center gap-1.5 shrink-0">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   isPlaying ? pauseMedia() : resumeMedia();
                 }}
-                className="w-9 h-9 rounded-full bg-accent-primary text-white flex items-center justify-center [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 active:scale-95 transition-transform duration-press ease-out"
+                className="w-11 h-11 min-w-11 min-h-11 rounded-full text-white flex items-center justify-center active:scale-[0.97] transition-transform duration-press ease-out shadow-md"
+                style={{
+                  backgroundColor: coverAccent.solid,
+                  boxShadow: `0 6px 16px ${coverAccent.shadow}`,
+                }}
+                aria-label={isPlaying ? "暂停" : "播放"}
               >
                 {loading ? (
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={18} className="animate-spin" />
                 ) : isPlaying ? (
-                  <Pause size={16} className="fill-white" />
+                  <Pause size={18} className="fill-white" />
                 ) : (
-                  <Play size={16} className="fill-white translate-x-0.5" />
+                  <Play size={18} className="fill-white translate-x-0.5" />
                 )}
               </button>
-              <button 
+              <button
+                type="button"
                 onClick={() => nextMedia(false)}
-                className="w-9 h-9 rounded-full bg-app-sidebar border border-app-border text-tx-secondary flex items-center justify-center active:bg-app-hover transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
+                className="w-11 h-11 min-w-11 min-h-11 rounded-full bg-app-sidebar/80 border border-app-border text-tx-secondary flex items-center justify-center active:scale-[0.97] active:bg-app-hover transition-[transform,background-color] duration-press ease-out"
+                aria-label="下一曲"
               >
-                <SkipForward size={16} />
+                <SkipForward size={18} />
               </button>
             </div>
 
@@ -1476,8 +1506,16 @@ export default function GlobalMusicPlayer() {
         )}
 
       {/* ----------------------------------------------------------------------- */}
-      {/* 全屏播放器：BottomSheet（拖拽关闭 + velocity） */}
+      {/* 全屏播放器：氛围底 portal 在 sheet 外（避免 transform 毁掉 CSS blur） */}
       {/* ----------------------------------------------------------------------- */}
+      <CoverBlurBackdrop
+        portal
+        active={isExpanded}
+        coverSrc={blurCoverSrc || null}
+        fallbackGradient={noCoverGradient}
+        zClassName="z-[159]"
+      />
+
       <BottomSheet
             open={isExpanded}
             onClose={() => setIsExpanded(false)}
@@ -1492,62 +1530,55 @@ export default function GlobalMusicPlayer() {
             dismissVelocity={720}
             className={cn(
               "rounded-none border-0",
-              "bg-black md:bg-[var(--color-bg)]",
-              // 桌面仍可限制宽度居中；移动端由 fullscreen 撑满
-              "md:max-w-[520px] md:mx-auto md:rounded-t-window md:border-x md:border-app-border",
+              // 透明：让 portal 氛围底透出
+              "bg-transparent",
+              "md:max-w-[520px] md:mx-auto md:rounded-t-window md:border-x md:border-white/10",
             )}
-            bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden"
+            bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden bg-transparent"
             scrimClassName="hidden md:block bg-black/45 dark:bg-black/60"
           >
             <div
               data-global-music-ui
               data-global-player-panel
-              className="relative flex flex-col flex-1 min-h-0 overflow-hidden text-tx-primary select-none"
+              className="relative flex flex-col flex-1 min-h-0 overflow-hidden text-white select-none bg-transparent"
               style={playerAccentStyle}
             >
 
-            {/* 背景：ID3/附件封面 → canvas 高斯氛围光（CoverBlurBackdrop） */}
-            <CoverBlurBackdrop
-              coverSrc={blurCoverSrc || null}
-              fallbackGradient={noCoverGradient}
-            />
-
-            {/* 顶部拖拽提示条（可拖；与 BottomSheet handle 叠加一层可见反馈） */}
+            {/* 顶部拖拽提示条 */}
             <div
               className="relative z-10 flex justify-center pt-1.5 pb-0.5 md:hidden"
               aria-hidden
             >
-              <div className="w-10 h-1 rounded-full bg-white/35" />
+              <div className="w-10 h-1 rounded-full bg-white/40" />
             </div>
 
-            {/* Header：透明叠在 blur 上；移动端去掉右上角播放列表（底栏控件仍有入口） */}
+            {/* Header */}
             <div
-              className="relative z-10 grid grid-cols-[44px_1fr_44px] items-center gap-2 px-3 sm:px-5 pb-2 bg-transparent"
+              className="relative z-10 grid grid-cols-[44px_1fr_44px] items-center gap-2 px-3 sm:px-5 pb-1 bg-transparent"
               style={{ paddingTop: "max(6px, env(safe-area-inset-top, 0px))" }}
             >
               <button
                 type="button"
                 data-no-drag
                 onClick={() => setIsExpanded(false)}
-                className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 active:scale-95 transition-transform duration-press ease-out"
+                className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 active:scale-[0.97] transition-transform duration-press ease-out"
                 aria-label="收起"
               >
                 <ChevronDown size={26} />
               </button>
               <div className="text-center min-w-0 px-1">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-white/70 font-bold truncate">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/65 font-semibold truncate">
                   正在播放
                 </p>
               </div>
-              {/* 占位保持标题居中；桌面保留播放列表入口 */}
               <button
                 type="button"
                 data-no-drag
                 onClick={() => setShowQueue(true)}
                 className={cn(
-                  "hidden md:inline-flex w-11 h-11 justify-self-end rounded-full items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
+                  "hidden md:inline-flex w-11 h-11 justify-self-end rounded-full items-center justify-center transition-[transform,background-color,color] duration-fast ease-out",
                   showQueue
-                    ? "text-accent-primary bg-accent-primary/15"
+                    ? "text-white bg-white/15"
                     : "text-white/90 hover:bg-white/10",
                 )}
                 aria-label="播放列表"
@@ -1559,43 +1590,38 @@ export default function GlobalMusicPlayer() {
 
             {/* Main column */}
             <div className="relative z-10 flex-1 flex flex-col min-h-0 w-full max-w-lg mx-auto px-6 sm:px-10">
-              {/* 大圆形旋转封面 */}
-              <div className="shrink-0 flex flex-col items-center w-full pt-2 sm:pt-6">
+              {/* 大圆形封面（参考 Now Playing） */}
+              <div className="shrink-0 flex flex-col items-center w-full pt-3 sm:pt-8">
                 <div
                   className={cn(
-                    "relative rounded-full flex items-center justify-center select-none",
-                    "w-[min(78vw,320px)] h-[min(78vw,320px)]",
-                    "shadow-[0_20px_60px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.55)]",
-                    "bg-black/20 border border-white/10 dark:border-white/5",
+                    "relative rounded-full flex items-center justify-center select-none overflow-hidden",
+                    "w-[min(72vw,300px)] h-[min(72vw,300px)]",
+                    "shadow-[0_24px_64px_rgba(0,0,0,0.45)]",
+                    "ring-1 ring-white/12",
                   )}
                 >
-                  <div className="absolute inset-[10%] rounded-full overflow-hidden shadow-inner">
-                    <AudioCover
-                      item={currentMedia}
-                      className={cn(
-                        "w-full h-full object-cover select-none media-disc-spin",
-                        !isPlaying && "media-disc-spin-paused",
-                      )}
-                      fallbackIconSize={56}
-                    />
-                  </div>
-                  <div className="absolute w-5 h-5 rounded-full bg-app-elevated/90 border border-app-border shadow-md flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-app-border" />
-                  </div>
+                  <AudioCover
+                    item={currentMedia}
+                    className={cn(
+                      "w-full h-full object-cover select-none media-disc-spin",
+                      !isPlaying && "media-disc-spin-paused",
+                    )}
+                    fallbackIconSize={56}
+                  />
                 </div>
 
-                <div className="mt-7 text-center w-full px-1">
-                  <h2 className="text-[1.35rem] sm:text-2xl font-bold text-white tracking-tight line-clamp-2 drop-shadow-sm">
+                <div className="mt-8 text-center w-full px-1">
+                  <h2 className="text-[1.4rem] sm:text-[1.65rem] font-bold text-white tracking-tight leading-tight line-clamp-2 drop-shadow-sm">
                     {currentMedia.title}
                   </h2>
-                  <p className="text-sm text-white/70 mt-2 truncate font-medium">
+                  <p className="text-[13px] sm:text-sm text-white/65 mt-2.5 truncate font-medium tracking-wide">
                     {[displayArtist || "未知歌手", displayAlbum].filter(Boolean).join(" · ")}
                   </p>
                 </div>
               </div>
 
-              {/* 歌词限高，不挤大封面与主控件 */}
-              <div className="flex-1 min-h-0 max-h-[15vh] sm:max-h-[18vh] mt-2 mb-1">
+              {/* 歌词限高 */}
+              <div className="flex-1 min-h-0 max-h-[14vh] sm:max-h-[16vh] mt-3 mb-1">
                 <MediaLyrics
                   lines={currentMedia.type === "audio" ? id3Meta?.lyrics : undefined}
                   plain={currentMedia.type === "audio" ? id3Meta?.lyricsPlain : undefined}
@@ -1608,13 +1634,13 @@ export default function GlobalMusicPlayer() {
                 />
               </div>
 
-              {/* 控件区贴底（浅色叠在封面 blur 上）；进度条禁止触发 sheet 拖拽 */}
+              {/* 控件区贴底 */}
               <div
-                className="shrink-0 flex flex-col gap-5 mt-auto pt-2"
-                style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+                className="shrink-0 flex flex-col gap-5 mt-auto pt-3"
+                style={{ paddingBottom: "max(22px, env(safe-area-inset-bottom))" }}
                 data-no-sheet-drag
               >
-                <div className="flex flex-col gap-2" data-no-drag>
+                <div className="flex flex-col gap-2.5" data-no-drag>
                   <input
                     type="range"
                     min="0"
@@ -1625,22 +1651,22 @@ export default function GlobalMusicPlayer() {
                     onMouseUp={handleProgressCommit}
                     onTouchEnd={handleProgressCommit}
                     onPointerUp={handleProgressCommit}
-                    className="player-accent-range w-full h-3 outline-none cursor-pointer"
+                    className="player-accent-range w-full h-4 outline-none cursor-pointer"
                     style={{ accentColor: coverAccent.solid }}
                     aria-label="播放进度"
                     data-no-drag
                   />
-                  <div className="flex items-center justify-between text-xs text-white/65 select-none font-medium tabular-nums">
+                  <div className="flex items-center justify-between text-[11px] text-white/55 select-none font-medium tabular-nums tracking-wide">
                     <span>{formatDuration(progressValue)}</span>
                     <span>{formatDuration(duration)}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between px-0 sm:px-2">
+                <div className="flex items-center justify-between px-0 sm:px-1">
                   <button
                     type="button"
                     onClick={cyclePlayMode}
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 active:scale-[0.97] transition-[transform,background-color,color] duration-press ease-out"
                     title="播放模式"
                   >
                     {playMode === "random" && (
@@ -1655,7 +1681,8 @@ export default function GlobalMusicPlayer() {
                   <button
                     type="button"
                     onClick={prevMedia}
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 transition-transform duration-press ease-out"
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-[0.97] transition-transform duration-press ease-out"
+                    aria-label="上一曲"
                   >
                     <SkipBack size={28} />
                   </button>
@@ -1666,11 +1693,12 @@ export default function GlobalMusicPlayer() {
                       e.stopPropagation();
                       isPlaying ? pauseMedia() : resumeMedia();
                     }}
-                    className="w-[4.5rem] h-[4.5rem] rounded-full text-white flex items-center justify-center shadow-xl hover:opacity-95 active:scale-95 transition-transform duration-press ease-out"
+                    className="w-[4.75rem] h-[4.75rem] rounded-full text-white flex items-center justify-center hover:opacity-95 active:scale-[0.97] transition-transform duration-press ease-out"
                     style={{
                       backgroundColor: coverAccent.solid,
-                      boxShadow: `0 12px 32px ${coverAccent.shadow}`,
+                      boxShadow: `0 14px 36px ${coverAccent.shadow}`,
                     }}
+                    aria-label={isPlaying ? "暂停" : "播放"}
                   >
                     {loading ? (
                       <Loader2 size={30} className="animate-spin" />
