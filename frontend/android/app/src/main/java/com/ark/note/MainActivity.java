@@ -3,6 +3,7 @@ package com.ark.note;
 import android.Manifest;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -74,6 +75,7 @@ public class MainActivity extends BridgeActivity {
             this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidLogBridge(), "AndroidLogBridge");
             this.bridge.getWebView().addJavascriptInterface(new AndroidSystemBarsBridge(), "AndroidSystemBarsBridge");
+            this.bridge.getWebView().addJavascriptInterface(new AndroidOrientationBridge(), "AndroidOrientationBridge");
 
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
@@ -217,6 +219,50 @@ public class MainActivity extends BridgeActivity {
                     AppLogger.i(TAG, "setImmersive=" + immersive);
                 } catch (Exception e) {
                     AppLogger.w(TAG, "setImmersive failed: " + e.getMessage());
+                }
+            });
+        }
+    }
+
+    /**
+     * 视频全屏强制横屏 / 退出竖屏。
+     * Capacitor ScreenOrientation 插件若未同步进 capacitor.plugins.json 会静默走 Web 实现而失败，
+     * 故提供直连 Activity 的桥作为可靠路径。
+     */
+    public class AndroidOrientationBridge {
+        /** sensor landscape：允许左右两种横屏，并强制转过来 */
+        @JavascriptInterface
+        public void lockLandscape() {
+            runOnUiThread(() -> {
+                try {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                    AppLogger.i(TAG, "lockLandscape SENSOR_LANDSCAPE");
+                } catch (Exception e) {
+                    AppLogger.w(TAG, "lockLandscape failed: " + e.getMessage());
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void lockPortrait() {
+            runOnUiThread(() -> {
+                try {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                    AppLogger.i(TAG, "lockPortrait");
+                } catch (Exception e) {
+                    AppLogger.w(TAG, "lockPortrait failed: " + e.getMessage());
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void unlock() {
+            runOnUiThread(() -> {
+                try {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    AppLogger.i(TAG, "orientation unlock");
+                } catch (Exception e) {
+                    AppLogger.w(TAG, "orientation unlock failed: " + e.getMessage());
                 }
             });
         }
