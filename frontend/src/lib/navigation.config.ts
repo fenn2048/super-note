@@ -117,7 +117,8 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "收藏",
     feature: "favorites",
     tier: 0,
-    placements: ["sidebarSecondary", "mobileMore"],
+    // 不在底栏/Rail 主路径；「我的」与笔记侧栏可进（任务主路径已收敛，此处保留可发现性）
+    placements: ["sidebarSecondary", "mobileMore", "cmdk"],
     moreDesc: "快速查看收藏的笔记和说说",
   },
   {
@@ -152,16 +153,17 @@ export const NAV_MODULES: NavModule[] = [
     group: "secondary",
     moreDesc: "个人账本、账单导入与收支统计",
   },
-  // AI 放在桌面 Rail 次要区最后（记账之后）
+  // AI：嵌入写作 / 说说 @su / 复盘，非独立目的地（决策：嵌入）
+  // 保留 Cmd-K / 直接 hash 可达；不占 Rail 与「我的」主宫格
   {
     id: "ai",
     mode: "ai-chat",
     labelKey: "sidebar.aiChat",
     labelFallback: "AI",
     tier: 1,
-    placements: ["desktopRail", "mobileMore", "cmdk"],
+    placements: ["cmdk"],
     group: "secondary",
-    moreDesc: "智能问答与写作辅助",
+    moreDesc: "智能问答（写作、说说、复盘内嵌优先）",
   },
   // 移动快捷：仍保留分项，进入 library + 对应 tab
   {

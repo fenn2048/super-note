@@ -10,7 +10,7 @@ import {
   FolderInput, Check, Home, Download, FolderOpen,
   Columns2, Columns3, FileType2, Link2, FileUp,
   Briefcase, Calendar, Bookmark, Folder, FolderArchive, MoreVertical, Loader2, Globe, Lock, Eye,
-  Compass, Milestone} from "lucide-react";
+  Compass, Milestone, BarChart3, MoreHorizontal} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -804,11 +804,35 @@ function ProjectSidebar() {
   const [activeFilter, setActiveFilter] = useState<{ type: string; groupId?: string; projectId?: string }>(() => {
     try {
       const val = sessionStorage.getItem("super-active-project-filter");
-      return val ? JSON.parse(val) : { type: "all" };
+      const parsed = val ? JSON.parse(val) : { type: "my-tasks" };
+      // 兼容旧「事务分类」独立入口
+      if (parsed?.type === "task-categories") {
+        try {
+          sessionStorage.setItem("super-analytics-panel", "categories");
+          sessionStorage.setItem("super-active-project-filter", JSON.stringify({ type: "analytics" }));
+        } catch { /* ignore */ }
+        return { type: "analytics" };
+      }
+      return parsed?.type ? parsed : { type: "my-tasks" };
     } catch {
-      return { type: "all" };
+      return { type: "my-tasks" };
     }
   });
+
+  /** 任务侧栏「更多」：项目 / 计划等降级入口 */
+  const [taskMoreExpanded, setTaskMoreExpanded] = useState(() => {
+    try {
+      const saved = localStorage.getItem("super-task-more-expanded");
+      if (saved != null) return saved === "true";
+    } catch { /* ignore */ }
+    return false;
+  });
+
+  useEffect(() => {
+    if (activeFilter.type === "plans" || activeFilter.type === "all" || activeFilter.type === "group") {
+      setTaskMoreExpanded(true);
+    }
+  }, [activeFilter.type]);
 
   const fetchGroupsAndProjects = useCallback(async () => {
     try {
@@ -861,10 +885,21 @@ function ProjectSidebar() {
   }, []);
 
   const selectFilter = (filter: typeof activeFilter) => {
+    // 兼容旧「事务分类」入口 → 复盘内分类面板
+    let next = filter;
+    if (filter.type === "task-categories") {
+      try {
+        sessionStorage.setItem("super-analytics-panel", "categories");
+      } catch { /* ignore */ }
+      next = { type: "analytics" };
+      window.dispatchEvent(
+        new CustomEvent("super:analytics-panel", { detail: { panel: "categories" } }),
+      );
+    }
     actions.setViewMode("projects");
-    setActiveFilter(filter);
-    sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
-    window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
+    setActiveFilter(next);
+    sessionStorage.setItem("super-active-project-filter", JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: next }));
     actions.setMobileSidebar(false);
   };
 
@@ -932,75 +967,12 @@ function ProjectSidebar() {
 
   return (<>
     <ScrollArea className="flex-1 min-h-0 px-2 space-y-4">
-      {/* Top Section */}
+      {/* 任务主路径：待办 · 日程 · 复盘；项目/计划降入「更多」 */}
       <div className="space-y-0.5 py-2">
-        {/* 我的计划 */}
         <div
           className={cn(
-            "flex items-center justify-between group/my-plans px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
-            state.viewMode === "projects" && activeFilter.type === "plans"
-              ? "bg-app-active text-tx-primary font-medium"
-              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-          )}
-          onClick={() => {
-            actions.setViewMode("projects");
-            selectFilter({ type: "plans" });
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Compass size={16} />
-            <span>{t("plans.myPlans")}</span>
-          </div>
-          <button
-            type="button"
-            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-plans:opacity-100 opacity-100 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.setViewMode("projects");
-              selectFilter({ type: "plans" });
-              sessionStorage.setItem("super-pending-create-plan", "1");
-              actions.setMobileSidebar(false);
-              window.dispatchEvent(new CustomEvent("super:create-plan-trigger"));
-            }}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-
-        {/* 我的项目 */}
-        <div
-          className={cn(
-            "flex items-center justify-between group/my-projects px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
-            state.viewMode === "projects" && activeFilter.type === "all"
-              ? "bg-app-active text-tx-primary font-medium"
-              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
-          )}
-          onClick={() => {
-            actions.setViewMode("projects");
-            selectFilter({ type: "all" });
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Briefcase size={16} />
-            <span>{t("projects.myProjects") || "我的项目"}</span>
-          </div>
-          <button
-            type="button"
-            className="h-5 w-5 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-projects:opacity-100 opacity-100 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.setViewMode("projects");
-              sessionStorage.setItem("super-pending-create-project", "1");
-              actions.setMobileSidebar(false);
-              window.dispatchEvent(new CustomEvent("super:create-project-trigger"));
-            }}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            "flex items-center gap-2 px-3 py-2 min-h-11 rounded-lg text-sm cursor-pointer",
+            "transition-colors duration-fast ease-out active:scale-[0.98]",
             activeFilter.type === "my-tasks"
               ? "bg-app-active text-tx-primary font-medium"
               : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
@@ -1012,7 +984,8 @@ function ProjectSidebar() {
         </div>
         <div
           className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer",
+            "flex items-center gap-2 px-3 py-2 min-h-11 rounded-lg text-sm cursor-pointer",
+            "transition-colors duration-fast ease-out active:scale-[0.98]",
             activeFilter.type === "calendar"
               ? "bg-app-active text-tx-primary font-medium"
               : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
@@ -1022,6 +995,120 @@ function ProjectSidebar() {
           <Calendar size={16} />
           <span>{t("projects.calendar") || "日历"}</span>
         </div>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 min-h-11 rounded-lg text-sm cursor-pointer",
+            "transition-colors duration-fast ease-out active:scale-[0.98]",
+            activeFilter.type === "analytics" || activeFilter.type === "task-categories"
+              ? "bg-app-active text-tx-primary font-medium"
+              : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+          )}
+          onClick={() => {
+            try {
+              sessionStorage.setItem("super-analytics-panel", "review");
+            } catch { /* ignore */ }
+            selectFilter({ type: "analytics" });
+          }}
+        >
+          <BarChart3 size={16} />
+          <span>任务复盘</span>
+        </div>
+
+        {/* 更多：我的项目 · 我的计划（降级主入口） */}
+        <button
+          type="button"
+          className={cn(
+            "w-full flex items-center gap-2 px-3 py-2 min-h-11 rounded-lg text-sm",
+            "transition-colors duration-fast ease-out",
+            "text-tx-tertiary hover:bg-app-hover hover:text-tx-secondary",
+          )}
+          onClick={() => {
+            setTaskMoreExpanded((v) => {
+              const next = !v;
+              try { localStorage.setItem("super-task-more-expanded", String(next)); } catch {}
+              return next;
+            });
+          }}
+        >
+          <MoreHorizontal size={16} />
+          <span className="flex-1 text-left">更多</span>
+          <ChevronDown
+            size={14}
+            className={cn(
+              "transition-transform duration-fast ease-out",
+              !taskMoreExpanded && "-rotate-90",
+            )}
+          />
+        </button>
+        {taskMoreExpanded && (
+          <div className="space-y-0.5 pl-1 animate-in fade-in duration-200">
+            <div
+              className={cn(
+                "flex items-center justify-between group/my-projects px-3 py-2 min-h-11 rounded-lg text-sm cursor-pointer",
+                "transition-colors duration-fast ease-out",
+                state.viewMode === "projects" && activeFilter.type === "all"
+                  ? "bg-app-active text-tx-primary font-medium"
+                  : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+              )}
+              onClick={() => {
+                actions.setViewMode("projects");
+                selectFilter({ type: "all" });
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Briefcase size={16} />
+                <span>{t("projects.myProjects") || "我的项目"}</span>
+              </div>
+              <button
+                type="button"
+                className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-projects:opacity-100 opacity-100 transition-[transform,background-color,color,opacity] duration-fast ease-out active:scale-[0.95]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.setViewMode("projects");
+                  sessionStorage.setItem("super-pending-create-project", "1");
+                  actions.setMobileSidebar(false);
+                  window.dispatchEvent(new CustomEvent("super:create-project-trigger"));
+                }}
+                aria-label="新建项目"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+            <div
+              className={cn(
+                "flex items-center justify-between group/my-plans px-3 py-2 min-h-11 rounded-lg text-sm cursor-pointer",
+                "transition-colors duration-fast ease-out",
+                state.viewMode === "projects" && activeFilter.type === "plans"
+                  ? "bg-app-active text-tx-primary font-medium"
+                  : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+              )}
+              onClick={() => {
+                actions.setViewMode("projects");
+                selectFilter({ type: "plans" });
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Compass size={16} />
+                <span>{t("plans.myPlans")}</span>
+              </div>
+              <button
+                type="button"
+                className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-app-hover text-tx-secondary hover:text-tx-primary md:opacity-0 md:group-hover/my-plans:opacity-100 opacity-100 transition-[transform,background-color,color,opacity] duration-fast ease-out active:scale-[0.95]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.setViewMode("projects");
+                  selectFilter({ type: "plans" });
+                  sessionStorage.setItem("super-pending-create-plan", "1");
+                  actions.setMobileSidebar(false);
+                  window.dispatchEvent(new CustomEvent("super:create-plan-trigger"));
+                }}
+                aria-label="新建计划"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
 

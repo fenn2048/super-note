@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Bot, Loader2, Check, AlertCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronRight, Zap, CircleCheck } from "lucide-react";
+import { Bot, Loader2, Check, AlertCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronRight, Zap, CircleCheck, MessageSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAppActions } from "@/store/AppContext";
+import { Button } from "@/components/ui/button";
 
 interface AISettingsState {
   ai_provider: string;
@@ -128,6 +130,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 
 export default function AISettingsPanel() {
   const { t } = useTranslation();
+  const actions = useAppActions();
   const [settings, setSettings] = useState<AISettingsState>({
     ai_provider: "openai",
     ai_api_url: "",
@@ -311,20 +314,44 @@ export default function AISettingsPanel() {
   const currentPreset = getPreset(settings.ai_provider);
   const needsKey = currentPreset?.needsKey ?? true;
 
+  const openAiChat = () => {
+    // AI 为嵌入能力；完整对话从设置进入，不占主导航
+    actions.setViewMode("ai-chat");
+    window.dispatchEvent(new CustomEvent("super:close-settings"));
+    try {
+      window.location.hash = "#/ai-chat";
+    } catch { /* ignore */ }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h3 className="text-lg font-bold text-tx-primary mb-1">{t("ai.title")}</h3>
           <p className="text-sm text-tx-secondary">{t("ai.description")}</p>
+          <p className="text-[11px] text-tx-tertiary mt-1.5 leading-relaxed">
+            主路径：笔记/计划写作助手、说说 @su、任务复盘润色。独立对话为可选入口。
+          </p>
         </div>
-        {isConfigured && (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-            <CircleCheck size={14} />
-            {t("ai.configured")}
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {isConfigured && (
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+              <CircleCheck size={14} />
+              {t("ai.configured")}
+            </span>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5 min-h-11 md:min-h-8 active:scale-[0.97] transition-transform duration-press ease-out"
+            onClick={openAiChat}
+          >
+            <MessageSquare size={14} />
+            打开对话
+          </Button>
+        </div>
       </div>
 
       {/* Provider 卡片列表 */}
