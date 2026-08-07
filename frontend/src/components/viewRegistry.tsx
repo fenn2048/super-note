@@ -16,6 +16,7 @@ const AIChatPanel = React.lazy(() => import("@/components/AIChatPanel"));
 const ProjectCenter = React.lazy(() => import("@/components/ProjectCenter"));
 const LibraryCenter = React.lazy(() => import("@/components/LibraryCenter"));
 const FinanceCenter = React.lazy(() => import("@/components/finance/FinanceCenter"));
+const HealthCenter = React.lazy(() => import("@/components/health/HealthCenter"));
 const MobileMorePage = React.lazy(() => import("@/components/MobileMorePage"));
 const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
 
@@ -101,6 +102,12 @@ export function renderRegisteredView(
       return (
         <Shell>
           <FinanceCenter />
+        </Shell>
+      );
+    case "health":
+      return (
+        <Shell>
+          <HealthCenter />
         </Shell>
       );
     case "more":

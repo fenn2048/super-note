@@ -32,6 +32,7 @@ const PACK_MODULES: Record<ModulePackId, Set<string> | null> = {
     "mentions",
     "ai",
     "finance",
+    "health",
   ]),
   creator: new Set([
     "home",
@@ -47,6 +48,7 @@ const PACK_MODULES: Record<ModulePackId, Set<string> | null> = {
     "trash",
     "mentions",
     "finance",
+    "health",
   ]),
 };
 

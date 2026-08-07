@@ -153,6 +153,17 @@ export const NAV_MODULES: NavModule[] = [
     group: "secondary",
     moreDesc: "个人账本、账单导入与收支统计",
   },
+  {
+    id: "health",
+    mode: "health",
+    labelKey: "sidebar.health",
+    labelFallback: "健康",
+    feature: "health",
+    tier: 2,
+    placements: ["desktopRail", "mobileMore", "cmdk"],
+    group: "secondary",
+    moreDesc: "家人病历本、治疗时间轴与 OCR 录入",
+  },
   // AI：嵌入写作 / 说说 @su / 复盘，非独立目的地（决策：嵌入）
   // 保留 Cmd-K / 直接 hash 可达；不占 Rail 与「我的」主宫格
   {
@@ -401,6 +412,7 @@ export function isModuleActive(
       viewMode === "ai-chat" ||
       viewMode === "mentions" ||
       viewMode === "finance" ||
+      viewMode === "health" ||
       viewMode === "settings" ||
       viewMode === "library" ||
       viewMode === "files" ||
@@ -469,17 +481,18 @@ export function shouldShowMobileTabBar(ctx: MobileShellContext): boolean {
 
 /**
  * 是否显示移动端「+」FAB
- * 根页且非「我的」、非栈页
+ * 根页且非「我的」、非栈页；记账/健康为模块全屏，用模块内 FAB
  */
 export function shouldShowMobileFAB(ctx: MobileShellContext): boolean {
   if (!shouldShowMobileTabBar(ctx)) return false;
   if (ctx.viewMode === "more") return false;
+  if (ctx.viewMode === "finance" || ctx.viewMode === "health") return false;
   return true;
 }
 
 /**
  * 是否显示桌面端全局「+」FAB（右下角常驻）
- * 排除：书籍阅读器、视频影院模式（由调用方传入 theater 标志）
+ * 排除：书籍阅读器、视频影院、记账/健康模块（自带创建入口）
  */
 export function shouldShowDesktopFAB(opts: {
   /** 正在全屏读某本书 */
@@ -488,10 +501,13 @@ export function shouldShowDesktopFAB(opts: {
   isMediaTheater?: boolean;
   /** 系统级遮罩（锁屏等）可再加 */
   blocked?: boolean;
+  /** 当前视图：finance/health 隐藏全局 + */
+  viewMode?: string;
 }): boolean {
   if (opts.blocked) return false;
   if (opts.isBookReading) return false;
   if (opts.isMediaTheater) return false;
+  if (opts.viewMode === "finance" || opts.viewMode === "health") return false;
   return true;
 }
 
