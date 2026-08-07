@@ -2513,6 +2513,273 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+
+  // v46：家人健康管理档案（成员 / 病历本 / 病历时间轴 / 阶段 / 附件 OCR）
+  {
+    version: 46,
+    name: "health-archive",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS health_members (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          displayName TEXT NOT NULL,
+          relationship TEXT,
+          birthDate TEXT,
+          gender TEXT,
+          bloodType TEXT,
+          allergies TEXT,
+          chronicNotes TEXT,
+          avatarPath TEXT,
+          linkedUserId TEXT,
+          sortOrder INTEGER NOT NULL DEFAULT 0,
+          isArchived INTEGER NOT NULL DEFAULT 0,
+          createdBy TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_members_ws
+          ON health_members(workspaceId, isArchived, sortOrder);
+
+        CREATE TABLE IF NOT EXISTS health_books (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          memberId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          color TEXT,
+          isArchived INTEGER NOT NULL DEFAULT 0,
+          createdBy TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (memberId) REFERENCES health_members(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_books_member
+          ON health_books(memberId, isArchived);
+
+        CREATE TABLE IF NOT EXISTS health_records (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          memberId TEXT NOT NULL,
+          bookId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          recordType TEXT NOT NULL DEFAULT 'visit',
+          status TEXT NOT NULL DEFAULT 'ongoing',
+          occurredAt TEXT NOT NULL,
+          endedAt TEXT,
+          hospital TEXT,
+          department TEXT,
+          doctor TEXT,
+          diagnosis TEXT,
+          prescription TEXT,
+          advice TEXT,
+          notes TEXT,
+          tagsJson TEXT,
+          costMinor INTEGER,
+          createdBy TEXT NOT NULL,
+          updatedBy TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          isDeleted INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (memberId) REFERENCES health_members(id) ON DELETE CASCADE,
+          FOREIGN KEY (bookId) REFERENCES health_books(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_records_timeline
+          ON health_records(bookId, occurredAt DESC);
+        CREATE INDEX IF NOT EXISTS idx_health_records_member_date
+          ON health_records(memberId, occurredAt DESC);
+        CREATE INDEX IF NOT EXISTS idx_health_records_ws_date
+          ON health_records(workspaceId, occurredAt DESC);
+
+        CREATE TABLE IF NOT EXISTS health_record_stages (
+          id TEXT PRIMARY KEY,
+          recordId TEXT NOT NULL,
+          stageDate TEXT,
+          label TEXT,
+          symptoms TEXT NOT NULL,
+          notes TEXT,
+          sortOrder INTEGER NOT NULL DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (recordId) REFERENCES health_records(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_stages_record
+          ON health_record_stages(recordId, sortOrder);
+
+        CREATE TABLE IF NOT EXISTS health_attachments (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          recordId TEXT,
+          memberId TEXT,
+          bookId TEXT,
+          userId TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'other',
+          filename TEXT NOT NULL,
+          mimeType TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          path TEXT NOT NULL,
+          hash TEXT,
+          ocrStatus TEXT NOT NULL DEFAULT 'none',
+          ocrRawText TEXT,
+          ocrStructuredJson TEXT,
+          ocrModel TEXT,
+          ocrError TEXT,
+          ocrAt TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (recordId) REFERENCES health_records(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_att_record ON health_attachments(recordId);
+        CREATE INDEX IF NOT EXISTS idx_health_att_ws ON health_attachments(workspaceId, createdAt DESC);
+      `);
+    },
+  },
+
+  // v47：中西医双轨 — 医疗体系 + 双诊断字段
+  {
+    version: 47,
+    name: "health-medicine-system-dual-diagnosis",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(health_records)").all() as { name: string }[];
+      const names = new Set(cols.map((c) => c.name));
+      if (!names.has("medicineSystem")) {
+        db.exec(
+          `ALTER TABLE health_records ADD COLUMN medicineSystem TEXT NOT NULL DEFAULT 'unknown'`,
+        );
+      }
+      if (!names.has("diagnosisWestern")) {
+        db.exec(`ALTER TABLE health_records ADD COLUMN diagnosisWestern TEXT`);
+      }
+      if (!names.has("diagnosisTcm")) {
+        db.exec(`ALTER TABLE health_records ADD COLUMN diagnosisTcm TEXT`);
+      }
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_health_records_medicine
+         ON health_records(workspaceId, medicineSystem, occurredAt DESC)`,
+      );
+
+      // 启发式回填：旧数据尽量标体系并拆诊断
+      const rows = db
+        .prepare(
+          `SELECT id, diagnosis, prescription, title, medicineSystem
+           FROM health_records WHERE isDeleted = 0`,
+        )
+        .all() as {
+        id: string;
+        diagnosis: string | null;
+        prescription: string | null;
+        title: string | null;
+        medicineSystem: string;
+      }[];
+
+      const upd = db.prepare(
+        `UPDATE health_records SET medicineSystem = ?, diagnosisWestern = ?, diagnosisTcm = ?
+         WHERE id = ?`,
+      );
+
+      const looksTcm = (s: string) =>
+        /配方颗粒|水煎|剂\)|付\)|共\s*\d+\s*剂|中医|证候|证型|君臣|饮片|汤剂|冲服|辨证/.test(s);
+      const looksWestern = (s: string) =>
+        /\bmg\b|毫克|片\/|每日\s*\d|一日三次|静滴|胶囊|西医|血常规|CT|MRI/i.test(s);
+
+      for (const r of rows) {
+        const blob = [r.diagnosis, r.prescription, r.title].filter(Boolean).join("\n");
+        let sys = r.medicineSystem || "unknown";
+        if (sys === "unknown" || !sys) {
+          const tcm = looksTcm(blob);
+          const west = looksWestern(blob);
+          if (tcm && !west) sys = "tcm";
+          else if (west && !tcm) sys = "western";
+          else if (tcm && west) sys = "integrated";
+        }
+        let dw: string | null = null;
+        let dt: string | null = null;
+        if (r.diagnosis) {
+          if (sys === "tcm") dt = r.diagnosis;
+          else if (sys === "western") dw = r.diagnosis;
+          else {
+            // 结合/未知：原文两边各留一份摘要，避免丢
+            dw = r.diagnosis;
+            if (looksTcm(r.diagnosis)) dt = r.diagnosis;
+          }
+        }
+        upd.run(sys, dw, dt, r.id);
+      }
+    },
+  },
+
+  // v48：家庭药箱 + 病历 careExtra（住院/手术/输液）
+  {
+    version: 48,
+    name: "health-medicine-cabinet-and-care-extra",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS health_medicines (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          brand TEXT,
+          category TEXT NOT NULL DEFAULT 'western',
+          spec TEXT,
+          usageText TEXT,
+          efficacy TEXT,
+          form TEXT,
+          unit TEXT,
+          quantityTotal REAL,
+          quantityRemain REAL,
+          expiryDate TEXT,
+          openedAt TEXT,
+          location TEXT,
+          memberId TEXT,
+          medicineSystem TEXT DEFAULT 'unknown',
+          notes TEXT,
+          imageAttachmentId TEXT,
+          sourceRecordId TEXT,
+          isArchived INTEGER NOT NULL DEFAULT 0,
+          isDeleted INTEGER NOT NULL DEFAULT 0,
+          createdBy TEXT NOT NULL,
+          updatedBy TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_med_ws
+          ON health_medicines(workspaceId, isDeleted, expiryDate);
+        CREATE INDEX IF NOT EXISTS idx_health_med_name
+          ON health_medicines(workspaceId, name);
+
+        CREATE TABLE IF NOT EXISTS health_medicine_tags (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          color TEXT,
+          UNIQUE(workspaceId, name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_med_tags_ws
+          ON health_medicine_tags(workspaceId);
+
+        CREATE TABLE IF NOT EXISTS health_medicine_tag_map (
+          medicineId TEXT NOT NULL,
+          tagId TEXT NOT NULL,
+          PRIMARY KEY (medicineId, tagId),
+          FOREIGN KEY (medicineId) REFERENCES health_medicines(id) ON DELETE CASCADE,
+          FOREIGN KEY (tagId) REFERENCES health_medicine_tags(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_med_tag_map_tag
+          ON health_medicine_tag_map(tagId);
+      `);
+
+      const recCols = db.prepare("PRAGMA table_info(health_records)").all() as { name: string }[];
+      if (!recCols.some((c) => c.name === "careExtraJson")) {
+        db.exec(`ALTER TABLE health_records ADD COLUMN careExtraJson TEXT`);
+      }
+
+      const attCols = db.prepare("PRAGMA table_info(health_attachments)").all() as { name: string }[];
+      if (!attCols.some((c) => c.name === "medicineId")) {
+        db.exec(`ALTER TABLE health_attachments ADD COLUMN medicineId TEXT`);
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS idx_health_att_medicine ON health_attachments(medicineId)`,
+        );
+      }
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

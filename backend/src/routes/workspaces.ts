@@ -434,6 +434,7 @@ const FEATURE_KEYS: WorkspaceFeature[] = [
   "favorites",
   "media",
   "finance",
+  "health",
 ];
 
 app.get("/:id/features", (c) => {
