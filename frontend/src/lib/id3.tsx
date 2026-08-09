@@ -486,14 +486,16 @@ export async function getID3CoverUrl(url: string): Promise<{ url: string; blob: 
 }
 
 /**
- * Resolve display cover: DB cover_url first, then session memory cache.
+ * Resolve display cover: session ID3 (blob/uploaded) first, then DB cover_url.
+ * ID3-first so APIC art wins over a missing/stale DB field while the track is playing.
  */
 function resolveCoverFromCache(itemId: string, dbCoverUrl?: string): string | null {
-  if (dbCoverUrl) return dbCoverUrl;
   const cached = id3CoverCache.get(itemId);
+  // empty string = parsed, no cover — fall through to DB if any
   if (cached) return cached;
   const meta = id3MetaCache.get(itemId);
   if (meta?.coverUrl) return meta.coverUrl;
+  if (dbCoverUrl) return dbCoverUrl;
   return null;
 }
 
@@ -700,6 +702,11 @@ interface AudioCoverProps {
   };
   className?: string;
   fallbackIconSize?: number;
+  /**
+   * Explicit cover URL (e.g. already-resolved ID3 blob from the playing track).
+   * Wins over cache / DB so fullscreen player can share one source with the blur backdrop.
+   */
+  src?: string | null;
 }
 
 /** 由标题/id 派生稳定色相，无封面时作渐变底色 */
@@ -713,13 +720,14 @@ function coverHue(seed: string): number {
 
 /**
  * Drop-in component to display the audio cover.
- * Prefers DB cover_url / session ID3 cache; does not parse ID3 (parsing happens on play).
+ * Prefers optional `src` override, then DB cover_url / session ID3 cache.
+ * Does not parse ID3 (parsing happens on play via useID3Cover parse:true).
  */
-export function AudioCover({ item, className, fallbackIconSize = 28 }: AudioCoverProps) {
+export function AudioCover({ item, className, fallbackIconSize = 28, src }: AudioCoverProps) {
   const { coverUrl, loading } = useID3Cover(item.id, item.cover_url, (item as any).type, {
     parse: false,
   });
-  const coverToUse = coverUrl || item.cover_url;
+  const coverToUse = (src && src.length > 0 ? src : null) || coverUrl || item.cover_url || null;
 
   const [imgFailed, setImgFailed] = useState(false);
   useEffect(() => {
@@ -730,8 +738,10 @@ export function AudioCover({ item, className, fallbackIconSize = 28 }: AudioCove
     return (
       <img
         src={
-          coverToUse.startsWith("/") && !coverToUse.startsWith("/api")
-            ? coverToUse // 本地静态资源（如 /default_audio_cover.jpg）
+          coverToUse.startsWith("blob:") ||
+          coverToUse.startsWith("data:") ||
+          (coverToUse.startsWith("/") && !coverToUse.startsWith("/api"))
+            ? coverToUse // blob / data / 本地静态资源（如 /default_audio_cover.jpg）
             : resolveAttachmentUrl(coverToUse)
         }
         alt={item.title || "audio cover"}

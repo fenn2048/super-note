@@ -17,7 +17,12 @@ import {
   updateNativeMediaPosition,
   updateNativeMediaSession,
 } from "@/lib/nativeMedia";
-import { isNativePlatform, setNativeImmersive } from "@/hooks/useCapacitor";
+import {
+  isNativePlatform,
+  setNativeImmersive,
+  applyNativeStatusBar,
+  syncStatusBarToAppTheme,
+} from "@/hooks/useCapacitor";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import {
   acquireLocalPlayUrl,
@@ -220,6 +225,8 @@ export default function MediaPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<ArtplayerType | null>(null);
   const isFullscreenRef = useRef(false);
+  /** 全屏时播放器控件是否可见；与系统栏同步（显示控件=显示状态栏，沉浸=同时隐藏） */
+  const controlsShownRef = useRef(true);
   const mediaMetaRef = useRef(media);
   mediaMetaRef.current = media;
   const playUrlRef = useRef<string>("");
@@ -283,6 +290,7 @@ export default function MediaPlayer({
       if (player) {
         player.pause();
         if (player.fullscreen) player.fullscreen = false;
+        if (player.fullscreenWeb) player.fullscreenWeb = false;
       }
     } catch {
       /* ignore */
@@ -300,10 +308,12 @@ export default function MediaPlayer({
       /* ignore */
     }
     void restorePortraitOrientation();
-    // 退出全屏：恢复 Android 状态栏/导航栏
+    // 退出全屏：恢复 Android 状态栏/导航栏 + App 主题色
     setNativeImmersive(false);
+    syncStatusBarToAppTheme();
     setIsFullscreen(false);
     isFullscreenRef.current = false;
+    controlsShownRef.current = true;
     onExitFullscreen?.();
   }, [onExitFullscreen, pauseMedia]);
 
@@ -717,6 +727,15 @@ export default function MediaPlayer({
       const Hls = hlsMod.default;
 
       const isHls = !fromLocal && rawUrl.includes(".m3u8");
+      /**
+       * Android 原生：用网页全屏（CSS 铺满）+ 我们自己的横屏锁 / 系统栏控制。
+       * 浏览器 Fullscreen API 会强制沉浸隐藏状态栏，导致「工具栏在、状态栏没了」。
+       * 其它平台仍用系统全屏按钮。
+       */
+      const androidNativeFs =
+        isNativePlatform() &&
+        (document.documentElement.getAttribute("data-native") === "android" ||
+          /android/i.test(navigator.userAgent || ""));
 
       const player = new Artplayer({
         container: containerRef.current,
@@ -732,9 +751,8 @@ export default function MediaPlayer({
         hotkey: true,
         // 关闭画中画：与全屏按钮视觉重复，且 Android WebView 上 PiP 体验差
         pip: false,
-        fullscreen: true,
-        // 关闭网页全屏：与原生 fullscreen 图标几乎一样，造成「按钮重复」
-        fullscreenWeb: false,
+        fullscreen: !androidNativeFs,
+        fullscreenWeb: androidNativeFs,
         playsInline: true,
         theme: "#23ade5",
         type: isHls ? "m3u8" : "auto",
@@ -777,6 +795,30 @@ export default function MediaPlayer({
 
       playerRef.current = player;
 
+      /**
+       * 全屏系统栏策略（对齐用户预期）：
+       * - 进入横屏全屏且底部工具栏显示 → 顶部状态栏也显示（非沉浸）
+       * - 点击进入沉浸态（工具栏收起）→ 状态栏与工具栏同时隐藏
+       * - 再点唤出工具栏 → 状态栏一并恢复
+       */
+      const syncSystemBarsWithControls = () => {
+        if (!isNativePlatform()) return;
+        if (!isFullscreenRef.current) {
+          setNativeImmersive(false);
+          return;
+        }
+        const immersive = !controlsShownRef.current;
+        setNativeImmersive(immersive);
+        if (!immersive) {
+          // 视频深色底：状态栏用浅色图标，避免黑底黑字
+          applyNativeStatusBar({
+            isDarkSurface: true,
+            backgroundColor: "#000000",
+            navigationColor: "#000000",
+          });
+        }
+      };
+
       const applyFullscreenUi = (fs: boolean) => {
         isFullscreenRef.current = fs;
         setIsFullscreen(fs);
@@ -798,22 +840,25 @@ export default function MediaPlayer({
           /* ignore */
         }
         if (fs) {
-          // 立即锁横屏 + 多次重试（全屏动画 / 系统栏变化后部分 ROM 会吞掉第一次 setRequestedOrientation）
+          // 进入全屏：默认控件可见 → 系统栏也可见（不立刻沉浸）
+          controlsShownRef.current = true;
           void lockLandscape();
-          // Android：隐藏状态栏/导航栏进入真正沉浸（点击收起控件后也保持）
-          setNativeImmersive(true);
+          syncSystemBarsWithControls();
+          // 锁横屏重试（全屏动画 / 系统栏变化后部分 ROM 会吞掉第一次）
+          // 同步：浏览器 Fullscreen API 可能先藏系统栏，按当前控件态再拉回
           for (const ms of [50, 150, 350, 700]) {
             window.setTimeout(() => {
-              if (isFullscreenRef.current) {
-                void lockLandscape();
-                setNativeImmersive(true);
-              }
+              if (!isFullscreenRef.current) return;
+              void lockLandscape();
+              syncSystemBarsWithControls();
             }, ms);
           }
         } else {
           // 非「返回并暂停」路径（点播放器自带退出全屏）也回到竖屏 + 恢复系统栏
+          controlsShownRef.current = true;
           void restorePortraitOrientation();
           setNativeImmersive(false);
+          syncStatusBarToAppTheme();
         }
       };
 
@@ -949,13 +994,11 @@ export default function MediaPlayer({
       player.on("fullscreenWeb", (state: boolean) => {
         applyFullscreenUi(!!state);
       });
-      // 全屏下控件显示/隐藏（点击进入沉浸态）：再次确保系统栏隐藏
-      // art-control-show 去掉后仍可能被主题 sync 顶出状态栏，这里跟一次
+      // 全屏下控件显隐 ↔ 系统栏：沉浸时一起藏，唤出工具栏时一起显示
       player.on("control", (shown: boolean) => {
+        controlsShownRef.current = !!shown;
         if (!isFullscreenRef.current || !isNativePlatform()) return;
-        if (!shown) {
-          setNativeImmersive(true);
-        }
+        syncSystemBarsWithControls();
       });
     } catch (err: any) {
       if (!active.current) return;
@@ -973,7 +1016,9 @@ export default function MediaPlayer({
       active.current = false;
       void unlockOrientation();
       // 组件卸载时务必恢复系统栏，避免卡在沉浸态
+      controlsShownRef.current = true;
       setNativeImmersive(false);
+      syncStatusBarToAppTheme();
       if (playerRef.current) {
         const time = playerRef.current.currentTime;
         if (time > 0) {

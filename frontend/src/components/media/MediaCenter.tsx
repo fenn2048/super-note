@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { AudioCover } from "@/lib/id3";
 import { EmptyState, LoadingBlock } from "@/components/common/FeedbackStates";
+import { MobileChromeRightPortal } from "@/components/common/MobileChromeHeader";
 import { pushNativeMediaCatalog, type NativeMediaTrack } from "@/lib/nativeMedia";
 import { isNativePlatform } from "@/hooks/useCapacitor";
 import {
@@ -886,9 +887,9 @@ export default function MediaCenter() {
               )}
             </div>
 
-            {/* 移动端：删除 icon 放到顶栏右上角（StackChrome 右侧空位） */}
-            {isAdmin &&
-              createPortal(
+            {/* 移动端：删除 icon 进统一顶栏右侧（与返回/标题垂直居中） */}
+            {isAdmin && (
+              <MobileChromeRightPortal>
                 <button
                   type="button"
                   data-media-chrome
@@ -899,18 +900,14 @@ export default function MediaCenter() {
                       fetchData();
                     }
                   }}
-                  className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-accent-danger hover:bg-accent-danger/10 active:scale-95 flex items-center justify-center"
-                  style={{
-                    top: "calc(var(--safe-area-top, 0px) + 12px)",
-                    right: "10px",
-                  }}
+                  className="md:hidden w-11 h-11 min-w-11 min-h-11 rounded-xl text-accent-danger hover:bg-accent-danger/10 active:scale-95 flex items-center justify-center"
                   title="删除单品"
                   aria-label="删除单品"
                 >
                   <Trash2 size={18} />
-                </button>,
-                document.body,
-              )}
+                </button>
+              </MobileChromeRightPortal>
+            )}
 
             {/* 详情正文限宽居中 */}
             <div className="w-full max-w-5xl mx-auto flex flex-col md:gap-6 flex-1 min-h-0">
@@ -1227,40 +1224,31 @@ export default function MediaCenter() {
           >
             {mobileLevel === "type" && (
               <div className="flex-1 flex flex-col min-h-0">
-                {/* titlebar 右上角：车载入口（始终）+ Alist 设置（管理员） */}
-                {typeof document !== "undefined" &&
-                  createPortal(
-                    <div
-                      data-media-chrome
-                      className="md:hidden fixed z-[45] flex items-center gap-0.5"
-                      style={{
-                        top: "calc(var(--safe-area-top, 0px) + 12px)",
-                        right: "10px",
-                      }}
+                {/* 顶栏右侧：车载入口（始终）+ Alist 设置（管理员）——与返回/标题同一行垂直居中 */}
+                <MobileChromeRightPortal>
+                  <div data-media-chrome className="md:hidden flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowCarMode(true)}
+                      className="w-11 h-11 min-w-11 min-h-11 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center transition-colors duration-press"
+                      title="车载 / CarLife"
+                      aria-label="车载 / CarLife"
                     >
+                      <Car size={20} />
+                    </button>
+                    {isAdmin && (
                       <button
                         type="button"
-                        onClick={() => setShowCarMode(true)}
+                        onClick={() => void openAlistSettings()}
                         className="w-11 h-11 min-w-11 min-h-11 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center transition-colors duration-press"
-                        title="车载 / CarLife"
-                        aria-label="车载 / CarLife"
+                        title="Alist 挂载配置"
+                        aria-label="Alist 挂载配置"
                       >
-                        <Car size={20} />
+                        <Settings size={20} />
                       </button>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => void openAlistSettings()}
-                          className="w-11 h-11 min-w-11 min-h-11 rounded-xl text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95 flex items-center justify-center transition-colors duration-press"
-                          title="Alist 挂载配置"
-                          aria-label="Alist 挂载配置"
-                        >
-                          <Settings size={20} />
-                        </button>
-                      )}
-                    </div>,
-                    document.body,
-                  )}
+                    )}
+                  </div>
+                </MobileChromeRightPortal>
                 {/* 紧贴 titlebar 下方，无居中大标题 */}
                 <div className="flex-1 overflow-y-auto px-4 pt-3 pb-[calc(5.5rem+var(--safe-area-bottom,0px))] flex flex-col gap-3">
                   <button
@@ -1314,25 +1302,21 @@ export default function MediaCenter() {
 
             {mobileLevel === "collections" && (
               <div className="flex-1 flex flex-col min-h-0">
-                {/* 新建合集：仅加号，portal 到 titlebar 右上角 */}
-                {isAdmin &&
-                  createPortal(
+                {/* 新建合集：仅加号，portal 进顶栏右侧 slot */}
+                {isAdmin && (
+                  <MobileChromeRightPortal>
                     <button
                       type="button"
                       data-media-chrome
                       onClick={handleOpenAddCollection}
-                      className="md:hidden fixed z-[45] w-10 h-10 rounded-xl text-accent-primary hover:bg-accent-primary/10 active:scale-95 flex items-center justify-center"
-                      style={{
-                        top: "calc(var(--safe-area-top, 0px) + 12px)",
-                        right: "10px",
-                      }}
+                      className="md:hidden w-11 h-11 min-w-11 min-h-11 rounded-xl text-accent-primary hover:bg-accent-primary/10 active:scale-95 flex items-center justify-center"
                       title="新建合集"
                       aria-label="新建合集"
                     >
                       <Plus size={22} strokeWidth={2.25} />
-                    </button>,
-                    document.body,
-                  )}
+                    </button>
+                  </MobileChromeRightPortal>
+                )}
                 <div className="flex-1 overflow-y-auto px-3 pt-3 pb-[calc(5.5rem+var(--safe-area-bottom,0px))]">
                   {loading ? (
                     <LoadingBlock label="正在载入合集…" className="h-48" />
@@ -1400,16 +1384,11 @@ export default function MediaCenter() {
 
             {mobileLevel === "items" && (
               <div className="flex-1 flex flex-col min-h-0 relative">
-                {/* 搜索 + 面包屑菜单：portal 到 titlebar 右上角（与「媒体」同一水平线） */}
-                {typeof document !== "undefined" &&
-                  createPortal(
+                {/* 搜索 + 面包屑菜单：portal 进顶栏右侧（与返回/标题垂直居中） */}
+                <MobileChromeRightPortal>
                     <div
                       data-media-chrome
-                      className="md:hidden fixed z-[45] flex items-center gap-0.5"
-                      style={{
-                        top: "calc(var(--safe-area-top, 0px) + 12px)",
-                        right: "10px",
-                      }}
+                      className="md:hidden flex items-center gap-0.5"
                     >
                       {!showMobileSearch && (
                         <>
@@ -1419,7 +1398,7 @@ export default function MediaCenter() {
                               setShowItemsMenu(false);
                               setShowMobileSearch(true);
                             }}
-                            className="w-10 h-10 rounded-xl flex items-center justify-center text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95"
+                            className="w-11 h-11 min-w-11 min-h-11 rounded-xl flex items-center justify-center text-tx-secondary hover:text-tx-primary hover:bg-app-hover active:scale-95"
                             title="搜索"
                             aria-label="搜索"
                           >
@@ -1430,7 +1409,7 @@ export default function MediaCenter() {
                               type="button"
                               onClick={() => setShowItemsMenu((v) => !v)}
                               className={cn(
-                                "w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-colors",
+                                "w-11 h-11 min-w-11 min-h-11 rounded-xl flex items-center justify-center active:scale-95 transition-colors",
                                 showItemsMenu
                                   ? "text-accent-primary bg-accent-primary/10"
                                   : "text-tx-secondary hover:text-tx-primary hover:bg-app-hover",
@@ -1585,9 +1564,8 @@ export default function MediaCenter() {
                           </div>
                         </>
                       )}
-                    </div>,
-                    document.body,
-                  )}
+                    </div>
+                </MobileChromeRightPortal>
 
                 {/* 展开搜索时：贴 titlebar 下的搜索条 */}
                 {showMobileSearch && (

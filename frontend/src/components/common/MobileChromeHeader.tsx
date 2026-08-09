@@ -7,12 +7,21 @@
  *   - bare：无左侧按钮，仅标题 + 右侧（特殊全屏页）
  *
  * 所有 md:hidden 主流程顶栏应优先用本组件，避免汉堡/返回/safe-area 各写一套。
+ *
+ * 右侧动作两种接入方式（与左侧返回/标题同一 flex 行，垂直居中）：
+ *   1) `right` prop
+ *   2) portal 到 `#mobile-chrome-header-right`（见 MobileChromeRightPortal）
+ *      —— 媒体子页等深层组件无需把按钮层层上抛
  */
-import React from "react";
+import React, { useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, Menu, X } from "lucide-react";
 import { useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/hooks/useCapacitor";
+
+/** 右侧动作 portal 挂载点 id（与下方 slot 保持一致） */
+export const MOBILE_CHROME_RIGHT_SLOT_ID = "mobile-chrome-header-right";
 
 export type MobileChromeVariant = "root" | "stack" | "bare";
 
@@ -101,10 +110,11 @@ export default function MobileChromeHeader({
         // 默认半透明毛玻璃；Android 原生由 index.css 覆盖为实色，避免状态栏区发白
         "bg-app-elevated/70 backdrop-blur-md",
         !borderless && "border-b border-app-border/60",
-        "transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel ease-soft overflow-hidden",
+        "transition-[transform,opacity,background-color,box-shadow,border-color] duration-panel ease-soft",
+        // 折叠时 overflow 裁切；展开时 visible，避免右侧菜单被裁
         visible
-          ? "min-h-[52px] opacity-100 py-1.5"
-          : "h-0 min-h-0 max-h-0 opacity-0 py-0 pointer-events-none border-0",
+          ? "min-h-[52px] opacity-100 py-1.5 overflow-visible"
+          : "h-0 min-h-0 max-h-0 opacity-0 py-0 pointer-events-none border-0 overflow-hidden",
         className
       )}
       style={{ paddingTop: visible ? "calc(var(--safe-area-top) + 4px)" : 0 }}
@@ -146,11 +156,43 @@ export default function MobileChromeHeader({
         )}
       </div>
 
-      {right != null && (
-        <div className="flex items-center gap-0.5 shrink-0 min-h-[44px]">{right}</div>
-      )}
+      {/* 始终挂载 slot：子页 createPortal 与 left/title 同一 flex 行垂直居中 */}
+      <div
+        id={MOBILE_CHROME_RIGHT_SLOT_ID}
+        data-mobile-chrome-right
+        className="flex items-center justify-end gap-0.5 shrink-0 min-h-[44px] self-center"
+      >
+        {right}
+      </div>
     </header>
   );
+}
+
+/** 解析当前顶栏右侧 portal 挂载点（header 未挂载时为 null） */
+export function useMobileChromeRightPortalTarget(): HTMLElement | null {
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const find = () => document.getElementById(MOBILE_CHROME_RIGHT_SLOT_ID);
+    setTarget(find());
+    // 资料库等懒加载子树可能比 header 晚一帧；再补一次
+    const t = window.setTimeout(() => setTarget(find()), 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  return target;
+}
+
+/**
+ * 把子节点 portal 进统一顶栏右侧（与返回/标题垂直对齐）。
+ * header 不存在时不渲染（避免 fixed 猜 top 错位）。
+ */
+export function MobileChromeRightPortal({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const target = useMobileChromeRightPortalTarget();
+  if (!target) return null;
+  return createPortal(children, target);
 }
 
 /** 顶栏右侧统一图标按钮样式（约 40–44px 触控） */
