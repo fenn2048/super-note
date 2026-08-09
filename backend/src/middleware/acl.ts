@@ -330,7 +330,8 @@ export type WorkspaceFeature =
   | "files"
   | "favorites"
   | "media"
-  | "finance";
+  | "finance"
+  | "health";
 
 /**
  * 功能开关 JSON 的结构。所有字段都是可选的：
@@ -350,6 +351,7 @@ export interface EnabledFeaturesConfig {
   favorites?: boolean;
   media?: boolean;
   finance?: boolean;
+  health?: boolean;
 }
 
 /**

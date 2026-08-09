@@ -568,11 +568,13 @@ interface RequestOptions extends RequestInit {
   sudoToken?: string;
   /** 标记此请求不走离线队列拦截（内部使用） */
   _skipOfflineQueue?: boolean;
+  /** 覆盖默认超时（ms）；OCR 等长请求可设 180000 */
+  timeoutMs?: number;
 }
 
 async function request<T>(url: string, options?: RequestOptions): Promise<T> {
   const token = getToken();
-  const { sudoToken, _skipOfflineQueue, ...restOptions } = options || {};
+  const { sudoToken, _skipOfflineQueue, timeoutMs, ...restOptions } = options || {};
   const fullUrl = `${getBaseUrl()}${url}`;
 
   // ─── 离线队列拦截：网络不可达时直接入队，不发请求 ──────────────
@@ -599,7 +601,13 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
     else userSignal.addEventListener("abort", () => linkedController.abort(), { once: true });
   }
   // 写入类请求才设超时（GET/读类不设，长轮询场景另行处理）；GET 也保留兜底但更长
-  const TIMEOUT_MS = (method === "GET" || method === "HEAD") ? 60000 : 30000;
+  // timeoutMs 可覆盖（健康档案 OCR 等长任务）
+  const TIMEOUT_MS =
+    typeof timeoutMs === "number" && timeoutMs > 0
+      ? timeoutMs
+      : method === "GET" || method === "HEAD"
+        ? 60000
+        : 30000;
   const timeoutId = setTimeout(() => {
     try { linkedController.abort(); } catch { /* ignore */ }
   }, TIMEOUT_MS);
@@ -4287,6 +4295,316 @@ export const api = {
         },
       );
     },
+  },
+
+  // ======================================================================
+  // 健康档案（Health）
+  // ======================================================================
+  health: {
+    listMembers: (workspaceId: string, includeArchived = false) => {
+      const q = new URLSearchParams({ workspaceId });
+      if (includeArchived) q.set("includeArchived", "1");
+      return request<import("@/types").HealthMember[]>(`/health/members?${q}`);
+    },
+    createMember: (data: {
+      workspaceId: string;
+      displayName: string;
+      relationship?: string | null;
+      birthDate?: string | null;
+      gender?: string | null;
+      bloodType?: string | null;
+      allergies?: string | null;
+      chronicNotes?: string | null;
+      linkedUserId?: string | null;
+      withDefaultBook?: boolean;
+    }) =>
+      request<{ member: import("@/types").HealthMember; book: import("@/types").HealthBook | null }>(
+        "/health/members",
+        { method: "POST", body: JSON.stringify(data) },
+      ),
+    updateMember: (id: string, data: Partial<import("@/types").HealthMember>) =>
+      request<import("@/types").HealthMember>(`/health/members/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    archiveMember: (id: string, archived = true) =>
+      request<import("@/types").HealthMember>(`/health/members/${id}/archive`, {
+        method: "POST",
+        body: JSON.stringify({ archived }),
+      }),
+    listBooks: (memberId: string, includeArchived = false) => {
+      const q = new URLSearchParams({ memberId });
+      if (includeArchived) q.set("includeArchived", "1");
+      return request<import("@/types").HealthBook[]>(`/health/books?${q}`);
+    },
+    createBook: (data: {
+      memberId: string;
+      title: string;
+      description?: string | null;
+      color?: string | null;
+    }) =>
+      request<import("@/types").HealthBook>("/health/books", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateBook: (id: string, data: Partial<import("@/types").HealthBook> & { isArchived?: boolean }) =>
+      request<import("@/types").HealthBook>(`/health/books/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    listRecords: (params: {
+      workspaceId?: string;
+      memberId?: string;
+      bookId?: string;
+      from?: string;
+      to?: string;
+      status?: string;
+      medicineSystem?: string;
+    }) => {
+      const q = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v) q.set(k, String(v));
+      });
+      return request<import("@/types").HealthRecordTimelineItem[]>(`/health/records?${q}`);
+    },
+    getRecord: (id: string) =>
+      request<import("@/types").HealthRecordDetail>(`/health/records/${id}`),
+    createRecord: (data: Record<string, unknown>) =>
+      request<import("@/types").HealthRecordDetail>("/health/records", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateRecord: (id: string, data: Record<string, unknown>) =>
+      request<import("@/types").HealthRecordDetail>(`/health/records/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    deleteRecord: (id: string) =>
+      request<{ ok: boolean }>(`/health/records/${id}`, { method: "DELETE" }),
+    replaceStages: (id: string, stages: Array<Record<string, unknown>>) =>
+      request<{ stages: import("@/types").HealthStage[] }>(`/health/records/${id}/stages`, {
+        method: "PUT",
+        body: JSON.stringify({ stages }),
+      }),
+    uploadAttachment: async (data: {
+      file: File;
+      workspaceId: string;
+      kind?: string;
+      recordId?: string;
+      memberId?: string;
+      bookId?: string;
+    }) => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", data.file);
+      form.append("workspaceId", data.workspaceId);
+      if (data.kind) form.append("kind", data.kind);
+      if (data.recordId) form.append("recordId", data.recordId);
+      if (data.memberId) form.append("memberId", data.memberId);
+      if (data.bookId) form.append("bookId", data.bookId);
+      const res = await fetch(`${getBaseUrl()}/health/attachments`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `上传失败: ${res.status}`);
+      return json as import("@/types").HealthAttachment;
+    },
+    deleteAttachment: (id: string) =>
+      request<{ ok: boolean }>(`/health/attachments/${id}`, { method: "DELETE" }),
+    runOcr: (id: string, documentHint?: string) =>
+      request<{
+        attachmentId: string;
+        ocrStatus: string;
+        rawText: string;
+        structured: import("@/types").HealthOcrStructured;
+        model: string;
+        attachment: import("@/types").HealthAttachment;
+      }>(`/health/attachments/${id}/ocr`, {
+        method: "POST",
+        body: JSON.stringify({ documentHint }),
+        // Vision / 本地 Tesseract + 结构化可能较慢
+        timeoutMs: 180000,
+        _skipOfflineQueue: true,
+      }),
+    /** 病历多图 OCR（报告多页，最多 6 张） */
+    runOcrBatch: (attachmentIds: string[], documentHint?: string) =>
+      request<{
+        attachmentId: string;
+        attachmentIds: string[];
+        ocrStatus: string;
+        rawText: string;
+        structured: import("@/types").HealthOcrStructured;
+        model: string;
+        imageCount: number;
+      }>("/health/ocr/batch", {
+        method: "POST",
+        body: JSON.stringify({ attachmentIds, documentHint }),
+        timeoutMs: 240000,
+        _skipOfflineQueue: true,
+      }),
+    applyOcr: (data: {
+      bookId?: string;
+      recordId?: string;
+      structured: import("@/types").HealthOcrStructured;
+      attachmentIds?: string[];
+      merge?: boolean;
+    }) =>
+      request<import("@/types").HealthRecordDetail>("/health/ocr/apply", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getAnalytics: (params: {
+      workspaceId: string;
+      memberId?: string;
+      period?: string;
+      from?: string;
+      to?: string;
+    }) => {
+      const q = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v) q.set(k, String(v));
+      });
+      return request<any>(`/health/analytics?${q}`);
+    },
+    getAnalyticsReport: (params: {
+      workspaceId: string;
+      memberId?: string;
+      period?: string;
+      from?: string;
+      to?: string;
+    }) => {
+      const q = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v) q.set(k, String(v));
+      });
+      return request<{ markdown: string; filename: string; range: any }>(
+        `/health/analytics/report?${q}`,
+      );
+    },
+    getAnalyticsAdvice: (
+      params: {
+        workspaceId: string;
+        memberId?: string;
+        period?: string;
+        from?: string;
+        to?: string;
+      },
+      body?: { includeReport?: boolean },
+    ) => {
+      const q = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v) q.set(k, String(v));
+      });
+      return request<{
+        insights: import("@/types").HealthInsight[];
+        aiText: string | null;
+        message?: string;
+        markdown?: string | null;
+      }>(`/health/analytics/advice?${q}`, {
+        method: "POST",
+        body: JSON.stringify(body || {}),
+      });
+    },
+
+    // ── 家庭药箱 ──
+    listMedicines: (params: {
+      workspaceId: string;
+      q?: string;
+      tag?: string;
+      expiry?: string;
+    }) => {
+      const q = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v) q.set(k, String(v));
+      });
+      return request<import("@/types").HealthMedicine[]>(`/health/medicines?${q}`);
+    },
+    getMedicine: (id: string) =>
+      request<import("@/types").HealthMedicine>(`/health/medicines/${id}`),
+    createMedicine: (data: Record<string, unknown>) =>
+      request<import("@/types").HealthMedicine>("/health/medicines", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateMedicine: (id: string, data: Record<string, unknown>) =>
+      request<import("@/types").HealthMedicine>(`/health/medicines/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    deleteMedicine: (id: string) =>
+      request<{ ok: boolean }>(`/health/medicines/${id}`, { method: "DELETE" }),
+    listMedicineTags: (workspaceId: string) =>
+      request<import("@/types").HealthMedicineTag[]>(
+        `/health/medicine-tags?workspaceId=${encodeURIComponent(workspaceId)}`,
+      ),
+    createMedicineTag: (data: { workspaceId: string; name: string; color?: string }) =>
+      request<import("@/types").HealthMedicineTag>("/health/medicine-tags", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    uploadMedicineAttachment: async (data: {
+      file: File;
+      workspaceId: string;
+      kind?: string;
+    }) => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", data.file);
+      form.append("workspaceId", data.workspaceId);
+      if (data.kind) form.append("kind", data.kind);
+      const res = await fetch(`${getBaseUrl()}/health/medicines/attachments`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `上传失败: ${res.status}`);
+      return json as import("@/types").HealthAttachment;
+    },
+    runMedicineOcr: (attachmentId: string) =>
+      request<{
+        attachmentId: string;
+        attachmentIds?: string[];
+        ocrStatus: string;
+        rawText: string;
+        structured: import("@/types").MedicineOcrStructured;
+        model: string;
+      }>(`/health/medicines/attachments/${attachmentId}/ocr`, {
+        method: "POST",
+        body: JSON.stringify({}),
+        timeoutMs: 180000,
+        _skipOfflineQueue: true,
+      }),
+    /** 多图药盒 OCR（同一药品多张照片，最多 6 张） */
+    runMedicineOcrBatch: (attachmentIds: string[]) =>
+      request<{
+        attachmentId: string;
+        attachmentIds: string[];
+        ocrStatus: string;
+        rawText: string;
+        structured: import("@/types").MedicineOcrStructured;
+        model: string;
+        imageCount: number;
+      }>("/health/medicines/ocr/batch", {
+        method: "POST",
+        body: JSON.stringify({ attachmentIds }),
+        timeoutMs: 240000,
+        _skipOfflineQueue: true,
+      }),
+    applyMedicineOcr: (data: {
+      workspaceId: string;
+      structured: import("@/types").MedicineOcrStructured;
+      attachmentId?: string;
+      attachmentIds?: string[];
+      medicineId?: string;
+      tagNames?: string[];
+    }) =>
+      request<import("@/types").HealthMedicine>("/health/medicines/ocr/apply", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 };
 

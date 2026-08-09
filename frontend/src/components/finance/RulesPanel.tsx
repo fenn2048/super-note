@@ -251,12 +251,12 @@ export default function RulesPanel({
                   <div className="font-medium flex flex-wrap items-center gap-2">
                     <span>{r.name}</span>
                     {r.ignore && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-500/15 text-tx-tertiary">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-app-elevated text-tx-tertiary">
                         忽略
                       </span>
                     )}
                     {r.fullMatch && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-warning/15 text-accent-warning">
                         完全匹配
                       </span>
                     )}
@@ -303,7 +303,7 @@ export default function RulesPanel({
                   </button>
                   <button
                     type="button"
-                    className="p-1.5 text-tx-tertiary hover:text-red-500"
+                    className="p-1.5 text-tx-tertiary hover:text-accent-danger"
                     title="删除"
                     onClick={async () => {
                       if (!r.id || !confirm(`删除规则「${r.name}」？`)) return;
@@ -375,7 +375,7 @@ function RuleEditorModal({
       onClose={onClose}
       title={rule.id ? "编辑规则" : "添加规则"}
       maxHeight="min(92dvh, 100%)"
-      zClassName="z-[10000]"
+      zClassName="z-modal"
       className="sm:max-w-xl sm:mx-auto"
     >
       <div className="px-4 pb-4">
@@ -627,7 +627,7 @@ function RuleEditorModal({
                 </select>
                 <button
                   type="button"
-                  className="p-1 text-red-500"
+                  className="p-1 text-accent-danger"
                   onClick={() =>
                     set(
                       "methodMappings",

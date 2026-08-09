@@ -421,6 +421,10 @@ function AppLayout() {
         // 思维导图功能已移除；旧书签/深链落到首页
         actions.setViewMode("home");
         window.location.hash = "#/home";
+      } else if (hash === "#/finance") {
+        actions.setViewMode("finance");
+      } else if (hash === "#/health") {
+        actions.setViewMode("health");
       } else if (hash === "#/settings" || hash.startsWith("#/settings/")) {
         const tabRaw = hash.startsWith("#/settings/")
           ? hash.slice("#/settings/".length).split(/[?#]/)[0]
@@ -1322,6 +1326,7 @@ function AppLayout() {
   const showDesktopFAB = shouldShowDesktopFAB({
     isBookReading,
     isMediaTheater: mediaTheaterMode,
+    viewMode: state.viewMode,
   });
 
   // 进入书籍阅读 / 影院模式时收起创建菜单，避免悬空浮层

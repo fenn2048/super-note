@@ -67,6 +67,12 @@ describe("shouldShowDesktopFAB", () => {
   it("hides when explicitly blocked", () => {
     expect(shouldShowDesktopFAB({ blocked: true })).toBe(false);
   });
+
+  it("hides on finance and health modules", () => {
+    expect(shouldShowDesktopFAB({ viewMode: "finance" })).toBe(false);
+    expect(shouldShowDesktopFAB({ viewMode: "health" })).toBe(false);
+    expect(shouldShowDesktopFAB({ viewMode: "all" })).toBe(true);
+  });
 });
 
 describe("isModuleActive", () => {

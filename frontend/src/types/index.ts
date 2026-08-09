@@ -103,6 +103,7 @@ export interface WorkspaceFeatures {
   projects: boolean;
   media: boolean;
   finance: boolean;
+  health: boolean;
 }
 
 /** 功能开关的稳定排序 + 展示元信息，UI 渲染列表用。 */
@@ -119,6 +120,7 @@ export const WORKSPACE_FEATURE_META: Array<{
   { key: "projects", label: "项目", description: "项目管理、任务看板与协作" },
   { key: "media", label: "媒体库", description: "音视频媒体管理与在线播放" },
   { key: "finance", label: "记账", description: "个人账本、账单导入与收支统计" },
+  { key: "health", label: "健康档案", description: "家人病历本、时间轴与 OCR 录入" },
 ];
 
 /** 记账模块类型 */
@@ -269,7 +271,230 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance" | "settings";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance" | "health" | "settings";
+
+/** 健康档案 */
+export type HealthRecordType =
+  | "visit"
+  | "hospitalization"
+  | "surgery"
+  | "infusion"
+  | "checkup"
+  | "medication"
+  | "emergency"
+  | "other";
+
+export type HealthRecordStatus = "ongoing" | "recovered" | "chronic" | "unknown";
+
+export type MedicineSystem = "western" | "tcm" | "integrated" | "unknown";
+
+export type HealthAttachmentKind =
+  | "medical_record"
+  | "invoice"
+  | "exam_lab"
+  | "prescription"
+  | "prescription_western"
+  | "prescription_tcm"
+  | "drug_label"
+  | "drug_box"
+  | "other";
+
+export interface HealthMember {
+  id: string;
+  workspaceId: string;
+  displayName: string;
+  relationship: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  bloodType: string | null;
+  allergies: string | null;
+  chronicNotes: string | null;
+  avatarPath: string | null;
+  linkedUserId: string | null;
+  sortOrder: number;
+  isArchived: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HealthBook {
+  id: string;
+  workspaceId: string;
+  memberId: string;
+  title: string;
+  description: string | null;
+  color: string | null;
+  isArchived: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HealthStage {
+  id: string;
+  recordId: string;
+  stageDate: string | null;
+  label: string | null;
+  symptoms: string;
+  notes: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface HealthLabItem {
+  name?: string;
+  value?: string;
+  unit?: string;
+  refRange?: string;
+  flag?: string;
+}
+
+export interface HealthOcrStructured {
+  documentType: string;
+  confidence: number;
+  medicineSystem?: MedicineSystem;
+  title?: string;
+  occurredAt?: string;
+  hospital?: string;
+  department?: string;
+  doctor?: string;
+  diagnosis?: string;
+  diagnosisWestern?: string;
+  diagnosisTcm?: string;
+  prescription?: string;
+  /** 检查结论专用，不进处方字段 */
+  examFindings?: string;
+  labs?: HealthLabItem[];
+  advice?: string;
+  costMinor?: number;
+  stages?: Array<{ stageDate?: string; label?: string; symptoms: string; notes?: string }>;
+  fieldsConfidence?: Record<string, number>;
+  warnings?: string[];
+}
+
+export interface HealthAttachment {
+  id: string;
+  workspaceId: string;
+  recordId: string | null;
+  memberId: string | null;
+  bookId: string | null;
+  userId: string;
+  kind: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  path: string;
+  hash?: string | null;
+  ocrStatus: string;
+  ocrRawText?: string | null;
+  ocrStructuredJson?: string | null;
+  ocrStructured?: HealthOcrStructured | null;
+  ocrModel?: string | null;
+  ocrError?: string | null;
+  ocrAt?: string | null;
+  createdAt: string;
+  url?: string;
+}
+
+export interface HealthRecordTimelineItem {
+  id: string;
+  memberId: string;
+  bookId: string;
+  title: string;
+  recordType: string;
+  status: string;
+  medicineSystem?: MedicineSystem | string;
+  occurredAt: string;
+  endedAt: string | null;
+  hospital: string | null;
+  department: string | null;
+  doctor: string | null;
+  diagnosis: string | null;
+  diagnosisWestern?: string | null;
+  diagnosisTcm?: string | null;
+  costMinor: number | null;
+  careExtra?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HealthRecordDetail extends HealthRecordTimelineItem {
+  workspaceId: string;
+  prescription: string | null;
+  advice: string | null;
+  notes: string | null;
+  tagsJson?: string | null;
+  tags?: string[];
+  careExtra?: Record<string, unknown> | null;
+  createdBy: string;
+  updatedBy?: string | null;
+  stages: HealthStage[];
+  attachments: HealthAttachment[];
+}
+
+export interface HealthMedicineTag {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string | null;
+}
+
+export interface HealthMedicine {
+  id: string;
+  workspaceId: string;
+  name: string;
+  brand: string | null;
+  category: string;
+  spec: string | null;
+  usageText: string | null;
+  efficacy: string | null;
+  form: string | null;
+  unit: string | null;
+  quantityTotal: number | null;
+  quantityRemain: number | null;
+  expiryDate: string | null;
+  openedAt: string | null;
+  location: string | null;
+  memberId: string | null;
+  medicineSystem: string | null;
+  notes: string | null;
+  imageAttachmentId: string | null;
+  sourceRecordId: string | null;
+  isArchived: number;
+  isDeleted: number;
+  createdBy: string;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tags?: HealthMedicineTag[];
+}
+
+export interface MedicineOcrStructured {
+  name?: string;
+  brand?: string;
+  category?: string;
+  spec?: string;
+  usageText?: string;
+  efficacy?: string;
+  form?: string;
+  unit?: string;
+  quantityRemain?: number;
+  expiryDate?: string;
+  medicineSystem?: MedicineSystem | string;
+  suggestedTags?: string[];
+  confidence: number;
+  fieldsConfidence?: Record<string, number>;
+  warnings?: string[];
+}
+
+export interface HealthInsight {
+  id: string;
+  severity: "info" | "warn" | "good";
+  title: string;
+  detail: string;
+  actionHint?: string;
+}
 
 export type MobileView = "list" | "editor";
 

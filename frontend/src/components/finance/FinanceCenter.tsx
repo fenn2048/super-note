@@ -62,6 +62,7 @@ export default function FinanceCenter() {
   const [active, setActive] = useState<FinanceLedger | null>(null);
   const [unlockToken, setUnlockToken] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("home");
+  const [showMoreTabs, setShowMoreTabs] = useState(false);
 
   // create form
   const [showCreate, setShowCreate] = useState(false);
@@ -274,8 +275,10 @@ export default function FinanceCenter() {
 
   // ─── List view ───
   if (!active) {
+    const listHeaderMat =
+      "bg-app-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-app-bg/70";
     return (
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg text-tx-primary">
         <MobileChromeHeader
           variant="stack"
           stackAction="back"
@@ -289,6 +292,7 @@ export default function FinanceCenter() {
               <Plus size={22} />
             </MobileChromeIconButton>
           }
+          className={listHeaderMat}
         />
         <PageHeader
           mdOnly
@@ -303,6 +307,7 @@ export default function FinanceCenter() {
               <Plus size={16} /> 新建账本
             </Button>
           }
+          className={listHeaderMat}
         />
 
         {error && (
@@ -333,7 +338,12 @@ export default function FinanceCenter() {
                   key={l.id}
                   type="button"
                   onClick={() => openLedger(l)}
-                  className="text-left rounded-card border border-app-border bg-app-card p-4 hover:border-accent-primary/50 transition-colors"
+                  className={cn(
+                    "text-left rounded-card border border-app-border bg-app-card p-4 min-h-12",
+                    "transition-[border-color,box-shadow,transform] duration-fast ease-out active:scale-[0.99]",
+                    "[@media(hover:hover)_and_(pointer:fine)]:hover:border-accent-primary/50",
+                    "[@media(hover:hover)_and_(pointer:fine)]:hover:shadow-xs",
+                  )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-2xl">{l.icon || "📒"}</div>
@@ -342,7 +352,7 @@ export default function FinanceCenter() {
                       {l.canManage !== false && (
                         <button
                           type="button"
-                          className="p-1 hover:text-red-500"
+                          className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-button text-tx-tertiary [@media(hover:hover)_and_(pointer:fine)]:hover:text-accent-danger [@media(hover:hover)_and_(pointer:fine)]:hover:bg-app-hover"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteLedger(l);
@@ -357,7 +367,7 @@ export default function FinanceCenter() {
                   <div className="mt-2 font-medium text-tx-primary flex items-center gap-2">
                     <span className="truncate">{l.title}</span>
                     {l.isShared || l.workspaceId ? (
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400">
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary">
                         共享
                       </span>
                     ) : (
@@ -400,7 +410,7 @@ export default function FinanceCenter() {
               ))}
             </select>
             {createWorkspaceId && (
-              <p className="text-xs text-violet-600 dark:text-violet-400 mb-3">
+              <p className="text-xs text-accent-primary mb-3">
                 工作区成员均可查看与记账；删除/改密仅创建者或管理员。
               </p>
             )}
@@ -433,12 +443,15 @@ export default function FinanceCenter() {
 
   // ─── Locked ───
   if (active.locked) {
+    const lockHeaderMat =
+      "bg-app-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-app-bg/70";
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-app-bg">
+      <div className="flex-1 flex flex-col min-h-0 bg-app-bg text-tx-primary">
         <MobileChromeHeader
           variant="stack"
           title={active.title}
           onLeadingClick={() => setActive(null)}
+          className={lockHeaderMat}
         />
         <PageHeader
           mdOnly
@@ -448,6 +461,7 @@ export default function FinanceCenter() {
               <ArrowLeft size={18} />
             </Button>
           }
+          className={lockHeaderMat}
         />
         <ContentCanvas maxWidthClass="max-w-sm" className="flex items-center">
           <div className="w-full rounded-window border border-app-border bg-app-card p-6">
@@ -459,7 +473,7 @@ export default function FinanceCenter() {
             {error && <p className="text-sm text-accent-danger mb-2 text-center">{error}</p>}
             <input
               type="password"
-              className="w-full mb-3 px-3 py-2 rounded-button border border-app-border bg-app-bg"
+              className="w-full mb-3 px-3 py-2 rounded-button border border-app-border bg-app-bg text-tx-primary"
               value={unlockPw}
               onChange={(e) => setUnlockPw(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
@@ -541,8 +555,11 @@ export default function FinanceCenter() {
     </>
   );
 
+  const headerMaterial =
+    "bg-app-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-app-bg/70";
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-app-bg text-tx-primary">
       <MobileChromeHeader
         variant="stack"
         title={ledgerTitle}
@@ -551,6 +568,7 @@ export default function FinanceCenter() {
           setUnlockToken(null);
         }}
         right={<div className="flex items-center gap-0.5">{ledgerActions}</div>}
+        className={headerMaterial}
       />
       <PageHeader
         mdOnly
@@ -570,36 +588,92 @@ export default function FinanceCenter() {
           </Button>
         }
         actions={ledgerActions}
+        className={headerMaterial}
       />
 
-      <nav className="shrink-0 flex gap-1 px-2 py-2 border-b border-app-border overflow-x-auto">
+      <nav
+        className={cn(
+          "shrink-0 flex gap-1 px-2 py-2 border-b border-app-border overflow-x-auto",
+          "bg-app-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-app-bg/70",
+        )}
+        aria-label="账本分区"
+      >
         {(
           [
             ["home", "概览", Wallet],
             ["tx", "明细", List],
-            ["import", "导入", Upload],
-            ["accounts", "账户", BookOpen],
-            ["rules", "规则", Settings2],
             ["stats", "统计", PieChart],
             ["budget", "预算", Target],
-            ["recurring", "定期", CalendarClock],
-            ["advice", "建议", Lightbulb],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
             key={id}
             type="button"
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id);
+              setShowMoreTabs(false);
+            }}
             className={cn(
-              "shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-button text-xs sm:text-sm",
-              tab === id ? "bg-accent-primary/15 text-accent-primary" : "text-tx-secondary hover:bg-app-hover",
+              "shrink-0 inline-flex items-center gap-1 min-h-11 px-3 rounded-button text-xs sm:text-sm",
+              "transition-[background-color,color,transform] duration-fast ease-out active:scale-[0.97]",
+              tab === id
+                ? "bg-accent-primary/15 text-accent-primary"
+                : "text-tx-secondary [@media(hover:hover)_and_(pointer:fine)]:hover:bg-app-hover",
             )}
           >
             <Icon size={14} />
             {label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowMoreTabs((v) => !v)}
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1 min-h-11 px-3 rounded-button text-xs sm:text-sm",
+            "transition-[background-color,color,transform] duration-fast ease-out active:scale-[0.97]",
+            (
+              ["import", "accounts", "rules", "recurring", "advice"] as Tab[]
+            ).includes(tab) || showMoreTabs
+              ? "bg-accent-primary/15 text-accent-primary"
+              : "text-tx-secondary [@media(hover:hover)_and_(pointer:fine)]:hover:bg-app-hover",
+          )}
+        >
+          <Settings2 size={14} />
+          更多
+        </button>
       </nav>
+      {showMoreTabs && (
+        <div className="shrink-0 flex flex-wrap gap-1 px-2 py-2 border-b border-app-border bg-app-elevated/80">
+          {(
+            [
+              ["import", "导入", Upload],
+              ["accounts", "账户", BookOpen],
+              ["rules", "规则", Settings2],
+              ["recurring", "定期", CalendarClock],
+              ["advice", "建议", Lightbulb],
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setTab(id);
+                setShowMoreTabs(false);
+              }}
+              className={cn(
+                "shrink-0 inline-flex items-center gap-1 min-h-11 px-3 rounded-button text-xs",
+                "transition-[background-color,color,transform] duration-fast ease-out active:scale-[0.97]",
+                tab === id
+                  ? "bg-accent-primary text-white"
+                  : "bg-app-surface border border-app-border text-tx-secondary",
+              )}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="px-3 pt-2">
@@ -667,7 +741,14 @@ export default function FinanceCenter() {
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <BottomSheet open onClose={onClose} title={title} maxHeight="min(92dvh, 100%)" zClassName="z-[10000]" className="sm:max-w-md sm:mx-auto">
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={title}
+      maxHeight="min(92dvh, 100%)"
+      zClassName="z-modal"
+      className="sm:max-w-md sm:mx-auto"
+    >
       <div className="px-4 pb-2">{children}</div>
     </BottomSheet>
   );
@@ -713,7 +794,7 @@ function LedgerHome({
         <label className="text-sm text-tx-secondary">月份</label>
         <input
           type="month"
-          className="px-2 py-1 rounded border border-app-border bg-app-bg text-sm"
+          className="px-2 py-1 rounded border border-app-border bg-app-bg text-sm text-tx-primary"
           value={ym}
           onChange={(e) => setYm(e.target.value)}
         />
@@ -1062,13 +1143,13 @@ function ManualTxModal({
       <label className="text-xs text-tx-tertiary">金额</label>
       <input
         inputMode="decimal"
-        className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-lg"
+        className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-lg text-tx-primary"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
         placeholder="0.00"
       />
       <label className="text-xs text-tx-tertiary">日期</label>
-      <input type="date" className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={date} onChange={(e) => setDate(e.target.value)} />
+      <input type="date" className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={date} onChange={(e) => setDate(e.target.value)} />
       <label className="text-xs text-tx-tertiary">{kind === "expense" ? "付款账户" : kind === "income" ? "收入分类" : "转出账户"}</label>
       <div className="mb-2">
         <AccountPicker
@@ -1090,9 +1171,9 @@ function ManualTxModal({
         />
       </div>
       <label className="text-xs text-tx-tertiary">对方</label>
-      <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={payee} onChange={(e) => setPayee(e.target.value)} />
+      <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={payee} onChange={(e) => setPayee(e.target.value)} />
       <label className="text-xs text-tx-tertiary">备注</label>
-      <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={narration} onChange={(e) => setNarration(e.target.value)} />
+      <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={narration} onChange={(e) => setNarration(e.target.value)} />
       <label className="text-xs text-tx-tertiary">标签</label>
       <div className="mb-3">
         <TagPicker
@@ -1102,7 +1183,7 @@ function ManualTxModal({
           presets={tagCatalog.presets}
         />
       </div>
-      {err && <p className="text-sm text-red-500 mb-2">{err}</p>}
+      {err && <p className="text-sm text-accent-danger mb-2">{err}</p>}
       <div className="flex gap-2">
         {!isEdit && (
           <button
@@ -1209,7 +1290,7 @@ function TxPanel({
     <div className="p-4">
       <div className="flex gap-2 mb-2">
         <input
-          className="flex-1 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-sm"
+          className="flex-1 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-sm text-tx-primary"
           placeholder="搜索对方/备注/标签"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -1228,7 +1309,7 @@ function TxPanel({
       {hasExtraFilter && (
         <div className="mb-2 flex flex-wrap gap-1.5 items-center text-[11px]">
           {from && to && (
-            <span className="px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600">
+            <span className="px-2 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary">
               {from} ~ {to}
             </span>
           )}
@@ -1241,7 +1322,7 @@ function TxPanel({
             <span className="px-2 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary">指定账户</span>
           )}
           {payeeFilter && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">对方 {payeeFilter}</span>
+            <span className="px-2 py-0.5 rounded-full bg-accent-warning/15 text-accent-warning">对方 {payeeFilter}</span>
           )}
           <button
             type="button"
@@ -1309,7 +1390,7 @@ function TxPanel({
             </button>
             <button
               type="button"
-              className="p-2 text-tx-tertiary hover:text-red-500 shrink-0"
+              className="p-2 text-tx-tertiary hover:text-accent-danger shrink-0"
               onClick={async () => {
                 if (!confirm("删除这笔交易？")) return;
                 try {
@@ -1394,12 +1475,12 @@ function AccountsPanel({
       ))}
       {show && (
         <Modal title="新建账户" onClose={() => setShow(false)}>
-          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={type} onChange={(e) => setType(e.target.value)}>
+          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={type} onChange={(e) => setType(e.target.value)}>
             {["ASSETS", "LIABILITIES", "INCOME", "EXPENSES", "EQUITY"].map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
-          <input className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={name} onChange={(e) => setName(e.target.value)} placeholder="Assets:Bank:ICBC" />
+          <input className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={name} onChange={(e) => setName(e.target.value)} placeholder="Assets:Bank:ICBC" />
           <button
             type="button"
             className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm"
@@ -1456,7 +1537,7 @@ function BudgetPanel({
         <label className="text-sm text-tx-secondary">月份</label>
         <input
           type="month"
-          className="px-2 py-1 rounded border border-app-border bg-app-bg text-sm"
+          className="px-2 py-1 rounded border border-app-border bg-app-bg text-sm text-tx-primary"
           value={ym}
           onChange={(e) => setYm(e.target.value)}
         />
@@ -1503,7 +1584,7 @@ function BudgetPanel({
                   <span className="font-medium">{b.accountName || "总支出"}</span>
                   <button
                     type="button"
-                    className="text-tx-tertiary hover:text-red-500"
+                    className="text-tx-tertiary hover:text-accent-danger"
                     onClick={async () => {
                       await api.finance.deleteBudget(ledgerId, b.id, unlockToken);
                       load();
@@ -1535,18 +1616,18 @@ function BudgetPanel({
       {show && (
         <Modal title="添加预算" onClose={() => setShow(false)}>
           <label className="text-xs text-tx-tertiary">月份</label>
-          <input type="month" className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={ym} onChange={(e) => setYm(e.target.value)} />
+          <input type="month" className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={ym} onChange={(e) => setYm(e.target.value)} />
           <label className="text-xs text-tx-tertiary">范围</label>
-          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
             <option value="">总支出</option>
             {accounts.filter((a) => a.type === "EXPENSES").map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
           <label className="text-xs text-tx-tertiary">预算金额（元）</label>
-          <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" />
+          <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" />
           <label className="text-xs text-tx-tertiary">备注</label>
-          <input className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input className="w-full mb-3 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={note} onChange={(e) => setNote(e.target.value)} />
           <button
             type="button"
             className="w-full py-2 rounded-lg bg-accent-primary text-white text-sm"
@@ -1799,7 +1880,7 @@ function RecurringPanel({
                   </button>
                   <button
                     type="button"
-                    className="text-red-500 p-1"
+                    className="text-accent-danger p-1"
                     onClick={async () => {
                       if (!confirm("删除该定期？")) return;
                       await api.finance.deleteRecurring(ledgerId, r.id, unlockToken);
@@ -1818,7 +1899,7 @@ function RecurringPanel({
       {show && (
         <Modal title="新建定期记账" onClose={() => setShow(false)}>
           <input
-            className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg"
+            className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary"
             placeholder="名称（如：房租 / 工资）"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -1870,20 +1951,20 @@ function RecurringPanel({
             {ruleType === "monthly" ? "每月几号 (1-28)" : ruleType === "weekly" ? "星期 (0日-6六)" : "每隔几天"}
           </label>
           <input
-            className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg"
+            className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary"
             value={day}
             onChange={(e) => setDay(e.target.value)}
           />
           <label className="text-xs text-tx-tertiary">金额</label>
           <input
-            className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg"
+            className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
           <label className="text-xs text-tx-tertiary">
             {kind === "income" ? "收入分类" : "付款账户"}
           </label>
-          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={fromId} onChange={(e) => setFromId(e.target.value)}>
+          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={fromId} onChange={(e) => setFromId(e.target.value)}>
             {accounts
               .filter((a) =>
                 kind === "income"
@@ -1897,7 +1978,7 @@ function RecurringPanel({
           <label className="text-xs text-tx-tertiary">
             {kind === "income" ? "入账账户" : "支出分类"}
           </label>
-          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={toId} onChange={(e) => setToId(e.target.value)}>
+          <select className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={toId} onChange={(e) => setToId(e.target.value)}>
             {accounts
               .filter((a) =>
                 kind === "income"
@@ -1909,7 +1990,7 @@ function RecurringPanel({
               ))}
           </select>
           <label className="text-xs text-tx-tertiary">对方/备注</label>
-          <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg" value={payee} onChange={(e) => setPayee(e.target.value)} />
+          <input className="w-full mb-2 px-3 py-2 rounded-lg border border-app-border bg-app-bg text-tx-primary" value={payee} onChange={(e) => setPayee(e.target.value)} />
           <label className="flex items-center gap-2 text-sm mb-3">
             <input type="checkbox" checked={autoPost} onChange={(e) => setAutoPost(e.target.checked)} />
             到期自动入账（关闭则只通知）
@@ -1977,7 +2058,7 @@ function AdvicePanel({ ledgerId, unlockToken }: { ledgerId: string; unlockToken:
           key={ins.id}
           className={cn(
             "rounded-xl border p-3",
-            ins.level === "warn" && "border-amber-500/40 bg-amber-500/5",
+            ins.level === "warn" && "border-accent-warning/40 bg-accent-warning/5",
             ins.level === "good" && "border-accent-primary/40 bg-accent-primary/5",
             ins.level === "info" && "border-app-border bg-app-card",
           )}

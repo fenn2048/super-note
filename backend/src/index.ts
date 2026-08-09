@@ -49,6 +49,7 @@ import releasesRouter from "./routes/releases";
 import booksRouter from "./routes/books";
 import mediaRouter from "./routes/media";
 import financeRouter from "./routes/finance";
+import healthRouter, { handleDownloadHealthAttachment } from "./routes/health";
 import { seedDatabase } from "./db/seed";
 import { initApiTokensTable, looksLikeApiToken, resolveApiToken } from "./lib/api-tokens";
 import { getDb, closeDb } from "./db/schema";
@@ -366,6 +367,9 @@ app.get("/api/attachments/:id", handleDownloadAttachment);
 // 任务列表里的图片缩略图通过 <img src="/api/task-attachments/<id>"> 拉取。
 app.get("/api/task-attachments/:id", handleDownloadTaskAttachment);
 
+// 健康档案附件下载：须在 JWT 全局中间件之前注册；鉴权在 handler 内完成。
+app.get("/api/health/attachments/:id", handleDownloadHealthAttachment);
+
 // 说说图片下载（同样不走 JWT，授权模型同上）。
 //   注意路径具体：/api/diary/attachments/:id，必须比 diaryRouter（在 JWT 之后挂的
 //   /api/diary/*）注册得**更早**，否则会被 JWT 中间件拦截。
@@ -557,6 +561,7 @@ app.route("/api/icloud", icloudRouter);
 app.route("/api/diary", diaryRouter);
 app.route("/api/media", mediaRouter);
 app.route("/api/finance", financeRouter);
+app.route("/api/health", healthRouter);
 app.route("/api/mentions", mentionsRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/url-import", urlImportRouter);
