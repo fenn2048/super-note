@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { api, resolveAttachmentUrl, getBaseUrl } from "@/lib/api";
 import { Music } from "lucide-react";
+import { api, resolveAttachmentUrl, getBaseUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 // Memory cache to prevent parsing the same audio repeatedly during current session
@@ -753,7 +753,6 @@ export function AudioCover({ item, className, fallbackIconSize = 28, src }: Audi
   }
 
   const hue = coverHue(item.title || item.id || "audio");
-  const initial = (item.title || "♪").trim().charAt(0).toUpperCase() || "♪";
 
   // className 里常带 object-cover（给 img 用），占位容器只保留尺寸/动画相关
   const shellClass = (className || "")
@@ -761,10 +760,12 @@ export function AudioCover({ item, className, fallbackIconSize = 28, src }: Audi
     .filter((c) => c && !c.startsWith("object-"))
     .join(" ");
 
+  // 无 ID3/DB 封面：渐变唱片盘 + 音符（不显示歌名首字）
   return (
     <div
       className={cn(
         "w-full h-full relative flex items-center justify-center overflow-hidden select-none",
+        loading && "animate-pulse",
         shellClass,
       )}
       style={{
@@ -775,7 +776,6 @@ export function AudioCover({ item, className, fallbackIconSize = 28, src }: Audi
       }}
       aria-hidden
     >
-      {/* 柔和唱片环，避免纯灰块 */}
       <div
         className="absolute inset-[14%] rounded-full border border-white/20"
         style={{
@@ -784,21 +784,10 @@ export function AudioCover({ item, className, fallbackIconSize = 28, src }: Audi
         }}
       />
       <div className="absolute inset-[42%] rounded-full bg-black/25 border border-white/10" />
-      <div className="relative z-[1] flex flex-col items-center justify-center gap-0.5">
-        <span
-          className={cn(
-            "text-white/95 font-semibold tracking-tight drop-shadow-sm leading-none",
-            loading && "animate-pulse",
-          )}
-          style={{ fontSize: Math.max(fallbackIconSize * 0.95, 16) }}
-        >
-          {initial}
-        </span>
-        <Music
-          style={{ width: fallbackIconSize * 0.55, height: fallbackIconSize * 0.55 }}
-          className="text-white/70"
-        />
-      </div>
+      <Music
+        style={{ width: fallbackIconSize, height: fallbackIconSize }}
+        className="relative z-[1] text-white/80"
+      />
     </div>
   );
 }
