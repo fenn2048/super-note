@@ -199,7 +199,7 @@ export default function TagInput({ noteId, noteTags, onTagsChange }: TagInputPro
           onFocus={handleFocus}
           onBlur={handleBlur}
           disabled={isAdding}
-          className="flex-1 min-w-[60px] sm:min-w-[80px] bg-transparent text-[10px] sm:text-[11px] text-tx-primary outline-none placeholder:text-tx-tertiary"
+          className="flex-1 min-w-[60px] sm:min-w-[80px] bg-transparent border-0 text-[10px] sm:text-[11px] text-tx-primary outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-none placeholder:text-tx-tertiary no-focus-ring"
           placeholder={noteTags.length === 0 ? t('tags.addTagPlaceholder') : ""}
         />
       </div>

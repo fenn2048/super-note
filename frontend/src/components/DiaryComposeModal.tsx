@@ -1390,7 +1390,7 @@ const handleEmojiSelect = (emoji: string) => {
                 <input
                   type="text"
                   placeholder="添加或新建标签..."
-                  className="flex-1 px-3 py-1.5 bg-app-bg border border-app-border rounded-lg text-xs text-tx-primary outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 no-focus-ring"
+                  className="flex-1 px-3 py-1.5 bg-app-bg border border-app-border rounded-lg text-xs text-tx-primary outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:shadow-none focus:border-app-border focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-none focus-visible:border-app-border no-focus-ring"
                   onKeyDown={async (e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();

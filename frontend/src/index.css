@@ -830,6 +830,32 @@ select:focus-visible {
   outline: none; /* 表单已有 ring，避免双线 */
 }
 
+/*
+ * 标签输入等：去掉选中时的蓝色焦点框。
+ * 多处 className 已写 no-focus-ring，此前未定义，浏览器默认蓝框仍会露出来。
+ */
+.no-focus-ring,
+.no-focus-ring:focus,
+.no-focus-ring:focus-visible,
+.no-focus-ring:active {
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-color: transparent !important;
+}
+
+/* 标签输入外壳内的 input 一律无蓝框（外壳自带边框即可） */
+.tag-input-area input,
+.tag-input-area input:focus,
+.tag-input-area input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
 /* 减弱动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   .media-disc-spin {
