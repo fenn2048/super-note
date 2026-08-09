@@ -499,7 +499,25 @@ export default function ProjectKanban({
               const taskId = e.dataTransfer.getData("text/plain");
               if (!taskId) return;
               try {
-                await api.updateProjectTask(taskId, { stageId: stage.id });
+                // 阶段名与 status 对齐，便于复盘记录真实开始/完成时间
+                const patch: {
+                  stageId: string;
+                  status?: "pending" | "in_progress" | "completed" | "paused";
+                  isCompleted?: number;
+                } = {
+                  stageId: stage.id,
+                };
+                if (stage.name === "待启动" || stage.name === "待规划") {
+                  patch.status = "pending";
+                  patch.isCompleted = 0;
+                } else if (stage.name === "进行中") {
+                  patch.status = "in_progress";
+                  patch.isCompleted = 0;
+                } else if (stage.name === "已完成") {
+                  patch.status = "completed";
+                  patch.isCompleted = 1;
+                }
+                await api.updateProjectTask(taskId, patch);
                 onRefresh();
               } catch (err: any) {
                 toast.error(err?.message || "移动任务失败");

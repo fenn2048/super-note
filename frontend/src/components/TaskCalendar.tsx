@@ -162,7 +162,7 @@ export default function TaskCalendar({ onDateSelect }: TaskCalendarProps) {
                       : <Circle size={14} className="text-tx-tertiary/40 shrink-0" />
                     }
                     <span className={cn("text-xs flex-1", item.isCompleted && "line-through text-tx-tertiary")}>{item.title}</span>
-                    {item.priority && item.priority >= 3 && <span className="text-[10px] text-red-500 shrink-0">!!</span>}
+                    {/* 优先级不再用 !! 暗示「紧急」，避免与四象限混淆 */}
                   </div>
                 ))
               )}

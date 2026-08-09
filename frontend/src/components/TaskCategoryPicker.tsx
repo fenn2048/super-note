@@ -154,18 +154,22 @@ export default function TaskCategoryPicker({ value, onChange, className, compact
         setOpen((v) => !v);
       }}
       className={cn(
-        "flex items-center gap-1.5 min-w-0 w-full bg-app-sidebar border border-app-border/60 px-2.5 py-1.5 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors",
-        compact && "py-1",
+        "items-center gap-1.5 min-w-0 bg-app-sidebar border border-app-border/60 px-2.5 py-1.5 rounded-xl text-xs text-tx-secondary hover:bg-app-hover transition-colors",
+        // compact：与 quick-add 其他 chip 同高同行；完整模式可占满表单行
+        compact
+          ? "inline-flex w-auto max-w-[11.5rem] py-1 shrink-0"
+          : "flex w-full",
         open && "ring-1 ring-accent-primary/30 border-accent-primary/40",
       )}
       title={selected?.description || "事务分类（可选）"}
     >
       <Tags size={12} className="text-tx-tertiary shrink-0" />
-      <span className="flex-1 min-w-0 text-left">
+      <span className={cn("min-w-0 text-left", compact ? "truncate" : "flex-1")}>
         <span className="block font-semibold truncate">
           {selected ? selected.label : "事务分类（可选）"}
         </span>
-        {selected?.description && (
+        {/* 完整模式才展示副说明；compact 用 title 气泡即可，避免撑开换行 */}
+        {!compact && selected?.description && (
           <span className="block text-[10px] font-normal text-tx-tertiary truncate leading-tight mt-0.5">
             {selected.description}
           </span>
@@ -244,16 +248,23 @@ export default function TaskCategoryPicker({ value, onChange, className, compact
     );
 
   return (
-    <div className={cn("flex flex-col gap-1 min-w-0", className)}>
+    <div
+      className={cn(
+        compact ? "inline-flex shrink-0 min-w-0 max-w-[11.5rem]" : "flex flex-col gap-1 min-w-0",
+        className,
+      )}
+    >
       {trigger}
-      {/* 始终可见的说明区：不依赖悬停 */}
-      <p className="text-[10px] text-tx-tertiary leading-snug px-0.5 min-h-[1rem]">
-        {selected?.description
-          ? selected.description
-          : open
-            ? "可选；列表内灰色文字为每类说明"
-            : "完全可选 · 选了更好做复盘，不选也能创建"}
-      </p>
+      {/* 完整表单模式保留始终可见说明；compact（如 quick-add 同行 chip）隐藏，避免长文案撑宽换行 */}
+      {!compact && (
+        <p className="text-[10px] text-tx-tertiary leading-snug px-0.5 min-h-[1rem]">
+          {selected?.description
+            ? selected.description
+            : open
+              ? "可选；列表内灰色文字为每类说明"
+              : "完全可选 · 选了更好做复盘，不选也能创建"}
+        </p>
+      )}
       {panel}
     </div>
   );

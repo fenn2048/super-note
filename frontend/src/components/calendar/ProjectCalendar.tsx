@@ -12,15 +12,19 @@ import {
   ExternalLink,
   Palette,
   Clock,
+  Filter,
+  Check,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { resolveNotStartedStageId } from "@/lib/taskEntry";
 import { toast } from "@/lib/toast";
 import { confirm } from "@/components/ui/confirm";
 import ContextMenu, { type ContextMenuItem } from "@/components/ContextMenu";
 import { useContextMenu } from "@/hooks/useContextMenu";
+import { BottomSheet } from "@/components/common/BottomSheet";
 import type { ProjectTask } from "@/types";
 
 import type { CalendarTask, CalendarViewMode, ProjectCalendarProps, TaskClipboard } from "./types";
@@ -47,6 +51,11 @@ import DayView from "./views/DayView";
 import WeekView from "./views/WeekView";
 import YearView from "./views/YearView";
 import type { DayDropPayload, TaskTimeChangePayload } from "./TimeGrid";
+import {
+  QUADRANT_META,
+  QUADRANT_ORDER,
+  type QuadrantFilter,
+} from "@/lib/taskQuadrant";
 import { DEFAULT_CAL_COLOR, nextCreateColorKey, resolveTaskColorKey } from "./taskColors";
 
 function loadViewMode(): CalendarViewMode {
@@ -73,6 +82,8 @@ export default function ProjectCalendar({
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantFilter>("all");
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   const [clipboard, setClipboard] = useTaskClipboard();
   const [createOpen, setCreateOpen] = useState(false);
@@ -112,8 +123,14 @@ export default function ProjectCalendar({
   const tasks = useMemo(() => flattenStageTasks(stages) as CalendarTask[], [stages]);
 
   const filteredTasks = useMemo(
-    () => filterTasksByProjectStatus(tasks, selectedProjectId, selectedStatus),
-    [tasks, selectedProjectId, selectedStatus],
+    () =>
+      filterTasksByProjectStatus(
+        tasks,
+        selectedProjectId,
+        selectedStatus,
+        selectedQuadrant,
+      ),
+    [tasks, selectedProjectId, selectedStatus, selectedQuadrant],
   );
 
   const uniqueProjects = useMemo(() => {
@@ -171,17 +188,9 @@ export default function ProjectCalendar({
     }
   };
 
-  const ensureStageId = async (projectId: string): Promise<string> => {
-    const stagesList = await api.getProjectStages(projectId);
-    const prefer =
-      stagesList.find((s) => s.name === "进行中") ||
-      stagesList.find((s) => s.name === "待启动") ||
-      stagesList.find((s) => s.name !== "已完成") ||
-      stagesList[0];
-    if (prefer) return prefer.id;
-    const created = await api.createProjectStage(projectId, { name: "进行中" });
-    return created.id;
-  };
+  /** 新建任务默认「待启动」（创建 ≠ 开始做） */
+  const ensureStageId = async (projectId: string): Promise<string> =>
+    resolveNotStartedStageId(projectId);
 
   const snapshotTask = (task: ProjectTask, mode: "copy" | "cut"): TaskClipboard => ({
     mode,
@@ -724,30 +733,85 @@ export default function ProjectCalendar({
     onDayDragLeave,
   };
 
+  const filterActive =
+    selectedProjectId !== "all" ||
+    selectedStatus !== "all" ||
+    selectedQuadrant !== "all";
+
+  const mobileViewModes = viewModes.filter((v) => v.id !== "year");
+
   return (
-    <div className="flex flex-col h-full bg-app-bg text-tx-primary pb-20 select-none">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-3 md:p-4 border-b border-app-border shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <CalendarIcon size={18} className="text-accent-primary shrink-0" />
-          <h2 className="text-base font-bold text-tx-primary truncate">{titleText}</h2>
-          {clipboard && (
-            <span className="hidden sm:inline text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-accent-primary/10 text-accent-primary truncate max-w-[160px]">
-              剪贴板：{clipboard.mode === "cut" ? "剪切" : "复制"}「{clipboard.title}」
-            </span>
-          )}
+    <div className="flex flex-col h-full bg-app-bg text-tx-primary pb-20 md:pb-4 select-none">
+      {/* Header：移动收敛工具栏，筛选进 Sheet */}
+      <div className="flex flex-col gap-2 p-3 md:p-4 border-b border-app-border shrink-0">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <CalendarIcon size={18} className="text-accent-primary shrink-0" />
+            <h2 className="text-base font-bold text-tx-primary truncate">{titleText}</h2>
+            {clipboard && (
+              <span className="hidden sm:inline text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-accent-primary/10 text-accent-primary truncate max-w-[160px]">
+                剪贴板：{clipboard.mode === "cut" ? "剪切" : "复制"}「{clipboard.title}」
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToday}
+              className="text-xs min-h-11 px-3"
+            >
+              {t("calendar.today") || "今天"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={goPrev}
+              className="min-h-11 min-w-11 h-11 w-11"
+              aria-label="上一页"
+            >
+              <ChevronLeft size={18} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={goNext}
+              className="min-h-11 min-w-11 h-11 w-11"
+              aria-label="下一页"
+            >
+              <ChevronRight size={18} />
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          {/* View switcher */}
-          <div className="inline-flex rounded-button border border-app-border bg-app-sidebar p-0.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* 移动：日/周/月；年在筛选 Sheet */}
+          <div className="inline-flex rounded-button border border-app-border bg-app-sidebar p-0.5 md:hidden">
+            {mobileViewModes.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setViewMode(v.id)}
+                className={cn(
+                  "px-3 min-h-10 text-xs font-semibold rounded-[calc(var(--radius-button)-2px)] min-w-[36px]",
+                  "transition-[background-color,color] duration-fast ease-out active:scale-[0.97]",
+                  viewMode === v.id
+                    ? "bg-app-elevated text-tx-primary shadow-xs"
+                    : "text-tx-tertiary",
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <div className="hidden md:inline-flex rounded-button border border-app-border bg-app-sidebar p-0.5">
             {viewModes.map((v) => (
               <button
                 key={v.id}
                 type="button"
                 onClick={() => setViewMode(v.id)}
                 className={cn(
-                  "px-2.5 h-7 text-xs font-semibold rounded-[calc(var(--radius-button)-2px)] min-w-[32px]",
+                  "px-2.5 h-8 text-xs font-semibold rounded-[calc(var(--radius-button)-2px)] min-w-[32px]",
                   "transition-[background-color,color] duration-fast ease-out",
                   viewMode === v.id
                     ? "bg-app-elevated text-tx-primary shadow-xs"
@@ -759,44 +823,230 @@ export default function ProjectCalendar({
             ))}
           </div>
 
-          {showProjectFilter && (
+          {/* 移动：一个筛选入口 */}
+          <button
+            type="button"
+            onClick={() => setFilterSheetOpen(true)}
+            className={cn(
+              "md:hidden inline-flex items-center gap-1.5 px-3 min-h-11 rounded-button text-xs font-semibold border transition-[transform,background-color,color,border-color] duration-press ease-out active:scale-[0.97]",
+              filterActive
+                ? "bg-accent-primary/12 text-accent-primary border-accent-primary/30"
+                : "bg-app-sidebar text-tx-secondary border-app-border",
+            )}
+          >
+            <Filter size={14} />
+            筛选
+            {filterActive && <span className="w-1.5 h-1.5 rounded-full bg-accent-primary" />}
+          </button>
+
+          {/* 桌面：内联 select */}
+          <div className="hidden md:flex items-center gap-1.5 flex-wrap">
+            {showProjectFilter && (
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary max-w-[150px] truncate"
+              >
+                <option value="all">{t("projects.allProjects") || "全部项目"}</option>
+                {uniqueProjects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary max-w-[120px] md:max-w-[150px] truncate"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary min-w-[85px] max-w-[120px] truncate"
             >
-              <option value="all">{t("projects.allProjects") || "全部项目"}</option>
-              {uniqueProjects.map((proj) => (
-                <option key={proj.id} value={proj.id}>
-                  {proj.name}
+              <option value="all">{t("calendar.allStatus") || "所有状态"}</option>
+              <option value="pending">{t("calendar.statusPending") || "待启动"}</option>
+              <option value="in_progress">{t("calendar.statusInProgress") || "进行中"}</option>
+              <option value="paused">{t("calendar.statusPaused") || "已暂停"}</option>
+              <option value="completed">{t("calendar.statusCompleted") || "已完成"}</option>
+            </select>
+            <select
+              value={selectedQuadrant}
+              onChange={(e) => setSelectedQuadrant(e.target.value as QuadrantFilter)}
+              className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary min-w-[90px] max-w-[130px] truncate"
+              aria-label="四象限筛选"
+            >
+              <option value="all">全部象限</option>
+              {QUADRANT_ORDER.map((id) => (
+                <option key={id} value={id}>
+                  {QUADRANT_META[id].shortLabel}
                 </option>
               ))}
+              <option value="uncategorized">未归类</option>
             </select>
-          )}
-
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="sleek-select h-8 px-2 text-xs text-tx-secondary rounded-lg border border-app-border bg-app-sidebar focus:outline-none focus:ring-1 focus:ring-accent-primary min-w-[85px] max-w-[120px] truncate"
-          >
-            <option value="all">{t("calendar.allStatus") || "所有状态"}</option>
-            <option value="pending">{t("calendar.statusPending") || "待启动"}</option>
-            <option value="in_progress">{t("calendar.statusInProgress") || "进行中"}</option>
-            <option value="paused">{t("calendar.statusPaused") || "已暂停"}</option>
-            <option value="completed">{t("calendar.statusCompleted") || "已完成"}</option>
-          </select>
-
-          <Button variant="outline" size="sm" onClick={goToday} className="text-xs">
-            {t("calendar.today") || "今天"}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={goPrev} className="h-8 w-8">
-            <ChevronLeft size={16} />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={goNext} className="h-8 w-8">
-            <ChevronRight size={16} />
-          </Button>
+          </div>
         </div>
       </div>
+
+      <BottomSheet
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        title="日历筛选"
+        maxHeight="min(72dvh, 100%)"
+        zClassName="z-modal"
+      >
+        <div className="px-4 pb-6 space-y-5">
+          <section className="space-y-2">
+            <h4 className="text-[11px] font-bold text-tx-tertiary uppercase tracking-wider">
+              视图
+            </h4>
+            <div className="flex flex-wrap gap-1.5">
+              {viewModes.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setViewMode(v.id)}
+                  className={cn(
+                    "px-3 py-2 min-h-11 rounded-lg text-xs font-semibold border transition-[transform,background-color,color,border-color] duration-press ease-out active:scale-[0.97]",
+                    viewMode === v.id
+                      ? "bg-accent-primary/12 text-accent-primary border-accent-primary/30"
+                      : "bg-app-elevated text-tx-tertiary border-app-border/40",
+                  )}
+                >
+                  {v.label === "日"
+                    ? "日视图"
+                    : v.label === "周"
+                      ? "周视图"
+                      : v.label === "月"
+                        ? "月视图"
+                        : "年视图"}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {showProjectFilter && uniqueProjects.length > 0 && (
+            <section className="space-y-2">
+              <h4 className="text-[11px] font-bold text-tx-tertiary uppercase tracking-wider">
+                项目
+              </h4>
+              <div className="space-y-1 max-h-[28vh] overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProjectId("all")}
+                  className={cn(
+                    "w-full py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-between min-h-[44px] active:scale-[0.98]",
+                    selectedProjectId === "all"
+                      ? "bg-accent-primary/10 text-accent-primary"
+                      : "bg-app-elevated text-tx-secondary",
+                  )}
+                >
+                  <span>{t("projects.allProjects") || "全部项目"}</span>
+                  {selectedProjectId === "all" && <Check size={14} />}
+                </button>
+                {uniqueProjects.map((proj) => (
+                  <button
+                    key={proj.id}
+                    type="button"
+                    onClick={() => setSelectedProjectId(proj.id)}
+                    className={cn(
+                      "w-full py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-between min-h-[44px] active:scale-[0.98]",
+                      selectedProjectId === proj.id
+                        ? "bg-accent-primary/10 text-accent-primary"
+                        : "bg-app-elevated text-tx-secondary",
+                    )}
+                  >
+                    <span className="truncate">{proj.name}</span>
+                    {selectedProjectId === proj.id && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="space-y-2">
+            <h4 className="text-[11px] font-bold text-tx-tertiary uppercase tracking-wider">
+              状态
+            </h4>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { id: "all", label: t("calendar.allStatus") || "所有状态" },
+                  { id: "pending", label: t("calendar.statusPending") || "待启动" },
+                  { id: "in_progress", label: t("calendar.statusInProgress") || "进行中" },
+                  { id: "paused", label: t("calendar.statusPaused") || "已暂停" },
+                  { id: "completed", label: t("calendar.statusCompleted") || "已完成" },
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedStatus(s.id)}
+                  className={cn(
+                    "px-3 py-2 min-h-11 rounded-lg text-[11px] font-semibold border active:scale-[0.97] transition-transform duration-press ease-out",
+                    selectedStatus === s.id
+                      ? "bg-accent-primary/12 text-accent-primary border-accent-primary/30"
+                      : "bg-app-elevated text-tx-tertiary border-app-border/40",
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-[11px] font-bold text-tx-tertiary uppercase tracking-wider">
+              四象限
+            </h4>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedQuadrant("all")}
+                className={cn(
+                  "px-3 py-2 min-h-11 rounded-lg text-[11px] font-semibold border active:scale-[0.97]",
+                  selectedQuadrant === "all"
+                    ? "bg-accent-primary/12 text-accent-primary border-accent-primary/30"
+                    : "bg-app-elevated text-tx-tertiary border-app-border/40",
+                )}
+              >
+                全部
+              </button>
+              {QUADRANT_ORDER.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setSelectedQuadrant(id)}
+                  className={cn(
+                    "px-3 py-2 min-h-11 rounded-lg text-[11px] font-semibold border active:scale-[0.97]",
+                    selectedQuadrant === id
+                      ? QUADRANT_META[id].badgeClass
+                      : "bg-app-elevated text-tx-tertiary border-app-border/40",
+                  )}
+                >
+                  {QUADRANT_META[id].shortLabel}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSelectedQuadrant("uncategorized")}
+                className={cn(
+                  "px-3 py-2 min-h-11 rounded-lg text-[11px] font-semibold border active:scale-[0.97]",
+                  selectedQuadrant === "uncategorized"
+                    ? "bg-accent-primary/12 text-accent-primary border-accent-primary/30"
+                    : "bg-app-elevated text-tx-tertiary border-app-border/40",
+                )}
+              >
+                未归类
+              </button>
+            </div>
+          </section>
+
+          <Button
+            type="button"
+            className="w-full min-h-11"
+            onClick={() => setFilterSheetOpen(false)}
+          >
+            完成
+          </Button>
+        </div>
+      </BottomSheet>
 
       {/* Views */}
       {viewMode === "month" && (

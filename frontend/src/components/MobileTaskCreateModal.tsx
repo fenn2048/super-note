@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Folder, User, Flag, Calendar, Loader2, ChevronDown, Check, ScanText } from "lucide-react";
+import { X, Folder, User, Loader2, ChevronDown, Check, ScanText } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { Motion } from "@/components/common/Motion";
 import { springs } from "@/lib/motion";
 import { BottomSheet } from "@/components/common/BottomSheet";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { Project, ProjectMember, Tag } from "@/types";
+import { Project } from "@/types";
 import { toast } from "@/lib/toast";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 import ReminderOffsetPicker from "@/components/common/ReminderOffsetPicker";
@@ -16,6 +16,9 @@ import OCRModal from "@/components/OCRModal";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
+import { resolveCompletedStageId, resolveNotStartedStageId } from "@/lib/taskEntry";
+import QuadrantPicker from "@/components/QuadrantPicker";
+import TaskCategoryPicker from "@/components/TaskCategoryPicker";
 
 interface MobileTaskCreateModalProps {
   isOpen: boolean;
@@ -33,7 +36,11 @@ export default function MobileTaskCreateModal({
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [members, setMembers] = useState<any[]>([]);
   const [assigneeId, setAssigneeId] = useState("");
-  const [priority, setPriority] = useState<number>(2); // Default to Medium (2)
+  const [isImportant, setIsImportant] = useState<number | null>(null);
+  const [isUrgent, setIsUrgent] = useState<number | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [isBackfilled, setIsBackfilled] = useState(false);
+  const [completedAt, setCompletedAt] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>({ type: "weekday" });
@@ -124,53 +131,61 @@ export default function MobileTaskCreateModal({
       toast.error("请选择所属项目");
       return;
     }
+    if (isBackfilled && !completedAt.trim()) {
+      toast.error("补录请填写实际完成日");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      // 1. Get stages of project to find the first stageId (fallback to "待启动")
-      const stages = await api.getProjectStages(selectedProjectId);
-      let stageId = "";
-      if (stages.length === 0) {
-        const newStage = await api.createProjectStage(selectedProjectId, { name: "待启动" });
-        stageId = newStage.id;
-      } else {
-        stageId = stages[0].id;
-      }
+      const stageId = isBackfilled
+        ? await resolveCompletedStageId(selectedProjectId)
+        : await resolveNotStartedStageId(selectedProjectId);
 
-      // 2. Prepare task payload
+      const due = dueDate || (isBackfilled ? completedAt : "");
       const payload = {
         stageId,
         title: title.trim(),
         description: description.trim(),
         assigneeId: assigneeId || null,
-        endDate: dueDate ? new Date(dueDate).toISOString() : null,
-        priority,
-        remindAt: remindAt || null,
+        endDate: due
+          ? new Date(due.includes("T") || due.includes(" ") ? due : `${due}T23:59:59`).toISOString()
+          : null,
+        priority: 2,
+        status: (isBackfilled ? "completed" : "pending") as "completed" | "pending",
+        isCompleted: isBackfilled ? 1 : 0,
+        isBackfilled: isBackfilled ? 1 : 0,
+        completedAt: isBackfilled ? completedAt : null,
+        progress: isBackfilled ? 100 : 0,
+        remindAt: isBackfilled ? null : remindAt || null,
         reminderOffsetValue,
         reminderOffsetUnit,
-        isRecurring: isRecurring ? 1 : 0,
-        recurrenceRule: isRecurring ? JSON.stringify(recurrenceRule) : null,
+        isRecurring: isBackfilled ? 0 : isRecurring ? 1 : 0,
+        recurrenceRule: !isBackfilled && isRecurring ? JSON.stringify(recurrenceRule) : null,
+        isImportant,
+        isUrgent,
+        categoryId,
       };
 
-      // 3. Create project task
       const newTask = await api.createProjectTask(selectedProjectId, payload);
-      toast.success("新建待办成功");
+      toast.success(isBackfilled ? "补录完成" : "新建待办成功");
 
-      // 原生端立刻调度本地通知（此前移动端创建路径漏调，导致锁屏永远收不到提醒）
       if (newTask?.remindAt) {
         void syncTaskNotification(newTask as any);
       }
 
-      // Reset form
       setTitle("");
       setDescription("");
       setDueDate("");
       setRemindAt("");
-      setPriority(2);
+      setIsImportant(null);
+      setIsUrgent(null);
+      setCategoryId(null);
+      setIsBackfilled(false);
+      setCompletedAt("");
       setIsRecurring(false);
       setRecurrenceRule({ type: "weekday" });
 
-      // Dispatch event to sync list UI
       window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
       window.dispatchEvent(new CustomEvent("super:workspace-changed"));
       window.dispatchEvent(new CustomEvent("super:project-search-changed", { detail: { query: "" } }));
@@ -378,31 +393,29 @@ export default function MobileTaskCreateModal({
                     </button>
                   </div>
 
-                  {/* Priority Selector Row */}
-                  <div className="flex items-center justify-between py-1 border-b border-app-border/40">
-                    <div className="flex items-center gap-2 text-tx-secondary">
-                      <Flag size={16} />
-                      <span className="text-xs font-semibold">优先级</span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      {[
-                        { level: 3, label: "高", activeClass: "bg-red-500 text-white font-bold ring-2 ring-red-500/20", inactiveClass: "bg-red-500/10 border-red-500/20 text-red-500" },
-                        { level: 2, label: "中", activeClass: "bg-amber-500 text-white font-bold ring-2 ring-amber-500/20", inactiveClass: "bg-amber-500/10 border-amber-500/20 text-amber-500" },
-                        { level: 1, label: "低", activeClass: "bg-blue-500 text-white font-bold ring-2 ring-blue-500/20", inactiveClass: "bg-blue-500/10 border-blue-500/20 text-blue-500" },
-                        { level: 0, label: "无", activeClass: "bg-zinc-500 text-white font-bold ring-2 ring-zinc-500/20", inactiveClass: "bg-zinc-500/10 border-zinc-500/20 text-tx-secondary" }
-                      ].map((prio) => (
-                        <button
-                          key={prio.level}
-                          type="button"
-                          onClick={() => setPriority(prio.level)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out border border-transparent ${
-                            priority === prio.level ? prio.activeClass : prio.inactiveClass
-                          }`}
-                        >
-                          {prio.label}
-                        </button>
-                      ))}
-                    </div>
+                  {/* 四象限（主决策维度） */}
+                  <div className="py-2 border-b border-app-border/40 space-y-1.5">
+                    <span className="text-xs font-semibold text-tx-secondary">四象限（可选）</span>
+                    <QuadrantPicker
+                      isImportant={isImportant}
+                      isUrgent={isUrgent}
+                      onChange={({ isImportant: imp, isUrgent: urg }) => {
+                        setIsImportant(imp);
+                        setIsUrgent(urg);
+                      }}
+                    />
+                  </div>
+
+                  {/* 事务分类 */}
+                  <div className="py-2 border-b border-app-border/40 space-y-1.5">
+                    <span className="text-xs font-semibold text-tx-secondary">
+                      事务分类 <span className="font-normal text-tx-tertiary">（可选）</span>
+                    </span>
+                    <TaskCategoryPicker
+                      value={categoryId}
+                      onChange={setCategoryId}
+                      className="w-full"
+                    />
                   </div>
 
                   {/* Due Date & Reminder Date Columns */}
@@ -418,7 +431,7 @@ export default function MobileTaskCreateModal({
                         showTime={true}
                       />
                     </div>
-                    {(dueDate || isRecurring) && (
+                    {(dueDate || isRecurring) && !isBackfilled && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-tx-secondary block">提醒设置</label>
                         <ReminderOffsetPicker
@@ -431,15 +444,63 @@ export default function MobileTaskCreateModal({
                     )}
                   </div>
 
-                  {/* Recurrence Configuration */}
-                  <div className="border-t border-app-border/40 pt-4 mt-1">
-                    <RecurrenceConfigurator
-                      isRecurring={isRecurring}
-                      onChangeRecurring={setIsRecurring}
-                      rule={recurrenceRule}
-                      onChangeRule={setRecurrenceRule}
-                    />
+                  {/* 事后补录 */}
+                  <div className="rounded-xl border border-app-border/50 bg-app-sidebar/30 p-3 space-y-2.5">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isBackfilled}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          setIsBackfilled(on);
+                          if (on) {
+                            setCompletedAt(
+                              completedAt ||
+                                (dueDate ? dueDate.slice(0, 10) : format(new Date(), "yyyy-MM-dd")),
+                            );
+                            setIsRecurring(false);
+                          } else {
+                            setCompletedAt("");
+                          }
+                        }}
+                        className="mt-0.5 w-4 h-4 rounded accent-accent-primary shrink-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-tx-primary">事后补录</span>
+                        <span className="block text-[11px] text-tx-tertiary mt-0.5 leading-snug">
+                          已做完再记进系统。完成数按实际完成日；复盘「创建数」不计补录。
+                        </span>
+                      </span>
+                    </label>
+                    {isBackfilled && (
+                      <div className="pl-6 space-y-1.5">
+                        <label className="text-[11px] font-bold text-tx-secondary block">实际完成日</label>
+                        <SleekDatePicker
+                          value={completedAt}
+                          onChange={(val) => {
+                            setCompletedAt(val || "");
+                            if (!dueDate && val) handleDueDateChange(val);
+                          }}
+                          placeholder="选择实际完成日"
+                          className="w-full"
+                          variant="mobile-form"
+                          showTime={false}
+                        />
+                      </div>
+                    )}
                   </div>
+
+                  {/* Recurrence — 补录不展示 */}
+                  {!isBackfilled && (
+                    <div className="border-t border-app-border/40 pt-4 mt-1">
+                      <RecurrenceConfigurator
+                        isRecurring={isRecurring}
+                        onChangeRecurring={setIsRecurring}
+                        rule={recurrenceRule}
+                        onChangeRule={setRecurrenceRule}
+                      />
+                    </div>
+                  )}
 
                   {/* Detailed Description */}
                   

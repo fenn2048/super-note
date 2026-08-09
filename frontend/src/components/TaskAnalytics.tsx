@@ -23,6 +23,7 @@ import {
   Clock,
   Download,
   Inbox,
+  LayoutGrid,
   Lightbulb,
   Loader2,
   RefreshCw,
@@ -31,6 +32,7 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
+  Zap,
 } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,7 @@ import { EmptyState, LoadingBlock } from "@/components/common/FeedbackStates";
 import { toast } from "@/lib/toast";
 import { Motion } from "@/components/common/Motion";
 import { springs } from "@/lib/motion";
+import { QUADRANT_META, type QuadrantId } from "@/lib/taskQuadrant";
 
 const TaskCategoryManager = React.lazy(() => import("./TaskCategoryManager"));
 
@@ -133,6 +136,7 @@ export default function TaskAnalytics() {
   const [exportWithAi, setExportWithAi] = useState(false);
   /** KPI：默认 3 张核心，展开看全部 */
   const [kpiExpanded, setKpiExpanded] = useState(false);
+  const [adoptingId, setAdoptingId] = useState<string | null>(null);
 
   useEffect(() => {
     const onPanel = (e: Event) => {
@@ -257,6 +261,72 @@ export default function TaskAnalytics() {
   const weekdays = data?.weekdays || [];
   const insights = data?.insights || [];
   const openLists = data?.openLists || { overdue: [], unscheduled: [], uncategorized: [] };
+  const quadrant = data?.quadrant as
+    | {
+        buckets: Array<{
+          key: string;
+          label: string;
+          completed: number;
+          open: number;
+          completedShare: number | null;
+          openShare: number | null;
+        }>;
+        q1CompletedShare: number | null;
+        q2CompletedShare: number | null;
+        uncategorizedOpen: number;
+        tagRateOpen: number | null;
+        tagRateCompleted: number | null;
+        completedTagged: number;
+        openTotal: number;
+      }
+    | undefined;
+  const urgentSuggestions = (data?.urgentSuggestions || []) as Array<{
+    taskId: string;
+    title: string;
+    projectName: string;
+    endDate: string | null;
+    reasonLabels: string[];
+  }>;
+
+  const adoptUrgent = async (taskId: string) => {
+    setAdoptingId(taskId);
+    try {
+      await api.updateProjectTask(taskId, { isUrgent: 1 });
+      toast.success("已标为紧急");
+      setData((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          urgentSuggestions: (prev.urgentSuggestions || []).filter(
+            (s: any) => s.taskId !== taskId,
+          ),
+        };
+      });
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
+    } catch (e: any) {
+      toast.error(e?.message || "更新失败");
+    } finally {
+      setAdoptingId(null);
+    }
+  };
+
+  const adoptAllUrgent = async () => {
+    if (urgentSuggestions.length === 0) return;
+    setAdoptingId("__all__");
+    try {
+      await Promise.all(
+        urgentSuggestions.map((s) => api.updateProjectTask(s.taskId, { isUrgent: 1 })),
+      );
+      toast.success(`已为 ${urgentSuggestions.length} 条任务标为紧急`);
+      setData((prev: any) => (prev ? { ...prev, urgentSuggestions: [] } : prev));
+      window.dispatchEvent(new CustomEvent("super:task-stats-changed"));
+    } catch (e: any) {
+      toast.error(e?.message || "批量更新失败");
+      await load();
+    } finally {
+      setAdoptingId(null);
+    }
+  };
 
   const pieData = useMemo(
     () =>
@@ -356,7 +426,7 @@ export default function TaskAnalytics() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5 pb-24 md:pb-12">
+        <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5 pb-[max(6rem,var(--mobile-content-pb,6rem))] md:pb-12">
           {panel === "categories" ? (
             <React.Suspense fallback={<LoadingBlock label="加载分类…" className="py-16" />}>
               <TaskCategoryManager embedded />
@@ -485,7 +555,7 @@ export default function TaskAnalytics() {
                     emphasis
                   />
                   <KpiCard
-                    label="未归类"
+                    label="分类未归"
                     value={String(uncategorizedCount)}
                     icon={<Tags size={14} className="text-amber-500" />}
                     emphasis
@@ -537,6 +607,167 @@ export default function TaskAnalytics() {
                 </button>
               </div>
 
+              {/* 四象限健康度 */}
+              {quadrant && (
+                <section className="rounded-xl border border-app-border/40 bg-app-elevated p-4 shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1.5">
+                        <LayoutGrid size={14} className="text-accent-primary" />
+                        四象限健康度
+                      </h3>
+                      <p className="text-[10px] text-tx-tertiary mt-1 leading-snug">
+                        重要×紧急（决策）· 不是「突发事务类」（分类）· 也不是「今日关注」（截止/提醒）
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-tx-tertiary">
+                      <span className="px-2 py-1 rounded-lg bg-app-hover">
+                        打开打标 {pct(quadrant.tagRateOpen)}
+                      </span>
+                      <span className="px-2 py-1 rounded-lg bg-app-hover">
+                        完成打标 {pct(quadrant.tagRateCompleted)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    {quadrant.buckets.map((b) => {
+                      const qid = b.key as QuadrantId | "uncategorized";
+                      const meta =
+                        qid !== "uncategorized" && QUADRANT_META[qid as QuadrantId]
+                          ? QUADRANT_META[qid as QuadrantId]
+                          : null;
+                      return (
+                        <div
+                          key={b.key}
+                          className={cn(
+                            "rounded-lg border px-2.5 py-2 min-h-[72px]",
+                            meta
+                              ? meta.badgeClass
+                              : "border-app-border/50 bg-app-sidebar/40 text-tx-tertiary",
+                          )}
+                        >
+                          <div className="text-[11px] font-bold truncate">{b.label}</div>
+                          <div className="mt-1.5 flex items-end justify-between gap-1">
+                            <div>
+                              <div className="text-lg font-bold font-mono leading-none">
+                                {b.completed}
+                              </div>
+                              <div className="text-[9px] opacity-80 mt-0.5">本期完成</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold font-mono">
+                                {b.open}
+                              </div>
+                              <div className="text-[9px] opacity-80">打开</div>
+                            </div>
+                          </div>
+                          <div className="text-[9px] mt-1.5 opacity-75">
+                            完成占比 {pct(b.completedShare)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                    <div className="rounded-lg bg-app-sidebar/50 border border-app-border/30 px-3 py-2">
+                      <span className="text-tx-tertiary">Q1 完成占比</span>
+                      <div className="font-bold text-red-500 mt-0.5">
+                        {pct(quadrant.q1CompletedShare)}
+                      </div>
+                      <p className="text-[10px] text-tx-quaternary mt-0.5">
+                        「马上做」占比 · 偏高≈救火多
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-app-sidebar/50 border border-app-border/30 px-3 py-2">
+                      <span className="text-tx-tertiary">Q2 完成占比</span>
+                      <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        {pct(quadrant.q2CompletedShare)}
+                      </div>
+                      <p className="text-[10px] text-tx-quaternary mt-0.5">
+                        「计划做」占比 · 宜抬高
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-app-sidebar/50 border border-app-border/30 px-3 py-2">
+                      <span className="text-tx-tertiary">象限未归·打开</span>
+                      <div className="font-bold text-tx-primary mt-0.5">
+                        {quadrant.uncategorizedOpen}
+                      </div>
+                      <p className="text-[10px] text-tx-quaternary mt-0.5">
+                        共 {quadrant.openTotal} 条打开
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* 紧急建议（可一键采纳 isUrgent=1） */}
+              {urgentSuggestions.length > 0 && (
+                <section className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider flex items-center gap-1.5">
+                        <Zap size={14} className="text-amber-500" />
+                        建议标四象限·紧急
+                      </h3>
+                      <p className="text-[10px] text-tx-tertiary mt-1">
+                        由截止/提醒/突发分类推断时间压力；只写 isUrgent，不改「重要」· 与「今日关注」列表不同
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[11px] gap-1 border-amber-500/30"
+                      disabled={adoptingId === "__all__"}
+                      onClick={adoptAllUrgent}
+                    >
+                      {adoptingId === "__all__" ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Zap size={12} />
+                      )}
+                      全部采纳
+                    </Button>
+                  </div>
+                  <ul className="divide-y divide-app-border/20 rounded-lg border border-app-border/40 bg-app-elevated overflow-hidden">
+                    {urgentSuggestions.map((s) => (
+                      <li
+                        key={s.taskId}
+                        className="flex items-center gap-2 px-3 py-2.5 text-xs"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-tx-primary truncate">
+                            {s.title}
+                          </div>
+                          <div className="text-tx-tertiary mt-0.5 truncate">
+                            {s.projectName}
+                            {s.endDate ? ` · 截止 ${String(s.endDate).slice(0, 10)}` : ""}
+                            {s.reasonLabels?.length
+                              ? ` · ${s.reasonLabels.join("、")}`
+                              : ""}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 shrink-0 text-[11px] px-2.5"
+                          disabled={adoptingId === s.taskId || adoptingId === "__all__"}
+                          onClick={() => adoptUrgent(s.taskId)}
+                        >
+                          {adoptingId === s.taskId ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            "标紧急"
+                          )}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               <div className="grid md:grid-cols-2 gap-4">
                 {/* 分类饼图 */}
                 <section className="rounded-xl border border-app-border/40 bg-app-elevated p-4 shadow-xs">
@@ -546,7 +777,7 @@ export default function TaskAnalytics() {
                   {pieData.length === 0 ? (
                     <p className="text-xs text-tx-tertiary py-10 text-center">本期尚无完成任务</p>
                   ) : (
-                    <div className="h-52">
+                    <div className="h-52" data-swipe-blocker>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -593,7 +824,7 @@ export default function TaskAnalytics() {
                   <h3 className="text-xs font-bold text-tx-secondary uppercase tracking-wider mb-3">
                     完成 · 星期分布
                   </h3>
-                  <div className="h-52">
+                  <div className="h-52" data-swipe-blocker>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={weekdays}>
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -727,7 +958,7 @@ export default function TaskAnalytics() {
                     [
                       ["unscheduled", `未安排 (${openLists.unscheduled?.length || 0})`],
                       ["overdue", `逾期 (${openLists.overdue?.length || 0})`],
-                      ["uncategorized", `未归类 (${openLists.uncategorized?.length || 0})`],
+                      ["uncategorized", `分类未归 (${openLists.uncategorized?.length || 0})`],
                     ] as const
                   ).map(([k, label]) => (
                     <button

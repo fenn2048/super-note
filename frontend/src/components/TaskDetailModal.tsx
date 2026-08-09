@@ -5,12 +5,15 @@ import { useTranslation } from "react-i18next";
 import {
   Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus, Bell,
   Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, Sparkles,
-  Eye, FileVideo, Image as ImageIcon, Paperclip, Upload, AlertCircle, Link, Compass, Loader2, MessageSquare, MoveRight
+  Eye, FileVideo, Image as ImageIcon, Paperclip, Upload, AlertCircle, Link, Compass, Loader2, MessageSquare, MoveRight,
+  LayoutGrid,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import GenericTagInput from "@/components/GenericTagInput";
 import TaskCategoryPicker from "@/components/TaskCategoryPicker";
+import QuadrantPicker from "@/components/QuadrantPicker";
+import { getQuadrantFromTask } from "@/lib/taskQuadrant";
 import { AiFormatHelper } from "@/components/AiFormatHelper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,6 +166,12 @@ export default function TaskDetailModal({
     if (!activeTask) return;
     const prevDescription = activeTask.description || "";
     try {
+      const completedAtForSave =
+        activeTask.isCompleted === 1
+          ? activeTask.completedAt
+            ? String(activeTask.completedAt).slice(0, 10)
+            : null
+          : null;
       const updated = await api.updateProjectTask(activeTask.id, {
         title: activeTask.title,
         description: activeTask.description,
@@ -177,6 +186,8 @@ export default function TaskDetailModal({
           .filter((id): id is string => !!id),
         tags: activeTask.tags?.map((t) => t.id) || [],
         categoryId: activeTask.categoryId ?? null,
+        isImportant: activeTask.isImportant ?? null,
+        isUrgent: activeTask.isUrgent ?? null,
         titleColor: activeTask.titleColor || null,
         dependencies: activeTask.dependencies?.map((d) => d.id) || [],
         remindAt: activeTask.remindAt || null,
@@ -189,6 +200,8 @@ export default function TaskDetailModal({
               : JSON.stringify(activeTask.recurrenceRule || DEFAULT_RECURRENCE_RULE))
           : null,
         recurrenceEndDate: (activeTask as any).recurrenceEndDate ?? null,
+        completedAt: completedAtForSave,
+        isBackfilled: activeTask.isBackfilled ?? undefined,
       });
       if (updated.remindAt) {
         syncTaskNotification(updated as any);
@@ -387,11 +400,14 @@ export default function TaskDetailModal({
 
   const sheetBody = (
     <>
-
         {/* Modal Header */}
         <div
           className="px-4 md:px-6 py-3 md:py-4 border-b border-app-border flex items-center justify-between bg-app-sidebar/30 shrink-0"
-          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 12px)" }}
+          style={{
+            paddingTop: isDesktop
+              ? undefined
+              : "calc(var(--safe-area-top, 0px) + 10px)",
+          }}
         >
           <div className="flex items-center gap-2">
             <button
@@ -419,6 +435,14 @@ export default function TaskDetailModal({
             <span className="text-[10px] uppercase font-bold text-tx-tertiary tracking-wider font-mono">
               {t("projects.taskDetails") || "任务详情"}
             </span>
+            {Number(activeTask.isBackfilled) === 1 && (
+              <span
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-500/12 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+                title="事后补录：复盘创建数不计，完成日按实际完成日统计"
+              >
+                补录
+              </span>
+            )}
           </div>
 
           {/* Top Middle Project Name */}
@@ -657,6 +681,42 @@ export default function TaskDetailModal({
               </div>
             </div>
 
+            {/* 实际完成日（已完成时，支持事后改期 / 补录） */}
+            {activeTask.isCompleted === 1 && (
+              <div className="flex items-center gap-3 md:col-span-2">
+                <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 flex-shrink-0">
+                  <CheckCircle2 size={13} />
+                  <span>完成日</span>
+                </div>
+                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                  <SleekDatePicker
+                    value={
+                      activeTask.completedAt
+                        ? String(activeTask.completedAt).slice(0, 10)
+                        : ""
+                    }
+                    onChange={(val) =>
+                      setActiveTask((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              completedAt: val || null,
+                              isBackfilled: val ? 1 : prev.isBackfilled,
+                            }
+                          : null,
+                      )
+                    }
+                    className="w-full max-w-xs"
+                    placeholder="实际完成日"
+                    showTime={false}
+                  />
+                  <p className="text-[10px] text-tx-quaternary leading-snug">
+                    改成真实做完的那天；保存后按补录处理（创建数不计入补录日，完成数归到完成日）。
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Reminder Offset */}
             {(activeTask.endDate || activeTask.isRecurring) ? (
               <div className="flex items-center gap-3 md:col-span-2">
@@ -713,6 +773,76 @@ export default function TaskDetailModal({
                   )
                 }
               />
+            </div>
+
+            {/* 四象限：重要 × 紧急 */}
+            <div className="flex items-start gap-3 relative md:col-span-2">
+              <div className="w-20 text-tx-tertiary font-semibold flex items-center gap-1.5 shrink-0 pt-2">
+                <LayoutGrid size={13} />
+                <span>四象限</span>
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <QuadrantPicker
+                  isImportant={activeTask.isImportant}
+                  isUrgent={activeTask.isUrgent}
+                  onChange={({ isImportant, isUrgent }) =>
+                    setActiveTask((prev) =>
+                      prev ? { ...prev, isImportant, isUrgent } : null,
+                    )
+                  }
+                />
+                {/* Q3：紧急不重要 → 快捷转交家人 */}
+                {getQuadrantFromTask(activeTask) === "q3" && membersList.length > 1 && (
+                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 space-y-2">
+                    <p className="text-[11px] text-tx-secondary leading-snug">
+                      <span className="font-bold text-amber-600 dark:text-amber-400">
+                        能转就转
+                      </span>
+                      ：紧急但不重要，可改指派给家人处理
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {membersList
+                        .filter((m) => m.userId !== activeTask.assigneeId)
+                        .slice(0, 6)
+                        .map((m) => (
+                          <button
+                            key={m.userId}
+                            type="button"
+                            onClick={() =>
+                              setAssignee({
+                                userId: m.userId,
+                                username: m.username,
+                                displayName: m.displayName,
+                                avatarUrl: m.avatarUrl,
+                              })
+                            }
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-9 rounded-lg border border-app-border bg-app-elevated text-[11px] font-semibold text-tx-secondary hover:bg-app-hover active:scale-[0.97] transition-[transform,background-color] duration-press ease-out"
+                          >
+                            {m.avatarUrl ? (
+                              <img
+                                src={m.avatarUrl}
+                                alt=""
+                                className="w-4 h-4 rounded-full object-cover"
+                              />
+                            ) : (
+                              <span className="w-4 h-4 rounded-full bg-accent-primary/15 text-[8px] font-bold text-accent-primary flex items-center justify-center uppercase">
+                                {(m.displayName || m.username || "?").slice(0, 1)}
+                              </span>
+                            )}
+                            {m.displayName || m.username}
+                          </button>
+                        ))}
+                      <button
+                        type="button"
+                        onClick={() => setShowMemberDropdown(true)}
+                        className="px-2.5 py-1.5 min-h-9 rounded-lg border border-dashed border-app-border text-[11px] text-tx-tertiary hover:text-tx-secondary"
+                      >
+                        更多…
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 事务主分类（完全可选 · 复盘维度） */}
@@ -1318,19 +1448,26 @@ export default function TaskDetailModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0">
+        <div
+          className="px-4 md:px-6 py-3 border-t border-app-border bg-app-sidebar/30 flex justify-end gap-2 shrink-0"
+          style={
+            isDesktop
+              ? undefined
+              : { paddingBottom: "max(12px, var(--safe-area-bottom, 0px))" }
+          }
+        >
           <Button
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="text-xs"
+            className="text-xs min-h-11 px-4"
           >
             {t("common.cancel") || "取消"}
           </Button>
           <Button
             size="sm"
             onClick={handleSaveTaskDetail}
-            className="text-xs bg-accent-primary hover:bg-accent-primary/95 text-white"
+            className="text-xs bg-accent-primary hover:bg-accent-primary/95 text-white min-h-11 px-4"
           >
             {t("common.save") || "保存"}
           </Button>
@@ -1344,13 +1481,14 @@ export default function TaskDetailModal({
         open
         onClose={() => handleSaveTaskDetail(true)}
         hideClose
-        maxHeight="100dvh"
-        className="h-[100dvh] max-h-[100dvh] rounded-none border-0"
-        bodyClassName="flex flex-col min-h-0"
+        hideHandle
+        fullscreen
+        className="rounded-none border-0 bg-app-elevated"
+        bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden"
         zClassName="z-modal"
         aria-label={t("projects.taskDetails") || "任务详情"}
       >
-        <div className="flex flex-col min-h-0 flex-1 bg-app-elevated">
+        <div className="flex flex-col min-h-0 flex-1 h-full w-full bg-app-elevated">
           {sheetBody}
         </div>
       </BottomSheet>

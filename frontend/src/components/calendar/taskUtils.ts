@@ -1,5 +1,9 @@
 import type { CalendarTask } from "./types";
 import { extractTimeHm, taskDateOnly, toLocalYmd } from "./dateUtils";
+import {
+  matchesQuadrantFilter,
+  type QuadrantFilter,
+} from "@/lib/taskQuadrant";
 
 export function flattenStageTasks(stages: { name?: string; tasks?: CalendarTask[] }[]): CalendarTask[] {
   return stages.reduce<CalendarTask[]>((acc, stage) => {
@@ -15,9 +19,11 @@ export function filterTasksByProjectStatus(
   tasks: CalendarTask[],
   selectedProjectId: string,
   selectedStatus: string,
+  selectedQuadrant: QuadrantFilter = "all",
 ): CalendarTask[] {
   return tasks.filter((task) => {
     if (selectedProjectId !== "all" && task.projectId !== selectedProjectId) return false;
+    if (!matchesQuadrantFilter(task, selectedQuadrant)) return false;
     if (selectedStatus === "all") return true;
 
     const isCompleted = task.isCompleted === 1 || task.stageName === "已完成";
