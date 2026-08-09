@@ -11,7 +11,11 @@ import {
   ensurePersonalTodoProject,
   PERSONAL_TODO,
 } from "../lib/defaultTodoProject.js";
-import { applyTaskLifecycleHooks, recordTaskStatusEvent } from "../services/task-status-events.js";
+import {
+  applyTaskLifecycleHooks,
+  normalizeCompletedAtInput,
+  recordTaskStatusEvent,
+} from "../services/task-status-events.js";
 
 const projectsRouter = new Hono();
 
@@ -709,6 +713,12 @@ projectsRouter.post("/:id/tasks", async (c) => {
     reminderOffsetUnit = "day",
     recurrenceEndDate = null,
     categoryId = null,
+    isImportant = null,
+    isUrgent = null,
+    /** 事后补录：1 表示已完成事后录入，复盘创建数不计 */
+    isBackfilled = 0,
+    isCompleted = 0,
+    completedAt = null,
   } = body;
   if (!title) return c.json({ error: "任务标题不能为空" }, 400);
   if (!stageId) return c.json({ error: "必须指定任务阶段" }, 400);
@@ -745,16 +755,97 @@ projectsRouter.post("/:id/tasks", async (c) => {
     }
   }
 
+  /** 四象限三态：null 未归类 / 1 是 / 0 否 */
+  const triBool = (v: unknown): number | null => {
+    if (v === undefined || v === null || v === "") return null;
+    if (v === true || v === 1 || v === "1") return 1;
+    if (v === false || v === 0 || v === "0") return 0;
+    return null;
+  };
+  const importantVal = triBool(isImportant);
+  const urgentVal = triBool(isUrgent);
+
+  // 事后补录：isBackfilled 或带 completedAt → 创建即完成；复盘创建数排除
+  const flagBackfill =
+    isBackfilled === 1 || isBackfilled === true || isBackfilled === "1";
+  const flagCompleted =
+    isCompleted === 1 || isCompleted === true || isCompleted === "1";
+  const completedAtNorm = normalizeCompletedAtInput(completedAt);
+  const isBackfillCreate = flagBackfill || !!completedAtNorm;
+  const createAsDone = isBackfillCreate || flagCompleted;
+
+  let createIsCompleted = 0;
+  let createStatus = status || "pending";
+  let createProgress = progress ?? 0;
+  let createCompletedAt: string | null = null;
+  let createIsBackfilled = 0;
+  let createEndDate = calculatedEndDate;
+
+  if (createAsDone) {
+    createIsCompleted = 1;
+    createStatus = "completed";
+    createProgress = 100;
+    createIsBackfilled = isBackfillCreate ? 1 : 0;
+    createCompletedAt =
+      completedAtNorm ||
+      (() => {
+        const n = new Date();
+        const y = n.getFullYear();
+        const m = String(n.getMonth() + 1).padStart(2, "0");
+        const d = String(n.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d} 23:59:59`;
+      })();
+    // 补录且无截止日时用实际完成日，便于准时率对齐
+    if (isBackfillCreate && !createEndDate && createCompletedAt) {
+      createEndDate = createCompletedAt.slice(0, 10);
+    }
+  }
+
   db.prepare(`
-    INSERT INTO project_tasks (id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate, description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, categoryId)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(taskId, id, stageId, title, status, assigneeId, startDate, calculatedEndDate, description, cover, sortOrder, userId, userId, priority, calculatedRemindAt, titleColor, progress, isRecurring, typeof recurrenceRule === 'string' ? recurrenceRule : JSON.stringify(recurrenceRule), reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, categoryId || null);
+    INSERT INTO project_tasks (
+      id, projectId, stageId, title, isCompleted, status, assigneeId, startDate, endDate,
+      description, cover, sortOrder, creatorId, modifierId, priority, remindAt, titleColor, progress,
+      isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate,
+      categoryId, isImportant, isUrgent, completedAt, isBackfilled
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    taskId,
+    id,
+    stageId,
+    title,
+    createIsCompleted,
+    createStatus,
+    assigneeId,
+    startDate,
+    createEndDate,
+    description,
+    cover,
+    sortOrder,
+    userId,
+    userId,
+    priority,
+    calculatedRemindAt,
+    titleColor,
+    createProgress,
+    isRecurring,
+    typeof recurrenceRule === "string" ? recurrenceRule : JSON.stringify(recurrenceRule),
+    reminderOffsetValue,
+    reminderOffsetUnit,
+    recurrenceEndDate,
+    categoryId || null,
+    importantVal,
+    urgentVal,
+    createCompletedAt,
+    createIsBackfilled,
+  );
 
   recordTaskStatusEvent(db, {
     taskId,
     userId,
     fromStatus: null,
-    toStatus: status || "pending",
+    toStatus: createStatus,
+    at: createCompletedAt || undefined,
   });
 
   // Add dependencies
@@ -766,7 +857,13 @@ projectsRouter.post("/:id/tasks", async (c) => {
     }
   }
 
-  logAudit(userId, "task", "create_task", `创建任务「${title}」`, { targetType: "project_task", targetId: taskId });
+  logAudit(
+    userId,
+    "task",
+    "create_task",
+    createIsBackfilled ? `补录任务「${title}」` : `创建任务「${title}」`,
+    { targetType: "project_task", targetId: taskId },
+  );
 
   // Add participants (accept id string or { userId | id })
   if (Array.isArray(participants)) {
@@ -801,7 +898,7 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   const { canWrite } = getProjectPermission(task.projectId, userId);
   if (!canWrite) return c.json({ error: "无权编辑该项目的任务", code: "FORBIDDEN" }, 403);
 
-  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, dependencies, categoryId } = body;
+  const { title, description, isCompleted, status, assigneeId, startDate, endDate, cover, stageId, sortOrder, checklists, participants, tags, priority, remindAt, titleColor, progress, projectId, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, dependencies, categoryId, isImportant, isUrgent, completedAt, isBackfilled } = body;
 
   let finalIsCompleted = isCompleted;
   let finalProgress = progress;
@@ -930,6 +1027,33 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
   if (reminderOffsetUnit !== undefined) { updates.push("reminderOffsetUnit = ?"); params.push(reminderOffsetUnit); }
   if (recurrenceEndDate !== undefined) { updates.push("recurrenceEndDate = ?"); params.push(recurrenceEndDate); }
   if (categoryId !== undefined) { updates.push("categoryId = ?"); params.push(categoryId || null); }
+  // 四象限：显式传 null 可清除归类
+  if (isImportant !== undefined) {
+    const v =
+      isImportant === null || isImportant === ""
+        ? null
+        : isImportant === true || isImportant === 1 || isImportant === "1"
+          ? 1
+          : isImportant === false || isImportant === 0 || isImportant === "0"
+            ? 0
+            : null;
+    updates.push("isImportant = ?");
+    params.push(v);
+  }
+  if (isUrgent !== undefined) {
+    const v =
+      isUrgent === null || isUrgent === ""
+        ? null
+        : isUrgent === true || isUrgent === 1 || isUrgent === "1"
+          ? 1
+          : isUrgent === false || isUrgent === 0 || isUrgent === "0"
+            ? 0
+            : null;
+    updates.push("isUrgent = ?");
+    params.push(v);
+  }
+
+  const completedAtOverride = normalizeCompletedAtInput(completedAt);
 
   // 生命周期：completedAt + status events
   const life = applyTaskLifecycleHooks(db, {
@@ -940,9 +1064,37 @@ projectsRouter.put("/tasks/:taskId", async (c) => {
       status: status !== undefined ? status : task.status,
       isCompleted: finalIsCompleted !== undefined ? finalIsCompleted : task.isCompleted,
     },
+    completedAtOverride: completedAt !== undefined ? completedAtOverride : undefined,
   });
   if (life.completedAtSql) {
     updates.push(life.completedAtSql);
+    if (life.completedAtParam != null) {
+      params.push(life.completedAtParam);
+    }
+  }
+
+  // isBackfilled：显式设置，或改了 completedAt / 补录完成时自动标记
+  if (isBackfilled !== undefined) {
+    const v =
+      isBackfilled === 1 || isBackfilled === true || isBackfilled === "1" ? 1 : 0;
+    updates.push("isBackfilled = ?");
+    params.push(v);
+  } else if (
+    completedAtOverride &&
+    (finalIsCompleted === 1 ||
+      finalIsCompleted === true ||
+      Number(task.isCompleted) === 1)
+  ) {
+    updates.push("isBackfilled = ?");
+    params.push(1);
+  } else if (
+    finalIsCompleted !== undefined &&
+    !(finalIsCompleted === 1 || finalIsCompleted === true) &&
+    Number(task.isCompleted) === 1
+  ) {
+    // 取消完成时清除补录标记
+    updates.push("isBackfilled = ?");
+    params.push(0);
   }
 
   if (updates.length > 0) {

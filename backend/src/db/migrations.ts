@@ -2780,6 +2780,43 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+
+  // v49：任务四象限（重要 × 紧急，可空 = 未归类）
+  {
+    version: 49,
+    name: "project-tasks-eisenhower-quadrant",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!cols.some((c) => c.name === "isImportant")) {
+        db.exec(`ALTER TABLE project_tasks ADD COLUMN isImportant INTEGER DEFAULT NULL`);
+      }
+      if (!cols.some((c) => c.name === "isUrgent")) {
+        db.exec(`ALTER TABLE project_tasks ADD COLUMN isUrgent INTEGER DEFAULT NULL`);
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_quadrant
+          ON project_tasks(isImportant, isUrgent)
+          WHERE isCompleted = 0;
+      `);
+    },
+  },
+
+  // v50：事后补录 — isBackfilled；完成日可回填（completedAt 已存在）
+  {
+    version: 50,
+    name: "project-tasks-backfill-flag",
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(project_tasks)").all() as { name: string }[];
+      if (!cols.some((c) => c.name === "isBackfilled")) {
+        db.exec(`ALTER TABLE project_tasks ADD COLUMN isBackfilled INTEGER NOT NULL DEFAULT 0`);
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_project_tasks_backfilled
+          ON project_tasks(isBackfilled)
+          WHERE isBackfilled = 1;
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

@@ -89,8 +89,74 @@ type TaskRow = {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  isBackfilled?: number | null;
   assigneeName: string | null;
+  /** 四象限：1 / 0 / null */
+  isImportant: number | null;
+  isUrgent: number | null;
+  remindAt: string | null;
 };
+
+export type QuadrantKey = "q1" | "q2" | "q3" | "q4" | "uncategorized";
+
+export interface QuadrantBucket {
+  key: QuadrantKey;
+  label: string;
+  /** 本期完成数 */
+  completed: number;
+  /** 当前打开（未完成）数 */
+  open: number;
+  /** 占本期完成的份额 */
+  completedShare: number | null;
+  /** 占打开任务的份额 */
+  openShare: number | null;
+}
+
+export interface QuadrantHealth {
+  buckets: QuadrantBucket[];
+  /** 本期已完成且有完整象限标记的数量 */
+  completedTagged: number;
+  completedTotal: number;
+  /** 打开任务中已打标 */
+  openTagged: number;
+  openTotal: number;
+  q1CompletedShare: number | null;
+  q2CompletedShare: number | null;
+  uncategorizedOpen: number;
+  tagRateOpen: number | null;
+  tagRateCompleted: number | null;
+}
+
+export interface UrgentSuggestion {
+  taskId: string;
+  title: string;
+  projectId: string;
+  projectName: string;
+  endDate: string | null;
+  remindAt: string | null;
+  isImportant: number | null;
+  isUrgent: number | null;
+  categoryId: string | null;
+  reasons: Array<"overdue" | "due_today" | "remind_due" | "category_urgent">;
+  reasonLabels: string[];
+}
+
+function tri(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v === true || v === 1 || v === "1") return 1;
+  if (v === false || v === 0 || v === "0") return 0;
+  return null;
+}
+
+function taskQuadrant(t: TaskRow): QuadrantKey {
+  const imp = tri(t.isImportant);
+  const urg = tri(t.isUrgent);
+  if (imp === null || urg === null) return "uncategorized";
+  if (imp === 1 && urg === 1) return "q1";
+  if (imp === 1 && urg === 0) return "q2";
+  if (imp === 0 && urg === 1) return "q3";
+  return "q4";
+}
 
 function dayStart(d: string) {
   return `${d} 00:00:00`;
@@ -187,7 +253,9 @@ function loadTasks(db: Database.Database, q: AnalyticsQuery): TaskRow[] {
              pt.assigneeId, pt.creatorId, pt.isCompleted, pt.status,
              pt.startDate, pt.endDate, pt.categoryId,
              pt.createdAt, pt.updatedAt, pt.completedAt,
-             COALESCE(u.displayName, u.username) AS assigneeName
+             COALESCE(pt.isBackfilled, 0) AS isBackfilled,
+             COALESCE(u.displayName, u.username) AS assigneeName,
+             pt.isImportant, pt.isUrgent, pt.remindAt
       FROM project_tasks pt
       JOIN projects p ON p.id = pt.projectId
       LEFT JOIN users u ON u.id = pt.assigneeId
@@ -203,8 +271,14 @@ function responsibleId(t: TaskRow): string | null {
   return t.assigneeId || t.creatorId || null;
 }
 
+function isBackfilledTask(t: TaskRow): boolean {
+  return Number(t.isBackfilled || 0) === 1;
+}
+
 function cycleMinutes(db: Database.Database, t: TaskRow): { minutes: number; estimated: boolean } | null {
   if (!t.completedAt && Number(t.isCompleted) !== 1) return null;
+  // 事后补录不参与周期统计（录入日 ≠ 实际干活跨度）
+  if (isBackfilledTask(t)) return null;
   const completedTs = parseTs(t.completedAt || t.updatedAt);
   if (completedTs == null) return null;
   const firstIp = firstInProgressAt(db, t.id);
@@ -238,15 +312,20 @@ function computeKpis(
 
   for (const t of tasks) {
     const isDone = Number(t.isCompleted) === 1;
-    if (inRange(t.createdAt, from, to)) {
+    // 创建数：排除事后补录（补录日会虚高「今天创建了多少」）
+    if (inRange(t.createdAt, from, to) && !isBackfilledTask(t)) {
       created++;
       if (!isDone) openCreatedInPeriod++;
     }
+    // 完成数仍按 completedAt（补录填真实完成日 → 落到正确周期）
     if (isDone && inRange(t.completedAt || t.updatedAt, from, to)) {
       completed++;
       const cyc = cycleMinutes(db, t);
       if (cyc) cycles.push(cyc.minutes);
-      totalActiveMinutes += computeActiveMinutes(db, t.id, dayStart(from), dayEnd(to));
+      // 补录无真实 active 区间，不计 active minutes
+      if (!isBackfilledTask(t)) {
+        totalActiveMinutes += computeActiveMinutes(db, t.id, dayStart(from), dayEnd(to));
+      }
       if (t.endDate) {
         withDueCompleted++;
         const due = dateOnly(t.endDate)!;
@@ -336,10 +415,12 @@ function byCategory(
       kind: leaf?.kind || null,
     });
 
-    if (inRange(t.createdAt, from, to)) b.created++;
+    if (inRange(t.createdAt, from, to) && !isBackfilledTask(t)) b.created++;
     if (Number(t.isCompleted) === 1 && inRange(t.completedAt || t.updatedAt, from, to)) {
       b.completed++;
-      b.activeMinutes += computeActiveMinutes(db, t.id, dayStart(from), dayEnd(to));
+      if (!isBackfilledTask(t)) {
+        b.activeMinutes += computeActiveMinutes(db, t.id, dayStart(from), dayEnd(to));
+      }
     }
   }
 
@@ -376,10 +457,12 @@ function byMember(
     } else if (t.assigneeName) {
       b.displayName = t.assigneeName;
     }
-    if (inRange(t.createdAt, from, to)) b.created++;
+    if (inRange(t.createdAt, from, to) && !isBackfilledTask(t)) b.created++;
     if (Number(t.isCompleted) === 1 && inRange(t.completedAt || t.updatedAt, from, to)) {
       b.completed++;
-      b.activeMinutes += computeActiveMinutes(db, t.id, dayStart(from), dayEnd(to));
+      if (!isBackfilledTask(t)) {
+        b.activeMinutes += computeActiveMinutes(db, t.id, dayStart(from), dayEnd(to));
+      }
     }
   }
   const list = [...buckets.values()].sort((a, b) => b.completed - a.completed);
@@ -410,12 +493,161 @@ function weekdayDistribution(
   return counts;
 }
 
+function computeQuadrantHealth(
+  tasks: TaskRow[],
+  from: string,
+  to: string,
+): QuadrantHealth {
+  const labels: Record<QuadrantKey, string> = {
+    q1: "马上做",
+    q2: "计划做",
+    q3: "能转就转",
+    q4: "少做",
+    uncategorized: "未归类",
+  };
+  const order: QuadrantKey[] = ["q1", "q2", "q3", "q4", "uncategorized"];
+  const completedCounts: Record<QuadrantKey, number> = {
+    q1: 0,
+    q2: 0,
+    q3: 0,
+    q4: 0,
+    uncategorized: 0,
+  };
+  const openCounts: Record<QuadrantKey, number> = {
+    q1: 0,
+    q2: 0,
+    q3: 0,
+    q4: 0,
+    uncategorized: 0,
+  };
+
+  let completedTotal = 0;
+  let completedTagged = 0;
+  let openTotal = 0;
+  let openTagged = 0;
+
+  for (const t of tasks) {
+    const q = taskQuadrant(t);
+    const done =
+      Number(t.isCompleted) === 1 && inRange(t.completedAt || t.updatedAt, from, to);
+    const open = Number(t.isCompleted) !== 1;
+    if (done) {
+      completedTotal++;
+      completedCounts[q]++;
+      if (q !== "uncategorized") completedTagged++;
+    }
+    if (open) {
+      openTotal++;
+      openCounts[q]++;
+      if (q !== "uncategorized") openTagged++;
+    }
+  }
+
+  const buckets: QuadrantBucket[] = order.map((key) => ({
+    key,
+    label: labels[key],
+    completed: completedCounts[key],
+    open: openCounts[key],
+    completedShare: completedTotal > 0 ? completedCounts[key] / completedTotal : null,
+    openShare: openTotal > 0 ? openCounts[key] / openTotal : null,
+  }));
+
+  const q1Share =
+    completedTotal > 0 ? completedCounts.q1 / completedTotal : null;
+  const q2Share =
+    completedTotal > 0 ? completedCounts.q2 / completedTotal : null;
+
+  return {
+    buckets,
+    completedTagged,
+    completedTotal,
+    openTagged,
+    openTotal,
+    q1CompletedShare: q1Share,
+    q2CompletedShare: q2Share,
+    uncategorizedOpen: openCounts.uncategorized,
+    tagRateOpen: openTotal > 0 ? openTagged / openTotal : null,
+    tagRateCompleted: completedTotal > 0 ? completedTagged / completedTotal : null,
+  };
+}
+
+/** 打开任务：有客观紧急信号但尚未标 isUrgent=1 → 建议采纳 */
+function computeUrgentSuggestions(
+  tasks: TaskRow[],
+  catMap: Map<string, TaskCategoryRow>,
+): UrgentSuggestion[] {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const now = Date.now();
+  const out: UrgentSuggestion[] = [];
+
+  for (const t of tasks) {
+    if (Number(t.isCompleted) === 1) continue;
+    const urg = tri(t.isUrgent);
+    if (urg === 1) continue; // 已标紧急
+
+    const reasons: UrgentSuggestion["reasons"] = [];
+    const reasonLabels: string[] = [];
+    const due = dateOnly(t.endDate);
+    if (due && due < todayStr) {
+      reasons.push("overdue");
+      reasonLabels.push("已逾期");
+    } else if (due && due === todayStr) {
+      reasons.push("due_today");
+      reasonLabels.push("今天截止");
+    }
+
+    if (t.remindAt) {
+      const rt = parseTs(t.remindAt);
+      if (rt != null && rt <= now) {
+        reasons.push("remind_due");
+        reasonLabels.push("提醒已到");
+      }
+    }
+
+    // 事务分类 kind=urgent（突发小类）→ 建议时间维度也标紧急（与 Q1 文案区分）
+    const leaf = t.categoryId ? catMap.get(t.categoryId) : null;
+    if (leaf?.kind === "urgent") {
+      reasons.push("category_urgent");
+      reasonLabels.push("突发事务类");
+    }
+
+    if (reasons.length === 0) continue;
+
+    out.push({
+      taskId: t.id,
+      title: t.title,
+      projectId: t.projectId,
+      projectName: t.projectName,
+      endDate: t.endDate,
+      remindAt: t.remindAt,
+      isImportant: tri(t.isImportant),
+      isUrgent: urg,
+      categoryId: t.categoryId,
+      reasons,
+      reasonLabels: [...new Set(reasonLabels)],
+    });
+  }
+
+  // 逾期优先，其次今天截止
+  const rank = (r: UrgentSuggestion["reasons"][number]) =>
+    r === "overdue" ? 0 : r === "due_today" ? 1 : r === "remind_due" ? 2 : 3;
+  out.sort((a, b) => {
+    const ra = Math.min(...a.reasons.map(rank));
+    const rb = Math.min(...b.reasons.map(rank));
+    if (ra !== rb) return ra - rb;
+    return (a.endDate || "").localeCompare(b.endDate || "");
+  });
+  return out.slice(0, 15);
+}
+
 function buildInsights(
   current: PeriodKpis,
   previous: PeriodKpis,
   rootCats: CategoryBucket[],
   members: MemberBucket[],
   scope: AnalyticsScope,
+  quadrant?: QuadrantHealth | null,
 ): InsightItem[] {
   const items: InsightItem[] = [];
 
@@ -516,6 +748,44 @@ function buildInsights(
     });
   }
 
+  // 四象限健康度洞察（与事务分类「突发类」文案区分）
+  if (quadrant && quadrant.completedTagged >= 3) {
+    if (quadrant.q1CompletedShare != null && quadrant.q1CompletedShare >= 0.4) {
+      items.push({
+        id: "quadrant-q1-high",
+        severity: "warn",
+        title: "救火偏多（重要且紧急）",
+        detail: `本期已打标完成中，约 ${Math.round(quadrant.q1CompletedShare * 100)}% 落在「马上做」。`,
+        actionHint: "下周给「计划做」预留固定时间，减少被逼到 Q1 才动手。",
+        filter: { quadrant: "q1" },
+      });
+    }
+    if (
+      quadrant.q2CompletedShare != null &&
+      quadrant.q2CompletedShare < 0.15 &&
+      quadrant.completedTagged >= 5
+    ) {
+      items.push({
+        id: "quadrant-q2-low",
+        severity: "info",
+        title: "计划做投入偏少",
+        detail: `本期完成里「计划做」仅约 ${Math.round((quadrant.q2CompletedShare || 0) * 100)}%，长期重要事项容易被挤掉。`,
+        actionHint: "从积压清单里挑 1～2 件标成「计划做」并设一个截止。",
+        filter: { quadrant: "q2" },
+      });
+    }
+  }
+  if (quadrant && quadrant.uncategorizedOpen >= 8) {
+    items.push({
+      id: "quadrant-untagged",
+      severity: "info",
+      title: "四象限未归类较多",
+      detail: `仍有 ${quadrant.uncategorizedOpen} 条打开任务未打四象限。`,
+      actionHint: "打开「四象限」视图批量整理，会更清楚今天先做什么。",
+      filter: { quadrant: "uncategorized" },
+    });
+  }
+
   if (items.length === 0) {
     items.push({
       id: "neutral",
@@ -525,7 +795,7 @@ function buildInsights(
     });
   }
 
-  return items.slice(0, 7);
+  return items.slice(0, 8);
 }
 
 function formatDuration(mins: number): string {
@@ -566,7 +836,9 @@ export function computeTaskAnalytics(db: Database.Database, q: AnalyticsQuery) {
   const leafCategories = byCategory(db, tasks, q.from, q.to, catMap, "leaf");
   const members = byMember(db, tasks, q.from, q.to);
   const weekdays = weekdayDistribution(tasks, q.from, q.to);
-  const insights = buildInsights(current, previous, rootCategories, members, q.scope);
+  const quadrant = computeQuadrantHealth(tasks, q.from, q.to);
+  const urgentSuggestions = computeUrgentSuggestions(tasks, catMap);
+  const insights = buildInsights(current, previous, rootCategories, members, q.scope, quadrant);
 
   // 打开态列表摘要
   const today = new Date();
@@ -616,6 +888,10 @@ export function computeTaskAnalytics(db: Database.Database, q: AnalyticsQuery) {
     weekdays,
     insights,
     openLists,
+    /** 四象限健康度（重要×紧急；与事务分类 kind=urgent 突发类区分） */
+    quadrant,
+    /** 建议标为「紧急」的打开任务（可一键采纳） */
+    urgentSuggestions,
   };
 }
 
@@ -659,6 +935,40 @@ export function buildTaskAnalyticsMarkdown(
   lines.push(`| 归类率 | ${pct(k.categorizeRate)} | ${pct(p.categorizeRate)} | — |`);
   lines.push(`| 突发类占比 | ${pct(k.urgentShare)} | ${pct(p.urgentShare)} | ${dlt(d.urgentShare)} |`);
   lines.push("");
+
+  if (data.quadrant) {
+    const qh = data.quadrant;
+    lines.push("## 四象限健康度");
+    lines.push("");
+    lines.push(
+      `_重要×紧急；「突发类」是事务分类维度，与本表的「马上做 Q1」不同。_`,
+    );
+    lines.push("");
+    lines.push("| 象限 | 本期完成 | 完成占比 | 打开中 |");
+    lines.push("| --- | ---: | ---: | ---: |");
+    for (const b of qh.buckets) {
+      lines.push(
+        `| ${b.label} | ${b.completed} | ${pct(b.completedShare)} | ${b.open} |`,
+      );
+    }
+    lines.push("");
+    lines.push(
+      `- 打开任务打标率：${pct(qh.tagRateOpen)}（未归类打开 ${qh.uncategorizedOpen}）`,
+    );
+    lines.push(`- 完成任务打标率：${pct(qh.tagRateCompleted)}`);
+    lines.push("");
+  }
+
+  if (data.urgentSuggestions?.length) {
+    lines.push("## 建议标为紧急");
+    lines.push("");
+    for (const s of data.urgentSuggestions.slice(0, 10)) {
+      lines.push(
+        `- ${s.title}（${s.projectName}）· ${s.reasonLabels.join("、")}`,
+      );
+    }
+    lines.push("");
+  }
 
   lines.push("## 完成结构（大类）");
   lines.push("");

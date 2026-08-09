@@ -1384,6 +1384,17 @@ function initSchema(db: Database.Database) {
   try { db.exec("ALTER TABLE tasks ADD COLUMN dueReminderFiredAt TEXT DEFAULT NULL"); } catch {}
   try { db.exec("ALTER TABLE project_tasks ADD COLUMN categoryId TEXT DEFAULT NULL"); } catch {}
   try { db.exec("ALTER TABLE project_tasks ADD COLUMN completedAt TEXT DEFAULT NULL"); } catch {}
+  // 四象限：重要 × 紧急（NULL = 未归类；与 migration v49 对齐）
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN isImportant INTEGER DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN isUrgent INTEGER DEFAULT NULL"); } catch {}
+  try { db.exec("ALTER TABLE project_tasks ADD COLUMN isBackfilled INTEGER NOT NULL DEFAULT 0"); } catch {}
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_project_tasks_quadrant
+        ON project_tasks(isImportant, isUrgent)
+        WHERE isCompleted = 0;
+    `);
+  } catch {}
   try { db.exec("ALTER TABLE task_categories ADD COLUMN description TEXT DEFAULT NULL"); } catch {}
   try {
     db.exec(`

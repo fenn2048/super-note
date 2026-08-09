@@ -31,8 +31,25 @@ export function recordTaskStatusEvent(
 }
 
 /**
+ * 规范化客户端传入的完成时间：
+ * - YYYY-MM-DD → 当日 23:59:59
+ * - ISO / 空格日期时间 → 尽量保留到秒
+ */
+export function normalizeCompletedAtInput(v: unknown): string | null {
+  if (v === undefined || v === null || v === "") return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s} 23:59:59`;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?/);
+  if (m) return `${m[1]} ${m[2]}:${m[3] || "00"}`;
+  return s.slice(0, 19);
+}
+
+/**
  * 在更新 project_tasks 时同步 completedAt 与状态事件。
  * 在实际 UPDATE 之前调用，传入变更前的 task 行与即将写入的字段。
+ *
+ * completedAtOverride：补录 / 手动指定实际完成时间（仅在变为完成时或已完成时改写）。
  */
 export function applyTaskLifecycleHooks(
   db: Database.Database,
@@ -47,8 +64,13 @@ export function applyTaskLifecycleHooks(
       status?: string | null;
       isCompleted?: number | boolean | null;
     };
+    /** 实际完成时间覆盖（事后补录） */
+    completedAtOverride?: string | null;
   },
-): { completedAtSql: string | null; completedAtValue: string | null } {
+): {
+  completedAtSql: string | null;
+  completedAtParam: string | null;
+} {
   const prevCompleted = Number(opts.prev.isCompleted || 0) === 1;
   const nextCompletedRaw = opts.next.isCompleted;
   const nextCompleted =
@@ -69,23 +91,33 @@ export function applyTaskLifecycleHooks(
     if (nextStatus === "completed") nextStatus = "pending";
   }
 
+  const override = normalizeCompletedAtInput(opts.completedAtOverride);
+
   if (nextStatus !== prevStatus) {
     recordTaskStatusEvent(db, {
       taskId: opts.taskId,
       userId: opts.userId,
       fromStatus: prevStatus,
       toStatus: nextStatus,
+      at: nextCompleted && !prevCompleted && override ? override : undefined,
     });
   }
 
   // completedAt 维护
   if (nextCompleted && !prevCompleted) {
-    return { completedAtSql: "completedAt = datetime('now')", completedAtValue: "set" };
+    if (override) {
+      return { completedAtSql: "completedAt = ?", completedAtParam: override };
+    }
+    return { completedAtSql: "completedAt = datetime('now')", completedAtParam: null };
   }
   if (!nextCompleted && prevCompleted) {
-    return { completedAtSql: "completedAt = NULL", completedAtValue: "clear" };
+    return { completedAtSql: "completedAt = NULL", completedAtParam: null };
   }
-  return { completedAtSql: null, completedAtValue: null };
+  // 已完成状态下单独改完成日
+  if (nextCompleted && prevCompleted && override) {
+    return { completedAtSql: "completedAt = ?", completedAtParam: override };
+  }
+  return { completedAtSql: null, completedAtParam: null };
 }
 
 /** 从 status events 汇总 Active Time（分钟）：in_progress 区间之和 */
