@@ -77,7 +77,15 @@ const DEFAULT_DISMISS_VELOCITY = 850;
 
 function viewportHeight(): number {
   if (typeof window === "undefined") return 800;
-  return Math.round(window.visualViewport?.height ?? window.innerHeight);
+  // 优先 visualViewport（键盘/浏览器 chrome 更准）；过小则回退 innerHeight
+  const vv = window.visualViewport?.height;
+  const ih = window.innerHeight || 800;
+  if (vv != null && vv > 0) {
+    // 偶发 vv 远小于可视区时回退（比例阈值）
+    if (vv < ih * 0.55) return Math.round(ih);
+    return Math.round(vv);
+  }
+  return Math.round(ih);
 }
 
 /** 下滑关闭：时长随剩余距离与速度略变，但绝不回弹 */
@@ -144,24 +152,33 @@ export function BottomSheet({
     if (closingRef.current) return;
     if (fullscreen) {
       const h = viewportHeight();
-      if (h > 0) setHeight(h);
+      if (h <= 0) return;
+      // 避免 visualViewport 轻微抖动反复 setState → 打断入场动画
+      setHeight((prev) => (Math.abs(prev - h) < 12 ? prev : h));
       return;
     }
     const el = panelRef.current;
     if (!el) return;
     const h = el.offsetHeight;
-    if (h > 0) setHeight(h);
+    if (h > 0) setHeight((prev) => (Math.abs(prev - h) < 4 ? prev : h));
   }, [fullscreen]);
 
   useLayoutEffect(() => {
     if (!open) {
       entered.current = false;
+      // 关闭后清高度，避免下次以陈旧 height 入场（二次打开高度不一致）
+      setHeight(0);
       // 不在这里清 closing / dismissed — 留给 onExitComplete，避免 exit 误判
       return;
     }
     closingRef.current = false;
     dismissedOffscreen.current = false;
     setIsClosing(false);
+    // 打开瞬间先给一个可用高度，减少 height=0 空窗
+    if (fullscreen) {
+      const h = viewportHeight();
+      if (h > 0) setHeight(h);
+    }
     measureHeight();
     const el = panelRef.current;
     const ro =
@@ -183,24 +200,45 @@ export function BottomSheet({
   }, [open, children, title, fullscreen, measureHeight]);
 
   // Enter animation once we know height
+  // 关键：height 二次变化会 stop 动画，且 entered 后不补 y→0 → 卡在半屏
   useEffect(() => {
     if (!open || height <= 0 || closingRef.current) return;
-    if (entered.current) {
-      // 高度在打开后变大：仅当仍在打开位附近时钉住 y=0
-      if (y.get() < height * 0.05) y.set(0);
-      return;
-    }
-    entered.current = true;
-    dismissedOffscreen.current = false;
+
     const snaps = resolveSnaps(height);
     const target = snaps[Math.min(initialSnap, snaps.length - 1)] ?? 0;
+
+    if (entered.current) {
+      // 已入场：高度微调时必须回到打开位，禁止卡在中途
+      const cur = y.get();
+      if (Math.abs(cur - target) < 2) {
+        y.set(target);
+        return;
+      }
+      if (reduce) {
+        y.set(target);
+        return;
+      }
+      const c = animate(y, target, springs.sheet);
+      return () => {
+        c.stop();
+        // 清理时若仍打开，强制钉在打开位（防半屏残留）
+        if (!closingRef.current) y.set(target);
+      };
+    }
+
+    entered.current = true;
+    dismissedOffscreen.current = false;
     if (reduce) {
       y.set(target);
       return;
     }
+    // 从屏外滑入
     y.set(height);
     const c = animate(y, target, springs.sheet);
-    return () => c.stop();
+    return () => {
+      c.stop();
+      if (!closingRef.current) y.set(target);
+    };
   }, [open, height, initialSnap, reduce, resolveSnaps, y]);
 
   useEffect(() => {
@@ -362,13 +400,19 @@ export function BottomSheet({
         <motion.div
           key="bottom-sheet-root"
           className={cn(
-            "fixed inset-0 flex flex-col",
-            fullscreen ? "justify-stretch" : "justify-end",
+            "fixed inset-0",
+            // 全屏：不依赖 flex 拉伸；半屏：底对齐
+            fullscreen ? "" : "flex flex-col justify-end",
             zClassName,
           )}
           style={
             fullscreen
               ? {
+                  // 与 visualViewport 对齐，避免 Android 100dvh 不满屏
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  width: "100%",
                   height: height > 0 ? height : "100%",
                   maxHeight: height > 0 ? height : "100%",
                 }
@@ -407,7 +451,7 @@ export function BottomSheet({
             className={cn(
               "relative w-full flex flex-col",
               fullscreen
-                ? "h-full max-h-full flex-1 rounded-none border-0"
+                ? "absolute inset-0 h-full max-h-full rounded-none border-0"
                 : "rounded-t-window border border-app-border border-b-0",
               "bg-app-card text-tx-primary shadow-xl",
               className,
@@ -415,8 +459,13 @@ export function BottomSheet({
             style={{
               ...(fullscreen
                 ? {
-                    height: "100%",
-                    maxHeight: "100%",
+                    // 显式像素高，避免 % / flex 链在 portal 里塌缩
+                    height: height > 0 ? height : "100%",
+                    maxHeight: height > 0 ? height : "100%",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
                     paddingBottom: 0,
                   }
                 : {
