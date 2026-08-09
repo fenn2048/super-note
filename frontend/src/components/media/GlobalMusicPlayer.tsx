@@ -222,10 +222,18 @@ export default function GlobalMusicPlayer() {
     [coverAccent.solid, coverAccent.shadow],
   );
 
-  const noCoverGradient = React.useMemo(
-    () => defaultCoverGradient(currentMedia?.title || currentMedia?.id || "music"),
-    [currentMedia?.title, currentMedia?.id],
-  );
+  const noCoverGradient = React.useMemo(() => {
+    // 有采样主色时用主色氛围；否则标题派生渐变
+    if (coverAccent?.solid) {
+      const c = coverAccent.solid;
+      return `linear-gradient(165deg, ${c}ee 0%, ${c}99 42%, #0a0a12 100%)`;
+    }
+    return defaultCoverGradient(currentMedia?.title || currentMedia?.id || "music");
+  }, [coverAccent?.solid, currentMedia?.title, currentMedia?.id]);
+
+  const expandPlayer = React.useCallback(() => {
+    setIsExpanded(true);
+  }, []);
 
   // ID3 歌手/专辑/封面回填 store（useID3Cover 已保证切歌时 meta 不会串曲）
   // 本曲文件内 ID3 优先：可纠正「切歌时被上一首串写」的错误 artist/album
@@ -1169,20 +1177,27 @@ export default function GlobalMusicPlayer() {
           />
         </div>
 
-        {/* 单行：封面 | 控件 | 音量 */}
-        <div className="flex items-center justify-between px-3 py-2.5 md:h-[64px] md:py-0 md:px-4 lg:px-5 gap-2 md:gap-3 min-w-0">
+        {/* 单行：封面 | 控件 | 音量 — 主区域点击展开全屏（控件 stopPropagation） */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={expandPlayer}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              expandPlayer();
+            }
+          }}
+          className="flex items-center justify-between px-3 py-2.5 md:h-[64px] md:py-0 md:px-4 lg:px-5 gap-2 md:gap-3 min-w-0 cursor-pointer"
+          aria-label="展开正在播放"
+        >
           {/* Left: 圆角方封面（移动更清晰）+ 曲目信息 */}
           <div className="flex items-center gap-3 min-w-0 flex-1 md:max-w-[30%] lg:max-w-[32%] md:min-w-[180px] md:flex-none md:shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsExpanded(true)}
+            <div
               className={cn(
-                "relative shrink-0 w-11 h-11 md:w-12 md:h-12 overflow-hidden cursor-pointer shadow-md",
+                "relative shrink-0 w-11 h-11 md:w-12 md:h-12 overflow-hidden shadow-md pointer-events-none",
                 "rounded-xl md:rounded-full border border-app-border/50 bg-app-elevated",
-                "active:scale-[0.97] transition-transform duration-press ease-out",
               )}
-              title="展开播放器"
-              aria-label="展开正在播放"
             >
               <AudioCover
                 item={currentMedia}
@@ -1195,24 +1210,23 @@ export default function GlobalMusicPlayer() {
                 fallbackIconSize={16}
               />
               <div className="hidden md:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-app-elevated border border-app-border/60 shadow" />
-            </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setIsExpanded(true)}
-              className="flex flex-col min-w-0 cursor-pointer gap-0.5 justify-center text-left flex-1"
-            >
+            <div className="flex flex-col min-w-0 gap-0.5 justify-center text-left flex-1 pointer-events-none">
               <span className="text-xs md:text-sm font-semibold text-tx-primary truncate">
                 {currentMedia.title}
               </span>
               <span className="text-[10px] md:text-xs text-tx-tertiary truncate">
                 {[displayArtist || "未知歌手", displayAlbum].filter(Boolean).join(" · ")}
               </span>
-            </button>
+            </div>
           </div>
 
           {/* Center: 仅播放控件，与封面垂直居中对齐 */}
-          <div className="hidden md:flex flex-1 min-w-0 items-center justify-center gap-3 lg:gap-5 px-2">
+          <div
+            className="hidden md:flex flex-1 min-w-0 items-center justify-center gap-3 lg:gap-5 px-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button 
               onClick={cyclePlayMode}
               className="p-1.5 rounded-full text-tx-secondary hover:text-tx-primary hover:bg-app-hover transition-colors"
@@ -1259,7 +1273,10 @@ export default function GlobalMusicPlayer() {
           </div>
 
           {/* Right: 音量 | 播放列表 | 最小化 | 关闭 — 与封面垂直居中 */}
-          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-1.5 shrink-0 md:min-w-0 justify-end">
+          <div
+            className="flex items-center gap-1 sm:gap-1.5 md:gap-1.5 shrink-0 md:min-w-0 justify-end"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex md:hidden items-center gap-1.5 shrink-0">
               <button
                 type="button"
@@ -1514,12 +1531,13 @@ export default function GlobalMusicPlayer() {
       <CoverBlurBackdrop
         portal
         active={isExpanded}
-        coverSrc={blurCoverSrc || null}
+        coverSrc={blurCoverSrc || coverToUse || null}
         fallbackGradient={noCoverGradient}
         zClassName="z-[159]"
       />
 
       <BottomSheet
+            key={isExpanded ? "gmp-expanded" : "gmp-collapsed"}
             open={isExpanded}
             onClose={() => setIsExpanded(false)}
             hideClose
