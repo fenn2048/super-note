@@ -452,8 +452,10 @@ export function BottomSheet({
               "relative w-full flex flex-col",
               fullscreen
                 ? "absolute inset-0 h-full max-h-full rounded-none border-0"
-                : "rounded-t-window border border-app-border border-b-0",
-              "bg-app-card text-tx-primary shadow-xl",
+                : "rounded-t-window border border-app-border border-b-0 bg-app-card shadow-xl",
+              // 全屏默认透明底（让氛围层透出）；半屏用卡片底
+              fullscreen ? "bg-transparent shadow-none" : null,
+              "text-tx-primary",
               className,
             )}
             style={{
@@ -467,6 +469,9 @@ export function BottomSheet({
                     right: 0,
                     bottom: 0,
                     paddingBottom: 0,
+                    // 强制透明：防止 Android 把 bg-transparent 画成实色卡片
+                    backgroundColor: "transparent",
+                    background: "transparent",
                   }
                 : {
                     maxHeight,
