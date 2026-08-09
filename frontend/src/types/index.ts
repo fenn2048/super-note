@@ -923,7 +923,19 @@ export interface ProjectTask {
   endDate: string | null;
   /** 事务主分类（小类 id） */
   categoryId?: string | null;
+  /**
+   * 四象限 · 重要（1 / 0 / null 未归类）
+   * 与 isUrgent 同时非 null 才构成象限
+   */
+  isImportant?: number | null;
+  /** 四象限 · 紧急（时间上急；1 / 0 / null 未归类） */
+  isUrgent?: number | null;
   completedAt?: string | null;
+  /**
+   * 事后补录：1 = 先做完再录入。
+   * 复盘「创建数」排除；完成数按 completedAt；周期/ active 不计。
+   */
+  isBackfilled?: number | null;
   description: string;
   cover: string;
   sortOrder: number;

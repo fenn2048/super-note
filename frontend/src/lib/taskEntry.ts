@@ -70,11 +70,40 @@ export async function ensureDefaultTodoProject(): Promise<Project> {
   return family;
 }
 
-async function firstStageId(projectId: string): Promise<string> {
+/**
+ * 新建任务默认阶段：优先「待启动」（创建 ≠ 开始做）。
+ * 无则「待规划」→ 非「已完成」的第一列 → 没有阶段时创建「待启动」。
+ */
+export async function resolveNotStartedStageId(projectId: string): Promise<string> {
   const stages = await api.getProjectStages(projectId);
-  if (stages.length > 0) return stages[0].id;
+  const notStarted =
+    stages.find((s) => s.name === "待启动") ||
+    stages.find((s) => s.name === "待规划");
+  if (notStarted) return notStarted.id;
+  const open = stages.find((s) => s.name !== "已完成");
+  if (open) return open.id;
+  if (stages[0]) return stages[0].id;
+  const created = await api.createProjectStage(projectId, { name: "待启动" });
+  return created.id;
+}
+
+/** 启动任务：进入「进行中」列 */
+export async function resolveInProgressStageId(projectId: string): Promise<string> {
+  const stages = await api.getProjectStages(projectId);
+  const inProgress = stages.find((s) => s.name === "进行中");
+  if (inProgress) return inProgress.id;
   const created = await api.createProjectStage(projectId, { name: "进行中" });
   return created.id;
+}
+
+/** 已完成列（补录 / 勾选完成） */
+export async function resolveCompletedStageId(projectId: string): Promise<string> {
+  const stages = await api.getProjectStages(projectId);
+  let completed = stages.find((s) => s.name === "已完成");
+  if (!completed) {
+    completed = await api.createProjectStage(projectId, { name: "已完成" });
+  }
+  return completed.id;
 }
 
 export interface UnifiedTaskInput {
@@ -87,6 +116,9 @@ export interface UnifiedTaskInput {
   projectId?: string;
   assigneeId?: string | null;
   tagIds?: string[];
+  /** 四象限：1 / 0 / null 未归类 */
+  isImportant?: number | null;
+  isUrgent?: number | null;
 }
 
 /**
@@ -99,7 +131,7 @@ export async function createUnifiedTask(
     ? await api.getProject(input.projectId)
     : await ensureDefaultTodoProject();
 
-  const stageId = await firstStageId(project.id);
+  const stageId = await resolveNotStartedStageId(project.id);
 
   const endDate = input.dueDate
     ? input.dueDate.includes("T") || input.dueDate.includes(" ")
@@ -116,5 +148,8 @@ export async function createUnifiedTask(
     priority: input.priority ?? 2,
     assigneeId: input.assigneeId ?? null,
     tags: input.tagIds,
+    status: "pending",
+    isImportant: input.isImportant ?? null,
+    isUrgent: input.isUrgent ?? null,
   });
 }
