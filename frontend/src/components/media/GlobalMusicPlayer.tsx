@@ -1528,6 +1528,7 @@ export default function GlobalMusicPlayer() {
       {/* ----------------------------------------------------------------------- */}
       {/* 全屏播放器：氛围底 portal 在 sheet 外（避免 transform 毁掉 CSS blur） */}
       {/* ----------------------------------------------------------------------- */}
+      {/* 氛围底：body portal（sheet 下方）+ 下面 panel 内再叠一层，双保险 */}
       <CoverBlurBackdrop
         portal
         active={isExpanded}
@@ -1550,20 +1551,27 @@ export default function GlobalMusicPlayer() {
             dismissFraction={0.2}
             dismissVelocity={720}
             className={cn(
-              "rounded-none border-0",
-              // 透明：让 portal 氛围底透出
-              "bg-transparent",
+              "rounded-none border-0 !bg-transparent",
               "md:max-w-[520px] md:mx-auto md:rounded-t-window md:border-x md:border-white/10",
             )}
-            bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden bg-transparent"
-            scrimClassName="hidden md:block bg-black/45 dark:bg-black/60"
+            bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden !bg-transparent"
+            // 移动端不要 scrim（会糊死氛围底）；桌面保留轻遮罩
+            scrimClassName="!hidden md:!block md:bg-black/40"
           >
             <div
               data-global-music-ui
               data-global-player-panel
-              className="relative flex flex-col flex-1 min-h-0 overflow-hidden text-white select-none bg-transparent"
+              className="relative flex flex-col flex-1 min-h-0 overflow-hidden text-white select-none !bg-transparent"
               style={playerAccentStyle}
             >
+            {/* 面板内氛围底：不依赖 portal 透出（Android 实色 sheet 时仍可见） */}
+            <CoverBlurBackdrop
+              portal={false}
+              active={isExpanded}
+              coverSrc={blurCoverSrc || coverToUse || null}
+              fallbackGradient={noCoverGradient}
+              className="z-0"
+            />
 
             {/* Header：安全区下沉 + 圆形返回遮罩；无顶部拖条 */}
             <div
