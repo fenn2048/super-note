@@ -31,17 +31,38 @@ const tasks = new Hono();
  * 本路由对旧客户端保持 URL 与大致字段形状，读写优先走 project_tasks。
  */
 
+/** 新建任务默认进「待启动」（创建 ≠ 开始做） */
 function firstStageId(db: any, projectId: string): string {
-  const s = db
+  const prefer = db
+    .prepare(
+      `SELECT id FROM project_stages
+       WHERE projectId = ? AND name IN ('待启动', '待规划')
+       ORDER BY CASE name WHEN '待启动' THEN 0 ELSE 1 END, sortOrder ASC
+       LIMIT 1`,
+    )
+    .get(projectId) as { id: string } | undefined;
+  if (prefer) return prefer.id;
+
+  const first = db
+    .prepare(
+      `SELECT id FROM project_stages
+       WHERE projectId = ? AND name != '已完成'
+       ORDER BY sortOrder ASC LIMIT 1`,
+    )
+    .get(projectId) as { id: string } | undefined;
+  if (first) return first.id;
+
+  const any = db
     .prepare(
       "SELECT id FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC LIMIT 1",
     )
     .get(projectId) as { id: string } | undefined;
-  if (s) return s.id;
+  if (any) return any.id;
+
   const id = uuid();
   db.prepare(
     `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
-     VALUES (?, ?, '进行中', 0, datetime('now'))`,
+     VALUES (?, ?, '待启动', 0, datetime('now'))`,
   ).run(id, projectId);
   return id;
 }

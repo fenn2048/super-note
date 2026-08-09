@@ -234,14 +234,17 @@ export function handleRecurringTask(
       const nextRemindAt = computeNextRemindAt(task, nextEndDate);
       const newId = crypto.randomUUID();
 
+      // 新一期周期任务：回到「待启动」（创建/到期 ≠ 已开始做）
       let targetStageId = task.stageId;
       const stages = db
         .prepare("SELECT * FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC")
         .all(task.projectId) as any[];
       if (stages && stages.length > 0) {
-        const inProgressStage = stages.find((s) => s.name === "进行中");
-        if (inProgressStage) {
-          targetStageId = inProgressStage.id;
+        const notStarted =
+          stages.find((s) => s.name === "待启动") ||
+          stages.find((s) => s.name === "待规划");
+        if (notStarted) {
+          targetStageId = notStarted.id;
         } else {
           const firstValidStage = stages.find((s) => s.name !== "已完成");
           if (firstValidStage) {

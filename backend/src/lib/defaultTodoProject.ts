@@ -12,17 +12,66 @@ const PERSONAL_TODO = "个人TODO";
 const FAMILY_TODO = "家庭TODO";
 const PERSONAL_COVER = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
 
+/** 与普通项目一致：创建 → 待启动，动手 → 进行中，完成 → 已完成 */
+const DEFAULT_TODO_STAGES = ["待启动", "进行中", "已完成"] as const;
+
+/**
+ * 确保 TODO 项目具备标准三阶段。
+ * - 空项目：一次建齐
+ * - 已有「进行中/已完成」的老个人TODO：补「待启动」并排在最前
+ */
 function ensureStages(db: any, projectId: string) {
-  const stageCount = db
-    .prepare("SELECT COUNT(*) as c FROM project_stages WHERE projectId = ?")
-    .get(projectId) as { c: number };
-  if (!stageCount?.c) {
-    for (const [i, stageName] of ["进行中", "已完成"].entries()) {
+  const existing = db
+    .prepare(
+      "SELECT id, name, sortOrder FROM project_stages WHERE projectId = ? ORDER BY sortOrder ASC",
+    )
+    .all(projectId) as { id: string; name: string; sortOrder: number }[];
+
+  if (existing.length === 0) {
+    for (const [i, stageName] of DEFAULT_TODO_STAGES.entries()) {
       db.prepare(
         `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
          VALUES (?, ?, ?, ?, datetime('now'))`,
       ).run(uuid(), projectId, stageName, i);
     }
+    return;
+  }
+
+  const byName = new Set(existing.map((s) => s.name));
+
+  // 老数据只有「进行中」「已完成」时补「待启动」，并插到最前
+  if (!byName.has("待启动")) {
+    const minOrder = existing.reduce(
+      (m, s) => Math.min(m, typeof s.sortOrder === "number" ? s.sortOrder : 0),
+      0,
+    );
+    db.prepare(
+      `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    ).run(uuid(), projectId, "待启动", minOrder - 1);
+  }
+  if (!byName.has("进行中")) {
+    const maxOrder = existing.reduce(
+      (m, s) => Math.max(m, typeof s.sortOrder === "number" ? s.sortOrder : 0),
+      0,
+    );
+    db.prepare(
+      `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    ).run(uuid(), projectId, "进行中", maxOrder + 1);
+  }
+  if (!byName.has("已完成")) {
+    const maxOrder = (
+      db
+        .prepare(
+          "SELECT COALESCE(MAX(sortOrder), 0) as m FROM project_stages WHERE projectId = ?",
+        )
+        .get(projectId) as { m: number }
+    ).m;
+    db.prepare(
+      `INSERT INTO project_stages (id, projectId, name, sortOrder, createdAt)
+       VALUES (?, ?, ?, ?, datetime('now'))`,
+    ).run(uuid(), projectId, "已完成", maxOrder + 1);
   }
 }
 
