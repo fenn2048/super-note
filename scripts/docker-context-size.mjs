@@ -114,8 +114,9 @@ if (big.length) {
 }
 // 门禁：默认 80/200；带客户端安装包时（--with-assets）context 会到 ~80–120MB
 const withAssets = process.argv.includes("--with-assets") || process.env.DOCKER_CONTEXT_WITH_ASSETS === "1";
-const WARN_MB = withAssets ? 150 : 80;
-const FAIL_MB = withAssets ? 280 : 200;
+// 默认表情包 ~74MB 在 backend/assets/bundled-stickers，会进 context 和运行时镜像
+const WARN_MB = withAssets ? 230 : 160;
+const FAIL_MB = withAssets ? 360 : 250;
 if (mb > FAIL_MB) {
   console.error(`\n[FAIL] context > ${FAIL_MB} MB — check .dockerignore (backend/data? packages?)`);
   process.exit(2);

@@ -90,9 +90,11 @@ node scripts/docker-context-size.mjs --with-assets
 
 | 指标 | 默认 | `--with-assets` |
 |------|------|-----------------|
-| context 告警 | 80 MB | 150 MB |
-| context 硬失败 | 200 MB | 280 MB |
+| context 告警 | 160 MB | 230 MB |
+| context 硬失败 | 250 MB | 360 MB |
 | 镜像软告警 | ~450 MB | ~520 MB |
+
+默认聊天表情包（`backend/assets/bundled-stickers`，约 74MB）会打进镜像，由后端提供 `/emojis/pack/`。Android APK 仍不内嵌该包，客户端按服务器地址拉取。
 
 ## CI
 
