@@ -23,7 +23,7 @@
 | 定位 | 轻量、安静的家庭私有笔记 / 说说 / 任务工作台 |
 | **主题** | **仅 light / dark**（`next-themes`，`html.dark`）。**已移除**多皮肤（obsidian/eink/claude/mono）与站点级字体设置 |
 | 字体 | 系统 UI 栈（`--editor-font-family` 固定）；不提供编辑器字体 / 霞鹜文楷开关 |
-| 移动底栏 | **固定 4 Tab**：笔记 · 任务 · 说说 · 我的（无「首页」Tab；首页在桌面 Rail / 我的入口） |
+| 移动底栏 | **固定 4 Tab**：首页 · 任务 · 说说 · 我的（笔记 / 聊天入口在「我的」宫格；与 `navigation.config.ts` 一致） |
 | 设置 | **独立路由** `#/settings`（可带 tab：`#/settings/appearance`） |
 | Bottom sheets | 统一 **`@/components/common/BottomSheet`**（拖拽 + rubberband + project + velocity handoff） |
 

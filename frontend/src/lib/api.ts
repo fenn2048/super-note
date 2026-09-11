@@ -349,10 +349,12 @@ function isOurApiMediaPath(pathnameOrUrl: string): boolean {
     return (
       /^\/api\/attachments(\/|$)/.test(path) ||
       /^\/api\/diary\/attachments(\/|$)/.test(path) ||
-      /^\/api\/task-attachments(\/|$)/.test(path)
+      /^\/api\/task-attachments(\/|$)/.test(path) ||
+      /^\/api\/im\/files(\/|$)/.test(path) ||
+      /^\/api\/im\/stickers(\/|$)/.test(path)
     );
   } catch {
-    return /\/api\/(attachments|diary\/attachments|task-attachments)(\/|$|\?)/.test(
+    return /\/api\/(attachments|diary\/attachments|task-attachments|im\/files|im\/stickers)(\/|$|\?)/.test(
       pathnameOrUrl,
     );
   }
@@ -1214,9 +1216,26 @@ export const api = {
     const qs = params.toString() ? `?${params.toString()}` : "";
     return request<Task[]>(`/tasks${qs}`);
   },
+  /** 未完成且有提醒/截止日的瘦字段，供本地通知调度 */
+  getReminderTasks: () => {
+    const params = new URLSearchParams();
+    const ws = getCurrentWorkspace();
+    if (ws && ws !== "") params.set("workspaceId", ws);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<
+      Array<{
+        id: string;
+        title: string;
+        isCompleted?: number | boolean;
+        remindAt?: string | null;
+        dueDate?: string | null;
+        endDate?: string | null;
+      }>
+    >(`/tasks/reminder-candidates${qs}`);
+  },
   getTask: (id: string) => request<Task>(`/tasks/${id}`),
+  /** @deprecated 新代码请用 createProjectTask；此方法仍写入 project_tasks（兼容层） */
   createTask: (data: Partial<Task>) => {
-    // 兼容层写入 project_tasks；workspaceId 放 body（后端亦接受 query 兜底）
     const ws =
       data.workspaceId !== undefined ? data.workspaceId : getCurrentWorkspace();
     const payload = {
@@ -3734,6 +3753,155 @@ export const api = {
     markAllRead: () => request<{ success: boolean }>("/notifications/read-all", { method: "PUT" }),
     create: (data: { targetUserId: string; type: string; sourceType?: string; sourceId?: string; sourceTitle?: string; actorId?: string; actorName?: string }) =>
       request<{ success: boolean; id: string }>("/notifications", { method: "POST", body: JSON.stringify(data) }),
+  },
+
+  // ======================================================================
+  // IM 聊天（家庭群 + 成员私聊）
+  // ======================================================================
+  im: {
+    conversations: () => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ items: import("@/types").ImConversation[] }>(`/im/conversations${qs}`);
+    },
+    unreadCount: () => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ count: number }>(`/im/unread-count${qs}`);
+    },
+    messages: (
+      conversationId: string,
+      opts?: {
+        before?: import("@/types").ImMessageCursor | null;
+        after?: import("@/types").ImMessageCursor | null;
+        around?: string;
+        cursor?: string;
+        limit?: number;
+      },
+    ) => {
+      const ws = getCurrentWorkspace();
+      const params = new URLSearchParams();
+      if (ws) params.set("workspaceId", ws);
+      params.set("limit", String(opts?.limit ?? 30));
+      if (opts?.around) params.set("around", opts.around);
+      if (opts?.before?.createdAt) {
+        params.set("before", opts.before.createdAt);
+        params.set("beforeId", opts.before.id);
+      }
+      if (opts?.after?.createdAt) {
+        params.set("after", opts.after.createdAt);
+        params.set("afterId", opts.after.id);
+      }
+      if (opts?.cursor) params.set("cursor", opts.cursor);
+      return request<import("@/types").ImMessagePage>(
+        `/im/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
+      );
+    },
+    search: (q: string, opts?: { conversationId?: string; cursor?: string; cursorId?: string; limit?: number }) => {
+      const ws = getCurrentWorkspace();
+      const params = new URLSearchParams();
+      if (ws) params.set("workspaceId", ws);
+      params.set("q", q);
+      if (opts?.conversationId) params.set("conversationId", opts.conversationId);
+      if (opts?.cursor) params.set("cursor", opts.cursor);
+      if (opts?.cursorId) params.set("cursorId", opts.cursorId);
+      params.set("limit", String(opts?.limit ?? 20));
+      return request<{
+        items: import("@/types").ImSearchHit[];
+        hasMore: boolean;
+        nextCursor: string | null;
+        nextCursorId: string | null;
+      }>(`/im/search?${params.toString()}`);
+    },
+    send: (conversationId: string, data: { type?: import("@/types").ImMessageType; body?: string; fileId?: string }) => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<import("@/types").ImMessage>(
+        `/im/conversations/${encodeURIComponent(conversationId)}/messages${qs}`,
+        { method: "POST", body: JSON.stringify(data) },
+      );
+    },
+    uploadFile: async (conversationId: string, file: File): Promise<import("@/types").ImFileInfo> => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", file);
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      const res = await fetch(
+        `${getBaseUrl()}/im/conversations/${encodeURIComponent(conversationId)}/files${qs}`,
+        {
+          method: "POST",
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: form,
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || `上传失败: ${res.status}`);
+      }
+      return res.json();
+    },
+    openDm: (userId: string) => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ id: string; workspaceId: string; type: "dm" }>(`/im/dm${qs}`, {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      });
+    },
+    markRead: (conversationId: string) => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ success: boolean }>(
+        `/im/conversations/${encodeURIComponent(conversationId)}/read${qs}`,
+        { method: "PUT" },
+      );
+    },
+    deleteConversation: (conversationId: string) => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ success: boolean }>(
+        `/im/conversations/${encodeURIComponent(conversationId)}${qs}`,
+        { method: "DELETE" },
+      );
+    },
+    stickers: () => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ items: import("@/types").ImSticker[] }>(`/im/stickers${qs}`);
+    },
+    uploadSticker: async (file: File): Promise<import("@/types").ImSticker> => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", file);
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      const res = await fetch(`${getBaseUrl()}/im/stickers${qs}`, {
+        method: "POST",
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || `上传失败: ${res.status}`);
+      }
+      return res.json();
+    },
+    deleteSticker: (id: string) => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ success: boolean }>(`/im/stickers/${encodeURIComponent(id)}${qs}`, {
+        method: "DELETE",
+      });
+    },
+    deleteMessages: (conversationId: string, data: { ids?: string[]; all?: boolean }) => {
+      const ws = getCurrentWorkspace();
+      const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
+      return request<{ success: boolean; deletedIds: string[]; skipped?: number; all?: boolean }>(
+        `/im/conversations/${encodeURIComponent(conversationId)}/messages${qs}`,
+        { method: "DELETE", body: JSON.stringify(data) },
+      );
+    },
   },
 
   // ======================================================================

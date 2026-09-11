@@ -80,7 +80,11 @@ interface ServerMessage {
     | "y:sync-step2"
     | "y:update"
     | "y:awareness"
-    | "force-logout";
+    | "force-logout"
+    | "im:message"
+    | "im:deleted"
+    | "im:conversation-deleted"
+    | "notification:received";
   [key: string]: any;
 }
 
@@ -189,6 +193,16 @@ function canJoinNoteRoom(noteId: string, userId: string): boolean {
 function canJoinWorkspaceRoom(workspaceId: string, userId: string): boolean {
   const accessible = getUserAccessibleWorkspaceIds(userId);
   return accessible.includes(workspaceId);
+}
+
+function canJoinImRoom(conversationId: string, userId: string): boolean {
+  try {
+    const { assertImMember } = require("../lib/im");
+    assertImMember(conversationId, userId);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------- 对外 API ----------------
@@ -325,6 +339,12 @@ function handleClientMessage(connectionId: string, msg: ClientMessage) {
       } else if (room.startsWith("workspace:")) {
         const wsId = room.slice(10);
         if (!canJoinWorkspaceRoom(wsId, info.userId)) {
+          send(ws, { type: "error", error: "Forbidden", room });
+          return;
+        }
+      } else if (room.startsWith("im:")) {
+        const convId = room.slice(3);
+        if (!canJoinImRoom(convId, info.userId)) {
           send(ws, { type: "error", error: "Forbidden", room });
           return;
         }

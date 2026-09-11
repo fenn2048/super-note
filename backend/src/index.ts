@@ -50,10 +50,15 @@ import booksRouter from "./routes/books";
 import mediaRouter from "./routes/media";
 import financeRouter from "./routes/finance";
 import healthRouter, { handleDownloadHealthAttachment } from "./routes/health";
+import imRouter, {
+  handleDownloadBundledSticker,
+  handleDownloadImFile,
+  handleDownloadImSticker,
+} from "./routes/im";
 import { seedDatabase } from "./db/seed";
 import { initApiTokensTable, looksLikeApiToken, resolveApiToken } from "./lib/api-tokens";
 import { getDb, closeDb } from "./db/schema";
-import { getBackupManager } from "./services/backup";
+import { getBackupManager, startNoteVersionsPruneScheduler, stopNoteVersionsPruneScheduler } from "./services/backup";
 import { attachRealtimeServer, getRealtimeStats, shutdownRealtime } from "./services/realtime";
 import { getYjsStats } from "./services/yjs";
 import { initWebhookTables } from "./services/webhook";
@@ -375,6 +380,11 @@ app.get("/api/health/attachments/:id", handleDownloadHealthAttachment);
 //   /api/diary/*）注册得**更早**，否则会被 JWT 中间件拦截。
 app.get("/api/diary/attachments/:id", handleDownloadDiaryImage);
 
+// IM 聊天附件：须在 JWT 全局中间件之前；handler 内 getAuthUserId（cookie / ?token=）
+app.get("/api/im/files/:id", handleDownloadImFile);
+app.get("/api/im/stickers/:id", handleDownloadImSticker);
+app.get("/emojis/pack/:file", handleDownloadBundledSticker);
+
 // JWT 鉴权中间件：保护所有 /api/* 路由（auth 和 health 已在上方注册，不受影响）
 //
 // 安全加固（C3）：
@@ -589,6 +599,7 @@ app.route("/api/attachments", attachmentsRouter);
 app.route("/api/task-attachments", taskAttachmentsRouter);
 app.route("/api/files", filesRouter);
 app.route("/api/books", booksRouter);
+app.route("/api/im", imRouter);
 
 app.get("/api/events/stream", async (c) => {
   const userId = c.req.header("X-User-Id");
@@ -873,6 +884,10 @@ try {
   }
 } catch { /* 备份启动失败不阻塞服务 */ }
 
+try {
+  startNoteVersionsPruneScheduler();
+} catch { /* ignore */ }
+
 // 启动 RAG Phase 2：sqlite-vec 扩展加载 + worker
 //   - initVecStore：把 sqlite-vec 加载进当前 db 连接；失败时自动 noop（worker
 //     仍能正常算 embedding 写 note_embeddings.vectorJson，只是没有 KNN 加速）
@@ -953,6 +968,7 @@ async function gracefulShutdown(signal: string) {
     try { stopAiTaskWorker(); } catch { /* ignore */ }
     try { stopFinanceWorker(); } catch { /* ignore */ }
     try { stopTaskReminderWorker(); } catch { /* ignore */ }
+    try { stopNoteVersionsPruneScheduler(); } catch { /* ignore */ }
     // 关停 DB 连接：内部会先 wal_checkpoint(TRUNCATE)，把 -wal 中的事务全部
     // 写回主 .db 文件。这样无论用户接下来是 cp 冷备、docker volume snapshot
     // 还是直接关机，拿到的 .db 都是完整的一致快照，不会丢最近事务。

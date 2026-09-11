@@ -31,7 +31,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   BookOpen, Book, Sparkles, NotebookPen, Briefcase, FolderOpen, Film, Smile,
   Settings, LogOut, PanelLeftClose, PanelLeft, X,
-  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Wallet, HeartPulse,
+  Columns2, Columns3, Cloud, CloudOff, Home, ListTodo, Bell, Wallet, HeartPulse, MessageCircle,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -69,6 +69,7 @@ const RAIL_ICONS: Record<string, React.ReactNode> = {
   media: <Film size={RAIL_ICON_SIZE} />,
   finance: <Wallet size={RAIL_ICON_SIZE} />,
   health: <HeartPulse size={RAIL_ICON_SIZE} />,
+  chat: <MessageCircle size={RAIL_ICON_SIZE} />,
 };
 
 export default function NavRail({ variant = "desktop" }: { variant?: "desktop" | "mobile" } = {}) {
@@ -255,6 +256,11 @@ export default function NavRail({ variant = "desktop" }: { variant?: "desktop" |
         {mod.id === "tasks" && state.reminderActiveCount > 0 && (
           <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent-danger text-[9px] font-bold text-white flex items-center justify-center leading-none z-10 shadow-sm">
             {state.reminderActiveCount}
+          </span>
+        )}
+        {mod.id === "chat" && state.chatUnreadCount > 0 && (
+          <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent-danger text-[9px] font-bold text-white flex items-center justify-center leading-none z-10 shadow-sm">
+            {state.chatUnreadCount > 99 ? "99+" : state.chatUnreadCount}
           </span>
         )}
         {showLabel && (

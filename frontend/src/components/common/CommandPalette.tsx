@@ -30,6 +30,7 @@ import {
   Home,
   Briefcase,
   Bell,
+  MessageCircle,
   Settings,
   Palette,
   Moon,
@@ -47,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { isModuleAllowedByPack } from "@/lib/modulePack";
+import { openTasksEntry } from "@/lib/navigation.config";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -253,9 +255,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: Briefcase,
         handler: () => {
           actions.setViewMode("projects");
-          const filter = { type: "my-tasks" };
-          sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
-          window.dispatchEvent(new CustomEvent("super:project-filter-changed", { detail: filter }));
+          openTasksEntry();
         },
       });
     }
@@ -270,6 +270,20 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           actions.setViewMode("mentions");
         },
       },
+    );
+    if (isModuleAllowedByPack("chat")) {
+      list.push({
+        id: "go-chat",
+        type: "command",
+        title: "前往 聊天",
+        subtitle: "家庭群与成员私聊",
+        icon: MessageCircle,
+        handler: () => {
+          actions.setViewMode("chat");
+        },
+      });
+    }
+    list.push(
       {
         id: "open-settings",
         type: "command",

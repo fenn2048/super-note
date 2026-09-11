@@ -35,6 +35,12 @@ import {
   type EnabledFeaturesConfig,
   type WorkspaceFeature,
 } from "../middleware/acl";
+import {
+  addUserToWorkspaceGroup,
+  ensureWorkspaceGroup,
+  removeUserFromWorkspaceIm,
+  syncWorkspaceGroupTitle,
+} from "../lib/im";
 
 const app = new Hono();
 
@@ -118,6 +124,12 @@ app.post("/", async (c) => {
   });
   tx();
 
+  try {
+    ensureWorkspaceGroup(id);
+  } catch (e) {
+    console.warn("[im] ensureWorkspaceGroup on create failed:", e);
+  }
+
   const workspace = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(id);
   return c.json({ ...(workspace as any), role: "owner", memberCount: 1, notebookCount: 0 }, 201);
 });
@@ -176,6 +188,13 @@ app.put("/:id", requireWorkspaceRole("admin"), async (c) => {
   params.push(id);
 
   db.prepare(`UPDATE workspaces SET ${fields.join(", ")} WHERE id = ?`).run(...params);
+  if (body.name !== undefined) {
+    try {
+      syncWorkspaceGroupTitle(id, String(body.name || ""));
+    } catch {
+      /* ignore */
+    }
+  }
   const ws = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(id);
   return c.json(ws);
 });
@@ -292,6 +311,11 @@ app.delete("/:id/members/:userId", requireWorkspaceRole("admin"), (c) => {
   db.prepare(
     "DELETE FROM note_acl WHERE userId = ? AND noteId IN (SELECT id FROM notes WHERE workspaceId = ?)",
   ).run(targetUserId, id);
+  try {
+    removeUserFromWorkspaceIm(id, targetUserId);
+  } catch {
+    /* ignore */
+  }
 
   return c.json({ success: true });
 });
@@ -314,6 +338,11 @@ app.post("/:id/leave", (c) => {
     id,
     userId,
   );
+  try {
+    removeUserFromWorkspaceIm(id, userId);
+  } catch {
+    /* ignore */
+  }
   return c.json({ success: true });
 });
 
@@ -413,6 +442,12 @@ app.post("/join", async (c) => {
   });
   tx();
 
+  try {
+    addUserToWorkspaceGroup(invite.workspaceId, userId);
+  } catch (e) {
+    console.warn("[im] addUserToWorkspaceGroup on join failed:", e);
+  }
+
   const ws = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(invite.workspaceId);
   return c.json({ success: true, workspace: ws, role: invite.role });
 });
@@ -435,6 +470,7 @@ const FEATURE_KEYS: WorkspaceFeature[] = [
   "media",
   "finance",
   "health",
+  "chat",
 ];
 
 app.get("/:id/features", (c) => {

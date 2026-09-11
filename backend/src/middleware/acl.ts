@@ -331,7 +331,8 @@ export type WorkspaceFeature =
   | "favorites"
   | "media"
   | "finance"
-  | "health";
+  | "health"
+  | "chat";
 
 /**
  * 功能开关 JSON 的结构。所有字段都是可选的：
@@ -352,6 +353,7 @@ export interface EnabledFeaturesConfig {
   media?: boolean;
   finance?: boolean;
   health?: boolean;
+  chat?: boolean;
 }
 
 /**

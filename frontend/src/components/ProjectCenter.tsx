@@ -23,6 +23,7 @@ import { toast } from "@/lib/toast";
 import { format } from "date-fns";
 import { syncTaskNotification } from "@/hooks/useCapacitor";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
+import { clearTaskDeepLink, openTaskById } from "@/lib/navigation.config";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import SleekDatePicker from "@/components/common/SleekDatePicker";
 
@@ -186,7 +187,7 @@ export default function ProjectCenter() {
           setActiveTaskId(taskId);
         } else {
           try {
-            const taskDetails = await api.getProjectTask(taskId);
+            const taskDetails = await api.getProjectTask(taskId).catch(() => api.getTask(taskId) as Promise<any>);
             setCenterActiveTask(taskDetails);
           } catch (err) {
             console.error("Failed to load task details:", err);
@@ -995,7 +996,10 @@ export default function ProjectCenter() {
             workspaceId={workspaceId || ""}
             wsMembers={wsMembers}
             favorites={favorites}
-            onOpenTask={(task) => setCenterActiveTask(task)}
+            onOpenTask={(task) => {
+              setCenterActiveTask(task);
+              if (task?.id) openTaskById(task.id);
+            }}
           />
         </React.Suspense>
       ) : activeFilter.type === "calendar" ? (
@@ -1618,7 +1622,10 @@ export default function ProjectCenter() {
         <TaskDetailModal
           task={centerActiveTask}
           wsMembers={wsMembers}
-          onClose={() => setCenterActiveTask(null)}
+          onClose={() => {
+            setCenterActiveTask(null);
+            clearTaskDeepLink();
+          }}
           onRefresh={refreshCurrentView}
           showProjectName={true}
         />

@@ -1,12 +1,7 @@
 /**
- * @消息列表（MentionList）
+ * 消息盒子（原 MentionList）
  * ---------------------------------------------------------------------------
- * 在 viewMode === "mentions" 时显示，展示当前用户被 @ 的所有消息。
- * 支持：
- *   - 分页加载（滚动到底部加载更多）
- *   - 点击单条标记已读 + 跳转源内容（带权限校验）
- *   - 全部已读
- *   - 未读蓝色左边框标记
+ * 统一展示 notifications：@提及、任务到点提醒、协作动态。
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -23,9 +18,21 @@ import {
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useApp, useAppActions } from "@/store/AppContext";
-import type { MentionItem } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { openTaskById, openTasksEntry, openChat } from "@/lib/navigation.config";
+
+type InboxItem = {
+  id: string;
+  type: string;
+  sourceType: string | null;
+  sourceId: string | null;
+  sourceTitle: string | null;
+  actorName: string | null;
+  label: string;
+  createdAt: string;
+  readAt: string | null;
+};
 
 // 来源类型 → 图标映射
 function SourceIcon({ type }: { type: string }) {
@@ -36,6 +43,8 @@ function SourceIcon({ type }: { type: string }) {
       return <FileText size={14} />;
     case "task":
       return <CheckSquare size={14} />;
+    case "chat":
+      return <MessageCircle size={14} />;
     default:
       return <Bell size={14} />;
   }
@@ -62,22 +71,37 @@ function sourceLabel(type: string): string {
     case "diary": return "说说";
     case "note": return "笔记";
     case "task": return "任务";
+    case "chat": return "聊天";
     default: return "";
   }
+}
+
+function itemHeadline(item: InboxItem): { actor: string; rest: string } {
+  const actor = item.actorName || "系统";
+  if (item.type === "mention") {
+    return { actor, rest: "中 @了你" };
+  }
+  if (item.type === "task_reminder") {
+    return { actor: actor || "任务提醒", rest: "" };
+  }
+  if (item.label) {
+    return { actor, rest: item.label };
+  }
+  return { actor, rest: "" };
 }
 
 export default function MentionList() {
   const { t } = useTranslation();
   const { state } = useApp();
   const actions = useAppActions();
-  const [items, setItems] = useState<MentionItem[]>([]);
+  const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const loadMentions = useCallback(async (reset = false) => {
+  const loadInbox = useCallback(async (reset = false) => {
     if (reset) {
       setLoading(true);
     } else {
@@ -85,7 +109,7 @@ export default function MentionList() {
     }
     try {
       const cursor = reset ? undefined : nextCursor || undefined;
-      const data = await api.mentions.list(cursor);
+      const data = await api.notifications.list(cursor);
       if (reset) {
         setItems(data.items);
       } else {
@@ -94,7 +118,7 @@ export default function MentionList() {
       setHasMore(data.hasMore);
       setNextCursor(data.nextCursor);
     } catch (e) {
-      console.error("Load mentions failed:", e);
+      console.error("Load notifications failed:", e);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -102,14 +126,13 @@ export default function MentionList() {
   }, [nextCursor]);
 
   useEffect(() => {
-    loadMentions(true);
+    loadInbox(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 标记已读 + 跳转
-  const handleClick = useCallback(async (item: MentionItem) => {
+  const handleClick = useCallback(async (item: InboxItem) => {
     if (!item.readAt) {
       try {
-        await api.mentions.markRead(item.id);
+        await api.notifications.markRead(item.id);
         setItems((prev) =>
           prev.map((m) => (m.id === item.id ? { ...m, readAt: new Date().toISOString() } : m)),
         );
@@ -117,27 +140,35 @@ export default function MentionList() {
       } catch {}
     }
 
-    // 尝试跳转（若 API 调用失败，说明无权限或已删除，走 catch 提示）
+    const sourceType = item.sourceType || (item.type === "task_reminder" ? "task" : "");
+    const sourceId = item.sourceId;
+    if (!sourceType || !sourceId) return;
+
     try {
-      switch (item.sourceType) {
+      switch (sourceType) {
         case "note":
           try {
-            const { bookHash } = await api.books.getNoteInfo(item.sourceId);
+            const { bookHash } = await api.books.getNoteInfo(sourceId);
             window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
-            localStorage.setItem("super-target-book-note-id", item.sourceId);
-            window.dispatchEvent(new CustomEvent("super:goto-book-note", { detail: { noteId: item.sourceId } }));
+            localStorage.setItem("super-target-book-note-id", sourceId);
+            window.dispatchEvent(new CustomEvent("super:goto-book-note", { detail: { noteId: sourceId } }));
           } catch {
-            await api.getNote(item.sourceId); // 权限验证
+            await api.getNote(sourceId);
             actions.setViewMode("all");
-            window.dispatchEvent(new CustomEvent("super:open-note", { detail: item.sourceId }));
+            window.dispatchEvent(new CustomEvent("super:open-note", { detail: sourceId }));
           }
           break;
         case "diary":
           actions.setViewMode("diary");
           break;
         case "task":
-          await api.getTask(item.sourceId); // 权限验证
-          actions.setViewMode("tasks");
+          openTasksEntry();
+          actions.setViewMode("projects");
+          openTaskById(sourceId);
+          break;
+        case "chat":
+          actions.setViewMode("chat");
+          openChat(sourceId);
           break;
       }
     } catch {
@@ -145,10 +176,9 @@ export default function MentionList() {
     }
   }, [state.unreadMentionCount, actions]);
 
-  // 全部已读
   const handleMarkAllRead = useCallback(async () => {
     try {
-      await api.mentions.markAllRead();
+      await api.notifications.markAllRead();
       setItems((prev) => prev.map((m) => ({ ...m, readAt: m.readAt || new Date().toISOString() })));
       actions.setUnreadMentionCount(0);
       toast.success("全部已读");
@@ -208,11 +238,14 @@ export default function MentionList() {
               <Bell size={22} className="text-tx-tertiary" />
             </div>
             <p className="text-sm text-tx-secondary font-medium">暂无消息</p>
-            <p className="text-xs text-tx-tertiary mt-1">当有人 @你 时，消息会显示在这里</p>
+            <p className="text-xs text-tx-tertiary mt-1">任务到期、@提及和协作动态会显示在这里</p>
           </div>
         ) : (
           <div className="divide-y divide-app-border/50">
-            {items.map((item) => (
+            {items.map((item) => {
+              const line = itemHeadline(item);
+              const sourceType = item.sourceType || (item.type === "task_reminder" ? "task" : "");
+              return (
               <button
                 key={item.id}
                 onClick={() => handleClick(item)}
@@ -221,7 +254,6 @@ export default function MentionList() {
                   !item.readAt && "bg-accent-primary/[0.02]",
                 )}
               >
-                {/* 未读标记 */}
                 <div className="pt-1 shrink-0">
                   {!item.readAt ? (
                     <div className="w-2 h-2 rounded-full bg-accent-primary" />
@@ -230,27 +262,33 @@ export default function MentionList() {
                   )}
                 </div>
 
-                {/* 头像 */}
                 <div className="w-7 h-7 rounded-full bg-app-hover flex items-center justify-center text-[10px] font-medium text-tx-secondary overflow-hidden shrink-0">
-                  {item.mentionedBy.avatarUrl ? (
-                    <img src={item.mentionedBy.avatarUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    (item.mentionedBy.displayName || item.mentionedBy.username)[0]
-                  )}
+                  {line.actor[0]}
                 </div>
 
-                {/* 内容 */}
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-tx-primary leading-relaxed">
-                    <span className="font-semibold">
-                      {item.mentionedBy.displayName || item.mentionedBy.username}
-                    </span>
-                    <span className="text-tx-tertiary"> 在</span>{" "}
-                    <span className="inline-flex items-center gap-1 text-accent-primary px-1.5 py-0.5 rounded bg-accent-primary/5 text-[10px] font-medium">
-                      <SourceIcon type={item.sourceType} />
-                      {sourceLabel(item.sourceType)}
-                    </span>{" "}
-                    <span className="text-tx-tertiary">中 @了你</span>
+                    <span className="font-semibold">{line.actor}</span>
+                    {item.type === "mention" && sourceType ? (
+                      <>
+                        <span className="text-tx-tertiary"> 在</span>{" "}
+                        <span className="inline-flex items-center gap-1 text-accent-primary px-1.5 py-0.5 rounded bg-accent-primary/5 text-[10px] font-medium">
+                          <SourceIcon type={sourceType} />
+                          {sourceLabel(sourceType)}
+                        </span>{" "}
+                        <span className="text-tx-tertiary">{line.rest}</span>
+                      </>
+                    ) : line.rest ? (
+                      <span className="text-tx-tertiary"> {line.rest}</span>
+                    ) : sourceType ? (
+                      <>
+                        {" "}
+                        <span className="inline-flex items-center gap-1 text-accent-primary px-1.5 py-0.5 rounded bg-accent-primary/5 text-[10px] font-medium">
+                          <SourceIcon type={sourceType} />
+                          {sourceLabel(sourceType) || item.label || "提醒"}
+                        </span>
+                      </>
+                    ) : null}
                   </div>
                   {item.sourceTitle && (
                     <p className="text-[11px] text-tx-tertiary mt-0.5 truncate">
@@ -264,13 +302,14 @@ export default function MentionList() {
 
                 <ExternalLink size={12} className="text-tx-tertiary/40 mt-1 shrink-0" />
               </button>
-            ))}
+              );
+            })}
 
             {/* 加载更多 */}
             {hasMore && (
               <div className="flex justify-center py-3">
                 <button
-                  onClick={() => loadMentions(false)}
+                  onClick={() => loadInbox(false)}
                   disabled={loadingMore}
                   className="flex items-center gap-1 text-xs text-tx-tertiary hover:text-tx-secondary transition-colors"
                 >
