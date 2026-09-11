@@ -20,6 +20,8 @@ import {
   getMediaCacheStats,
   formatBytes,
   subscribeMediaCache,
+  MAX_MEDIA_CACHE_BYTES,
+  MAX_MEDIA_CACHE_ITEMS,
   type MediaCacheMeta,
 } from "@/lib/mediaFileCache";
 import {
@@ -75,7 +77,12 @@ export default function MediaCacheSheet({
   filterType = "all",
 }: MediaCacheSheetProps) {
   const [items, setItems] = useState<MediaCacheMeta[]>([]);
-  const [stats, setStats] = useState({ count: 0, totalBytes: 0 });
+  const [stats, setStats] = useState({
+    count: 0,
+    totalBytes: 0,
+    maxBytes: 500 * 1024 * 1024,
+    maxItems: 50,
+  });
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -190,10 +197,11 @@ export default function MediaCacheSheet({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-tx-primary">
-              已缓存 {stats.count} 项
+              已缓存 {stats.count}/{stats.maxItems || MAX_MEDIA_CACHE_ITEMS} 项
             </p>
             <p className="text-xs text-tx-tertiary">
-              占用 {formatBytes(stats.totalBytes)}
+              {formatBytes(stats.totalBytes)} / {formatBytes(stats.maxBytes || MAX_MEDIA_CACHE_BYTES)}
+              （超出自动淘汰最旧）
             </p>
           </div>
           {activeJobs.length > 0 && (

@@ -1590,9 +1590,11 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
       -webkit-hyphens: ${currentSettings.hyphenation ? "auto" : "none"} !important;
     `;
 
-    // Build injected stylesheet
+    // 霞鹜仅在选用时注入，避免阅读器默认拉取 400 个 woff2
+    const lxgwImport =
+      currentSettings.fontFamily === "lxgw" ? `@import url('/fonts/lxgw/lxgwwenkaiscreen.css');\n` : "";
     const css = `
-      @import url('/fonts/lxgw/style.css');
+      ${lxgwImport}
       html {
         --serif: "Georgia", serif;
         --sans-serif: "Inter", "Helvetica Neue", system-ui, sans-serif;

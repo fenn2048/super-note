@@ -971,7 +971,7 @@ const NoteCard = React.memo(function NoteCard({
     return cleaned.slice(0, 160);
   })();
 
-  const wordCount = note.contentText?.length || 0;
+  const wordCount = note.contentLength ?? note.contentText?.length ?? 0;
   // 工作区视图下笔记可能由不同成员创建，需要在卡片底部展示创建者；
   // 个人空间下创建者一定是当前用户，留白即可。creatorName 由后端 list 接口
   // COALESCE(displayName, username) 注入（昵称优先），老后端无该字段时退化为不展示。
@@ -1817,10 +1817,12 @@ export default function NoteList() {
 
     await runInBatches(ids, BULK_AI_CONCURRENCY, async (id) => {
       const note = state.notes.find((x) => x.id === id);
-      if (!note || !note.contentText) { failCount++; return; }
+      if (!note) { failCount++; return; }
       try {
-        // 复用单笔记 aiChat("tags") 流程：一次 LLM 调用 + 解析 + 批量加标签
-        const result = await api.aiChat("tags", note.contentText.slice(0, 2000));
+        const full = await api.getNote(id);
+        const text = (full?.contentText || note.contentText || "").slice(0, 2000);
+        if (!text.trim()) { failCount++; return; }
+        const result = await api.aiChat("tags", text);
         const tagNames = result.split(/[,，、\s]+/).map((s) => s.replace(/^#/, "").trim()).filter(Boolean);
         // 逐个确保 tag 存在并关联；此处串行是为避免并发对同一 tag 名重复 INSERT
         for (const name of tagNames) {

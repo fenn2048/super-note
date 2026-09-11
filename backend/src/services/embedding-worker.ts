@@ -35,7 +35,8 @@ import {
 import { extractAttachmentText, chunkAttachmentText } from "./attachment-indexer";
 
 // ====== 调参 ======
-const POLL_INTERVAL_MS = 5_000;          // 轮询间隔（无任务时）
+const POLL_INTERVAL_MS = 5_000;          // 有任务时的轮询间隔
+const POLL_MAX_MS = 60_000;              // 空转退避上限
 const BATCH_SIZE = 5;                    // 单轮处理多少条
 const MAX_RETRIES = 3;                   // 单任务最大重试次数
 const MIN_CONTENT_LENGTH = 10;           // 文本短于此长度直接 skip
@@ -48,6 +49,7 @@ const DEFAULT_DIM = 1536;                // 仅作元数据，实际维度由 pr
 let timer: NodeJS.Timeout | null = null;
 let running = false;            // 是否有 tick 正在执行
 let stopped = false;            // 是否已 stop（防止 tick 在 stop 后再排下一次）
+let pollDelayMs = POLL_INTERVAL_MS;
 
 // ============================================================
 // 配置读取
@@ -269,6 +271,12 @@ async function processOne(
       }
       const pairs = newRowIds.map((rowid, i) => ({ rowid, vector: vectors[i] }));
       upsertVectors(pairs);
+      if (isVecAvailable() && newRowIds.length > 0) {
+        const ph = newRowIds.map(() => "?").join(",");
+        db.prepare(`UPDATE note_embeddings SET vectorJson = '[]' WHERE id IN (${ph})`).run(
+          ...newRowIds,
+        );
+      }
     } catch (e) {
       // vec 写入失败不影响主流程；下次 reindex-vec 能修
       console.warn("[embedding-worker] vec upsert failed:", e);
@@ -424,6 +432,12 @@ async function processAttachmentOne(
         resetVecTable(dim);
       }
       upsertVectors(newRowIds.map((rowid, i) => ({ rowid, vector: vectors[i] })));
+      if (isVecAvailable() && newRowIds.length > 0) {
+        const ph = newRowIds.map(() => "?").join(",");
+        db.prepare(`UPDATE note_embeddings SET vectorJson = '[]' WHERE id IN (${ph})`).run(
+          ...newRowIds,
+        );
+      }
     } catch (e) {
       console.warn("[embedding-worker] attachment vec upsert failed:", e);
     }
@@ -433,16 +447,16 @@ async function processAttachmentOne(
 // ============================================================
 // 主循环
 // ============================================================
-async function tick(): Promise<void> {
-  if (running || stopped) return;
+async function tick(): Promise<boolean> {
+  if (running || stopped) return false;
   running = true;
+  let hadWork = false;
   try {
     const db = getDb();
 
     const cfg = readEmbeddingConfig(db);
     if (!cfg) {
-      // 没配模型 → 啥也不做（下次轮询再试）
-      return;
+      return false;
     }
 
     // 拉一批 pending（排除已超过最大重试的）
@@ -460,7 +474,9 @@ async function tick(): Promise<void> {
       retries: number;
     }[];
 
-    if (tasks.length === 0) return;
+    if (tasks.length === 0) {
+      /* fall through to attachments */
+    } else {
 
     // 标 processing（防止重复领取——单进程不严格需要，但 future-proof）
     const markProcessing = db.prepare(
@@ -484,23 +500,24 @@ async function tick(): Promise<void> {
         await sleep(500);
       }
     }
+    hadWork = true;
+    }
   } catch (e) {
     console.warn("[embedding-worker] tick error:", e);
   } finally {
     running = false;
   }
 
-  // ---- 附件任务：与笔记任务同一个 tick，共享 BATCH_SIZE 的"大轮询"节奏 ----
-  // 放在 finally 之外的独立 try/catch：笔记分支出错不影响附件分支，反之亦然。
-  await tickAttachments();
+  const attWork = await tickAttachments();
+  return hadWork || attWork;
 }
 
-async function tickAttachments(): Promise<void> {
-  if (stopped) return;
+async function tickAttachments(): Promise<boolean> {
+  if (stopped) return false;
   try {
     const db = getDb();
     const cfg = readEmbeddingConfig(db);
-    if (!cfg) return;
+    if (!cfg) return false;
 
     const tasks = db
       .prepare(
@@ -515,7 +532,7 @@ async function tickAttachments(): Promise<void> {
       retries: number;
     }[];
 
-    if (tasks.length === 0) return;
+    if (tasks.length === 0) return false;
 
     const markProcessing = db.prepare(
       "UPDATE attachment_embedding_queue SET status = 'processing', updatedAt = datetime('now') WHERE attachmentId = ?",
@@ -537,8 +554,10 @@ async function tickAttachments(): Promise<void> {
         await sleep(500);
       }
     }
+    return true;
   } catch (e) {
     console.warn("[embedding-worker] tickAttachments error:", e);
+    return false;
   }
 }
 
@@ -550,23 +569,34 @@ function sleep(ms: number): Promise<void> {
 // 对外 API
 // ============================================================
 
+function scheduleNextTick(delay: number): void {
+  if (stopped) return;
+  timer = setTimeout(() => {
+    void (async () => {
+      const hadWork = await tick();
+      pollDelayMs = hadWork
+        ? POLL_INTERVAL_MS
+        : Math.min(POLL_MAX_MS, Math.round(pollDelayMs * 1.8));
+      scheduleNextTick(pollDelayMs);
+    })();
+  }, delay);
+  if (typeof timer.unref === "function") timer.unref();
+}
+
 /** 启动 worker（幂等）。在 index.ts 启动时调用一次即可。 */
 export function startEmbeddingWorker(): void {
   if (timer) return;
   stopped = false;
-  // 启动后立即跑一轮，再进入定时循环（首次跑能加速冷启动回填）
-  setImmediate(() => { void tick(); });
-  timer = setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
-  // 让 timer 不阻塞进程退出
-  if (typeof timer.unref === "function") timer.unref();
-  console.log("[embedding-worker] started");
+  pollDelayMs = POLL_INTERVAL_MS;
+  scheduleNextTick(0);
+  console.log("[embedding-worker] started (idle backoff up to 60s)");
 }
 
 /** 停止 worker（用于优雅关停 / 单测） */
 export function stopEmbeddingWorker(): void {
   stopped = true;
   if (timer) {
-    clearInterval(timer);
+    clearTimeout(timer);
     timer = null;
   }
 }
