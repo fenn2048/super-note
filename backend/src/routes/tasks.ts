@@ -28,7 +28,8 @@ const tasks = new Hono();
  * P1 收尾 / P2-X2：/api/tasks 兼容层
  * ---------------------------------------------------------------------------
  * 产品任务模型已统一到 project_tasks（个人TODO/家庭TODO）。
- * 本路由对旧客户端保持 URL 与大致字段形状，读写优先走 project_tasks。
+ * 本路由对旧客户端保持 URL 与大致字段形状；列表/创建/更新/完成只走 project_tasks。
+ * 旧 `tasks` 表：GET /:id 仍可读兜底；PUT/PATCH 返回 410；DELETE 允许清孤儿。
  */
 
 /** 新建任务默认进「待启动」（创建 ≠ 开始做） */
@@ -153,6 +154,17 @@ function canManageProjectTask(pt: any, userId: string): boolean {
   return canManageResource(pt.creatorId || pt.projectOwnerId || "", ws, userId);
 }
 
+/** 旧 `tasks` 表写路径已冻结（读仍可兜底）。 */
+function rejectLegacyWrite(c: any) {
+  return c.json(
+    {
+      error: "旧任务表已冻结，请使用项目任务",
+      code: "LEGACY_TASKS_FROZEN",
+    },
+    410,
+  );
+}
+
 /** 兼容：先 project_tasks，再 legacy tasks 表 */
 function loadLegacyTask(db: any, id: string): any | null {
   const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as any;
@@ -256,6 +268,64 @@ tasks.get("/", (c) => {
   return c.json(rows.map(mapProjectTaskToLegacy));
 });
 
+/** 本地通知调度用瘦列表：未完成且有 remindAt / 截止日 */
+tasks.get("/reminder-candidates", (c) => {
+  const db = getDb();
+  const userId = c.req.header("X-User-Id")!;
+  const workspaceId = c.req.query("workspaceId") || null;
+  const ws = workspaceId && workspaceId !== "personal" ? workspaceId : null;
+
+  const sql = ws
+    ? `
+      SELECT pt.id, pt.title, pt.isCompleted, pt.remindAt, pt.endDate
+      FROM project_tasks pt
+      JOIN projects p ON p.id = pt.projectId
+      WHERE p.isDeleted = 0 AND p.workspaceId = ?
+        AND COALESCE(pt.isCompleted, 0) = 0
+        AND (
+          (pt.remindAt IS NOT NULL AND TRIM(pt.remindAt) != '')
+          OR (pt.endDate IS NOT NULL AND TRIM(pt.endDate) != '')
+        )
+        AND (pt.assigneeId = ? OR pt.creatorId = ? OR p.ownerId = ?
+             OR EXISTS(SELECT 1 FROM project_members pm WHERE pm.projectId = p.id AND pm.userId = ?))
+    `
+    : `
+      SELECT pt.id, pt.title, pt.isCompleted, pt.remindAt, pt.endDate
+      FROM project_tasks pt
+      JOIN projects p ON p.id = pt.projectId
+      WHERE p.isDeleted = 0 AND (p.workspaceId IS NULL OR p.workspaceId = '')
+        AND COALESCE(pt.isCompleted, 0) = 0
+        AND (
+          (pt.remindAt IS NOT NULL AND TRIM(pt.remindAt) != '')
+          OR (pt.endDate IS NOT NULL AND TRIM(pt.endDate) != '')
+        )
+        AND (pt.assigneeId = ? OR pt.creatorId = ? OR p.ownerId = ?)
+    `;
+  const params = ws ? [ws, userId, userId, userId, userId] : [userId, userId, userId];
+  try {
+    const rows = db.prepare(sql).all(...params) as Array<{
+      id: string;
+      title: string;
+      isCompleted: number;
+      remindAt: string | null;
+      endDate: string | null;
+    }>;
+    return c.json(
+      rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        isCompleted: r.isCompleted,
+        remindAt: r.remindAt,
+        dueDate: r.endDate,
+        endDate: r.endDate,
+      })),
+    );
+  } catch (e) {
+    console.error("[tasks.reminder-candidates]", e);
+    return c.json([]);
+  }
+});
+
 // ─── 静态路径必须在 /:id 之前注册，否则会被当成任务 id ────────────────
 
 function normalizeWs(raw: string | null | undefined): string | null {
@@ -329,8 +399,13 @@ tasks.get("/stats/summary", (c) => {
   const week = countPt(
     `COALESCE(pt.isCompleted, 0) = 0 AND pt.endDate IS NOT NULL AND date(pt.endDate) >= date('now') AND date(pt.endDate) <= date('now', '+7 days')`,
   );
+  // 与桌面 Rail / 移动底栏红点、任务「今日焦点」对齐：
+  // 逾期 + 今天截止 + 提前量已到点（未完成）
   const activeReminders = countPt(
-    `COALESCE(pt.isCompleted, 0) = 0 AND pt.remindAt IS NOT NULL AND pt.remindAt <= datetime('now', 'localtime')`,
+    `COALESCE(pt.isCompleted, 0) = 0 AND (
+        (pt.endDate IS NOT NULL AND TRIM(pt.endDate) != '' AND date(pt.endDate) <= date('now'))
+        OR (pt.remindAt IS NOT NULL AND TRIM(pt.remindAt) != '' AND pt.remindAt <= datetime('now', 'localtime'))
+      )`,
   );
 
   return c.json({
@@ -1072,243 +1147,12 @@ tasks.put("/:id", (c) => {
       }
     }
 
-    // ---------- legacy tasks 表兜底 ----------
+    // ---------- legacy tasks 表写路径已冻结（读仍走 GET /:id 兜底） ----------
     const existing = db
       .prepare("SELECT * FROM tasks WHERE id = ?")
       .get(id) as any;
     if (!existing) return c.json({ error: "Task not found" }, 404);
-
-    if (!canManageResource(existing.userId, existing.workspaceId, userId)) {
-      return c.json({ error: "无权修改该任务", code: "FORBIDDEN" }, 403);
-    }
-
-    const title = body.title ?? existing.title;
-    const isCompleted = body.isCompleted ?? existing.isCompleted;
-    const status = body.status ?? existing.status;
-    const priority = body.priority ?? existing.priority;
-    const dueDate =
-      body.dueDate !== undefined ? body.dueDate : existing.dueDate;
-    let calculatedRemindAt =
-      body.remindAt !== undefined ? body.remindAt : existing.remindAt;
-    const noteId =
-      body.noteId !== undefined ? body.noteId : existing.noteId;
-    const parentId =
-      body.parentId !== undefined ? body.parentId : existing.parentId;
-    const sortOrder = body.sortOrder ?? existing.sortOrder;
-    const isRecurring = body.isRecurring ?? existing.isRecurring;
-    const recurrenceRule =
-      body.recurrenceRule !== undefined
-        ? body.recurrenceRule
-        : existing.recurrenceRule;
-    const finalOffsetValue =
-      body.reminderOffsetValue !== undefined
-        ? body.reminderOffsetValue
-        : existing.reminderOffsetValue;
-    const finalOffsetUnit =
-      body.reminderOffsetUnit !== undefined
-        ? body.reminderOffsetUnit
-        : existing.reminderOffsetUnit;
-    const recurrenceEndDate =
-      body.recurrenceEndDate !== undefined
-        ? body.recurrenceEndDate
-        : existing.recurrenceEndDate;
-    const tagIds = body.tagIds;
-    const dependencies = body.dependencies;
-
-    if (
-      dueDate &&
-      body.dueDate !== undefined &&
-      (!calculatedRemindAt || isRecurring)
-    ) {
-      try {
-        calculatedRemindAt = calculateRemindAt(
-          dueDate,
-          finalOffsetValue,
-          finalOffsetUnit,
-        );
-      } catch (e) {
-        console.warn("Failed to update calculated remind at", e);
-      }
-    } else if (!dueDate && body.dueDate === null) {
-      calculatedRemindAt = null;
-    }
-
-    if (
-      (isCompleted === 1 || isCompleted === true) &&
-      existing.isCompleted === 0
-    ) {
-      const incompleteDeps = db
-        .prepare(
-          `
-        SELECT t.title FROM task_dependencies td
-        JOIN tasks t ON td.dependsOnTaskId = t.id
-        WHERE td.taskId = ? AND t.isCompleted = 0
-      `,
-        )
-        .all(id) as { title: string }[];
-      if (incompleteDeps.length > 0) {
-        const depTitles = incompleteDeps
-          .map((d) => `「${d.title}」`)
-          .join(", ");
-        return c.json(
-          {
-            error: `无法完成任务，因为前置依赖任务尚未完成: ${depTitles}`,
-            code: "DEPENDENCY_UNRESOLVED",
-          },
-          400,
-        );
-      }
-    }
-
-    if (body.status !== undefined && body.status !== existing.status) {
-      logAudit(
-        userId,
-        "task",
-        "update_task_status",
-        `修改任务状态为: ${body.status}`,
-        { targetType: "task", targetId: id },
-      );
-      if (body.status === "paused") {
-        const { propagateStatusDown } = await import(
-          "../lib/planStatusSync.js"
-        );
-        propagateStatusDown(db, "task", id, "paused", userId);
-      }
-    }
-
-    if (body.title !== undefined && body.title !== existing.title) {
-      logAudit(
-        userId,
-        "task",
-        "update_task_title",
-        `修改任务标题为: 「${body.title}」`,
-        { targetType: "task", targetId: id },
-      );
-    }
-    if (
-      body.isCompleted !== undefined &&
-      (body.isCompleted ? 1 : 0) !== existing.isCompleted
-    ) {
-      const isComp = !!body.isCompleted;
-      logAudit(
-        userId,
-        "task",
-        isComp ? "complete_task" : "reopen_task",
-        isComp ? "完成了任务" : "重新开启了任务",
-        { targetType: "task", targetId: id },
-      );
-    }
-
-    if (
-      body.parentId !== undefined &&
-      body.parentId !== null &&
-      body.parentId !== existing.parentId
-    ) {
-      const parent = db
-        .prepare("SELECT workspaceId FROM tasks WHERE id = ?")
-        .get(body.parentId) as { workspaceId: string | null } | undefined;
-      if (!parent) return c.json({ error: "父任务不存在" }, 404);
-      if (parent.workspaceId !== existing.workspaceId) {
-        return c.json(
-          {
-            error: "子任务必须与父任务在同一工作区",
-            code: "SCOPE_MISMATCH",
-          },
-          400,
-        );
-      }
-    }
-
-    const tx = db.transaction(() => {
-      db.prepare(
-        `
-        UPDATE tasks SET title = ?, isCompleted = ?, status = ?, priority = ?, dueDate = ?, remindAt = ?,
-          noteId = ?, parentId = ?, sortOrder = ?, isRecurring = ?, recurrenceRule = ?, reminderOffsetValue = ?, reminderOffsetUnit = ?, recurrenceEndDate = ?, updatedAt = datetime('now')
-        WHERE id = ?
-      `,
-      ).run(
-        title,
-        isCompleted,
-        status,
-        priority,
-        dueDate,
-        calculatedRemindAt,
-        noteId,
-        parentId,
-        sortOrder,
-        isRecurring,
-        typeof recurrenceRule === "string"
-          ? recurrenceRule
-          : JSON.stringify(recurrenceRule),
-        finalOffsetValue,
-        finalOffsetUnit,
-        recurrenceEndDate,
-        id,
-      );
-
-      if (tagIds !== undefined && Array.isArray(tagIds)) {
-        db.prepare("DELETE FROM task_tags WHERE taskId = ?").run(id);
-        if (tagIds.length > 0) {
-          const insertTag = db.prepare(
-            "INSERT INTO task_tags (taskId, tagId) VALUES (?, ?)",
-          );
-          for (const tagId of tagIds) insertTag.run(id, tagId);
-        }
-      }
-
-      if (dependencies !== undefined && Array.isArray(dependencies)) {
-        db.prepare("DELETE FROM task_dependencies WHERE taskId = ?").run(id);
-        for (const depId of dependencies) {
-          if (depId !== id) {
-            db.prepare(
-              "INSERT INTO task_dependencies (taskId, dependsOnTaskId) VALUES (?, ?)",
-            ).run(id, depId);
-          }
-        }
-      }
-    });
-
-    let nextOccurrence: any = null;
-    let recurrenceMeta: { created: boolean; reason?: string } | null = null;
-    try {
-      tx();
-      if (
-        (body.isCompleted === 1 || body.isCompleted === true) &&
-        existing.isCompleted === 0
-      ) {
-        const rec = handleRecurringTask(db, id, false);
-        recurrenceMeta = { created: rec.created, reason: rec.reason };
-        if (rec.created && rec.newTaskId) {
-          nextOccurrence = loadLegacyTask(db, rec.newTaskId);
-        }
-      }
-    } catch (err: any) {
-      return c.json({ error: `更新失败：${err?.message || err}` }, 500);
-    }
-
-    if (body.title) {
-      try {
-        createMentions(
-          "task",
-          id,
-          body.title.trim().slice(0, 80),
-          body.title,
-          userId,
-        );
-      } catch (e) {
-        console.warn("[tasks.put] createMentions failed:", e);
-      }
-    }
-
-    const legacyResult = loadLegacyTask(db, id);
-    if (nextOccurrence || recurrenceMeta) {
-      return c.json({
-        ...legacyResult,
-        nextOccurrence: nextOccurrence || undefined,
-        recurrence: recurrenceMeta || undefined,
-      });
-    }
-    return c.json(legacyResult);
+    return rejectLegacyWrite(c);
   });
 });
 
@@ -1412,86 +1256,12 @@ tasks.patch("/:id/toggle", (c) => {
     return c.json(toggleResult);
   }
 
-  // legacy 兜底
+  // legacy 写路径已冻结
   const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as
     | { userId: string; workspaceId: string | null; isCompleted: number; isRecurring?: number }
     | undefined;
   if (!task) return c.json({ error: "Task not found" }, 404);
-
-  if (!canManageResource(task.userId, task.workspaceId, userId)) {
-    return c.json({ error: "无权修改该任务", code: "FORBIDDEN" }, 403);
-  }
-
-  const newStatus = task.isCompleted ? 0 : 1;
-
-  if (newStatus === 1) {
-    const incompleteDeps = db
-      .prepare(
-        `
-      SELECT t.title FROM task_dependencies td
-      JOIN tasks t ON td.dependsOnTaskId = t.id
-      WHERE td.taskId = ? AND t.isCompleted = 0
-    `,
-      )
-      .all(id) as { title: string }[];
-    if (incompleteDeps.length > 0) {
-      const depTitles = incompleteDeps.map((d) => `「${d.title}」`).join(", ");
-      return c.json(
-        {
-          error: `无法完成任务，因为前置依赖任务尚未完成: ${depTitles}`,
-          code: "DEPENDENCY_UNRESOLVED",
-        },
-        400,
-      );
-    }
-  }
-
-  db.prepare(
-    "UPDATE tasks SET isCompleted = ?, updatedAt = datetime('now') WHERE id = ?",
-  ).run(newStatus, id);
-  logAudit(
-    userId,
-    "task",
-    newStatus === 1 ? "complete_task" : "reopen_task",
-    newStatus === 1 ? "完成了任务" : "重新开启了任务",
-    { targetType: "task", targetId: id },
-  );
-
-  let nextOccurrence: any = null;
-  let recurrenceMeta: { created: boolean; reason?: string } | null = null;
-  if (newStatus === 1) {
-    const rec = handleRecurringTask(db, id, false);
-    recurrenceMeta = { created: rec.created, reason: rec.reason };
-    if (rec.created && rec.newTaskId) {
-      nextOccurrence = loadLegacyTask(db, rec.newTaskId);
-    }
-  }
-
-  if (newStatus === 1 && task.workspaceId) {
-    try {
-      broadcastToWorkspace(
-        task.workspaceId,
-        "task_completed",
-        "task",
-        id,
-        null,
-        userId,
-        userId,
-      );
-    } catch (e) {
-      console.warn("[tasks.toggle] broadcastToWorkspace failed:", e);
-    }
-  }
-
-  const legacyToggle = loadLegacyTask(db, id);
-  if (nextOccurrence || recurrenceMeta) {
-    return c.json({
-      ...legacyToggle,
-      nextOccurrence: nextOccurrence || undefined,
-      recurrence: recurrenceMeta || undefined,
-    });
-  }
-  return c.json(legacyToggle);
+  return rejectLegacyWrite(c);
 });
 
 // 删除任务（project_tasks 优先）

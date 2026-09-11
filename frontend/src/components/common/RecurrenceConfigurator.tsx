@@ -132,6 +132,9 @@ export default function RecurrenceConfigurator({
             compact ? "flex flex-wrap items-center gap-3 space-y-0 py-2" : ""
           )}
         >
+          <p className="text-[10px] text-tx-tertiary leading-snug w-full">
+            提醒只针对当前这一期（截止前的提前量 + 截止当天）。完成后才生成下一期并重新计算提醒。
+          </p>
           {/* Cycle Type */}
           <div className={cn("flex items-center gap-2", compact ? "shrink-0" : "")}>
             <span className="text-tx-tertiary font-medium">类型:</span>
