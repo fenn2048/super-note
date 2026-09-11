@@ -121,6 +121,18 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- 任务提醒精确闹钟（WebView 被冻时仍可到点弹出） -->
+        <receiver
+            android:name=".TaskReminderAlarmReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ark.note.action.TASK_REMINDER_FIRE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
@@ -136,6 +148,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 任务提醒精确闹钟（Android 12+）；无此权限则 LocalNotifications 无法按 remindAt 准时触发 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- 开机后由系统/插件恢复已调度的本地通知（与 LocalNotifications 配合） -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal, Bell, Activity, AlarmClock } from "lucide-react";
+import { Palette, Shield, Database, X, Settings, Camera, Save, Loader2, Trash2, Upload, Type, Check, ChevronDown, ChevronRight, Globe, Bot, Users, Info, ExternalLink, RefreshCw, Wrench, Key, Building2, BookOpen, ToggleLeft, Download, Smartphone, SlidersHorizontal, Bell, Activity, AlarmClock, HardDrive } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import SecuritySettings from "@/components/SecuritySettings";
@@ -511,9 +511,46 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
       </p>
 
       {!isNative ? (
-        <p className="text-xs text-tx-tertiary p-2.5 rounded-lg bg-app-elevated border border-app-border">
-          当前为 Web/桌面环境，本地任务闹钟仅在 Android/iOS 客户端生效。服务端到点兜底仍可用。
-        </p>
+        <div className="space-y-2">
+          <p className="text-xs text-tx-tertiary p-2.5 rounded-lg bg-app-elevated border border-app-border">
+            当前为 Web/桌面环境：不会预调度系统闹钟。到期时若已授予通知权限，会弹出 Chrome / 系统通知（前台也会弹）。未授权则只用应用内提示。需 HTTPS 或 localhost。
+          </p>
+          {typeof Notification !== "undefined" && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if (!window.isSecureContext) {
+                    const { toast } = await import("@/lib/toast");
+                    toast.error("当前不是安全上下文（需 HTTPS 或 localhost），浏览器无法弹出系统通知");
+                    return;
+                  }
+                  const s = await Notification.requestPermission();
+                  const { toast } = await import("@/lib/toast");
+                  if (s === "granted") {
+                    toast.success("浏览器通知已开启");
+                    try {
+                      new Notification("通知已开启", {
+                        body: "到期提醒会以系统通知显示。可关掉这条。",
+                        icon: "/apple-touch-icon.png",
+                      });
+                    } catch (e) {
+                      console.warn("[notifications] test Notification failed", e);
+                    }
+                  } else {
+                    toast.error(`权限状态：${s}。请在地址栏右侧站点设置里允许通知。`);
+                  }
+                } catch (err: any) {
+                  const { toast } = await import("@/lib/toast");
+                  toast.error(err?.message || "请求权限失败");
+                }
+              }}
+              className="w-full py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover transition-transform duration-press ease-out active:scale-[0.98]"
+            >
+              开启浏览器通知
+            </button>
+          )}
+        </div>
       ) : (
         <>
           <div className="space-y-1.5 text-xs">
@@ -607,7 +644,7 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
                 setResyncing(true);
                 try {
                   const { syncAllTaskNotifications } = await import("@/hooks/useCapacitor");
-                  const tasks = await api.getTasks("all");
+                  const tasks = await api.getReminderTasks();
                   await syncAllTaskNotifications(tasks as any);
                   const { toast } = await import("@/lib/toast");
                   toast.success("已重新同步全部任务提醒");
@@ -635,6 +672,71 @@ function NotificationDiagnosticsCard({ isNative }: { isNative: boolean }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function MediaCacheQuotaCard() {
+  const [stats, setStats] = useState({
+    count: 0,
+    totalBytes: 0,
+    maxBytes: 500 * 1024 * 1024,
+    maxItems: 50,
+  });
+  const [busy, setBusy] = useState(false);
+
+  const reload = useCallback(async () => {
+    try {
+      const { getMediaCacheStats } = await import("@/lib/mediaFileCache");
+      setStats(await getMediaCacheStats());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return (
+    <div className="rounded-xl border border-app-border bg-app-surface/50 p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-tx-primary flex items-center gap-2">
+        <HardDrive size={15} className="text-accent-primary" />
+        媒体本地缓存
+      </h3>
+      <p className="text-xs text-tx-tertiary leading-relaxed">
+        音视频离线缓存上限 {Math.round(stats.maxBytes / (1024 * 1024))} MB / {stats.maxItems}{" "}
+        条，超出自动淘汰最旧项。
+      </p>
+      <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-app-elevated border border-app-border">
+        <span className="text-tx-secondary">已用</span>
+        <span className="font-semibold text-tx-primary">
+          {stats.count} 项 · {(stats.totalBytes / (1024 * 1024)).toFixed(1)} MB
+        </span>
+      </div>
+      <button
+        type="button"
+        disabled={busy || stats.count === 0}
+        onClick={async () => {
+          if (!window.confirm("确认清空全部本地媒体缓存？")) return;
+          setBusy(true);
+          try {
+            const { clearAllMediaFiles } = await import("@/lib/mediaFileCache");
+            await clearAllMediaFiles();
+            await reload();
+            const { toast } = await import("@/lib/toast");
+            toast.success("已清空媒体缓存");
+          } catch (e: any) {
+            const { toast } = await import("@/lib/toast");
+            toast.error(e?.message || "清理失败");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="w-full py-2.5 rounded-lg border border-app-border bg-app-elevated text-tx-primary text-xs font-semibold hover:bg-app-hover disabled:opacity-50"
+      >
+        {busy ? "清理中…" : "清空媒体缓存"}
+      </button>
     </div>
   );
 }
@@ -765,6 +867,8 @@ function AboutPanel() {
           })}
         </div>
       </div>
+
+      <MediaCacheQuotaCard />
 
       {/* 通知诊断（原生全功能；Web 显示说明） */}
       <NotificationDiagnosticsCard isNative={!!isNative} />

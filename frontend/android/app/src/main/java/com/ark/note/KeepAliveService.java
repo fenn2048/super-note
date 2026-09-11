@@ -255,11 +255,20 @@ public class KeepAliveService extends Service {
                 String actorName = item.optString("actorName", "");
                 String label = item.optString("label", "新通知");
                 String sourceTitle = item.optString("sourceTitle", "");
+                String type = item.optString("type", "");
+                String sourceType = item.optString("sourceType", "");
+                String sourceId = item.optString("sourceId", "");
+                if ("chat_message".equals(type) || "chat".equals(sourceType)) {
+                    sourceType = "chat";
+                    if (label == null || label.isEmpty() || "新通知".equals(label)) {
+                        label = "发来聊天消息";
+                    }
+                }
                 String title = actorName.isEmpty() ? "蜉蝣 · 消息" : (actorName + " " + label);
                 String text = (sourceTitle == null || sourceTitle.isEmpty())
                         ? "有一条新的未读消息"
                         : sourceTitle;
-                showMessageNotification(id, title, text);
+                showMessageNotification(id, title, text, sourceType, sourceId);
             }
         } catch (Exception e) {
             Log.e(TAG, "fetch notifications", e);
@@ -306,7 +315,8 @@ public class KeepAliveService extends Service {
         return null;
     }
 
-    private void showMessageNotification(String id, String title, String text) {
+    private void showMessageNotification(
+            String id, String title, String text, String sourceType, String sourceId) {
         android.app.NotificationManager notificationManager =
                 (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (notificationManager == null) return;
@@ -315,7 +325,12 @@ public class KeepAliveService extends Service {
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.putExtra("navigateSourceType", "mention");
+        if (sourceType != null && !sourceType.isEmpty()) {
+            intent.putExtra("navigateSourceType", sourceType);
+        }
+        if (sourceId != null && !sourceId.isEmpty() && !"null".equals(sourceId)) {
+            intent.putExtra("navigateSourceId", sourceId);
+        }
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this,
                 id.hashCode(),

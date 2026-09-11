@@ -67,6 +67,7 @@ public class MainActivity extends BridgeActivity {
         // 通知渠道；KeepAlive 默认关闭
         NotificationChannels.ensureAll(this);
         KeepAliveService.startIfEnabled(this);
+        TaskReminderWorker.enqueue(this);
 
         handleIncomingIntent(getIntent());
 
@@ -369,6 +370,33 @@ public class MainActivity extends BridgeActivity {
             intent.removeExtra(Intent.EXTRA_STREAM);
             intent.removeExtra(Intent.EXTRA_SUBJECT);
         }
+
+        String navType = intent.getStringExtra("navigateSourceType");
+        String navId = intent.getStringExtra("navigateSourceId");
+        if (navType != null && !navType.isEmpty()) {
+            dispatchItemNavigate(navType, navId != null ? navId : "");
+            intent.removeExtra("navigateSourceType");
+            intent.removeExtra("navigateSourceId");
+        }
+    }
+
+    private void dispatchItemNavigate(String sourceType, String sourceId) {
+        final String js =
+                "try{sessionStorage.setItem('super:pending-navigate',JSON.stringify({sourceType:"
+                        + org.json.JSONObject.quote(sourceType)
+                        + ",sourceId:"
+                        + org.json.JSONObject.quote(sourceId)
+                        + "}));window.dispatchEvent(new CustomEvent('super:navigate-to-item-trigger'));}catch(e){}";
+        Runnable inject = () -> {
+            if (this.bridge != null && this.bridge.getWebView() != null) {
+                this.bridge.getWebView().evaluateJavascript(js, null);
+            }
+        };
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            this.bridge.getWebView().post(inject);
+        } else {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(inject, 800);
+        }
     }
 
     public class AndroidDownloadBridge {
@@ -661,19 +689,21 @@ public class MainActivity extends BridgeActivity {
 
     public class AndroidKeepAliveBridge {
         @JavascriptInterface
-        public void updateAuthInfo(String serverUrl, String token, String userId) {
+        public void updateAuthInfo(String serverUrl, String token, String userId, String workspaceId) {
             android.content.SharedPreferences sharedPref =
                     getSharedPreferences(KeepAliveService.PREFS, MODE_PRIVATE);
             sharedPref.edit()
                     .putString("serverUrl", serverUrl != null ? serverUrl : "")
                     .putString("token", token != null ? token : "")
                     .putString("userId", userId != null ? userId : "")
+                    .putString("workspaceId", workspaceId != null ? workspaceId : "")
                     .apply();
 
             if (KeepAliveService.isEnabled(MainActivity.this)) {
                 KeepAliveService.stop(MainActivity.this);
                 KeepAliveService.startIfEnabled(MainActivity.this);
             }
+            TaskReminderWorker.enqueueNow(MainActivity.this);
         }
     }
 }

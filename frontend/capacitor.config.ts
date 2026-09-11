@@ -39,6 +39,15 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
   plugins: {
+    LocalNotifications: {
+      // iOS 前台也要出横幅/声音，并更新桌面角标
+      presentationOptions: ["badge", "sound", "banner", "list"],
+      iconColor: "#C45C26",
+    },
+    Badge: {
+      persist: true,
+      autoClear: false,
+    },
     SplashScreen: {
       // 禁用自动隐藏，由前端 JS 在渲染完成后手动调用 hide()
       launchAutoHide: false,
