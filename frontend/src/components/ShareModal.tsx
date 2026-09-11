@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Link2, Copy, Check, Trash2, Shield, Clock, Eye, EyeOff, Globe, RefreshCw, Loader2, ExternalLink, QrCode, Share2 } from "lucide-react";
+import { X, Link2, Copy, Check, Trash2, Shield, Clock, Eye, EyeOff, Globe, RefreshCw, Loader2, ExternalLink, QrCode, Share2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api, getServerUrl } from "@/lib/api";
+import { api, getServerUrl, getCurrentWorkspace } from "@/lib/api";
 import { Share, SharePermission } from "@/types";
 import { cn } from "@/lib/utils";
 import { springs } from "@/lib/motion";
+import { ShareConversationSheet } from "@/components/chat/ShareToChat";
+import { isFamilyWorkspace } from "@/lib/imCard";
 
 interface ShareModalProps {
   noteId: string;
@@ -18,7 +20,9 @@ export default function ShareModal({ noteId, noteTitle, onClose }: ShareModalPro
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [shareToChatOpen, setShareToChatOpen] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  const family = isFamilyWorkspace(getCurrentWorkspace());
 
   // 新建分享表单
   const [permission, setPermission] = useState<SharePermission>("view");
@@ -173,6 +177,7 @@ export default function ShareModal({ noteId, noteTitle, onClose }: ShareModalPro
   ];
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 backdrop-blur-sm"
       onClick={handleBackdropClick}
@@ -206,6 +211,23 @@ export default function ShareModal({ noteId, noteTitle, onClose }: ShareModalPro
 
         {/* 内容区域 */}
         <div className="flex-1 overflow-auto">
+          {family && (
+            <div className="px-5 py-4 border-b border-app-border">
+              <button
+                type="button"
+                onClick={() => setShareToChatOpen(true)}
+                className="w-full min-h-12 flex items-center gap-3 px-3 rounded-card border border-app-border bg-app-surface hover:bg-app-hover text-left transition-colors duration-press ease-out"
+              >
+                <span className="w-8 h-8 rounded-button bg-accent-primary/12 text-accent-primary flex items-center justify-center shrink-0">
+                  <MessageCircle size={16} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-tx-primary">分享到聊天</span>
+                  <span className="block text-[11px] text-tx-tertiary">以卡片发到家庭群或私聊</span>
+                </span>
+              </button>
+            </div>
+          )}
           {/* 创建新分享 */}
           <div className="px-5 py-4 border-b border-app-border">
             <h3 className="text-xs font-medium text-tx-secondary mb-3 flex items-center gap-1.5">
@@ -345,6 +367,12 @@ export default function ShareModal({ noteId, noteTitle, onClose }: ShareModalPro
         </div>
       </motion.div>
     </div>
+    <ShareConversationSheet
+      open={shareToChatOpen}
+      onClose={() => setShareToChatOpen(false)}
+      card={{ kind: "note", id: noteId }}
+    />
+    </>
   );
 }
 

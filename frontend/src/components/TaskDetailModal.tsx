@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Project, ProjectStage, ProjectTask, Tag, UserPublicInfo, AuditLog } from "@/types";
-import { api } from "@/lib/api";
+import { api, getCurrentWorkspace } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 import {
   Plus, Edit2, Trash2, CheckSquare, Calendar, User, UserPlus, Bell,
   Tag as TagIcon, X, PlusCircle, CheckCircle2, Circle, Clock, Check, Sparkles,
   Eye, FileVideo, Image as ImageIcon, Paperclip, Upload, AlertCircle, Link, Compass, Loader2, MessageSquare, MoveRight,
-  LayoutGrid,
+  LayoutGrid, Share2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -31,6 +31,8 @@ import { syncTaskNotification } from "@/hooks/useCapacitor";
 import { TASK_COLOR_MAP } from "./ProjectKanban";
 import { BottomSheet } from "@/components/common/BottomSheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { ShareConversationSheet } from "@/components/chat/ShareToChat";
+import { isFamilyWorkspace } from "@/lib/imCard";
 
 const DEFAULT_RECURRENCE_RULE: RecurrenceRule = { type: "monthly", day: 1 };
 
@@ -85,6 +87,7 @@ export default function TaskDetailModal({
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const [showMoveDropdown, setShowMoveDropdown] = useState(false);
+  const [shareToChatOpen, setShareToChatOpen] = useState(false);
   const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const taskDescRef = useRef<HTMLTextAreaElement>(null);
@@ -453,6 +456,17 @@ export default function TaskDetailModal({
           )}
 
           <div className="flex items-center gap-2">
+            {isFamilyWorkspace(getCurrentWorkspace()) && (
+              <button
+                type="button"
+                onClick={() => setShareToChatOpen(true)}
+                className="p-1.5 hover:bg-app-hover rounded-lg text-tx-tertiary hover:text-tx-primary transition-colors"
+                title="分享到聊天"
+                aria-label="分享到聊天"
+              >
+                <Share2 size={16} />
+              </button>
+            )}
             <div className="relative">
               <button
                 onClick={() => {
@@ -1475,36 +1489,50 @@ export default function TaskDetailModal({
     </>
   );
 
+  const shareSheet = (
+    <ShareConversationSheet
+      open={shareToChatOpen}
+      onClose={() => setShareToChatOpen(false)}
+      card={{ kind: "task", id: activeTask.id }}
+    />
+  );
+
   if (!isDesktop) {
     return (
-      <BottomSheet
-        open
-        onClose={() => handleSaveTaskDetail(true)}
-        hideClose
-        hideHandle
-        fullscreen
-        className="rounded-none border-0 bg-app-elevated"
-        bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden"
-        zClassName="z-modal"
-        aria-label={t("projects.taskDetails") || "任务详情"}
-      >
-        <div className="flex flex-col min-h-0 flex-1 h-full w-full bg-app-elevated">
-          {sheetBody}
-        </div>
-      </BottomSheet>
+      <>
+        <BottomSheet
+          open
+          onClose={() => handleSaveTaskDetail(true)}
+          hideClose
+          hideHandle
+          fullscreen
+          className="rounded-none border-0 bg-app-elevated"
+          bodyClassName="flex flex-col min-h-0 h-full p-0 overflow-hidden"
+          zClassName="z-modal"
+          aria-label={t("projects.taskDetails") || "任务详情"}
+        >
+          <div className="flex flex-col min-h-0 flex-1 h-full w-full bg-app-elevated">
+            {sheetBody}
+          </div>
+        </BottomSheet>
+        {shareSheet}
+      </>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center p-4 select-text">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => handleSaveTaskDetail(true)}
-      />
-      <div className="relative bg-app-elevated w-full max-w-2xl rounded-window border border-app-border shadow-xl flex flex-col max-h-[85vh] overflow-hidden">
-        {sheetBody}
+    <>
+      <div className="fixed inset-0 z-modal flex items-center justify-center p-4 select-text">
+        <div
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={() => handleSaveTaskDetail(true)}
+        />
+        <div className="relative bg-app-elevated w-full max-w-2xl rounded-window border border-app-border shadow-xl flex flex-col max-h-[85vh] overflow-hidden">
+          {sheetBody}
+        </div>
       </div>
-    </div>
+      {shareSheet}
+    </>
   );
 }
 
