@@ -454,6 +454,11 @@ module.exports = {
       filter: ["**/*"],
     },
     {
+      from: "backend/assets/bundled-stickers",
+      to: "backend/assets/bundled-stickers",
+      filter: ["**/*"],
+    },
+    {
       from: "frontend/dist",
       to: "frontend/dist",
       filter: ["**/*"],
