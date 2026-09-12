@@ -40,7 +40,7 @@ import {
   loadCachedAuthUser,
 } from "@/lib/authVerify";
 import { bootstrap as syncBootstrap, teardown as syncTeardown } from "@/lib/syncEngine";
-import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, showLocalNotification, haptic, ensureNotificationChannels, syncAllTaskNotifications } from "@/hooks/useCapacitor";
+import { useMobileBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform, presentIncomingNotification, haptic, ensureNotificationChannels, syncAllTaskNotifications, setAppIconBadge } from "@/hooks/useCapacitor";
 import { useShareReceive } from "@/hooks/useShareReceive";
 import { useShellLayout } from "@/hooks/useShellLayout";
 import { stashSharePayload, subscribeShareReceive } from "@/lib/shareReceive";
@@ -59,6 +59,10 @@ import { renderRegisteredView } from "@/components/viewRegistry";
 import { realtime } from "@/lib/realtime";
 import {
   openTasksEntry,
+  openTaskById,
+  parseTasksHash,
+  parseChatHash,
+  openChat,
   openPlansEntry,
   setLibraryTab,
   shouldShowMobileTabBar,
@@ -401,9 +405,14 @@ function AppLayout() {
         if (!notesViewModes.includes(viewModeRef.current)) {
           actions.setViewMode("all");
         }
-      } else if (hash === "#/tasks") {
-        openTasksEntry();
+      } else if (parseTasksHash(hash)) {
+        const parsed = parseTasksHash(hash)!;
         actions.setViewMode("projects");
+        if (parsed.taskId) {
+          openTaskById(parsed.taskId);
+        } else {
+          openTasksEntry();
+        }
       } else if (hash === "#/files") {
         setLibraryTab("files");
         actions.setViewMode("library");
@@ -425,6 +434,8 @@ function AppLayout() {
         actions.setViewMode("finance");
       } else if (hash === "#/health") {
         actions.setViewMode("health");
+      } else if (parseChatHash(hash)) {
+        actions.setViewMode("chat");
       } else if (hash === "#/settings" || hash.startsWith("#/settings/")) {
         const tabRaw = hash.startsWith("#/settings/")
           ? hash.slice("#/settings/".length).split(/[?#]/)[0]
@@ -467,6 +478,19 @@ function AppLayout() {
       
       if (state.viewMode === "media" && window.location.hash.startsWith("#/media")) {
         // Let MediaCenter manage its own sub-routes
+      } else if (
+        state.viewMode === "projects" &&
+        (window.location.hash === "#/tasks" ||
+          window.location.hash.startsWith("#/tasks/") ||
+          window.location.hash === "#/plans" ||
+          window.location.hash.startsWith("#/plans"))
+      ) {
+        // 任务 / 计划深链由入口函数维护，勿覆盖成 #/projects
+      } else if (
+        state.viewMode === "chat" &&
+        (window.location.hash === "#/chat" || window.location.hash.startsWith("#/chat/"))
+      ) {
+        // 会话深链由 ChatCenter 维护，勿覆盖成 #/chat
       } else if (window.location.hash !== targetHash) {
         window.location.hash = targetHash;
       }
@@ -660,6 +684,7 @@ function AppLayout() {
         actions.setReminderActiveCount(stats.activeReminders || 0);
         // 初始与周期性刷新消息未读数
         actions.refreshMentionCount();
+        actions.refreshChatUnreadCount();
       } catch (err) {
         console.error("Fetch task stats for reminder badge failed:", err);
       }
@@ -667,110 +692,64 @@ function AppLayout() {
 
     fetchStats();
 
-    // 周期性拉取（60s）
-    timer = setInterval(fetchStats, 60000);
+    timer = setInterval(fetchStats, 5 * 60 * 1000);
 
     const onStatsChanged = () => {
       fetchStats();
     };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchStats();
+    };
 
     window.addEventListener("super:task-stats-changed", onStatsChanged);
     window.addEventListener("super:workspace-changed", onStatsChanged);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       if (timer) clearInterval(timer);
       window.removeEventListener("super:task-stats-changed", onStatsChanged);
       window.removeEventListener("super:workspace-changed", onStatsChanged);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [actions]);
 
-  // 监听 WebSocket 的实时通知，收到后立即刷新或更新未读数红点，并在原生平台展示本地通知
+  // 监听 WebSocket 的实时通知：刷新未读红点；原生走 LocalNotifications，桌面走系统通知 / toast
   useEffect(() => {
     const offNotification = realtime.on("notification:received", (msg: any) => {
       if (msg && typeof msg.unreadCount === "number") {
         actions.setUnreadMentionCount(msg.unreadCount);
       }
-      if (msg && msg.notification && isNativePlatform()) {
-        const notif = msg.notification;
-        const isZh = i18n.language?.startsWith("zh");
-        let title = isZh ? "新消息" : "New Message";
-        let body = notif.sourceTitle || (isZh ? "你收到了一条新消息" : "You received a new message");
-        const actor = notif.actorName || (isZh ? "某人" : "Someone");
-        const targetTitle = notif.sourceTitle || "";
-
-        switch (notif.type) {
-          case "mention":
-            title = isZh ? "有人提到你" : "Mentioned You";
-            body = isZh
-              ? `${actor} 在「${targetTitle || "内容"}」中提到了你`
-              : `${actor} mentioned you in "${targetTitle || "content"}"`;
-            break;
-          case "task_completed":
-            title = isZh ? "任务完成" : "Task Completed";
-            body = isZh
-              ? `${actor} 完成了任务: ${targetTitle}`
-              : `${actor} completed task: ${targetTitle}`;
-            break;
-          case "diary_posted":
-            title = isZh ? "新说说" : "New Diary Entry";
-            body = isZh
-              ? `${actor} 发表了说说: ${targetTitle}`
-              : `${actor} posted a new diary entry: ${targetTitle}`;
-            break;
-          case "note_updated":
-            title = isZh ? "笔记更新" : "Note Updated";
-            body = isZh
-              ? `${actor} 更新了笔记: ${targetTitle}`
-              : `${actor} updated note: ${targetTitle}`;
-            break;
-          case "task_reminder": {
-            const isDue = notif.kind === "due" || String(targetTitle || "").startsWith("【今天截止】");
-            title = isZh
-              ? isDue
-                ? "截止提醒"
-                : "任务提醒"
-              : isDue
-                ? "Due Today"
-                : "Task Reminder";
-            body = targetTitle
-              ? targetTitle
-              : isZh
-                ? "你有一个待办到点了"
-                : "A task reminder is due";
-            break;
-          }
+      if (msg && msg.notification) {
+        const n = msg.notification;
+        const viewingThisChat =
+          n.sourceType === "chat" &&
+          n.sourceId &&
+          typeof window !== "undefined" &&
+          document.visibilityState === "visible" &&
+          (window.location.hash === `#/chat/${n.sourceId}` ||
+            window.location.hash.startsWith(`#/chat/${encodeURIComponent(n.sourceId)}`));
+        if (!viewingThisChat) {
+          const isZh = i18n.language?.startsWith("zh");
+          void presentIncomingNotification(n, isZh);
         }
-
-        showLocalNotification(title, body, {
-          sourceType: notif.sourceType || (notif.type === "task_reminder" ? "task" : undefined),
-          sourceId: notif.sourceId,
-          taskId: notif.type === "task_reminder" ? notif.sourceId : undefined,
-        });
       }
+    });
+    const offIm = realtime.on("im:message", (msg: any) => {
+      if (msg?.echo) return;
+      actions.refreshChatUnreadCount();
     });
     return () => {
       offNotification();
+      offIm();
     };
   }, [actions, i18n.language]);
 
-  // 当未读消息变化时，动态更新移动端应用图标的角标(Badge)
+  // 应用图标角标 = 未读消息 + 今日焦点（逾期 / 今天截止 / 提前量已到）
   useEffect(() => {
-    if (isNativePlatform()) {
-      const updateBadge = async () => {
-        try {
-          const { Badge } = await import("@capawesome/capacitor-badge");
-          const perm = await Badge.checkPermissions();
-          if (perm.display !== "granted") {
-            await Badge.requestPermissions();
-          }
-          await Badge.set({ count: state.unreadMentionCount });
-        } catch (err) {
-          console.error("Failed to update app icon badge:", err);
-        }
-      };
-      updateBadge();
-    }
-  }, [state.unreadMentionCount]);
+    if (!isNativePlatform()) return;
+    const count = (state.unreadMentionCount || 0) + (state.reminderActiveCount || 0);
+    void setAppIconBadge(count);
+  }, [state.unreadMentionCount, state.reminderActiveCount]);
 
   // 监听移动端生命周期状态变化，返回前台时立即同步最新消息与重连 WebSocket
   useEffect(() => {
@@ -780,12 +759,13 @@ function AppLayout() {
     const handler = CapApp.addListener("appStateChange", ({ isActive }) => {
       if (isActive && active) {
         actions.refreshMentionCount();
+        actions.refreshChatUnreadCount();
         realtime.connect();
         api.getTaskStats().then((stats) => {
           actions.setReminderActiveCount(stats.activeReminders || 0);
         }).catch(console.error);
         // 回前台：重同步任务本地通知（厂商可能清掉 exact alarm）
-        api.getTasks("all").then((tasks) => {
+        api.getReminderTasks().then((tasks) => {
           void syncAllTaskNotifications(tasks as any);
         }).catch(() => {});
         // 热启动：拉最新闪屏元数据并缓存（不弹闪屏门）
@@ -841,8 +821,16 @@ function AppLayout() {
           actions.setViewMode("diary");
           actions.setMobileView("list");
         } else if (sourceType === "task") {
-          actions.setViewMode("tasks");
+          openTasksEntry();
+          actions.setViewMode("projects");
           actions.setMobileView("list");
+          openTaskById(sourceId);
+          sessionStorage.removeItem("super:pending-navigate");
+        } else if (sourceType === "chat") {
+          actions.setViewMode("chat");
+          actions.setMobileView("list");
+          openChat(sourceId);
+          sessionStorage.removeItem("super:pending-navigate");
         }
       } catch (e) {
         console.error("Failed to parse pending navigate:", e);
@@ -863,7 +851,8 @@ function AppLayout() {
   // 监听旧待办快捷跳转事件
   useEffect(() => {
     const onNavigateToTasks = () => {
-      actions.setViewMode("tasks");
+      openTasksEntry();
+      actions.setViewMode("projects");
       actions.setMobileView("list");
     };
     window.addEventListener("super:navigate-to-tasks", onNavigateToTasks);
@@ -949,6 +938,7 @@ function AppLayout() {
     "trash",
     "mentions",
     "tasks",
+    "chat",
   ]);
   useRegisterBackLayer(
     "more-stack",
@@ -989,7 +979,7 @@ function AppLayout() {
     void ensureNotificationChannels();
     const resyncTaskReminders = async () => {
       try {
-        const tasks = await api.getTasks("all");
+        const tasks = await api.getReminderTasks();
         await syncAllTaskNotifications(tasks as any);
       } catch (e) {
         console.warn("[notifications] resync task reminders failed:", e);
@@ -2071,19 +2061,24 @@ function AuthGate() {
   // Synchronize credentials to Android native bridge for background notifications
   useEffect(() => {
     const cap = (window as any).Capacitor;
-    if (cap && cap.getPlatform() === "android") {
+    if (!cap || cap.getPlatform() !== "android") return;
+    const sync = () => {
       const bridge = (window as any).AndroidKeepAliveBridge;
-      if (bridge && bridge.updateAuthInfo) {
-        const serverUrl = getServerUrl();
-        const token = activeToken || localStorage.getItem("super-token") || "";
-        const userId = user?.id || "";
-        try {
-          bridge.updateAuthInfo(serverUrl, token, userId);
-        } catch (e) {
-          console.error("Failed to sync auth info to Android bridge:", e);
-        }
+      if (!bridge || !bridge.updateAuthInfo) return;
+      try {
+        bridge.updateAuthInfo(
+          getServerUrl(),
+          activeToken || localStorage.getItem("super-token") || "",
+          user?.id || "",
+          getCurrentWorkspace() || "",
+        );
+      } catch (e) {
+        console.error("Failed to sync auth info to Android bridge:", e);
       }
-    }
+    };
+    sync();
+    window.addEventListener("super:workspace-changed", sync);
+    return () => window.removeEventListener("super:workspace-changed", sync);
   }, [user?.id, activeToken]);
 
   // Phase B: 用户登录态确立后启动同步引擎（绑定 IDB + 全量 pull）。

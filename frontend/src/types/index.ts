@@ -104,6 +104,7 @@ export interface WorkspaceFeatures {
   media: boolean;
   finance: boolean;
   health: boolean;
+  chat: boolean;
 }
 
 /** 功能开关的稳定排序 + 展示元信息，UI 渲染列表用。 */
@@ -121,6 +122,7 @@ export const WORKSPACE_FEATURE_META: Array<{
   { key: "media", label: "媒体库", description: "音视频媒体管理与在线播放" },
   { key: "finance", label: "记账", description: "个人账本、账单导入与收支统计" },
   { key: "health", label: "健康档案", description: "家人病历本、时间轴与 OCR 录入" },
+  { key: "chat", label: "聊天", description: "家庭群与成员私聊" },
 ];
 
 /** 记账模块类型 */
@@ -234,7 +236,10 @@ export interface NoteListItem {
   notebookId: string;
   workspaceId: string | null;   // Phase 1 新增
   title: string;
+  /** 列表预览（服务端截断，非全文） */
   contentText: string;
+  /** 正文长度（字符），用于字数；列表不再下发全文 */
+  contentLength?: number;
   isPinned: number;
   isFavorite: number;
   isLocked: number;
@@ -271,7 +276,89 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance" | "health" | "settings";
+export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "search" | "tasks" | "tag" | "ai-chat" | "diary" | "files" | "mentions" | "more" | "projects" | "plans" | "books" | "media" | "library" | "finance" | "health" | "settings" | "chat";
+
+export type ImConversationType = "group" | "dm";
+export type ImMessageType = "text" | "image" | "file" | "sticker" | "voice" | "card";
+export type ImCardKind = "note" | "diary" | "task";
+
+export interface ImCardPayload {
+  kind: ImCardKind;
+  id: string;
+  title: string;
+  snippet?: string;
+  label: string;
+}
+
+export interface ImFileInfo {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  kind?: "image" | "file" | "audio";
+}
+
+export interface ImSticker {
+  id: string;
+  uploaderId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  createdAt?: string;
+}
+
+export interface ImConversation {
+  id: string;
+  workspaceId: string;
+  type: ImConversationType;
+  title: string;
+  peerId: string | null;
+  peerAvatarUrl: string | null;
+  updatedAt: string;
+  lastMessageAt: string | null;
+  lastPreview: string;
+  lastSenderId: string | null;
+  unreadCount: number;
+}
+
+export interface ImMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string | null;
+  senderAvatarUrl: string | null;
+  type: ImMessageType;
+  body: string;
+  fileId: string | null;
+  file: ImFileInfo | null;
+  createdAt: string;
+}
+
+export interface ImMessageCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface ImMessagePage {
+  items: ImMessage[];
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+  beforeCursor: ImMessageCursor | null;
+  afterCursor: ImMessageCursor | null;
+  /** 兼容旧字段 */
+  hasMore?: boolean;
+  nextCursor?: string | null;
+}
+
+export interface ImSearchHit {
+  conversationId: string;
+  conversationTitle: string;
+  conversationType: ImConversationType;
+  message: ImMessage;
+  snippet: string;
+}
 
 /** 健康档案 */
 export type HealthRecordType =
@@ -678,6 +765,7 @@ export interface TaskStats {
   today: number;
   overdue: number;
   week: number;
+  /** 今日焦点：逾期 + 今天截止 + 提前量已到点（未完成） */
   activeReminders: number;
 }
 
@@ -964,6 +1052,7 @@ export interface ProjectTask {
   dependencies?: Array<{ id: string; title: string; isCompleted: number }>;
   projectName?: string;
   stageName?: string;
+  projectWorkspaceId?: string | null;
 }
 
 export interface ProjectTaskChecklist {

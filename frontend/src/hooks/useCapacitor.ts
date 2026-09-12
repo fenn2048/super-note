@@ -883,6 +883,44 @@ function sameMinute(a: Date, b: Date): boolean {
   return Math.floor(a.getTime() / 60_000) === Math.floor(b.getTime() / 60_000);
 }
 
+const CATCHUP_KEY = "super:task-notif-catchup";
+const CATCHUP_GRACE_MS = 36 * 60 * 60 * 1000;
+
+function readCatchupIds(): Set<number> {
+  try {
+    const raw = localStorage.getItem(CATCHUP_KEY);
+    const arr = raw ? (JSON.parse(raw) as number[]) : [];
+    return new Set(arr.filter((n) => typeof n === "number"));
+  } catch {
+    return new Set();
+  }
+}
+
+function markCatchupSent(id: number) {
+  try {
+    const ids = readCatchupIds();
+    ids.add(id);
+    localStorage.setItem(CATCHUP_KEY, JSON.stringify([...ids].slice(-400)));
+  } catch {
+    /* ignore */
+  }
+}
+
+function hasCatchupSent(id: number): boolean {
+  return readCatchupIds().has(id);
+}
+
+/** 未来时刻原样调度；刚过期（36h 内）补发一次立刻通知 */
+function resolveSlotFireAt(parsed: Date, notifId: number): Date | null {
+  const now = Date.now();
+  const t = parsed.getTime();
+  if (isNaN(t)) return null;
+  if (t > now) return parsed;
+  if (now - t > CATCHUP_GRACE_MS) return null;
+  if (hasCatchupSent(notifId)) return null;
+  return new Date(now + 2500);
+}
+
 /**
  * 双提醒计划：
  * 1) 提前量：remindAt（若设置）
@@ -904,38 +942,99 @@ export function buildTaskReminderSlots(task: TaskLikeForReminder): Array<{
   }> = [];
   if (task.isCompleted) return slots;
 
-  let advanceAt: Date | null = null;
+  let advanceParsed: Date | null = null;
   if (task.remindAt) {
-    advanceAt = parseRemindAtToLocalDate(task.remindAt);
-    if (advanceAt && !isNaN(advanceAt.getTime()) && advanceAt.getTime() > Date.now()) {
-      slots.push({
-        kind: "advance",
-        at: advanceAt,
-        title: "任务提醒",
-        body: task.title,
-        id: taskAdvanceNotifId(task.id),
-      });
+    advanceParsed = parseRemindAtToLocalDate(task.remindAt);
+    const advanceId = taskAdvanceNotifId(task.id);
+    if (advanceParsed && !isNaN(advanceParsed.getTime())) {
+      const at = resolveSlotFireAt(advanceParsed, advanceId);
+      if (at) {
+        slots.push({
+          kind: "advance",
+          at,
+          title: "任务提醒",
+          body: task.title,
+          id: advanceId,
+        });
+      }
     }
   }
 
   const dueStr = taskDueField(task);
   if (dueStr) {
-    const dueAt = parseRemindAtToLocalDate(dueStr);
-    if (dueAt && !isNaN(dueAt.getTime()) && dueAt.getTime() > Date.now()) {
-      // 与提前量同一分钟则不再重复调度截止提醒
-      if (!advanceAt || !sameMinute(advanceAt, dueAt)) {
+    const dueParsed = parseRemindAtToLocalDate(dueStr);
+    const dueId = taskDueNotifId(task.id);
+    if (dueParsed && !isNaN(dueParsed.getTime())) {
+      if (advanceParsed && sameMinute(advanceParsed, dueParsed)) {
+        return slots;
+      }
+      const at = resolveSlotFireAt(dueParsed, dueId);
+      if (at) {
         slots.push({
           kind: "due",
-          at: dueAt,
+          at,
           title: "截止提醒",
           body: `【今天截止】${task.title}`,
-          id: taskDueNotifId(task.id),
+          id: dueId,
         });
       }
     }
   }
 
   return slots;
+}
+
+function toTaskLocalNotif(
+  slot: { kind: "advance" | "due"; at: Date; title: string; body: string; id: number },
+  task: TaskLikeForReminder,
+) {
+  return {
+    title: slot.title,
+    body: slot.body,
+    id: slot.id,
+    channelId: NOTIF_CHANNEL_TASKS,
+    schedule: { at: slot.at, allowWhileIdle: true },
+    autoCancel: true,
+    extra: {
+      taskId: task.id,
+      kind: slot.kind,
+      sourceType: "task",
+      sourceId: task.id,
+    },
+  };
+}
+
+/** 桌面/移动应用图标角标 */
+export async function setAppIconBadge(count: number): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    const { Badge } = await import("@capawesome/capacitor-badge");
+    const perm = await Badge.checkPermissions();
+    if (perm.display !== "granted") {
+      const req = await Badge.requestPermissions();
+      if (req.display !== "granted") return;
+    }
+    const n = Math.max(0, Math.floor(count));
+    if (n <= 0) await Badge.clear();
+    else await Badge.set({ count: n });
+  } catch (err) {
+    console.warn("[badge] set failed", err);
+  }
+}
+
+export async function bumpAppIconBadge(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    const { Badge } = await import("@capawesome/capacitor-badge");
+    const perm = await Badge.checkPermissions();
+    if (perm.display !== "granted") {
+      const req = await Badge.requestPermissions();
+      if (req.display !== "granted") return;
+    }
+    await Badge.increase();
+  } catch (err) {
+    console.warn("[badge] increase failed", err);
+  }
 }
 
 async function checkAndRequestPermissions() {
@@ -969,15 +1068,12 @@ export async function syncTaskNotification(task: Task | TaskLikeForReminder) {
     if (!granted) return;
 
     await LocalNotifications.schedule({
-      notifications: slots.map((s) => ({
-        title: s.title,
-        body: s.body,
-        id: s.id,
-        channelId: NOTIF_CHANNEL_TASKS,
-        schedule: { at: s.at, allowWhileIdle: true },
-        extra: { taskId: task.id, kind: s.kind },
-      })),
+      notifications: slots.map((s) => toTaskLocalNotif(s, task)),
     });
+    const now = Date.now();
+    for (const s of slots) {
+      if (s.at.getTime() <= now + 10_000) markCatchupSent(s.id);
+    }
   } catch (err) {
     console.error("syncTaskNotification failed:", err);
   }
@@ -1020,14 +1116,7 @@ export async function syncAllTaskNotifications(tasks: Array<Task | TaskLikeForRe
 
       for (const s of slots) {
         idsToKeep.add(s.id);
-        notificationsToSchedule.push({
-          title: s.title,
-          body: s.body,
-          id: s.id,
-          channelId: NOTIF_CHANNEL_TASKS,
-          schedule: { at: s.at, allowWhileIdle: true },
-          extra: { taskId: task.id, kind: s.kind },
-        });
+        notificationsToSchedule.push(toTaskLocalNotif(s, task));
       }
       // cancel orphan of the pair not in slots
       for (const id of [advanceId, dueId]) {
@@ -1045,6 +1134,11 @@ export async function syncAllTaskNotifications(tasks: Array<Task | TaskLikeForRe
 
     if (notificationsToSchedule.length > 0) {
       await LocalNotifications.schedule({ notifications: notificationsToSchedule });
+      const now = Date.now();
+      for (const n of notificationsToSchedule) {
+        const at = n.schedule?.at ? new Date(n.schedule.at).getTime() : 0;
+        if (at && at <= now + 10_000) markCatchupSent(n.id);
+      }
     }
   } catch (err) {
     console.error("syncAllTaskNotifications failed:", err);
@@ -1122,6 +1216,141 @@ export async function openExactAlarmSettings(): Promise<void> {
   }
 }
 
+export function formatIncomingNotificationCopy(
+  notif: {
+    type?: string;
+    kind?: string;
+    actorName?: string | null;
+    sourceTitle?: string | null;
+  },
+  isZh: boolean,
+): { title: string; body: string } {
+  let title = isZh ? "新消息" : "New Message";
+  const actor = notif.actorName || (isZh ? "某人" : "Someone");
+  const targetTitle = notif.sourceTitle || "";
+  let body = targetTitle || (isZh ? "你收到了一条新消息" : "You received a new message");
+
+  switch (notif.type) {
+    case "mention":
+      title = isZh ? "有人提到你" : "Mentioned You";
+      body = isZh
+        ? `${actor} 在「${targetTitle || "内容"}」中提到了你`
+        : `${actor} mentioned you in "${targetTitle || "content"}"`;
+      break;
+    case "task_completed":
+      title = isZh ? "任务完成" : "Task Completed";
+      body = isZh
+        ? `${actor} 完成了任务: ${targetTitle}`
+        : `${actor} completed task: ${targetTitle}`;
+      break;
+    case "diary_posted":
+      title = isZh ? "新说说" : "New Diary Entry";
+      body = isZh
+        ? `${actor} 发表了说说: ${targetTitle}`
+        : `${actor} posted a new diary entry: ${targetTitle}`;
+      break;
+    case "note_updated":
+      title = isZh ? "笔记更新" : "Note Updated";
+      body = isZh
+        ? `${actor} 更新了笔记: ${targetTitle}`
+        : `${actor} updated note: ${targetTitle}`;
+      break;
+    case "chat_message":
+      title = isZh ? "新聊天" : "New Chat";
+      body = targetTitle
+        ? isZh
+          ? `${actor}: ${targetTitle}`
+          : `${actor}: ${targetTitle}`
+        : isZh
+          ? `${actor} 发来一条消息`
+          : `${actor} sent a message`;
+      break;
+    case "task_reminder": {
+      const isDue = notif.kind === "due" || String(targetTitle || "").startsWith("【今天截止】");
+      title = isZh
+        ? isDue
+          ? "截止提醒"
+          : "任务提醒"
+        : isDue
+          ? "Due Today"
+          : "Task Reminder";
+      body = targetTitle
+        ? targetTitle
+        : isZh
+          ? "你有一个待办到点了"
+          : "A task reminder is due";
+      break;
+    }
+  }
+
+  return { title, body };
+}
+
+function stashPendingNavigate(extra: { sourceType?: string; sourceId?: string; taskId?: string }) {
+  if (typeof window === "undefined") return;
+  if (extra.sourceType && extra.sourceId) {
+    sessionStorage.setItem(
+      "super:pending-navigate",
+      JSON.stringify({ sourceType: extra.sourceType, sourceId: extra.sourceId }),
+    );
+    window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
+  } else if (extra.taskId) {
+    sessionStorage.setItem(
+      "super:pending-navigate",
+      JSON.stringify({ sourceType: "task", sourceId: extra.taskId }),
+    );
+    window.dispatchEvent(new CustomEvent("super:navigate-to-item-trigger"));
+  }
+}
+
+function canUseWebNotification(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof Notification !== "undefined" &&
+    Notification.permission === "granted" &&
+    window.isSecureContext
+  );
+}
+
+/** 桌面：已授权则始终弹系统通知（不要求窗口在后台）。失败或未授权时用 toast。 */
+async function showWebDesktopNotification(
+  title: string,
+  body: string,
+  extra: { sourceType?: string; sourceId?: string; taskId?: string; id?: string },
+) {
+  let shownOs = false;
+  if (canUseWebNotification()) {
+    try {
+      const n = new Notification(title, {
+        body,
+        tag: extra.sourceId || extra.id || title,
+        icon: "/apple-touch-icon.png",
+        silent: false,
+      });
+      n.onclick = () => {
+        try {
+          window.focus();
+        } catch {
+          /* ignore */
+        }
+        stashPendingNavigate(extra);
+        n.close();
+      };
+      shownOs = true;
+    } catch (e) {
+      console.warn("[notifications] Notification() failed", e);
+    }
+  }
+
+  // 前台页 Chrome 有时不展示横幅；应用内 toast 兜底。后台只走系统通知。
+  const pageVisible =
+    typeof document === "undefined" || (!document.hidden && document.hasFocus());
+  if (!shownOs || pageVisible) {
+    const { toast } = await import("@/lib/toast");
+    toast.info(`${title}：${body}`, 5000);
+  }
+}
+
 // ─── 实时消息本地通知触发 ──────────────────────────────────────────
 export async function showLocalNotification(title: string, body: string, extra: any) {
   if (!isNativePlatform()) return;
@@ -1137,19 +1366,60 @@ export async function showLocalNotification(title: string, body: string, extra: 
           title,
           body,
           id: notificationId,
-          channelId: NOTIF_CHANNEL_MESSAGES,
+          channelId:
+            extra?.taskId || extra?.sourceType === "task"
+              ? NOTIF_CHANNEL_TASKS
+              : NOTIF_CHANNEL_MESSAGES,
           extra,
+          autoCancel: true,
         },
       ],
     });
+    void bumpAppIconBadge();
   } catch (err) {
     console.error("showLocalNotification failed:", err);
   }
 }
 
+/** 原生走 LocalNotifications；Web / Electron 走系统通知或 toast */
+export async function presentIncomingNotification(
+  notif: {
+    id?: string;
+    type?: string;
+    kind?: string;
+    actorName?: string | null;
+    sourceTitle?: string | null;
+    sourceType?: string | null;
+    sourceId?: string | null;
+  },
+  isZh: boolean,
+): Promise<void> {
+  const { title, body } = formatIncomingNotificationCopy(notif, isZh);
+  const extra = {
+    sourceType: notif.sourceType || (notif.type === "task_reminder" ? "task" : undefined),
+    sourceId: notif.sourceId || undefined,
+    taskId: notif.type === "task_reminder" ? notif.sourceId || undefined : undefined,
+    id: notif.id,
+  };
+  if (isNativePlatform()) {
+    await showLocalNotification(title, body, extra);
+    return;
+  }
+  await showWebDesktopNotification(title, body, extra);
+}
+
 // 注册通知点击跳转事件
 if (typeof window !== "undefined" && isNativePlatform()) {
   try {
+    LocalNotifications.addListener("localNotificationReceived", (notification) => {
+      void bumpAppIconBadge();
+      const extra = notification.extra as { taskId?: string; kind?: string } | undefined;
+      if (extra?.taskId) {
+        const id =
+          extra.kind === "due" ? taskDueNotifId(String(extra.taskId)) : taskAdvanceNotifId(String(extra.taskId));
+        markCatchupSent(id);
+      }
+    });
     LocalNotifications.addListener("localNotificationActionPerformed", (action) => {
       const extra = action.notification.extra;
       if (extra) {

@@ -72,6 +72,12 @@ interface MentionPickerProps {
   onSelect: (user: UserPublicInfo) => void;
   /** 关闭下拉 */
   onClose: () => void;
+  /**
+   * 限定候选（群聊成员）。传入后不再打全局搜索，也不出现 @su。
+   * 未传则保持历史行为：搜索全站用户。
+   */
+  candidates?: UserPublicInfo[];
+  className?: string;
 }
 
 interface SearchResult extends UserPublicInfo {
@@ -83,6 +89,8 @@ export default function MentionPicker({
   anchorRect,
   onSelect,
   onClose,
+  candidates,
+  className,
 }: MentionPickerProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,6 +99,19 @@ export default function MentionPicker({
 
   // 搜索用户
   useEffect(() => {
+    if (candidates) {
+      const q = search.trim().toLowerCase();
+      const filtered = candidates.filter((u) => {
+        if (u.id === SU_USER_ID) return false;
+        if (!q) return true;
+        const name = (u.displayName || "").toLowerCase();
+        return u.username.toLowerCase().includes(q) || name.includes(q);
+      });
+      setResults(filtered);
+      setHighlighted(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     Promise.all([
       api.searchUsers(search).catch(() => [] as UserPublicInfo[]),
@@ -105,7 +126,7 @@ export default function MentionPicker({
       setHighlighted(0);
     }).catch(() => setResults([]))
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [search, candidates]);
 
   // 键盘导航（由父组件通过 ref 调用）
   // 键盘监听（拦截上下键、回车、Esc，避免输入框换行或光标移动）
@@ -168,9 +189,9 @@ export default function MentionPicker({
   return (
     <div
       ref={containerRef}
-      className={`z-[1000] w-56 max-h-44 overflow-y-auto bg-app-elevated border border-app-border rounded-lg shadow-xl ${
+      className={`z-popover w-56 max-h-44 overflow-y-auto bg-app-elevated border border-app-border rounded-lg shadow-xl ${
         anchorRect ? "fixed" : "absolute"
-      }`}
+      } ${className || ""}`}
       style={!anchorRect ? {} : style}
     >
       {loading && (

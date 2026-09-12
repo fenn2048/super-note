@@ -321,87 +321,8 @@ export function handleRecurringTask(
       };
     }
 
-    // legacy tasks table
-    const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
-    if (!task) return { created: false, reason: "task_not_found" };
-    if (!task.isRecurring || !task.recurrenceRule) {
-      return { created: false, reason: "not_recurring" };
-    }
-
-    let rule: RecurrenceRule;
-    try {
-      rule =
-        typeof task.recurrenceRule === "string"
-          ? JSON.parse(task.recurrenceRule)
-          : task.recurrenceRule;
-    } catch {
-      return { created: false, reason: "invalid_recurrence_rule" };
-    }
-    if (!rule || !rule.type) {
-      return { created: false, reason: "invalid_recurrence_rule" };
-    }
-
-    if (!task.dueDate) return { created: false, reason: "missing_end_date" };
-
-    const nextDueDate = getNextOccurrenceString(task.dueDate, rule);
-    if (!nextDueDate) return { created: false, reason: "next_date_failed" };
-
-    if (task.recurrenceEndDate) {
-      const nextParts = parseTaskDateTime(nextDueDate);
-      const endParts = parseTaskDateTime(task.recurrenceEndDate);
-      if (nextParts && endParts) {
-        if (taskDatePartsToDate(nextParts).getTime() > taskDatePartsToDate(endParts).getTime()) {
-          return { created: false, reason: "past_recurrence_end" };
-        }
-      }
-    }
-
-    const nextRemindAt = computeNextRemindAt(
-      { ...task, endDate: task.dueDate },
-      nextDueDate,
-    );
-    const newId = crypto.randomUUID();
-
-    db.prepare(
-      `
-      INSERT INTO tasks (
-        id, userId, workspaceId, title, isCompleted, status, priority, dueDate, remindAt,
-        noteId, parentId, sortOrder, isRecurring, recurrenceRule, reminderOffsetValue, reminderOffsetUnit, recurrenceEndDate, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `,
-    ).run(
-      newId,
-      task.userId,
-      task.workspaceId,
-      task.title,
-      task.priority,
-      nextDueDate,
-      nextRemindAt,
-      task.noteId,
-      task.parentId,
-      task.sortOrder,
-      task.recurrenceRule,
-      task.reminderOffsetValue,
-      task.reminderOffsetUnit,
-      task.recurrenceEndDate,
-    );
-
-    const tags = db
-      .prepare("SELECT tagId FROM task_tags WHERE taskId = ?")
-      .all(taskId) as { tagId: string }[];
-    const insertTag = db.prepare(
-      "INSERT OR IGNORE INTO task_tags (taskId, tagId) VALUES (?, ?)",
-    );
-    for (const t of tags) {
-      insertTag.run(newId, t.tagId);
-    }
-
-    return {
-      created: true,
-      newTaskId: newId,
-      nextDueDate,
-      nextRemindAt,
-    };
+    // legacy tasks 表写路径已冻结，不再生成下一期
+    return { created: false, reason: "legacy_frozen" };
   } catch (err) {
     console.error("Error handling recurrence:", err);
     return {

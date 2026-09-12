@@ -115,11 +115,27 @@ export function getDb(): Database.Database {
       db = undefined;
       throw e;
     }
-    // WAL 自动检查点：每小时执行一次，防止 WAL 日志无限增长
-    const WAL_CHECKPOINT_INTERVAL = 60 * 60 * 1000;
+    // WAL：每 5 分钟看体积，超过 8MB 立刻截断；每小时兜底一次
+    const WAL_CHECK_MS = 5 * 60 * 1000;
+    const WAL_MAX_BYTES = 8 * 1024 * 1024;
+    const WAL_HOURLY_MS = 60 * 60 * 1000;
+    let lastHourly = Date.now();
     const walTimer = setInterval(() => {
-      try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch { /* ignore */ }
-    }, WAL_CHECKPOINT_INTERVAL);
+      try {
+        const walPath = DB_PATH + "-wal";
+        let oversize = false;
+        try {
+          oversize = fs.statSync(walPath).size > WAL_MAX_BYTES;
+        } catch {
+          /* 无 wal 文件 */
+        }
+        const hourly = Date.now() - lastHourly >= WAL_HOURLY_MS;
+        if (oversize || hourly) {
+          db.pragma("wal_checkpoint(TRUNCATE)");
+          if (hourly) lastHourly = Date.now();
+        }
+      } catch { /* ignore */ }
+    }, WAL_CHECK_MS);
     walTimer.unref();
   }
   return db;

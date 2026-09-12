@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useMemo } from "react";
 import { Notebook, NoteListItem, Note, Tag, ViewMode, MobileView } from "@/types";
-import { api } from "@/lib/api";
+import { api, getCurrentWorkspace } from "@/lib/api";
 
 export type SyncStatus = "idle" | "saving" | "saved" | "error" | "offline" | "queued";
 
@@ -30,6 +30,7 @@ interface AppState {
   notesRefreshToken: number;
   reminderActiveCount: number;
   unreadMentionCount: number;
+  chatUnreadCount: number;
 }
 
 type Action =
@@ -57,6 +58,7 @@ type Action =
   | { type: "TRIGGER_REFRESH_NOTES" }
   | { type: "SET_REMINDER_ACTIVE_COUNT"; payload: number }
   | { type: "SET_UNREAD_MENTION_COUNT"; payload: number }
+  | { type: "SET_CHAT_UNREAD_COUNT"; payload: number }
   | { type: "SET_SIDEBAR_COLLAPSED"; payload: boolean };
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
@@ -103,7 +105,7 @@ function getSavedViewMode(): ViewMode {
     const validModes: ViewMode[] = [
       "home", "notebook", "favorites", "trash", "all", "search", "tasks", "tag",
       "ai-chat", "diary", "files", "mentions", "more", "projects",
-      "plans", "books", "media", "library", "finance",
+      "plans", "books", "media", "library", "finance", "health", "chat",
     ];
     // 思维导图功能已移除：旧 localStorage 值回退首页
     if (saved === "mindmaps") return "home";
@@ -138,6 +140,7 @@ const initialState: AppState = {
   notesRefreshToken: 0,
   reminderActiveCount: 0,
   unreadMentionCount: 0,
+  chatUnreadCount: 0,
 };
 
 export { MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, MIN_NOTELIST_WIDTH, MAX_NOTELIST_WIDTH, DEFAULT_NOTELIST_WIDTH };
@@ -223,6 +226,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, reminderActiveCount: action.payload };
     case "SET_UNREAD_MENTION_COUNT":
       return { ...state, unreadMentionCount: action.payload };
+    case "SET_CHAT_UNREAD_COUNT":
+      return { ...state, chatUnreadCount: action.payload };
     default:
       return state;
   }
@@ -283,9 +288,29 @@ export function useAppActions() {
     setMobileSidebar: (v: boolean) => dispatch({ type: "SET_MOBILE_SIDEBAR", payload: v }),
     setReminderActiveCount: (v: number) => dispatch({ type: "SET_REMINDER_ACTIVE_COUNT", payload: v }),
     setUnreadMentionCount: (v: number) => dispatch({ type: "SET_UNREAD_MENTION_COUNT", payload: v }),
-    /** 刷新 @消息未读数 */
+    setChatUnreadCount: (v: number) => dispatch({ type: "SET_CHAT_UNREAD_COUNT", payload: v }),
+    refreshChatUnreadCount: () => {
+      const ws = getCurrentWorkspace();
+      if (!ws || ws === "personal") {
+        dispatch({ type: "SET_CHAT_UNREAD_COUNT", payload: 0 });
+        return;
+      }
+      api.im
+        .unreadCount()
+        .then((r) => dispatch({ type: "SET_CHAT_UNREAD_COUNT", payload: r.count }))
+        .catch(() => dispatch({ type: "SET_CHAT_UNREAD_COUNT", payload: 0 }));
+    },
+    /** 刷新消息未读数（notifications 为唯一源，含 @提及与任务提醒） */
     refreshMentionCount: () => {
-      api.mentions!.unreadCount().then((r) => dispatch({ type: "SET_UNREAD_MENTION_COUNT", payload: r.count })).catch(console.error);
+      api.notifications
+        .unreadCount()
+        .then((r) => dispatch({ type: "SET_UNREAD_MENTION_COUNT", payload: r.count }))
+        .catch(() => {
+          api.mentions
+            .unreadCount()
+            .then((r) => dispatch({ type: "SET_UNREAD_MENTION_COUNT", payload: r.count }))
+            .catch(console.error);
+        });
     },
     refreshNotebooks: () => {
       api.getNotebooks().then((v) => dispatch({ type: "SET_NOTEBOOKS", payload: v })).catch(console.error);

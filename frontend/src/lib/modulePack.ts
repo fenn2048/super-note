@@ -33,6 +33,7 @@ const PACK_MODULES: Record<ModulePackId, Set<string> | null> = {
     "ai",
     "finance",
     "health",
+    "chat",
   ]),
   creator: new Set([
     "home",
@@ -49,6 +50,7 @@ const PACK_MODULES: Record<ModulePackId, Set<string> | null> = {
     "mentions",
     "finance",
     "health",
+    "chat",
   ]),
 };
 
@@ -66,7 +68,7 @@ export const MODULE_PACK_META: Array<{
   {
     id: "family",
     label: "家庭协作",
-    description: "笔记 + 任务 + 说说 + 消息，适合家庭共用",
+    description: "笔记 + 任务 + 说说 + 消息 + 聊天，适合家庭共用",
     recommended: true,
   },
   {

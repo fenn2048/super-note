@@ -368,6 +368,9 @@ async function startBackend() {
     ELECTRON_USER_DATA: userDataPath,
     FRONTEND_DIST: getFrontendDist(),
     JWT_SECRET: ensureJwtSecret(),
+    BUNDLED_STICKERS_DIR: app.isPackaged
+      ? path.join(process.resourcesPath, "backend", "assets", "bundled-stickers")
+      : path.join(__dirname, "..", "backend", "assets", "bundled-stickers"),
   };
   // 关键：用 Electron 自身跑 node 模式时必须设置这个环境变量
   if (useElectron) spawnEnv.ELECTRON_RUN_AS_NODE = "1";

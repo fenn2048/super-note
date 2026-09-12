@@ -2817,6 +2817,95 @@ export const MIGRATIONS: Migration[] = [
       `);
     },
   },
+
+  // v51：家庭工作区 IM（群 + 成员私聊）
+  {
+    version: 51,
+    name: "im-conversations-messages-files",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS im_conversations (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          type TEXT NOT NULL,
+          title TEXT,
+          dmKey TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (workspaceId) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_im_conv_ws_group
+          ON im_conversations(workspaceId) WHERE type = 'group';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_im_conv_ws_dm
+          ON im_conversations(workspaceId, dmKey) WHERE type = 'dm';
+        CREATE INDEX IF NOT EXISTS idx_im_conv_ws_updated
+          ON im_conversations(workspaceId, updatedAt DESC);
+
+        CREATE TABLE IF NOT EXISTS im_members (
+          conversationId TEXT NOT NULL,
+          userId TEXT NOT NULL,
+          lastReadAt TEXT,
+          joinedAt TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (conversationId, userId),
+          FOREIGN KEY (conversationId) REFERENCES im_conversations(id) ON DELETE CASCADE,
+          FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_im_members_user
+          ON im_members(userId);
+
+        CREATE TABLE IF NOT EXISTS im_files (
+          id TEXT PRIMARY KEY,
+          conversationId TEXT NOT NULL,
+          uploaderId TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          mimeType TEXT,
+          size INTEGER NOT NULL DEFAULT 0,
+          path TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (conversationId) REFERENCES im_conversations(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_im_files_conv
+          ON im_files(conversationId);
+
+        CREATE TABLE IF NOT EXISTS im_messages (
+          id TEXT PRIMARY KEY,
+          conversationId TEXT NOT NULL,
+          senderId TEXT NOT NULL,
+          type TEXT NOT NULL,
+          body TEXT NOT NULL DEFAULT '',
+          fileId TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (conversationId) REFERENCES im_conversations(id) ON DELETE CASCADE,
+          FOREIGN KEY (fileId) REFERENCES im_files(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_im_messages_conv_created
+          ON im_messages(conversationId, createdAt DESC);
+      `);
+    },
+  },
+
+  // v52：工作区自定义表情
+  {
+    version: 52,
+    name: "im-workspace-stickers",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS im_stickers (
+          id TEXT PRIMARY KEY,
+          workspaceId TEXT NOT NULL,
+          uploaderId TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          mimeType TEXT,
+          size INTEGER NOT NULL DEFAULT 0,
+          path TEXT NOT NULL,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (workspaceId) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_im_stickers_ws
+          ON im_stickers(workspaceId, createdAt DESC);
+      `);
+    },
+  },
 ];
 
 /** 当前代码已知的最高 schema 版本（== MIGRATIONS 里 max(version)）。 */

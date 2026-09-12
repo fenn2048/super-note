@@ -142,15 +142,6 @@ export function propagateStatusDown(db: any, type: "plan" | "milestone" | "proje
         // but 'paused' is explicitly requested to sync.
     }
   } else if (type === "task") {
-    // Update sub-tasks (for general tasks)
-    const subTasks = db.prepare("SELECT id, title, status FROM tasks WHERE parentId = ?").all(id) as { id: string; title: string; status: string }[];
-    for (const st of subTasks) {
-        if (targetStatus === "paused" && st.status !== "paused") {
-            db.prepare("UPDATE tasks SET status = ?, updatedAt = datetime('now') WHERE id = ?").run(targetStatus, st.id);
-            logAudit(userId, "task", "task_status_auto_update", `父任务状态更新触发子任务「${st.title}」状态自动变为: ${getChineseStatus(targetStatus)}`, { targetType: "task", targetId: st.id });
-            // Recursively propagate
-            propagateStatusDown(db, "task", st.id, targetStatus, userId);
-        }
-    }
+    // legacy `tasks` 子任务写路径已冻结；项目任务无 parentId 树
   }
 }

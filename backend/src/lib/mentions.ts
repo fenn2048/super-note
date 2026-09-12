@@ -28,7 +28,7 @@ export function parseMentionedUsernames(text: string): string[] {
 /**
  * 解析 mentions 并写入数据库
  *
- * @param sourceType  - "note" | "diary" | "task"
+ * @param sourceType  - "note" | "diary" | "task" | "chat"
  * @param sourceId    - 源内容 ID
  * @param sourceTitle - 源内容标题（用于消息列表展示）
  * @param contentText - 文本内容（从中解析 @用户名）
@@ -36,7 +36,7 @@ export function parseMentionedUsernames(text: string): string[] {
  * @returns 创建的 mentions 数量和被提及的用户名列表
  */
 export function createMentions(
-  sourceType: "note" | "diary" | "task",
+  sourceType: "note" | "diary" | "task" | "chat",
   sourceId: string,
   sourceTitle: string | null,
   contentText: string,
@@ -80,7 +80,7 @@ export function createMentions(
 
     try {
       const { broadcastToUser } = require("../services/realtime");
-      const unread = db.prepare("SELECT COUNT(*) as count FROM mentions WHERE mentionedUserId = ? AND readAt IS NULL").get(target.id) as { count: number };
+      const unread = db.prepare("SELECT COUNT(*) as count FROM notifications WHERE userId = ? AND readAt IS NULL").get(target.id) as { count: number };
       broadcastToUser(target.id, {
         type: "notification:received",
         unreadCount: unread.count,
@@ -102,6 +102,72 @@ export function createMentions(
   }
 
   return { created: created.length, mentioned: created };
+}
+
+/**
+ * 群聊 @提及：每条消息独立通知，不按会话去重。
+ * 只通知会话成员（allowedUserIds），忽略 @su / 非成员。
+ */
+export function createChatMentions(
+  conversationId: string,
+  sourceTitle: string | null,
+  contentText: string,
+  mentionedByUserId: string,
+  allowedUserIds: Set<string>,
+): string[] {
+  const db = getDb();
+  const usernames = parseMentionedUsernames(contentText);
+  if (usernames.length === 0 || allowedUserIds.size === 0) return [];
+
+  const actor = db
+    .prepare("SELECT displayName, username FROM users WHERE id = ?")
+    .get(mentionedByUserId) as { displayName: string | null; username: string } | undefined;
+  const actorName = actor?.displayName || actor?.username || "某人";
+
+  const mentionedIds: string[] = [];
+  for (const username of usernames) {
+    const target = db
+      .prepare("SELECT id FROM users WHERE username = ? AND isDisabled = 0")
+      .get(username) as { id: string } | undefined;
+    if (!target) continue;
+    if (target.id === mentionedByUserId) continue;
+    if (!allowedUserIds.has(target.id)) continue;
+    if (mentionedIds.includes(target.id)) continue;
+
+    const id = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO mentions (id, sourceType, sourceId, sourceTitle, mentionedUserId, mentionedByUserId, createdAt)
+       VALUES (?, 'chat', ?, ?, ?, ?, datetime('now'))`,
+    ).run(id, conversationId, sourceTitle || null, target.id, mentionedByUserId);
+    db.prepare(
+      `INSERT INTO notifications (id, userId, type, sourceType, sourceId, sourceTitle, actorId, actorName, createdAt)
+       VALUES (?, ?, 'mention', 'chat', ?, ?, ?, ?, datetime('now'))`,
+    ).run(id, target.id, conversationId, sourceTitle || null, mentionedByUserId, actorName);
+
+    try {
+      const { broadcastToUser } = require("../services/realtime");
+      const unread = db
+        .prepare("SELECT COUNT(*) as count FROM notifications WHERE userId = ? AND readAt IS NULL")
+        .get(target.id) as { count: number };
+      broadcastToUser(target.id, {
+        type: "notification:received",
+        unreadCount: unread.count,
+        notification: {
+          id,
+          type: "mention",
+          sourceType: "chat",
+          sourceId: conversationId,
+          sourceTitle: sourceTitle || null,
+          actorId: mentionedByUserId,
+          actorName,
+        },
+      });
+    } catch (e) {
+      console.warn("[mentions] failed to broadcast chat mention:", e);
+    }
+    mentionedIds.push(target.id);
+  }
+  return mentionedIds;
 }
 
 /**
@@ -160,7 +226,7 @@ export function broadcastToWorkspace(
     // 写入后立即向该用户发送实时通知推送
     try {
       const { broadcastToUser } = require("../services/realtime");
-      const unread = db.prepare("SELECT COUNT(*) as count FROM mentions WHERE mentionedUserId = ? AND readAt IS NULL").get(member.userId) as { count: number };
+      const unread = db.prepare("SELECT COUNT(*) as count FROM notifications WHERE userId = ? AND readAt IS NULL").get(member.userId) as { count: number };
       broadcastToUser(member.userId, {
         type: "notification:received",
         unreadCount: unread.count,

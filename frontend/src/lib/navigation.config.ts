@@ -164,6 +164,17 @@ export const NAV_MODULES: NavModule[] = [
     group: "secondary",
     moreDesc: "家人病历本、治疗时间轴与 OCR 录入",
   },
+  {
+    id: "chat",
+    mode: "chat",
+    labelKey: "sidebar.chat",
+    labelFallback: "聊天",
+    feature: "chat",
+    tier: 1,
+    placements: ["desktopRail", "mobileMore", "cmdk"],
+    group: "primary",
+    moreDesc: "家庭群与成员私聊",
+  },
   // AI：嵌入写作 / 说说 @su / 复盘，非独立目的地（决策：嵌入）
   // 保留 Cmd-K / 直接 hash 可达；不占 Rail 与「我的」主宫格
   {
@@ -288,9 +299,56 @@ function isModuleVisible(
   return isFeatureEnabled(m, features) && isModuleAllowedByPack(m.id);
 }
 
+/** `#/chat` 列表；`#/chat/<id>` 打开指定会话。其它 hash 返回 null。 */
+export function parseChatHash(
+  hash: string,
+): { conversationId: string | null } | null {
+  if (hash === "#/chat") return { conversationId: null };
+  const m = /^#\/chat\/([^/?#]+)/.exec(hash);
+  if (!m) return null;
+  try {
+    return { conversationId: decodeURIComponent(m[1]) || null };
+  } catch {
+    return { conversationId: m[1] };
+  }
+}
+
+export function openChat(conversationId?: string | null): void {
+  const next = conversationId ? `#/chat/${encodeURIComponent(conversationId)}` : "#/chat";
+  if (typeof window !== "undefined" && window.location.hash !== next) {
+    window.location.hash = next;
+  }
+}
+
+/** `#/tasks` 列表；`#/tasks/<id>` 打开指定任务。其它 hash 返回 null。 */
+export function parseTasksHash(
+  hash: string,
+): { taskId: string | null } | null {
+  if (hash === "#/tasks") return { taskId: null };
+  const m = /^#\/tasks\/([^/?#]+)/.exec(hash);
+  if (!m) return null;
+  try {
+    return { taskId: decodeURIComponent(m[1]) || null };
+  } catch {
+    return { taskId: m[1] };
+  }
+}
+
+function fireOpenProjectTask(taskId: string): void {
+  const fire = () => {
+    window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: taskId }));
+  };
+  fire();
+  if (typeof window !== "undefined") {
+    window.setTimeout(fire, 0);
+    window.setTimeout(fire, 250);
+  }
+}
+
 /**
  * 进入「任务」统一入口：项目模块 + 我的任务过滤器。
  * 供 NavRail / 底栏 / Cmd-K / 旧 viewMode=tasks 重定向共用。
+ * hash 落在 `#/tasks`（已是 `#/tasks/...` 则不覆盖）。
  */
 export function openTasksEntry(): void {
   const filter = { type: "my-tasks" as const };
@@ -302,8 +360,11 @@ export function openTasksEntry(): void {
   window.dispatchEvent(
     new CustomEvent("super:project-filter-changed", { detail: filter }),
   );
-  // 懒加载 ProjectCenter 时监听器可能尚未注册：下一帧再派一次，确保落到 my-tasks
   if (typeof window !== "undefined") {
+    const h = window.location.hash;
+    if (!h.startsWith("#/tasks")) {
+      window.location.hash = "#/tasks";
+    }
     window.setTimeout(() => {
       try {
         sessionStorage.setItem("super-active-project-filter", JSON.stringify(filter));
@@ -312,6 +373,27 @@ export function openTasksEntry(): void {
         new CustomEvent("super:project-filter-changed", { detail: filter }),
       );
     }, 0);
+  }
+}
+
+/** 打开任务模块并弹出指定任务详情。深链 `#/tasks/<id>`。 */
+export function openTaskById(taskId: string): void {
+  if (!taskId) return;
+  if (typeof window !== "undefined") {
+    const target = `#/tasks/${encodeURIComponent(taskId)}`;
+    if (window.location.hash !== target) {
+      window.location.hash = target;
+    }
+  }
+  openTasksEntry();
+  fireOpenProjectTask(taskId);
+}
+
+/** 关掉任务详情时，把 `#/tasks/<id>` 收回 `#/tasks`。 */
+export function clearTaskDeepLink(): void {
+  if (typeof window === "undefined") return;
+  if (window.location.hash.startsWith("#/tasks/")) {
+    window.location.hash = "#/tasks";
   }
 }
 
@@ -413,6 +495,7 @@ export function isModuleActive(
       viewMode === "mentions" ||
       viewMode === "finance" ||
       viewMode === "health" ||
+      viewMode === "chat" ||
       viewMode === "settings" ||
       viewMode === "library" ||
       viewMode === "files" ||
@@ -507,7 +590,7 @@ export function shouldShowDesktopFAB(opts: {
   if (opts.blocked) return false;
   if (opts.isBookReading) return false;
   if (opts.isMediaTheater) return false;
-  if (opts.viewMode === "finance" || opts.viewMode === "health") return false;
+  if (opts.viewMode === "finance" || opts.viewMode === "health" || opts.viewMode === "chat") return false;
   return true;
 }
 

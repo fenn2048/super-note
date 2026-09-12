@@ -26,11 +26,11 @@ public final class NotificationChannels {
         if (nm == null) return;
 
         create(nm, SYNC, "后台同步", "后台消息轮询与同步状态（常驻通知）",
-                NotificationManager.IMPORTANCE_LOW, false, false);
+                NotificationManager.IMPORTANCE_LOW, false, false, false);
         create(nm, MESSAGES, "消息与提及", "家庭协作消息、@提及等",
-                NotificationManager.IMPORTANCE_HIGH, true, true);
+                NotificationManager.IMPORTANCE_HIGH, true, true, true);
         create(nm, TASKS, "任务提醒", "任务截止与提醒时间到点通知",
-                NotificationManager.IMPORTANCE_HIGH, true, true);
+                NotificationManager.IMPORTANCE_HIGH, true, true, true);
         // 媒体通道：锁屏可见 + 默认优先级，便于系统 MediaStyle 控件展示。
         // 若旧版以 IMPORTANCE_LOW 建过同 id，系统不会更新属性 → 先删再建。
         try {
@@ -64,14 +64,16 @@ public final class NotificationChannels {
             String description,
             int importance,
             boolean lights,
-            boolean vibration
+            boolean vibration,
+            boolean showBadge
     ) {
         NotificationChannel ch = new NotificationChannel(id, name, importance);
         ch.setDescription(description);
         ch.enableLights(lights);
         ch.enableVibration(vibration);
-        if (importance <= NotificationManager.IMPORTANCE_LOW) {
-            ch.setShowBadge(false);
+        ch.setShowBadge(showBadge);
+        if (importance >= NotificationManager.IMPORTANCE_DEFAULT) {
+            ch.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
         }
         nm.createNotificationChannel(ch);
     }

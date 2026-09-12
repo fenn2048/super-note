@@ -1843,3 +1843,27 @@ export function getBackupManager(): BackupManager {
   }
   return _manager;
 }
+
+let noteVersionsPruneTimer: NodeJS.Timeout | null = null;
+
+/** 启动后 45s 清一轮，之后每天一次（不依赖自动备份是否开启） */
+export function startNoteVersionsPruneScheduler(): void {
+  if (noteVersionsPruneTimer) return;
+  const run = () => {
+    try {
+      getBackupManager().pruneNoteVersions();
+    } catch (e) {
+      console.warn("[Backup] scheduled pruneNoteVersions failed:", e);
+    }
+  };
+  setTimeout(run, 45_000).unref?.();
+  noteVersionsPruneTimer = setInterval(run, 24 * 60 * 60 * 1000);
+  noteVersionsPruneTimer.unref?.();
+}
+
+export function stopNoteVersionsPruneScheduler(): void {
+  if (noteVersionsPruneTimer) {
+    clearInterval(noteVersionsPruneTimer);
+    noteVersionsPruneTimer = null;
+  }
+}

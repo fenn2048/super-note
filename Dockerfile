@@ -53,6 +53,8 @@ COPY frontend/index.html \
 COPY frontend/src ./frontend/src
 COPY frontend/public ./frontend/public
 
+# 镜像里只跑 vite build：tsc -b 失败时 vite 不会执行，最终 stage 会报
+# COPY frontend/dist not found（BuildKit 用的是失败 RUN 之前的层）。
 RUN --mount=type=cache,target=/root/.npm \
     cd frontend \
     && if [ -n "${TARGETARCH}" ]; then \
@@ -67,7 +69,8 @@ RUN --mount=type=cache,target=/root/.npm \
         npm install "$ROLLUP_PKG" --no-save --no-audit --no-fund 2>/dev/null || true; \
       fi; \
     fi \
-    && npm run build \
+    && npx vite build \
+    && test -f dist/index.html \
     && find dist -name '*.map' -type f -delete 2>/dev/null || true \
     && find dist -type d -name 'node_modules' -prune -o -type f -name '*.LICENSE.txt' -delete 2>/dev/null || true
 
@@ -132,6 +135,8 @@ COPY --from=backend-build /app/backend/dist/index.js ./backend/dist/index.js
 COPY --from=backend-build /app/backend/dist/package.json ./backend/dist/package.json
 COPY --from=backend-build /app/backend/dist/node_modules ./backend/node_modules
 COPY --from=backend-build /app/backend/templates ./backend/templates
+# 默认聊天表情包（~74MB）。放在 frontend dist 之前，避免前端小改动重拷这一层。
+COPY backend/assets/bundled-stickers ./backend/assets/bundled-stickers
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 RUN mkdir -p /app/data
@@ -147,6 +152,7 @@ ENV SUPER_BUILD_TIME=${BUILD_DATE} \
     NODE_ENV=production \
     DB_PATH=/app/data/super-note.db \
     PORT=3001 \
+    BUNDLED_STICKERS_DIR=/app/backend/assets/bundled-stickers \
     # NODE_PATH 让 require('better-sqlite3') 从 /app/backend/node_modules 解析
     NODE_PATH=/app/backend/node_modules
 

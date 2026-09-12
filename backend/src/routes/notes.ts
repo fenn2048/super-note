@@ -63,7 +63,9 @@ app.get("/", (c) => {
   //     的极端窗口期 → 名字给 null，前端按"未知用户"渲染；
   //   - 与 diaries / books 等列表契约对齐：COALESCE(displayName, username)。
   let query = `SELECT notes.id, notes.userId, notes.notebookId, notes.workspaceId, notes.title,
-    notes.contentText, notes.isPinned,
+    substr(notes.contentText, 1, 240) AS contentText,
+    length(notes.contentText) AS contentLength,
+    notes.isPinned,
     CASE WHEN EXISTS(SELECT 1 FROM favorites f WHERE f.noteId = notes.id AND f.userId = ?) THEN 1 ELSE 0 END AS isFavorite,
     notes.isLocked, notes.isArchived, notes.isTrashed, notes.version, notes.createdAt, notes.updatedAt,
     notes.visibility,

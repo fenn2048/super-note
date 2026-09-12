@@ -29,6 +29,7 @@ import {
   Pin,
   MoreHorizontal,
   Heart,
+  Share2,
   Video,
   Menu,
   ScanText,
@@ -37,6 +38,8 @@ import {
   BookOpen,
 } from "lucide-react";
 import { api, getCurrentWorkspace, getBaseUrl, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
+import { ShareConversationSheet } from "@/components/chat/ShareToChat";
+import { isFamilyWorkspace } from "@/lib/imCard";
 import { realtime } from "@/lib/realtime";
 import { toast } from "@/lib/toast";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
@@ -2057,6 +2060,7 @@ function DiaryCard({
   }, [newCommentText, showMobileCommentInput]);
   const commentMentionTrigger = useMentionState(newCommentText, commentCursorPos);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [shareToChatOpen, setShareToChatOpen] = useState(false);
   const mountRef = useRef(true);
   useEffect(() => { return () => { mountRef.current = false; }; }, []);
 
@@ -2566,6 +2570,20 @@ function DiaryCard({
                           <span>{item.isPinned ? "取消置顶" : "置顶"}</span>
                         </button>
 
+                        {isFamilyWorkspace(getCurrentWorkspace()) && (
+                          <button
+                            role="menuitem"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowActionMenu(false);
+                              setShareToChatOpen(true);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium flex items-center gap-1 hover:bg-white/10 active:bg-white/15 transition-colors whitespace-nowrap shrink-0"
+                          >
+                            <Share2 size={12} />
+                            <span>分享到聊天</span>
+                          </button>
+                        )}
                         {currentUser && item.userId === currentUser.id && (
                           <button
                             role="menuitem"
@@ -3026,6 +3044,11 @@ function DiaryCard({
           />
         )}
       </AnimatePresence>
+      <ShareConversationSheet
+        open={shareToChatOpen}
+        onClose={() => setShareToChatOpen(false)}
+        card={{ kind: "diary", id: item.id }}
+      />
     </>
   );
 }

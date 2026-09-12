@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import { toast } from "@/lib/toast";
+import { clearTaskDeepLink } from "@/lib/navigation.config";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import TaskDetailModal from "./TaskDetailModal";
@@ -159,6 +160,7 @@ export default function ProjectKanban({
     setActiveTask(null);
     onClearActiveTaskId?.();
     setShowColorDropdown(false);
+    clearTaskDeepLink();
   };
 
   // Listen to initialActiveTaskId

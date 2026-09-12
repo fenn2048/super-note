@@ -1,21 +1,31 @@
-import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
+import React, { Suspense, useCallback, useRef, useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star, Pin, Trash2, Cloud, CloudOff, RefreshCw, Check, Loader2, ChevronLeft, FolderInput, ChevronRight, ChevronDown, X, ListTree, Lock, Unlock, Tag as TagIcon, Type, MoreHorizontal, Share2, History, MessageCircle, FileCode, Eye, Pencil, CloudUpload, PanelLeft, Paperclip, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import TiptapEditor, { HeadingItem } from "@/components/TiptapEditor";
-import MarkdownEditor from "@/components/MarkdownEditor";
-import HtmlPreviewPane, { isFullHtmlDocument } from "@/components/HtmlPreviewPane";
-import MarkdownPreviewPane from "@/components/MarkdownPreviewPane";
-import type { NoteEditorHandle } from "@/components/editors/types";
+const TiptapEditor = React.lazy(() => import("@/components/TiptapEditor"));
+const MarkdownEditor = React.lazy(() => import("@/components/MarkdownEditor"));
+const HtmlPreviewPane = React.lazy(() =>
+  import("@/components/HtmlPreviewPane").then((m) => ({ default: m.default })),
+);
+const MarkdownPreviewPane = React.lazy(() => import("@/components/MarkdownPreviewPane"));
+import type { NoteEditorHandle, NoteEditorHeading } from "@/components/editors/types";
+
+function isFullHtmlDocument(content: string): boolean {
+  const stripped = (content || "").trimStart().replace(/^(\s*<!--[\s\S]*?-->\s*)+/, "");
+  const lower = stripped.slice(0, 30).toLowerCase();
+  return lower.startsWith("<!doctype") || lower.startsWith("<html");
+}
 import { useApp, useAppActions, SyncStatus } from "@/store/AppContext";
-import { api } from "@/lib/api";
+import { api, getCurrentWorkspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Tag, Notebook } from "@/types";
 import { useTranslation } from "react-i18next";
 import { haptic } from "@/hooks/useCapacitor";
 import { toast } from "@/lib/toast";
 import ShareModal from "@/components/ShareModal";
+import { ShareConversationSheet } from "@/components/chat/ShareToChat";
+import { isFamilyWorkspace } from "@/lib/imCard";
 import EditorCollabMenu from "@/components/EditorCollabMenu";
 import VisibilityToggle from "@/components/common/VisibilityToggle";
 import VersionHistoryPanel from "@/components/VersionHistoryPanel";
@@ -91,7 +101,7 @@ export default function EditorPane() {
   // 必须能看到最新值，否则在偏好刚开启之后还会向"本应锁的笔记"写盘 / 写 yDoc。
   const viewLockedIdsRef = useRef(viewLockedIds);
   viewLockedIdsRef.current = viewLockedIds;
-  const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const [headings, setHeadings] = useState<NoteEditorHeading[]>([]);
   const scrollToRef = useRef<((pos: number) => void) | null>(null);
   const { t } = useTranslation();
 
@@ -134,6 +144,7 @@ export default function EditorPane() {
   const [showMobileMoveMenu, setShowMobileMoveMenu] = useState(false);
   const [showMobileOutline, setShowMobileOutline] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showShareToChat, setShowShareToChat] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCommentPanel, setShowCommentPanel] = useState(false);
   const [showAttachmentsPanel, setShowAttachmentsPanel] = useState(false);
@@ -1978,6 +1989,20 @@ export default function EditorPane() {
             <Share2 size={18} className="text-emerald-500 shrink-0" />
             <span>分享</span>
           </button>
+          {isFamilyWorkspace(getCurrentWorkspace()) && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowShareToChat(true);
+                setShowMobileMenu(false);
+                setShowMobileMoveMenu(false);
+              }}
+              className="w-full min-h-12 flex items-center gap-3 px-3 rounded-xl text-sm text-tx-primary active:bg-app-hover transition-colors duration-press ease-out"
+            >
+              <MessageCircle size={18} className="text-accent-primary shrink-0" />
+              <span>分享到聊天</span>
+            </button>
+          )}
 
           <div className="h-px bg-app-border/60 mx-2 my-1" />
 
@@ -2491,6 +2516,13 @@ export default function EditorPane() {
           {/* ErrorBoundary 包裹三种编辑器：切笔记为 key，崩溃后自动重置；
               底层还能打到 console 的 [EditorErrorBoundary] 日志与 window.__lastDirtyDoc */}
           <EditorErrorBoundary resetKey={activeNote.id}>
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                <Loader2 size={20} className="animate-spin text-accent-primary" />
+              </div>
+            }
+          >
           {htmlPreviewMode ? (
             <HtmlPreviewPane
               key={`html-${activeNote.id}`}
@@ -2542,6 +2574,7 @@ export default function EditorPane() {
               editable={!effectiveLocked && !modeSwitching && !readingMode}
             />
           )}
+          </Suspense>
           </EditorErrorBoundary>
           {/*
             UX1/UX2：编辑器切换中 overlay。
@@ -2573,6 +2606,13 @@ export default function EditorPane() {
           noteId={activeNote.id}
           noteTitle={activeNote.title}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+      {activeNote && (
+        <ShareConversationSheet
+          open={showShareToChat}
+          onClose={() => setShowShareToChat(false)}
+          card={{ kind: "note", id: activeNote.id }}
         />
       )}
 
@@ -2721,7 +2761,7 @@ function OutlinePanel({
   headings,
   onSelect,
   onClose}: {
-  headings: HeadingItem[];
+  headings: NoteEditorHeading[];
   onSelect: (pos: number) => void;
   onClose: () => void;
 }) {

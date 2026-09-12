@@ -53,7 +53,7 @@ export default function ReminderOffsetPicker({
         </select>
       </div>
       <p className="text-[10px] text-tx-tertiary leading-snug pl-0.5">
-        将在「提前量」与「截止日当天」各提醒一次（同时刻自动去重）
+        将在「提前量」与「截止日当天」各提醒一次（同时刻自动去重）。到期会出现在任务红点、消息盒子，并在已授权时弹出系统通知。
       </p>
     </div>
   );

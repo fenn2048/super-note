@@ -121,6 +121,10 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      "/emojis/pack": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
       // 后端的实时协作 WebSocket（Y.js presence / 协同编辑）也必须代理，
       // 否则手机端 `new WebSocket("/ws")` 会落到 vite 自己的 HMR server 上。
       "/ws": {

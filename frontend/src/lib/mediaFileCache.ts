@@ -29,7 +29,13 @@ export interface MediaCacheRecord extends MediaCacheMeta {
 export interface MediaCacheStats {
   count: number;
   totalBytes: number;
+  maxBytes: number;
+  maxItems: number;
 }
+
+/** 本地媒体缓存硬顶：超出按 cachedAt 最旧淘汰（不含正在播放的 keepId） */
+export const MAX_MEDIA_CACHE_BYTES = 500 * 1024 * 1024;
+export const MAX_MEDIA_CACHE_ITEMS = 50;
 
 interface MediaCacheSchema extends DBSchema {
   mediaFiles: {
@@ -320,6 +326,7 @@ export async function putMediaFile(
   }
   if (!cachedIdSet) cachedIdSet = new Set();
   cachedIdSet.add(record.mediaId);
+  await evictMediaCacheIfNeeded(record.mediaId);
   // 换文件后旧 object URL 失效
   const oldUrl = objectUrls.get(record.mediaId);
   if (oldUrl) {
@@ -403,7 +410,29 @@ export async function getMediaCacheStats(): Promise<MediaCacheStats> {
   return {
     count: rows.length,
     totalBytes: rows.reduce((sum, r) => sum + (r.size || 0), 0),
+    maxBytes: MAX_MEDIA_CACHE_BYTES,
+    maxItems: MAX_MEDIA_CACHE_ITEMS,
   };
+}
+
+async function evictMediaCacheIfNeeded(keepId?: string): Promise<void> {
+  const rows = await listMediaCacheMeta();
+  let total = rows.reduce((sum, r) => sum + (r.size || 0), 0);
+  if (rows.length <= MAX_MEDIA_CACHE_ITEMS && total <= MAX_MEDIA_CACHE_BYTES) return;
+
+  const oldest = [...rows].sort((a, b) => a.cachedAt - b.cachedAt);
+  const toDelete: string[] = [];
+  for (const row of oldest) {
+    if (rows.length - toDelete.length <= MAX_MEDIA_CACHE_ITEMS && total <= MAX_MEDIA_CACHE_BYTES) {
+      break;
+    }
+    if (keepId && row.mediaId === keepId) continue;
+    toDelete.push(row.mediaId);
+    total -= row.size || 0;
+  }
+  if (toDelete.length > 0) {
+    await deleteMediaFiles(toDelete);
+  }
 }
 
 export async function clearAllMediaFiles(): Promise<void> {
