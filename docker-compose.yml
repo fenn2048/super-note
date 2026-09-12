@@ -5,9 +5,15 @@
 # 可选能力通过 profile 启用：
 #
 #   docker compose up -d                              # 仅 core
-#   docker compose --profile ai up -d                 # + Redis + Ollama
+#   docker compose --profile ocr up -d                # + PaddleOCR（病历/药盒秒级识字）
+#   docker compose --profile ai up -d                 # + Redis + Ollama（聊天大模型，非 OCR）
 #   docker compose --profile media up -d              # + OpenList
 #   docker compose --profile full up -d               # 全家桶
+#
+# 病历 OCR 推荐：
+#   PADDLEOCR_URL=http://paddleocr:8868
+#   HEALTH_OCR_ENGINE=paddle
+#   docker compose --profile ocr up -d
 #
 # 多实例 / 跨进程广播与 AI 异步队列需要 Redis 时，请显式设置：
 #   REDIS_URL=redis://redis:6379
@@ -81,7 +87,10 @@ services:
       # 启用上面的独立备份卷后，**必须**同步设置以下变量，否则备份仍会写到 data 卷：
       #- BACKUP_DIR=/app/backups
       # --- 可选能力（启用对应 profile 时取消注释或写入 .env）---
-      # AI / 多实例：需要 redis + 可选 ollama
+      # 病历 OCR：PaddleOCR 侧车（推荐，秒级中文，无需大模型）
+      # - PADDLEOCR_URL=http://paddleocr:8868
+      # - HEALTH_OCR_ENGINE=paddle
+      # AI / 多实例：需要 redis + 可选 ollama（聊天用，非 OCR 默认）
       # - REDIS_URL=redis://redis:6379
       # - OLLAMA_URL=http://ollama:11434
       # 媒体库：需要 openlist
@@ -89,9 +98,12 @@ services:
       # - MEDIA_STORAGE_URL=http://openlist:5244
       # - OPENLIST_TOKEN=
       # - MEDIA_STORAGE_TOKEN=
-      # 通过环境变量透传（用户在 .env 里配置时生效；未设则后端走 memory Redis / 无 Ollama）
+      # 通过环境变量透传（用户在 .env 里配置时生效）
       - REDIS_URL=${REDIS_URL:-}
       - OLLAMA_URL=${OLLAMA_URL:-}
+      - PADDLEOCR_URL=${PADDLEOCR_URL:-}
+      - HEALTH_OCR_ENGINE=${HEALTH_OCR_ENGINE:-paddle}
+      - PADDLEOCR_TIMEOUT_MS=${PADDLEOCR_TIMEOUT_MS:-60000}
       - OPENLIST_URL=${OPENLIST_URL:-}
       - MEDIA_STORAGE_URL=${MEDIA_STORAGE_URL:-}
       - OPENLIST_TOKEN=${OPENLIST_TOKEN:-}
@@ -104,7 +116,33 @@ services:
           memory: 1024M
 
   # ============================================================================
-  # Ollama 本地 LLM 服务 — Qwen2.5:1.8b
+  # 中文 OCR 侧车（RapidOCR + ONNXRuntime，服务名仍叫 paddleocr）
+  # 启用：docker compose --profile ocr up -d
+  # .env: PADDLEOCR_URL=http://paddleocr:8868
+  # 不使用 paddlepaddle，避免部分 Intel x86 上 SIGILL
+  # ----------------------------------------------------------------------------
+  paddleocr:
+    profiles: ["ocr", "full"]
+    build:
+      context: ./docker/paddleocr
+      dockerfile: Dockerfile
+    image: ${PADDLEOCR_IMAGE:-super-note-paddleocr:latest}
+    container_name: super-note-paddleocr
+    restart: unless-stopped
+    # ports:
+    #   - "8868:8868"
+    environment:
+      OCR_LANG: ch
+      USE_ANGLE_CLS: "true"
+      CPU_THREADS: ${PADDLEOCR_CPU_THREADS:-4}
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 2G
+
+  # ============================================================================
+  # Ollama 本地 LLM 服务 — Qwen2.5:1.8b（聊天/写作，默认不用于病历 OCR）
   # 启用：docker compose --profile ai up -d
   #       或 docker compose --profile full up -d
   # ----------------------------------------------------------------------------

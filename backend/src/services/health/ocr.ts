@@ -1,9 +1,8 @@
 /**
  * 健康档案 OCR
  * ---------------------------------------------------------------------------
- * 1) 优先：Vision 多模态模型（image_url）直接结构化
- * 2) 回退：当前模型不支持图片时 → 本地 Tesseract 提字 → 文本 LLM 结构化
- * 3) 智谱 GLM 等纯文本模型（如 glm-4.7-flash）走回退路径
+ * 默认：PaddleOCR 侧车提字 + 轻量启发式结构化（无大模型，秒级）
+ * 可选：HEALTH_OCR_ENGINE=vision 时走多模态 LLM；auto 时 Paddle 失败再尝试 Vision/Tesseract
  */
 import type Database from "better-sqlite3";
 import fs from "fs";
@@ -15,6 +14,15 @@ import type {
   HealthOcrStructured,
   MedicineOcrStructured,
 } from "./types.js";
+import {
+  structureHealthFromOcrText,
+  structureMedicineFromOcrText,
+} from "./ocr-heuristics.js";
+import {
+  callPaddleOcr,
+  getHealthOcrEngine,
+  isPaddleOcrConfigured,
+} from "./paddle-ocr-client.js";
 import {
   buildMedicineOcrPrompt,
   buildOcrSystemPrompt,
@@ -298,6 +306,55 @@ async function tryVisionStructure(
   throw lastErr || new Error("Vision OCR 失败");
 }
 
+/** 压缩图片供 OCR（Paddle / Vision 共用） */
+async function prepareImageForOcr(
+  buf: Buffer,
+  maxSide = 1600,
+  quality = 85,
+): Promise<Buffer> {
+  try {
+    const out = await sharp(buf)
+      .rotate()
+      .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality })
+      .toBuffer();
+    return Buffer.from(out);
+  } catch {
+    return buf;
+  }
+}
+
+/** Paddle 提字 + 启发式结构化（默认路径） */
+async function runPaddleHealthImage(
+  buf: Buffer,
+  documentHint?: string,
+): Promise<{ rawText: string; structured: HealthOcrStructured; model: string }> {
+  const prepared = await prepareImageForOcr(buf, 2000, 90);
+  const r = await callPaddleOcr(prepared);
+  const structured = structureHealthFromOcrText(r.text, documentHint, {
+    avgScore: r.avgScore,
+    engineLabel: "PaddleOCR",
+  });
+  return {
+    rawText: r.text,
+    structured,
+    model: "paddleocr+heuristics",
+  };
+}
+
+async function runPaddleMedicineImage(
+  buf: Buffer,
+): Promise<{ rawText: string; structured: MedicineOcrStructured; model: string }> {
+  const prepared = await prepareImageForOcr(buf, 1600, 88);
+  const r = await callPaddleOcr(prepared);
+  const structured = structureMedicineFromOcrText(r.text, { avgScore: r.avgScore });
+  return {
+    rawText: r.text,
+    structured,
+    model: "paddleocr+heuristics",
+  };
+}
+
 export async function runHealthOcr(
   db: Database.Database,
   attachment: HealthAttachmentRow,
@@ -307,10 +364,8 @@ export async function runHealthOcr(
   structured: HealthOcrStructured;
   model: string;
 }> {
+  const engine = getHealthOcrEngine();
   const cfg = loadAiConfig(db);
-  if (!cfg) {
-    throw new Error("未配置 AI 服务。请在设置中配置 AI 模型后再试。");
-  }
 
   const absPath = path.join(getAttachmentsDir(), attachment.path);
   if (!fs.existsSync(absPath)) {
@@ -325,23 +380,47 @@ export async function runHealthOcr(
   const isImage = mime.startsWith("image/");
   const isPdf = mime === "application/pdf";
 
-  // ── 图片：Vision 优先，失败则本地 OCR + 文本 LLM ──
+  // ── 图片 ──
   if (isImage) {
-    // 压缩过长边，控制 data URL 体积
-    let visionBuf: Buffer = buf;
-    try {
-      const out = await sharp(buf)
-        .rotate()
-        .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 85 })
-        .toBuffer();
-      visionBuf = Buffer.from(out);
-    } catch {
-      visionBuf = buf;
+    // 默认 / auto：PaddleOCR（无需 AI 配置）
+    if (engine === "paddle" || engine === "auto") {
+      if (isPaddleOcrConfigured()) {
+        try {
+          return await runPaddleHealthImage(buf, documentHint);
+        } catch (e: any) {
+          const msg = e?.message || String(e);
+          if (engine === "paddle") throw e instanceof Error ? e : new Error(msg);
+          console.warn("[health.ocr] paddle failed, try vision/local:", msg.slice(0, 200));
+        }
+      } else if (engine === "paddle") {
+        throw new Error(
+          "未配置 PADDLEOCR_URL。请启动 docker 中的 paddleocr 服务并设置环境变量。",
+        );
+      }
     }
+
+    // vision 或 auto 回退：需要 AI
+    if (!cfg) {
+      // 无 AI 时最后尝试 tesseract + 启发式（不调用 LLM）
+      try {
+        const ocrText = await runLocalImageOcr(buf);
+        return {
+          rawText: ocrText,
+          structured: structureHealthFromOcrText(ocrText, documentHint, {
+            engineLabel: "Tesseract",
+          }),
+          model: "tesseract+heuristics",
+        };
+      } catch {
+        throw new Error(
+          "OCR 失败：PaddleOCR 不可用且未配置 AI。请设置 PADDLEOCR_URL 或配置 AI 模型。",
+        );
+      }
+    }
+
+    const visionBuf = await prepareImageForOcr(buf, 1600, 85);
     const imageDataUrl = mimeToDataUrl("image/jpeg", visionBuf);
 
-    // 若当前模型几乎肯定不支持 vision，且无 zhipu 候选，直接本地 OCR
     const skipVision =
       looksLikeTextOnlyModel(cfg.ai_model) &&
       candidateVisionModels(cfg).every((m) => looksLikeTextOnlyModel(m) || m === cfg.ai_model) &&
@@ -353,27 +432,30 @@ export async function runHealthOcr(
         return await tryVisionStructure(cfg, imageDataUrl, documentHint);
       } catch (e: any) {
         const msg = e?.message || String(e);
-        // 非 vision 不支持类错误：若完全失败再抛；vision 不支持则回退
-        if (!isVisionUnsupportedError(msg) && !looksLikeTextOnlyModel(cfg.ai_model)) {
-          // 网络/鉴权等：仍尝试本地 OCR 兜底
-          console.warn("[health.ocr] vision failed, fallback to local OCR:", msg.slice(0, 200));
-        } else {
-          console.warn("[health.ocr] model has no vision, fallback to local OCR:", msg.slice(0, 200));
-        }
+        console.warn("[health.ocr] vision failed, fallback:", msg.slice(0, 200));
       }
     }
 
-    // 本地 OCR 回退
     const ocrText = await runLocalImageOcr(buf);
-    return structureFromText(
-      cfg,
-      ocrText,
-      documentHint,
-      "以下文字由本地 OCR 从图片提取（当前配置的 AI 模型不支持直接识图）。请结构化为 JSON，不要编造原文中没有的信息：",
-    );
+    try {
+      return await structureFromText(
+        cfg,
+        ocrText,
+        documentHint,
+        "以下文字由本地 OCR 从图片提取。请结构化为 JSON，不要编造原文中没有的信息：",
+      );
+    } catch {
+      return {
+        rawText: ocrText,
+        structured: structureHealthFromOcrText(ocrText, documentHint, {
+          engineLabel: "Tesseract",
+        }),
+        model: "tesseract+heuristics",
+      };
+    }
   }
 
-  // ── PDF：抽文本 → 结构化；失败提示转图 ──
+  // ── PDF：抽文本层；无 AI 时用启发式 ──
   if (isPdf) {
     let pdfText = "";
     try {
@@ -399,7 +481,16 @@ export async function runHealthOcr(
       pdfText = "";
     }
     if (pdfText.length > 40) {
-      return structureFromText(cfg, pdfText, documentHint, "以下是从 PDF 提取的文本，请结构化为 JSON：");
+      if (cfg && engine === "vision") {
+        return structureFromText(cfg, pdfText, documentHint, "以下是从 PDF 提取的文本，请结构化为 JSON：");
+      }
+      return {
+        rawText: pdfText,
+        structured: structureHealthFromOcrText(pdfText, documentHint, {
+          engineLabel: "PDF text",
+        }),
+        model: "pdf-text+heuristics",
+      };
     }
     throw new Error(
       "该 PDF 无可提取文本（可能是扫描件）。请将关键页导出为图片后上传识别。",
@@ -407,12 +498,15 @@ export async function runHealthOcr(
   }
 
   if (mime.startsWith("text/") || mime === "application/json") {
-    return structureFromText(
-      cfg,
-      buf.toString("utf8").slice(0, 20000),
-      documentHint,
-      "以下是文档文本，请结构化为 JSON：",
-    );
+    const text = buf.toString("utf8").slice(0, 20000);
+    if (cfg && engine === "vision") {
+      return structureFromText(cfg, text, documentHint, "以下是文档文本，请结构化为 JSON：");
+    }
+    return {
+      rawText: text,
+      structured: structureHealthFromOcrText(text, documentHint, { engineLabel: "text" }),
+      model: "text+heuristics",
+    };
   }
 
   throw new Error(`暂不支持该文件类型的 OCR: ${mime || "unknown"}`);
@@ -420,7 +514,7 @@ export async function runHealthOcr(
 
 /**
  * 病历多图 OCR（检查报告多页等，最多 6 张）
- * 优先一次多图 Vision；失败则逐张识别再合并
+ * 默认：逐张 PaddleOCR 再合并；可选 Vision 多图
  */
 export async function runHealthOcrMulti(
   db: Database.Database,
@@ -434,10 +528,8 @@ export async function runHealthOcrMulti(
 }> {
   if (!attachments.length) throw new Error("请至少上传一张图片");
   const limited = attachments.slice(0, 6);
+  const engine = getHealthOcrEngine();
   const cfg = loadAiConfig(db);
-  if (!cfg) {
-    throw new Error("未配置 AI 服务。请在设置中配置 AI 模型后再试。");
-  }
 
   const prepared: Array<{ id: string; dataUrl: string; buf: Buffer; mime: string }> = [];
   for (const att of limited) {
@@ -449,30 +541,56 @@ export async function runHealthOcrMulti(
     }
     const mime = (att.mimeType || "").toLowerCase();
     if (!mime.startsWith("image/")) {
-      // 非图片仍可单张走原逻辑
       if (limited.length === 1) {
         const one = await runHealthOcr(db, att, documentHint);
         return { ...one, attachmentIds: [att.id] };
       }
       throw new Error("多图 OCR 目前仅支持图片；PDF 请单独识别或导出为图片");
     }
-    let visionBuf: Buffer = buf;
-    try {
-      const out = await sharp(buf)
-        .rotate()
-        .resize({ width: 1400, height: 1400, fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toBuffer();
-      visionBuf = Buffer.from(out);
-    } catch {
-      visionBuf = buf;
-    }
+    const visionBuf = await prepareImageForOcr(buf, 1400, 82);
     prepared.push({
       id: att.id,
       dataUrl: mimeToDataUrl("image/jpeg", visionBuf),
       buf,
       mime,
     });
+  }
+
+  // ── 默认 Paddle：逐张识别合并 ──
+  if (engine === "paddle" || engine === "auto") {
+    if (isPaddleOcrConfigured()) {
+      try {
+        const partials: HealthOcrStructured[] = [];
+        const rawParts: string[] = [];
+        for (let i = 0; i < prepared.length; i++) {
+          const r = await runPaddleHealthImage(prepared[i].buf, documentHint);
+          partials.push(r.structured);
+          rawParts.push(`--- 图${i + 1} ---\n${r.rawText}`);
+        }
+        const structured = mergeHealthOcrStructured(partials, documentHint);
+        if (prepared.length > 1) {
+          structured.warnings = [
+            ...(structured.warnings || []),
+            `已用 PaddleOCR 综合 ${prepared.length} 张图片，请核对。`,
+          ];
+        }
+        return {
+          rawText: rawParts.join("\n\n").slice(0, 100000),
+          structured,
+          model: "paddleocr+heuristics",
+          attachmentIds: prepared.map((p) => p.id),
+        };
+      } catch (e: any) {
+        if (engine === "paddle") throw e;
+        console.warn("[health.ocr] multi paddle fail:", String(e?.message || e).slice(0, 200));
+      }
+    } else if (engine === "paddle") {
+      throw new Error("未配置 PADDLEOCR_URL，无法进行多图 OCR");
+    }
+  }
+
+  if (!cfg) {
+    throw new Error("多图 OCR 需要 PaddleOCR（PADDLEOCR_URL）或配置 AI 多模态模型");
   }
 
   const system = buildOcrSystemPrompt(documentHint);
@@ -522,7 +640,7 @@ export async function runHealthOcrMulti(
     }
   }
 
-  // 逐张回退再合并
+  // 逐张 tesseract / vision 回退
   const partials: HealthOcrStructured[] = [];
   const rawParts: string[] = [];
   let usedModel = cfg.ai_model;
@@ -561,15 +679,23 @@ export async function runHealthOcrMulti(
     if (!done) {
       try {
         const ocrText = await runLocalImageOcr(p.buf);
-        const r = await structureFromText(
-          cfg,
-          ocrText,
-          documentHint,
-          `第 ${i + 1}/${prepared.length} 张本地 OCR 文本，请结构化为 JSON：`,
-        );
-        partials.push(r.structured);
-        rawParts.push(`--- 图${i + 1} local ---\n${r.rawText}`);
-        usedModel = r.model;
+        try {
+          const r = await structureFromText(
+            cfg,
+            ocrText,
+            documentHint,
+            `第 ${i + 1}/${prepared.length} 张本地 OCR 文本，请结构化为 JSON：`,
+          );
+          partials.push(r.structured);
+          rawParts.push(`--- 图${i + 1} local ---\n${r.rawText}`);
+          usedModel = r.model;
+        } catch {
+          partials.push(
+            structureHealthFromOcrText(ocrText, documentHint, { engineLabel: "Tesseract" }),
+          );
+          rawParts.push(`--- 图${i + 1} local ---\n${ocrText}`);
+          usedModel = "tesseract+heuristics";
+        }
         done = true;
       } catch (e: any) {
         lastErr = e instanceof Error ? e : new Error(String(e));
@@ -739,16 +865,47 @@ export async function runMedicineOcrMulti(
   attachmentIds: string[];
 }> {
   if (!attachments.length) throw new Error("请至少上传一张药盒照片");
-  const limited = attachments.slice(0, 6); // 防止 token 过大
+  const limited = attachments.slice(0, 6);
+  const engine = getHealthOcrEngine();
   const cfg = loadAiConfig(db);
-  if (!cfg) {
-    throw new Error("未配置 AI 服务。请在设置中配置 AI 模型后再试。");
-  }
 
   const prepared: Array<{ id: string; dataUrl: string; buf: Buffer }> = [];
   for (const att of limited) {
     const { dataUrl, buf } = await imageAttachmentToDataUrl(att);
     prepared.push({ id: att.id, dataUrl, buf });
+  }
+
+  // ── 默认 Paddle ──
+  if (engine === "paddle" || engine === "auto") {
+    if (isPaddleOcrConfigured()) {
+      try {
+        const partials: MedicineOcrStructured[] = [];
+        const rawParts: string[] = [];
+        for (let i = 0; i < prepared.length; i++) {
+          const r = await runPaddleMedicineImage(prepared[i].buf);
+          partials.push(r.structured);
+          rawParts.push(`--- 图${i + 1} ---\n${r.rawText}`);
+        }
+        return {
+          rawText: rawParts.join("\n\n").slice(0, 100000),
+          structured: mergeMedicineOcrResults(partials),
+          model: "paddleocr+heuristics",
+          attachmentIds: prepared.map((p) => p.id),
+        };
+      } catch (e: any) {
+        if (engine === "paddle") throw e;
+        console.warn(
+          "[health.medicine-ocr] paddle fail:",
+          String(e?.message || e).slice(0, 200),
+        );
+      }
+    } else if (engine === "paddle") {
+      throw new Error("未配置 PADDLEOCR_URL。请启动 PaddleOCR 侧车。");
+    }
+  }
+
+  if (!cfg) {
+    throw new Error("药盒 OCR 需要 PaddleOCR（PADDLEOCR_URL）或配置 AI 多模态模型");
   }
 
   const system = buildMedicineOcrPrompt();
@@ -760,7 +917,6 @@ export async function runMedicineOcrMulti(
   const models = candidateVisionModels(cfg);
   let lastErr: Error | null = null;
 
-  // 1) 一次请求多图
   for (const model of models) {
     if (looksLikeTextOnlyModel(model) && model === cfg.ai_model && models.length > 1) {
       continue;
@@ -802,7 +958,6 @@ export async function runMedicineOcrMulti(
     }
   }
 
-  // 2) 逐张 Vision / 本地 OCR，再合并
   const partials: MedicineOcrStructured[] = [];
   const rawParts: string[] = [];
   let usedModel = cfg.ai_model;
@@ -841,18 +996,10 @@ export async function runMedicineOcrMulti(
     if (!done) {
       try {
         const ocrText = await runLocalImageOcr(p.buf);
-        const { text, model } = await callChatCompletions(cfg, {
-          system,
-          userContent: `第 ${i + 1}/${prepared.length} 张药盒本地 OCR 文本，结构化为 JSON：\n\n${ocrText}`,
-          temperature: 0.1,
-        });
-        const parsed = extractJsonObject(text);
-        if (parsed) {
-          partials.push(normalizeMedicineOcrStructured(parsed));
-          rawParts.push(`--- 图${i + 1} local ---\n${text}`);
-          usedModel = `${model}+local-ocr`;
-          done = true;
-        }
+        partials.push(structureMedicineFromOcrText(ocrText));
+        rawParts.push(`--- 图${i + 1} local ---\n${ocrText}`);
+        usedModel = "tesseract+heuristics";
+        done = true;
       } catch (e: any) {
         lastErr = e instanceof Error ? e : new Error(String(e));
       }

@@ -94,8 +94,30 @@ docker run -d \
 | `PORT` | `3001` | 服务监听端口 |
 | `DB_PATH` | `/app/data/super-note.db` | 数据库文件路径 |
 | `NODE_ENV` | `production` | 运行环境 |
-| `OLLAMA_URL` | （未设置） | Ollama 服务地址（如需本地 AI 请自行部署 Ollama） |
+| `OLLAMA_URL` | （未设置） | Ollama 服务地址（可选聊天大模型，非病历 OCR 默认） |
+| `PADDLEOCR_URL` | （未设置） | PaddleOCR 侧车地址，病历/药盒 OCR 默认引擎。例：`http://paddleocr:8868` |
+| `HEALTH_OCR_ENGINE` | `paddle` | `paddle`（默认）/ `vision`（多模态 LLM）/ `auto` |
+| `PADDLEOCR_TIMEOUT_MS` | `60000` | 单次 OCR 超时毫秒 |
 | `MAX_BOOK_UPLOAD_MB` | `512` | 书库单本上传上限（MB）；超大 PDF 需同步调大反代 body 限制 |
+
+### 病历 OCR（RapidOCR + ONNX，推荐）
+
+VL 大模型在 CPU 上往往需数分钟/张；中文病历识字请用 **OCR 侧车**（RapidOCR + ONNXRuntime，通常数秒～十余秒）。  
+服务名仍为 `paddleocr`，环境变量仍为 `PADDLEOCR_URL`（与后端兼容）。
+
+```bash
+# .env
+PADDLEOCR_URL=http://paddleocr:8868
+HEALTH_OCR_ENGINE=paddle
+
+# 必须 --no-cache 去掉旧 paddlepaddle 层，否则可能 SIGILL
+docker compose --profile ocr build --no-cache paddleocr
+docker compose --profile ocr up -d
+docker logs -f super-note-paddleocr   # 应见 RapidOCR ready
+curl -s http://127.0.0.1:8868/health  # engine: rapidocr-onnx
+```
+
+详情见 `docker/paddleocr/README.md`。不需要为 OCR 部署 `qwen*-vl` / Ollama，也不安装官方 `paddlepaddle`（部分 Intel 会 Illegal instruction）。
 
 ### 反代上传大文件（413 Request Entity Too Large）
 

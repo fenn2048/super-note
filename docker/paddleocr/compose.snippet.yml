@@ -1,0 +1,42 @@
+# 将下列片段合并进 /app/super-note 的 docker-compose.yml
+# 并确保 super-note 镜像已包含 PaddleOCR 客户端代码（重新 build）。
+#
+# 启动：
+#   docker compose --profile ocr up -d --build
+# 或直接把 paddleocr 写进默认 services（不挂 profile）并：
+#   docker compose up -d --build
+
+services:
+  super-note:
+    environment:
+      - PADDLEOCR_URL=http://paddleocr:8868
+      - HEALTH_OCR_ENGINE=paddle
+      - PADDLEOCR_TIMEOUT_MS=60000
+      # 病历 OCR 不再需要 Ollama，可去掉：
+      # - OLLAMA_URL=...
+
+  paddleocr:
+    build:
+      context: ./docker/paddleocr
+      dockerfile: Dockerfile
+    image: super-note-paddleocr:latest
+    container_name: super-note-paddleocr
+    restart: unless-stopped
+    ports:
+      - "8868:8868"
+    volumes:
+      - paddleocr-models:/root/.paddleocr
+      - paddleocr-models-hub:/root/.paddlepaddle
+    environment:
+      OCR_LANG: ch
+      USE_ANGLE_CLS: "true"
+      CPU_THREADS: "4"
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 3G
+
+volumes:
+  paddleocr-models:
+  paddleocr-models-hub:

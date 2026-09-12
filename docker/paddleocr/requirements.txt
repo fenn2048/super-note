@@ -1,0 +1,10 @@
+# 中文 OCR 侧车：RapidOCR + ONNXRuntime（兼容较老 Intel x86，避免 Paddle SIGILL）
+# 模型为 PP-OCR 系，与 Super Note 的 PADDLEOCR_URL 接口兼容
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+Pillow==10.4.0
+onnxruntime==1.19.2
+rapidocr-onnxruntime==1.4.4

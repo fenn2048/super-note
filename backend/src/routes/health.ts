@@ -543,16 +543,7 @@ health.post("/attachments/:id/ocr", async (c) => {
   const gate = requireWsMember(row.workspaceId, userId);
   if ("error" in gate) return c.json({ error: gate.error }, gate.status);
 
-  if (!loadAiConfig(db)) {
-    return c.json(
-      {
-        error: "未配置 AI",
-        message: "请在设置中配置支持多模态（Vision）的 AI 模型后再使用 OCR。",
-      },
-      400,
-    );
-  }
-
+  // 默认 PaddleOCR（PADDLEOCR_URL），不强制配置 AI
   const body = await c.req.json().catch(() => ({}));
   const documentHint =
     typeof body.documentHint === "string" ? body.documentHint : row.kind || "auto";
@@ -609,12 +600,6 @@ health.post("/ocr/batch", async (c) => {
   }
   const gate = requireWsMember(workspaceId, userId);
   if ("error" in gate) return c.json({ error: gate.error }, gate.status);
-  if (!loadAiConfig(db)) {
-    return c.json(
-      { error: "未配置 AI", message: "请在设置中配置支持多模态的 AI 模型。" },
-      400,
-    );
-  }
 
   for (const r of rows) setOcrProcessing(db, r.id);
   try {
@@ -1192,12 +1177,6 @@ health.post("/medicines/attachments/:id/ocr", async (c) => {
   if (!row) return c.json({ error: "附件不存在" }, 404);
   const gate = requireWsMember(row.workspaceId, userId);
   if ("error" in gate) return c.json({ error: gate.error }, gate.status);
-  if (!loadAiConfig(db)) {
-    return c.json(
-      { error: "未配置 AI", message: "请在设置中配置支持多模态的 AI 模型。" },
-      400,
-    );
-  }
   setOcrProcessing(db, row.id);
   try {
     const result = await runMedicineOcr(db, row);
@@ -1247,12 +1226,6 @@ health.post("/medicines/ocr/batch", async (c) => {
   }
   const gate = requireWsMember(workspaceId, userId);
   if ("error" in gate) return c.json({ error: gate.error }, gate.status);
-  if (!loadAiConfig(db)) {
-    return c.json(
-      { error: "未配置 AI", message: "请在设置中配置支持多模态的 AI 模型。" },
-      400,
-    );
-  }
 
   for (const r of rows) setOcrProcessing(db, r.id);
   try {

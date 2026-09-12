@@ -1,0 +1,74 @@
+# ============================================================================
+# Super Note 部署示例 — 病历 OCR：RapidOCR + ONNX（秒级）
+# 用法：合并/覆盖到 /app/super-note/docker-compose.yml
+#
+# 前提：
+#   1) 目录存在 docker/paddleocr/
+#   2) super-note:latest 含 PaddleOCR 客户端代码（调侧车 HTTP）
+#      docker build -t super-note:latest .
+#
+# 启动：
+#   docker compose up -d --build
+#   docker logs -f super-note-paddleocr   # 应见 RapidOCR ready
+# ============================================================================
+version: "3.8"
+
+services:
+  super-note:
+    image: super-note:latest
+    container_name: super-note
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./super-note-data:/app/data
+      - super-note-backup:/app/backups
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/super-note.db
+      - PORT=3001
+      - BACKUP_DIR=/app/backups
+      - PADDLEOCR_URL=http://paddleocr:8868
+      - HEALTH_OCR_ENGINE=paddle
+      - PADDLEOCR_TIMEOUT_MS=60000
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - paddleocr
+      - redis
+
+  paddleocr:
+    build:
+      context: ./docker/paddleocr
+      dockerfile: Dockerfile
+    image: super-note-paddleocr:latest
+    container_name: super-note-paddleocr
+    restart: unless-stopped
+    ports:
+      - "8868:8868"
+    environment:
+      OCR_LANG: ch
+      USE_ANGLE_CLS: "true"
+      CPU_THREADS: "4"
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 2G
+
+  redis:
+    image: docker.m.daocloud.io/redis:7-alpine
+    container_name: super-note-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+volumes:
+  super-note-data:
+    driver: local
+  super-note-backup:
+    driver: local
+  redis-data:
+    driver: local
