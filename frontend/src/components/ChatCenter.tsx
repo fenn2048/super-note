@@ -23,6 +23,7 @@ import {
   Trash2,
   Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { registerPlugin } from "@capacitor/core";
 import { EmojiPicker } from "@/components/EmojiPicker";
@@ -403,6 +404,32 @@ function initials(name: string | null | undefined): string {
   return s ? s.slice(0, 1).toUpperCase() : "?";
 }
 
+function ComposerMoreTile({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex flex-col items-center gap-1.5 min-h-11 px-1 py-1 rounded-button text-tx-secondary active:scale-[0.97] transition-transform duration-press ease-out disabled:opacity-50 disabled:pointer-events-none"
+    >
+      <span className="w-14 h-14 rounded-card bg-app-elevated border border-app-border flex items-center justify-center text-tx-primary shadow-xs">
+        <Icon size={22} />
+      </span>
+      <span className="text-[11px] leading-none">{label}</span>
+    </button>
+  );
+}
+
 function Avatar({
   name,
   url,
@@ -458,6 +485,7 @@ export default function ChatCenter() {
   const [searchingThread, setSearchingThread] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
   const [stickers, setStickers] = useState<ImSticker[]>([]);
   const [recording, setRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
@@ -882,6 +910,11 @@ export default function ChatCenter() {
     el.scrollTop = el.scrollHeight;
   }, [messages, activeId]);
 
+  useEffect(() => {
+    setPlusOpen(false);
+    setEmojiOpen(false);
+  }, [activeId]);
+
   const selectConversation = useCallback((id: string) => {
     setActiveId(id);
     openChat(id);
@@ -1018,6 +1051,13 @@ export default function ChatCenter() {
   );
 
   useRegisterBackLayer(
+    "chat-plus",
+    plusOpen,
+    () => setPlusOpen(false),
+    258,
+  );
+
+  useRegisterBackLayer(
     "chat-share",
     sharePickerOpen,
     () => setSharePickerOpen(false),
@@ -1114,6 +1154,7 @@ export default function ChatCenter() {
       if (!activeId || sending) return;
       setSending(true);
       setEmojiOpen(false);
+      setPlusOpen(false);
       try {
         const sent = await api.im.send(activeId, { type: "sticker", body });
         await appendSent(sent);
@@ -1125,6 +1166,24 @@ export default function ChatCenter() {
     },
     [activeId, sending, appendSent],
   );
+
+  const insertAtMention = useCallback(() => {
+    const el = textareaRef.current;
+    const pos = el?.selectionStart ?? draft.length;
+    const needsSpace = pos > 0 && !/\s/.test(draft[pos - 1] || "");
+    const insert = `${needsSpace ? " " : ""}@`;
+    const next = draft.slice(0, pos) + insert + draft.slice(pos);
+    setDraft(next);
+    const caret = pos + insert.length;
+    setCursorPos(caret);
+    setMentionClosed(false);
+    setPlusOpen(false);
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(caret, caret);
+    });
+  }, [draft]);
 
   const sendVoiceFile = useCallback(
     async (file: File, duration: number) => {
@@ -1276,6 +1335,7 @@ export default function ChatCenter() {
       recordStartedRef.current = Date.now();
       setRecording(true);
       setEmojiOpen(false);
+      setPlusOpen(false);
       setRecordDuration(0);
       recordTimerRef.current = setInterval(() => {
         const sec = Math.floor((Date.now() - recordStartedRef.current) / 1000);
@@ -2006,42 +2066,6 @@ export default function ChatCenter() {
                 }
               }}
             />
-            {emojiOpen && (
-              <div className="mb-2">
-                <EmojiPicker
-                  className="w-full max-w-full shadow-xs"
-                  initialTab="mine"
-                  onSelectTextEmoji={(emoji) => {
-                    const el = textareaRef.current;
-                    const pos = el?.selectionStart ?? draft.length;
-                    const next = draft.slice(0, pos) + emoji + draft.slice(pos);
-                    setDraft(next);
-                    const caret = pos + emoji.length;
-                    setCursorPos(caret);
-                    requestAnimationFrame(() => {
-                      el?.focus();
-                      el?.setSelectionRange(caret, caret);
-                    });
-                  }}
-                  onSelectImageEmoji={(url) => void sendSticker(url)}
-                  customStickers={stickers.map((s) => ({
-                    id: s.id,
-                    url: resolveAttachmentUrl(s.url),
-                  }))}
-                  onSelectCustom={(s) => void sendSticker(`sticker:${s.id}`)}
-                  onAddCustom={() => stickerInputRef.current?.click()}
-                  onDeleteCustom={async (id) => {
-                    try {
-                      await api.im.deleteSticker(id);
-                      setStickers((prev) => prev.filter((s) => s.id !== id));
-                      toast.success("已删除");
-                    } catch (err: any) {
-                      toast.error(err?.message || "删除失败");
-                    }
-                  }}
-                />
-              </div>
-            )}
             {mentionTrigger && active?.type === "group" && !emojiOpen && (
               <div className="mb-1">
                 <MentionPicker
@@ -2073,13 +2097,13 @@ export default function ChatCenter() {
             )}
             {recording ? (
               <div className="flex items-center gap-1.5">
-                <Button type="button" variant="ghost" size="icon-lg" aria-label="取消录音" onClick={cancelRecording}>
+                <Button type="button" variant="ghost" size="icon-lg" className="!rounded-full shrink-0" aria-label="取消录音" onClick={cancelRecording}>
                   <X size={18} />
                 </Button>
                 <div
                   className={cn(
                     fieldControlClass,
-                    "flex-1 flex items-center gap-2.5 min-h-11 py-0 overflow-hidden",
+                    "flex-1 min-w-0 w-0 flex items-center gap-2.5 min-h-11 py-0 overflow-hidden",
                   )}
                 >
                   <span className="tabular-nums text-sm font-semibold text-accent-danger shrink-0 w-10">
@@ -2095,12 +2119,12 @@ export default function ChatCenter() {
                     ))}
                   </div>
                 </div>
-                <Button type="button" size="icon-lg" aria-label="发送语音" onClick={() => void finishRecording()}>
+                <Button type="button" size="icon-lg" className="!rounded-full shrink-0" aria-label="发送语音" onClick={() => void finishRecording()}>
                   <Send size={18} />
                 </Button>
               </div>
             ) : (
-            <div className="flex items-end gap-1.5">
+            <div className="flex items-end gap-1">
               <input
                 ref={imageInputRef}
                 type="file"
@@ -2122,88 +2146,105 @@ export default function ChatCenter() {
                   if (f) void sendFile(f, false);
                 }}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                aria-label="表情"
-                disabled={sending}
-                onClick={() => {
-                  setEmojiOpen((v) => !v);
-                  setMentionClosed(true);
-                }}
-              >
-                <Smile size={18} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                aria-label="发送图片"
-                disabled={sending}
-                onClick={() => imageInputRef.current?.click()}
-              >
-                <ImageIcon size={18} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                aria-label="发送文件"
-                disabled={sending}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip size={18} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                aria-label="分享笔记、说说或任务"
-                disabled={sending}
-                onClick={() => {
-                  setEmojiOpen(false);
-                  setSharePickerOpen(true);
-                }}
-              >
-                <Share2 size={18} />
-              </Button>
-              {active?.type === "group" && (
+              {isDesktop ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    className="shrink-0"
+                    aria-label="表情"
+                    disabled={sending}
+                    onClick={() => {
+                      setPlusOpen(false);
+                      setEmojiOpen((v) => !v);
+                      setMentionClosed(true);
+                    }}
+                  >
+                    <Smile size={18} />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    className="shrink-0"
+                    aria-label="发送图片"
+                    disabled={sending}
+                    onClick={() => imageInputRef.current?.click()}
+                  >
+                    <ImageIcon size={18} />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    className="shrink-0"
+                    aria-label="发送文件"
+                    disabled={sending}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip size={18} />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    className="shrink-0"
+                    aria-label="分享笔记、说说或任务"
+                    disabled={sending}
+                    onClick={() => {
+                      setEmojiOpen(false);
+                      setPlusOpen(false);
+                      setSharePickerOpen(true);
+                    }}
+                  >
+                    <Share2 size={18} />
+                  </Button>
+                  {active?.type === "group" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-lg"
+                      className="shrink-0"
+                      aria-label="提及成员"
+                      disabled={sending}
+                      onClick={insertAtMention}
+                    >
+                      <AtSign size={18} />
+                    </Button>
+                  )}
+                </>
+              ) : (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-lg"
-                  aria-label="提及成员"
+                  className="!rounded-full shrink-0"
+                  aria-label="语音消息"
                   disabled={sending}
-                  onClick={() => {
-                    const el = textareaRef.current;
-                    const pos = el?.selectionStart ?? draft.length;
-                    const insertAt = pos;
-                    const needsSpace = insertAt > 0 && !/\s/.test(draft[insertAt - 1] || "");
-                    const insert = `${needsSpace ? " " : ""}@`;
-                    const next = draft.slice(0, insertAt) + insert + draft.slice(insertAt);
-                    setDraft(next);
-                    const caret = insertAt + insert.length;
-                    setCursorPos(caret);
-                    requestAnimationFrame(() => {
-                      el?.focus();
-                      el?.setSelectionRange(caret, caret);
-                    });
-                  }}
+                  onClick={() => void startRecording()}
                 >
-                  <AtSign size={18} />
+                  <Mic size={22} />
                 </Button>
               )}
               <textarea
                 ref={textareaRef}
                 value={draft}
                 rows={1}
-                placeholder={active?.type === "group" ? "发消息，输入 @ 提及家人" : "发消息…"}
+                placeholder={
+                  isDesktop && active?.type === "group" ? "发消息，输入 @ 提及家人" : "发消息"
+                }
                 disabled={sending}
                 className={cn(
                   fieldControlClass,
-                  "flex-1 min-h-11 max-h-32 resize-none py-2.5",
+                  "flex-1 min-w-0 w-0 min-h-11 max-h-32 resize-none py-2.5 leading-5",
+                  !isDesktop && "!rounded-full px-3.5",
                 )}
+                enterKeyHint="send"
+                onFocus={() => {
+                  setPlusOpen(false);
+                  if (!isDesktop) setEmojiOpen(false);
+                }}
                 onChange={(e) => {
                   setDraft(e.target.value);
                   setMentionClosed(false);
@@ -2223,28 +2264,167 @@ export default function ChatCenter() {
                   }
                 }}
               />
-              {draft.trim() ? (
-                <Button
-                  type="button"
-                  size="icon-lg"
-                  aria-label="发送"
-                  disabled={sending}
-                  onClick={() => void sendText()}
-                >
-                  <Send size={18} />
-                </Button>
+              {isDesktop ? (
+                draft.trim() ? (
+                  <Button
+                    type="button"
+                    size="icon-lg"
+                    className="shrink-0"
+                    aria-label="发送"
+                    disabled={sending}
+                    onClick={() => void sendText()}
+                  >
+                    <Send size={18} />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="icon-lg"
+                    className="shrink-0"
+                    aria-label="语音消息"
+                    disabled={sending}
+                    onClick={() => void startRecording()}
+                  >
+                    <Mic size={18} />
+                  </Button>
+                )
               ) : (
-                <Button
-                  type="button"
-                  size="icon-lg"
-                  aria-label="语音消息"
-                  disabled={sending}
-                  onClick={() => void startRecording()}
-                >
-                  <Mic size={18} />
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    className="!rounded-full shrink-0"
+                    aria-label="表情"
+                    disabled={sending}
+                    onClick={() => {
+                      const next = !emojiOpen;
+                      setEmojiOpen(next);
+                      setPlusOpen(false);
+                      setMentionClosed(true);
+                      if (next) textareaRef.current?.blur();
+                    }}
+                  >
+                    <Smile size={22} />
+                  </Button>
+                  {draft.trim() ? (
+                    <Button
+                      type="button"
+                      size="icon-lg"
+                      className="!rounded-full shrink-0"
+                      aria-label="发送"
+                      disabled={sending}
+                      onClick={() => void sendText()}
+                    >
+                      <Send size={18} />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-lg"
+                      className="!rounded-full shrink-0"
+                      aria-label={plusOpen ? "收起" : "更多"}
+                      disabled={sending}
+                      onClick={() => {
+                        setEmojiOpen(false);
+                        setPlusOpen((v) => {
+                          const next = !v;
+                          if (next) textareaRef.current?.blur();
+                          return next;
+                        });
+                      }}
+                    >
+                      <Plus
+                        size={22}
+                        className={cn(
+                          "transition-transform duration-fast ease-out",
+                          plusOpen && "rotate-45",
+                        )}
+                      />
+                    </Button>
+                  )}
+                </>
               )}
             </div>
+            )}
+            {emojiOpen && (
+              <div className="pt-2">
+                <EmojiPicker
+                  className="w-full max-w-full shadow-xs"
+                  initialTab="mine"
+                  onSelectTextEmoji={(emoji) => {
+                    const el = textareaRef.current;
+                    const pos = el?.selectionStart ?? draft.length;
+                    const next = draft.slice(0, pos) + emoji + draft.slice(pos);
+                    setDraft(next);
+                    const caret = pos + emoji.length;
+                    setCursorPos(caret);
+                    requestAnimationFrame(() => {
+                      if (!el) return;
+                      if (isDesktop) {
+                        el.focus();
+                        el.setSelectionRange(caret, caret);
+                      }
+                    });
+                  }}
+                  onSelectImageEmoji={(url) => void sendSticker(url)}
+                  customStickers={stickers.map((s) => ({
+                    id: s.id,
+                    url: resolveAttachmentUrl(s.url),
+                  }))}
+                  onSelectCustom={(s) => void sendSticker(`sticker:${s.id}`)}
+                  onAddCustom={() => stickerInputRef.current?.click()}
+                  onDeleteCustom={async (id) => {
+                    try {
+                      await api.im.deleteSticker(id);
+                      setStickers((prev) => prev.filter((s) => s.id !== id));
+                      toast.success("已删除");
+                    } catch (err: any) {
+                      toast.error(err?.message || "删除失败");
+                    }
+                  }}
+                />
+              </div>
+            )}
+            {plusOpen && !isDesktop && !recording && !emojiOpen && (
+              <div className="grid grid-cols-4 gap-x-2 gap-y-3 px-1 pt-3">
+                <ComposerMoreTile
+                  icon={ImageIcon}
+                  label="图片"
+                  disabled={sending}
+                  onClick={() => {
+                    setPlusOpen(false);
+                    imageInputRef.current?.click();
+                  }}
+                />
+                <ComposerMoreTile
+                  icon={Paperclip}
+                  label="文件"
+                  disabled={sending}
+                  onClick={() => {
+                    setPlusOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                />
+                <ComposerMoreTile
+                  icon={Share2}
+                  label="分享"
+                  disabled={sending}
+                  onClick={() => {
+                    setPlusOpen(false);
+                    setSharePickerOpen(true);
+                  }}
+                />
+                {active?.type === "group" && (
+                  <ComposerMoreTile
+                    icon={AtSign}
+                    label="提及"
+                    disabled={sending}
+                    onClick={insertAtMention}
+                  />
+                )}
+              </div>
             )}
           </div>
         </section>
