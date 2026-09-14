@@ -19,6 +19,12 @@ import TextareaFormatToolbar from "@/components/common/TextareaFormatToolbar";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { springs } from "@/lib/motion";
+import {
+  createVoiceMediaRecorder,
+  getVoiceMediaStream,
+  voiceBlobFromChunks,
+  voiceFileFromBlob,
+} from "@/lib/voiceRecorder";
 import { BottomSheet } from "@/components/common/BottomSheet";
 
 
@@ -373,8 +379,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           }
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
+        const stream = await getVoiceMediaStream();
+        const mediaRecorder = createVoiceMediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
 
@@ -405,8 +411,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
             return;
           }
 
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
+          const audioBlob = voiceBlobFromChunks(audioChunksRef.current, mediaRecorder.mimeType);
+          const file = voiceFileFromBlob(audioBlob);
           try {
             setVoiceUploading(true);
             const uploadRes = await api.diaryImages.upload(file);
@@ -565,8 +571,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
         }
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const stream = await getVoiceMediaStream();
+      const mediaRecorder = createVoiceMediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -585,7 +591,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
           audioContextRef.current.close().catch(() => {});
           audioContextRef.current = null;
         }
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioBlob = voiceBlobFromChunks(audioChunksRef.current, mediaRecorder.mimeType);
         setTempAudioBlob(audioBlob);
         stream!.getTracks().forEach((track) => track.stop());
       };
@@ -725,7 +731,7 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
     setIsPaused(false);
 
     const uploadBlob = async (blob: Blob, duration: number) => {
-      const file = new File([blob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
+      const file = voiceFileFromBlob(blob);
       try {
         const uploadRes = await api.diaryImages.upload(file);
         setPendingVoice({
@@ -745,7 +751,8 @@ export default function DiaryComposeModal({ isOpen, onClose, onPost, initialImag
       if (mediaRecorderRef.current) {
         const currentDuration = recordDuration;
         mediaRecorderRef.current.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const rec = mediaRecorderRef.current;
+          const audioBlob = voiceBlobFromChunks(audioChunksRef.current, rec?.mimeType);
           await uploadBlob(audioBlob, currentDuration);
         };
         mediaRecorderRef.current.stop();
