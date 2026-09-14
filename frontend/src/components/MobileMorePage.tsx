@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { api, broadcastLogout, getCurrentWorkspace } from "@/lib/api";
 import {
-  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine, Wallet, NotebookPen, HeartPulse, MessageCircle,
+  FolderOpen, Heart, Bot, Bell, Settings, LogOut, Trash2, BookOpen, Film, Book, Search, ScanLine, Wallet, NotebookPen, HeartPulse,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
@@ -27,7 +27,6 @@ const MORE_ICONS: Record<string, React.ReactNode> = {
   books: <Book className="w-6 h-6 text-orange-500" />,
   finance: <Wallet className="w-6 h-6 text-emerald-500" />,
   health: <HeartPulse className="w-6 h-6 text-rose-500" />,
-  chat: <MessageCircle className="w-6 h-6 text-sky-500" />,
 };
 
 export default function MobileMorePage() {
@@ -123,7 +122,7 @@ export default function MobileMorePage() {
       <MobileChromeHeader
         variant="bare"
         title="我的"
-        subtitle="笔记、资料库、AI、消息与设置"
+        subtitle="笔记、资料库、消息与设置"
       />
 
       <ContentCanvas className="pb-6" flush>
@@ -142,11 +141,6 @@ export default function MobileMorePage() {
                 {item.id === "mentions" && state.unreadMentionCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-elevated">
                     {state.unreadMentionCount}
-                  </span>
-                )}
-                {item.id === "chat" && state.chatUnreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm border border-app-elevated">
-                    {state.chatUnreadCount > 99 ? "99+" : state.chatUnreadCount}
                   </span>
                 )}
               </div>

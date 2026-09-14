@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { registerPlugin } from "@capacitor/core";
 import { EmojiPicker } from "@/components/EmojiPicker";
-import { api, getCurrentWorkspace, resolveAttachmentUrl } from "@/lib/api";
+import { api, getCurrentWorkspace, resolveAttachmentUrl, withMediaWidth } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { useAppActions } from "@/store/AppContext";
 import type { ImConversation, ImMessage, ImMessageCursor, ImSearchHit, ImSticker, UserPublicInfo, WorkspaceMember, WorkspaceRole } from "@/types";
@@ -50,8 +50,10 @@ import { Motion } from "@/components/common/Motion";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { openChat, parseChatHash } from "@/lib/navigation.config";
+import { isModuleAllowedByPack } from "@/lib/modulePack";
+import { useWorkspaceFeatures } from "@/store/workspaceFeaturesStore";
 import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
-import { easings, springs } from "@/lib/motion";
+import { springs } from "@/lib/motion";
 import { cardPreview } from "@/lib/imCard";
 import { ImShareCardBubble, ShareItemPickerSheet } from "@/components/chat/ShareToChat";
 
@@ -165,6 +167,51 @@ function stickerSrc(m: ImMessage): string {
   if (b.startsWith("sticker:")) return resolveAttachmentUrl(`/api/im/stickers/${b.slice(8)}`);
   if (b.startsWith("/emojis/")) return resolveAttachmentUrl(b);
   return "";
+}
+
+function stickerLooksAnimated(src: string, body?: string | null): boolean {
+  return /\.gif(\?|$)/i.test(src) || /\.gif(\?|$)/i.test(body || "");
+}
+
+/** 气泡先出 240px 首帧，GIF 再在后台换成原图，避免发送后卡住等大文件。 */
+function ChatStickerImage({
+  message,
+  className,
+}: {
+  message: ImMessage;
+  className?: string;
+}) {
+  const full = stickerSrc(message);
+  const thumb = full ? withMediaWidth(full) : "";
+  const animated = stickerLooksAnimated(full, message.body);
+  const [src, setSrc] = useState(thumb || full);
+
+  useEffect(() => {
+    const next = thumb || full;
+    setSrc(next);
+    if (!animated || !full) return;
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setSrc(full);
+    };
+    img.src = full;
+    return () => {
+      cancelled = true;
+      img.onload = null;
+    };
+  }, [full, thumb, animated]);
+
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt="表情"
+      className={className}
+      draggable={false}
+      decoding="async"
+    />
+  );
 }
 
 function formatVoiceClock(sec: number): string {
@@ -313,7 +360,7 @@ function VoiceBubble({ src, duration }: { src: string; duration: number }) {
                 ? {
                     duration: 0.64 + (i % 4) * 0.07,
                     repeat: Infinity,
-                    ease: easings.inOut,
+                    ease: [0.77, 0, 0.175, 1], // easings.inOut
                     delay: (i % 5) * 0.05,
                   }
                 : springs.snappy
@@ -422,11 +469,37 @@ function Avatar({
   );
 }
 
+function ChatDiaryEntryButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title="说说"
+      aria-label="说说"
+      className="inline-flex items-center gap-1 min-h-11 px-2.5 rounded-button text-tx-secondary hover:bg-app-hover hover:text-tx-primary active:scale-[0.97] transition-transform duration-press ease-out"
+    >
+      <Smile size={16} />
+      <span className="text-xs font-semibold">说说</span>
+    </button>
+  );
+}
+
 export default function ChatCenter() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const { height: kbHeight } = useKeyboardVisible();
   const actions = useAppActions();
+  const { features, packTick } = useWorkspaceFeatures();
   const me = selfUserId();
+  const showDiaryEntry = useMemo(
+    () => isModuleAllowedByPack("diary") && (features == null || features.diaries !== false),
+    [features, packTick],
+  );
+
+  const openDiary = useCallback(() => {
+    haptic.light();
+    actions.setViewMode("diary");
+    actions.setMobileView("list");
+  }, [actions]);
 
   const [workspaceId, setWorkspaceId] = useState(() => getCurrentWorkspace());
   const [conversations, setConversations] = useState<ImConversation[]>([]);
@@ -1421,10 +1494,11 @@ export default function ChatCenter() {
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <MobileChromeHeader
-          variant="stack"
-          stackAction="back"
+          variant="bare"
           title="聊天"
-          onLeadingClick={() => actions.setViewMode("more")}
+          right={
+            showDiaryEntry ? <ChatDiaryEntryButton onOpen={openDiary} /> : undefined
+          }
         />
         <PageHeader title="聊天" mdOnly />
         <EmptyState
@@ -1447,14 +1521,15 @@ export default function ChatCenter() {
           style={!isDesktop && kbHeight > 0 ? { paddingBottom: kbHeight } : undefined}
         >
           <MobileChromeHeader
-            variant="stack"
-            stackAction="back"
+            variant="bare"
             title="聊天"
-            onLeadingClick={() => actions.setViewMode("more")}
             right={
-              <MobileChromeIconButton title="发起私聊" onClick={openPicker}>
-                <Plus size={18} />
-              </MobileChromeIconButton>
+              <div className="flex items-center">
+                {showDiaryEntry && <ChatDiaryEntryButton onOpen={openDiary} />}
+                <MobileChromeIconButton title="发起私聊" onClick={openPicker}>
+                  <Plus size={18} />
+                </MobileChromeIconButton>
+              </div>
             }
           />
           <PageHeader
@@ -1863,15 +1938,13 @@ export default function ChatCenter() {
                               </div>
                             )}
                             {isStickerMessage(m) ? (
-                              <img
-                                src={stickerSrc(m)}
-                                alt="表情"
+                              <ChatStickerImage
+                                message={m}
                                 className={cn(
                                   "block max-w-[120px] max-h-[120px] w-auto h-auto object-contain bg-transparent border-0 shadow-none",
                                   highlightId === m.id && "ring-2 ring-accent-primary rounded-button",
                                   selected && "ring-2 ring-accent-primary/50 rounded-button",
                                 )}
-                                draggable={false}
                               />
                             ) : m.type === "card" ? (
                               <div

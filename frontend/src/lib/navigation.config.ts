@@ -2,10 +2,10 @@
  * 全局导航单一配置源（产品 IA P0）
  * ---------------------------------------------------------------------------
  * 产品决策（已锁定）：
- *   1. 主场景 = 家庭 OS / 工作台（首页 + 任务 + 说说并重；笔记在「我的」）
+ *   1. 主场景 = 家庭 OS / 工作台（首页 + 任务 + 聊天并重；笔记在「我的」；说说从聊天顶栏进）
  *   2. 任务模型 = 方案 A：统一到 Project（无独立 Task 一级入口）
  *   3. 编辑器主格式 = RTE（tiptap）优先
- *   4. 移动底栏 = 首页 | 任务 | 说说 | 我的（笔记入口在「我的」宫格）
+ *   4. 移动底栏 = 首页 | 任务 | 聊天 | 我的（笔记在「我的」；说说在聊天列表右上角）
  *
  * 所有壳（NavRail / 移动底栏 / 我的页 / 侧栏次级入口 / Cmd-K）应消费本文件，
  * 避免增删模块时多处漂移。
@@ -105,8 +105,10 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "说说",
     feature: "diaries",
     tier: 1,
-    placements: ["desktopRail", "mobileTab", "cmdk"],
+    // 移动端入口在聊天列表顶栏右上角，不占底栏 / 「我的」
+    placements: ["desktopRail", "cmdk"],
     group: "primary",
+    moreDesc: "家庭动态、心情与日常记录",
   },
 
   // ── 侧栏/我的：笔记派生视图 ──
@@ -171,7 +173,8 @@ export const NAV_MODULES: NavModule[] = [
     labelFallback: "聊天",
     feature: "chat",
     tier: 1,
-    placements: ["desktopRail", "mobileMore", "cmdk"],
+    // 移动底栏第三位；桌面 Rail 仍保留
+    placements: ["desktopRail", "mobileTab", "cmdk"],
     group: "primary",
     moreDesc: "家庭群与成员私聊",
   },
@@ -251,7 +254,7 @@ export function getDesktopRailModules(
   );
 }
 
-/** 移动底栏：首页 | 任务 | 说说 | 我的（「我的」由壳层单独渲染） */
+/** 移动底栏：首页 | 任务 | 聊天 | 我的（「我的」由壳层单独渲染） */
 export function getMobileTabModules(
   features: WorkspaceFeatures | null,
 ): NavModule[] {
@@ -458,7 +461,7 @@ export function isNotesViewMode(viewMode: ViewMode): boolean {
  * - notes：笔记派生 + 收藏/回收站（桌面 Rail；移动从「我的」进入）
  * - tasks：projects / plans / 历史 tasks
  * - library：资料库及分项
- * - more：底栏「我的」——二级页（含笔记）也高亮；首页独立 Tab 后不再占 more
+ * - more：底栏「我的」——二级页（含笔记）也高亮；首页 / 聊天独立 Tab 后不再占 more
  */
 export function isModuleActive(
   mod: NavModule | string,
@@ -467,6 +470,10 @@ export function isModuleActive(
   const id = typeof mod === "string" ? mod : mod.id;
   if (id === "home") {
     return viewMode === "home";
+  }
+  if (id === "chat") {
+    // 桌面 Rail 的「聊天」仅 chat 本身；移动底栏用 isChatTabActive（含说说）
+    return viewMode === "chat";
   }
   if (id === "notes") {
     return (
@@ -495,7 +502,6 @@ export function isModuleActive(
       viewMode === "mentions" ||
       viewMode === "finance" ||
       viewMode === "health" ||
-      viewMode === "chat" ||
       viewMode === "settings" ||
       viewMode === "library" ||
       viewMode === "files" ||
@@ -512,6 +518,11 @@ export function isModuleActive(
 /** 底栏「我的」是否高亮（二级页也算） */
 export function isMoreTabActive(viewMode: ViewMode): boolean {
   return isModuleActive("more", viewMode);
+}
+
+/** 底栏「聊天」是否高亮（说说从聊天顶栏进入，也算） */
+export function isChatTabActive(viewMode: ViewMode): boolean {
+  return viewMode === "chat" || viewMode === "diary";
 }
 
 // ── 移动壳层规则（Phase A · 体验蓝图固化）────────────────────────────────
@@ -534,6 +545,8 @@ export interface MobileShellContext {
   mobileView?: "list" | "editor" | string;
   /** 项目详情打开时不显示底栏 */
   isProjectDetailOpen?: boolean;
+  /** 聊天会话打开时不显示底栏 */
+  isChatThreadOpen?: boolean;
   /** 底栏滚动显隐 */
   barsVisible?: boolean;
   /** 软键盘 */
@@ -542,17 +555,18 @@ export interface MobileShellContext {
 
 /**
  * 是否显示移动底栏（根页）
- * 根：首页 / 笔记列表 / 任务非详情 / 说说 / 我的
- * 非根：资料库栈、回收站、编辑器、项目详情…
+ * 根：首页 / 笔记列表 / 任务非详情 / 聊天列表 / 说说 / 我的
+ * 非根：资料库栈、回收站、编辑器、项目详情、聊天会话…
  */
 export function shouldShowMobileTabBar(ctx: MobileShellContext): boolean {
-  const { viewMode, mobileView, isProjectDetailOpen } = ctx;
+  const { viewMode, mobileView, isProjectDetailOpen, isChatThreadOpen } = ctx;
   if (viewMode === "settings") return false;
   if (isLibraryStackViewMode(viewMode)) return false;
   if (viewMode === "trash") return false;
   if (viewMode === "home") return true;
   if (viewMode === "more") return true;
   if (viewMode === "diary") return true;
+  if (viewMode === "chat") return !isChatThreadOpen;
   if (viewMode === "projects" || viewMode === "plans" || viewMode === "tasks") {
     return !isProjectDetailOpen;
   }
@@ -569,7 +583,7 @@ export function shouldShowMobileTabBar(ctx: MobileShellContext): boolean {
 export function shouldShowMobileFAB(ctx: MobileShellContext): boolean {
   if (!shouldShowMobileTabBar(ctx)) return false;
   if (ctx.viewMode === "more") return false;
-  if (ctx.viewMode === "finance" || ctx.viewMode === "health") return false;
+  if (ctx.viewMode === "finance" || ctx.viewMode === "health" || ctx.viewMode === "chat") return false;
   return true;
 }
 

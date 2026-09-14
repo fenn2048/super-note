@@ -7,6 +7,9 @@ import {
   shouldShowMobileFAB,
   shouldShowDesktopFAB,
   isLibraryStackViewMode,
+  getMobileTabModules,
+  getMobileMoreModules,
+  isChatTabActive,
 } from "@/lib/navigation.config";
 
 describe("mobile shell rules", () => {
@@ -49,6 +52,22 @@ describe("mobile shell rules", () => {
     expect(shouldShowMobileTabBar({ viewMode: "settings" })).toBe(false);
     expect(shouldShowMobileFAB({ viewMode: "settings" })).toBe(false);
   });
+
+  it("chat list shows tab bar but not fab; thread hides both", () => {
+    expect(shouldShowMobileTabBar({ viewMode: "chat" })).toBe(true);
+    expect(shouldShowMobileFAB({ viewMode: "chat" })).toBe(false);
+    expect(
+      shouldShowMobileTabBar({ viewMode: "chat", isChatThreadOpen: true }),
+    ).toBe(false);
+    expect(
+      shouldShowMobileFAB({ viewMode: "chat", isChatThreadOpen: true }),
+    ).toBe(false);
+  });
+
+  it("diary from chat still shows tab + fab", () => {
+    expect(shouldShowMobileTabBar({ viewMode: "diary" })).toBe(true);
+    expect(shouldShowMobileFAB({ viewMode: "diary" })).toBe(true);
+  });
 });
 
 describe("shouldShowDesktopFAB", () => {
@@ -87,5 +106,22 @@ describe("isModuleActive", () => {
     // 笔记改入「我的」后，笔记/收藏二级页高亮我的
     expect(isModuleActive("more", "all")).toBe(true);
     expect(isModuleActive("more", "favorites")).toBe(true);
+    // 说说从聊天顶栏进入，高亮聊天而非「我的」
+    expect(isModuleActive("more", "diary")).toBe(false);
+    expect(isModuleActive("more", "chat")).toBe(false);
+    expect(isModuleActive("chat", "chat")).toBe(true);
+    expect(isModuleActive("chat", "diary")).toBe(false);
+    expect(isChatTabActive("chat")).toBe(true);
+    expect(isChatTabActive("diary")).toBe(true);
+    expect(isChatTabActive("more")).toBe(false);
+  });
+
+  it("mobile tabs are home / tasks / chat; diary is not in more", () => {
+    const tabs = getMobileTabModules(null).map((m) => m.id);
+    const more = getMobileMoreModules(null).map((m) => m.id);
+    expect(tabs).toEqual(["home", "tasks", "chat"]);
+    expect(more).not.toContain("diary");
+    expect(more).toContain("notes");
+    expect(more).not.toContain("chat");
   });
 });

@@ -51,7 +51,7 @@ When creating or editing **frontend UI, components, pages, modals, drawers, list
 
 ## Product layout (short)
 
-- Mobile tab bar: 首页 · 任务 · 说说 · 我的 (notes live under 我的; see DESIGN.md §1 / navigation.config).
+- Mobile tab bar: 首页 · 任务 · 聊天 · 我的 (notes under 我的; 说说 from chat header; see DESIGN.md §1 / navigation.config).
 - Settings: hash route `#/settings` — not an ad-hoc full-screen hack.
 - Page contract: header + one scroll root + FeedbackStates empty/loading/error.
 

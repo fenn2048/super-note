@@ -434,6 +434,20 @@ export function resolveAttachmentUrl(src: string | null | undefined): string {
   return attachMediaAuthToken(absolute);
 }
 
+/** 附件 / 表情缩略图宽度（与后端 ALLOWED_WIDTHS 对齐） */
+export const MEDIA_THUMB_WIDTH = 240;
+
+/**
+ * 给媒体 URL 加上 `?w=`（幂等）。须在 resolveAttachmentUrl 之后调用，以免打乱 token。
+ * 表情选择器 / 气泡用 240：GIF 只出首帧 webp，避免一次拉几十 MB 原图。
+ */
+export function withMediaWidth(url: string, width: number = MEDIA_THUMB_WIDTH): string {
+  if (!url) return "";
+  if (!Number.isFinite(width) || width <= 0) return url;
+  if (/[?&]w=\d+/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}w=${width}`;
+}
+
 /**
  * 安全解析响应体为 JSON。
  *

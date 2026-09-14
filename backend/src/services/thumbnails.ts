@@ -18,7 +18,7 @@
  *   - 透明图（svg / png with alpha）也用 webp（webp 支持 alpha）。
  *   - SVG / GIF 特殊处理：
  *       * SVG：sharp 转 raster 体积反而大、容易丢字体，直接返回原图。
- *       * GIF：转静态首帧 webp（列表页用静态足够；播放动图请打开详情）。
+ *       * GIF：转静态首帧 webp（列表页 / 表情选择器用静态足够；聊天气泡可再换原图）。
  *   - sharp 不放在 ".thumbs/" 暴露目录里直接读，全部走 /api/attachments/:id 入口，
  *     避免目录穿越。
  *

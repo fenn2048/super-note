@@ -1,15 +1,16 @@
 /**
- * 移动底栏：首页 | 任务 | 说说 | 我的（固定 4 Tab）
- * 笔记入口改到「我的」宫格。
+ * 移动底栏：首页 | 任务 | 聊天 | 我的（固定 4 Tab）
+ * 笔记入口在「我的」宫格；说说从聊天列表顶栏进入。
  */
 import React, { useMemo } from "react";
-import { Home, ListTodo, Smile, User as UserIcon } from "lucide-react";
+import { Home, ListTodo, MessageCircle, User as UserIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/hooks/useCapacitor";
 import {
   getMobileTabModules,
+  isChatTabActive,
   isModuleActive,
   isMoreTabActive,
   openTasksEntry,
@@ -20,8 +21,7 @@ import type { ViewMode } from "@/types";
 const TAB_ICONS: Record<string, React.ReactNode> = {
   home: <Home size={20} />,
   tasks: <ListTodo size={20} />,
-  // 说说：笑脸轮廓（原 NotebookPen 已给笔记）
-  diary: <Smile size={20} />,
+  chat: <MessageCircle size={20} />,
 };
 
 export default function MobileTabBar({ visible }: { visible: boolean }) {
@@ -53,7 +53,10 @@ export default function MobileTabBar({ visible }: { visible: boolean }) {
       mode: m.mode,
       label: t(m.labelKey, { defaultValue: m.labelFallback }),
       icon: TAB_ICONS[m.id] || <Home size={20} />,
-      active: isModuleActive(m, state.viewMode),
+      active:
+        m.id === "chat"
+          ? isChatTabActive(state.viewMode)
+          : isModuleActive(m, state.viewMode),
       openMyTasks: m.action === "openMyTasks",
     })),
     {
@@ -111,6 +114,11 @@ export default function MobileTabBar({ visible }: { visible: boolean }) {
             {tab.id === "tasks" && state.reminderActiveCount > 0 && (
               <span className="absolute -top-1 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
                 {state.reminderActiveCount}
+              </span>
+            )}
+            {tab.id === "chat" && state.chatUnreadCount > 0 && (
+              <span className="absolute -top-1 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-accent-danger text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-sm">
+                {state.chatUnreadCount > 99 ? "99+" : state.chatUnreadCount}
               </span>
             )}
           </div>

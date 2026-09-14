@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EMOJI_LIST, IMAGE_EMOJI_TABS } from "@/lib/emoji";
-import { resolveAttachmentUrl } from "@/lib/api";
+import { resolveAttachmentUrl, withMediaWidth } from "@/lib/api";
 
 export type CustomStickerItem = { id: string; url: string };
 
@@ -287,10 +287,11 @@ function StickerCell({
         aria-label={editing ? "删除表情" : "发送表情"}
       >
         <img
-          src={src}
+          src={withMediaWidth(src)}
           alt=""
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain pointer-events-none"
           loading="lazy"
+          decoding="async"
           draggable={false}
         />
       </button>

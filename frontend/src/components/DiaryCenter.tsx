@@ -4252,7 +4252,13 @@ export default function DiaryCenter() {
         <div className="md:hidden shrink-0">
           {!showMobileSearch ? (
             <MobileChromeHeader
-              variant="bare"
+              variant="stack"
+              stackAction="back"
+              leadingLabel="返回"
+              onLeadingClick={() => {
+                actions.setViewMode("chat");
+                actions.setMobileView("list");
+              }}
               title={
                 <span className="inline-flex items-center gap-2 min-w-0">
                   <span className="w-8 h-8 rounded-button bg-accent-primary flex items-center justify-center shrink-0">

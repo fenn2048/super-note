@@ -379,6 +379,9 @@ function AppLayout() {
     }
     return null;
   });
+  const [isChatThreadOpen, setIsChatThreadOpen] = useState(
+    () => Boolean(parseChatHash(window.location.hash)?.conversationId),
+  );
 
   const viewModeRef = useRef(state.viewMode);
   useEffect(() => {
@@ -389,6 +392,7 @@ function AppLayout() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
+      setIsChatThreadOpen(Boolean(parseChatHash(hash)?.conversationId));
       const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
       if (hash.startsWith("#/books/")) {
         const bookHash = hash.replace("#/books/", "");
@@ -938,13 +942,21 @@ function AppLayout() {
     "trash",
     "mentions",
     "tasks",
-    "chat",
   ]);
   useRegisterBackLayer(
     "more-stack",
     moreStackModes.has(state.viewMode),
     () => {
       actions.setViewMode("more");
+      actions.setMobileView("list");
+    },
+    200
+  );
+  useRegisterBackLayer(
+    "diary-from-chat",
+    state.viewMode === "diary",
+    () => {
+      actions.setViewMode("chat");
       actions.setMobileView("list");
     },
     200
@@ -1292,6 +1304,7 @@ function AppLayout() {
     viewMode: state.viewMode,
     mobileView: state.mobileView,
     isProjectDetailOpen,
+    isChatThreadOpen,
     barsVisible,
     keyboardVisible,
   };

@@ -44,6 +44,7 @@ import {
   parseThumbnailWidth,
   getOrCreateThumbnailAsync,
   isThumbnailable,
+  deleteThumbnailsFor,
 } from "../services/thumbnails";
 
 const IM_FILES_DIR = getImFilesDir();
@@ -337,8 +338,8 @@ const BUNDLED_MIME: Record<string, string> = {
   ".json": "application/json",
 };
 
-/** 全员默认表情包：/emojis/pack/<file>，无需登录。 */
-export function handleDownloadBundledSticker(c: Context): Response {
+/** 全员默认表情包：/emojis/pack/<file>，无需登录。支持 ?w= 静态 webp 缩略图。 */
+export async function handleDownloadBundledSticker(c: Context): Promise<Response> {
   const file = c.req.param("file") || "";
   if (!BUNDLED_STICKER_FILE.test(file)) {
     return c.json({ error: "无效的表情" }, 400);
@@ -355,6 +356,19 @@ export function handleDownloadBundledSticker(c: Context): Response {
   }
   const ext = path.extname(file).toLowerCase();
   const mime = BUNDLED_MIME[ext] || "application/octet-stream";
+  const width = parseThumbnailWidth(c.req.query("w"));
+  if (width && isThumbnailable(mime)) {
+    const thumb = await getOrCreateThumbnailAsync(dir, `bundled-${file}`, abs, mime, width);
+    if (thumb) {
+      return new Response(toResponseBody(thumb.buffer), {
+        headers: {
+          "Content-Type": thumb.mimeType,
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "Content-Disposition": "inline",
+        },
+      });
+    }
+  }
   const buffer = fs.readFileSync(abs);
   return new Response(toResponseBody(buffer), {
     headers: {
@@ -383,9 +397,24 @@ export async function handleDownloadImSticker(c: Context): Promise<Response> {
   if (!getUserWorkspaceRole(row.workspaceId, actorId)) {
     return c.json({ error: "无权访问该表情", code: "FORBIDDEN" }, 403);
   }
-  const absPath = path.join(getImStickersDir(), row.path);
+  const stickersDir = getImStickersDir();
+  const absPath = path.join(stickersDir, row.path);
   if (!fs.existsSync(absPath)) return c.json({ error: "文件丢失" }, 404);
   const mime = row.mimeType || "image/png";
+  const width = parseThumbnailWidth(c.req.query("w"));
+  if (width && isThumbnailable(mime)) {
+    const thumb = await getOrCreateThumbnailAsync(stickersDir, row.id, absPath, mime, width);
+    if (thumb) {
+      return new Response(toResponseBody(thumb.buffer), {
+        headers: {
+          "Content-Type": thumb.mimeType,
+          "Cache-Control": "private, max-age=86400",
+          "Content-Disposition": encodeContentDispositionFilename(row.filename, true),
+          "Content-Security-Policy": "default-src 'none'; sandbox;",
+        },
+      });
+    }
+  }
   const buffer = fs.readFileSync(absPath);
   return new Response(toResponseBody(buffer), {
     headers: {
@@ -1006,12 +1035,14 @@ app.delete("/stickers/:id", (c) => {
     return c.json({ error: "只能删除自己添加的表情" }, 403);
   }
   db.prepare("DELETE FROM im_stickers WHERE id = ?").run(stickerId);
-  const abs = path.join(getImStickersDir(), row.path);
+  const stickersDir = getImStickersDir();
+  const abs = path.join(stickersDir, row.path);
   try {
     if (fs.existsSync(abs)) fs.unlinkSync(abs);
   } catch {
     /* ignore */
   }
+  deleteThumbnailsFor(stickersDir, stickerId);
   return c.json({ success: true });
 });
 
