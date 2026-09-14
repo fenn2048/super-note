@@ -5,11 +5,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AtSign,
+  BookOpen,
   Check,
   ChevronDown,
+  Copy,
   Download,
   FileText,
   Image as ImageIcon,
+  ListTodo,
   MessageCircle,
   Mic,
   Paperclip,
@@ -33,8 +36,12 @@ import { useAppActions } from "@/store/AppContext";
 import type { ImConversation, ImMessage, ImMessageCursor, ImSearchHit, ImSticker, UserPublicInfo, WorkspaceMember, WorkspaceRole } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { copyText } from "@/lib/clipboard";
+import { createUnifiedTask } from "@/lib/taskEntry";
 import { confirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
+import ContextMenu, { type ContextMenuItem } from "@/components/ContextMenu";
+import { useContextMenu } from "@/hooks/useContextMenu";
 import { fieldControlClass } from "@/components/ui/field";
 import MentionPicker, { parseMentionTrigger, replaceMentionText } from "@/components/MentionPicker";
 import { haptic } from "@/hooks/useCapacitor";
@@ -158,6 +165,30 @@ function imPreview(m: { type: string; body?: string | null; file?: { filename?: 
   if (m.type === "file") return m.file?.filename ? `[文件] ${m.file.filename}` : "[文件]";
   if (m.type === "card") return cardPreview(m.body);
   return (m.body || "").replace(/\s+/g, " ").trim();
+}
+
+function messageCopyText(m: ImMessage): string {
+  if (m.type === "card") return cardPreview(m.body);
+  if (m.type === "text") return (m.body || "").trim();
+  return imPreview(m);
+}
+
+function messageTaskTitle(m: ImMessage): string {
+  if (m.type === "text") {
+    const t = (m.body || "").replace(/\s+/g, " ").trim();
+    if (!t) return "未命名任务";
+    return t.length > 80 ? t.slice(0, 80) : t;
+  }
+  return imPreview(m) || "未命名任务";
+}
+
+async function fetchMessageFile(m: ImMessage): Promise<File> {
+  if (!m.file?.url) throw new Error("没有可转存的附件");
+  const res = await fetch(resolveAttachmentUrl(m.file.url));
+  if (!res.ok) throw new Error("下载附件失败");
+  const blob = await res.blob();
+  const type = blob.type || m.file.mimeType || "application/octet-stream";
+  return new File([blob], m.file.filename || "file", { type });
 }
 
 function isStickerMessage(m: { type?: string; body?: string | null }): boolean {
@@ -404,6 +435,37 @@ function initials(name: string | null | undefined): string {
   return s ? s.slice(0, 1).toUpperCase() : "?";
 }
 
+function MessageActionRow({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-3 min-h-12 px-3 rounded-button text-left text-sm",
+        "active:scale-[0.97] transition-transform duration-press ease-out",
+        disabled && "opacity-40 pointer-events-none",
+        danger ? "text-accent-danger" : "text-tx-primary",
+      )}
+    >
+      <Icon size={18} className={danger ? "text-accent-danger" : "text-tx-secondary"} />
+      {label}
+    </button>
+  );
+}
+
 function ComposerMoreTile({
   icon: Icon,
   label,
@@ -486,6 +548,7 @@ export default function ChatCenter() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [actionMsgId, setActionMsgId] = useState<string | null>(null);
   const [stickers, setStickers] = useState<ImSticker[]>([]);
   const [recording, setRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
@@ -517,6 +580,9 @@ export default function ChatCenter() {
   const stickBottomRef = useRef(true);
   const pressTimerRef = useRef<number | null>(null);
   const skipClickRef = useRef(false);
+  const longPressArmedRef = useRef(false);
+  const suppressContextMenuRef = useRef(0);
+  const { menu, menuRef, openMenu, closeMenu } = useContextMenu();
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const hasMoreAfterRef = useRef(false);
@@ -544,6 +610,7 @@ export default function ChatCenter() {
     !mentionClosed && active?.type === "group"
       ? parseMentionTrigger(draft, cursorPos)
       : null;
+  const actionMsg = actionMsgId ? messages.find((m) => m.id === actionMsgId) || null : null;
 
   const refreshUnread = useCallback(() => {
     if (personal) {
@@ -913,7 +980,9 @@ export default function ChatCenter() {
   useEffect(() => {
     setPlusOpen(false);
     setEmojiOpen(false);
-  }, [activeId]);
+    setActionMsgId(null);
+    closeMenu();
+  }, [activeId, closeMenu]);
 
   const selectConversation = useCallback((id: string) => {
     setActiveId(id);
@@ -932,13 +1001,6 @@ export default function ChatCenter() {
     setSelectedIds(new Set());
   }, []);
 
-  const enterSelect = useCallback((id: string) => {
-    haptic.medium();
-    skipClickRef.current = true;
-    setSelecting(true);
-    setSelectedIds(new Set([id]));
-  }, []);
-
   const toggleSelected = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -951,6 +1013,131 @@ export default function ChatCenter() {
   const canDeleteMessage = useCallback(
     (m: ImMessage) => m.senderId === me || canModerate,
     [me, canModerate],
+  );
+
+  const closeMessageActions = useCallback(() => {
+    setActionMsgId(null);
+    closeMenu();
+  }, [closeMenu]);
+
+  const copyMessage = useCallback(async (m: ImMessage) => {
+    const text = messageCopyText(m);
+    if (!text) {
+      toast.error("没有可复制的内容");
+      return;
+    }
+    const ok = await copyText(text);
+    if (ok) toast.success("已复制");
+    else toast.error("复制失败");
+  }, []);
+
+  const addMessageToTask = useCallback(async (m: ImMessage) => {
+    const title = messageTaskTitle(m);
+    const who = (m.senderName || "").trim() || "成员";
+    const when = formatClock(m.createdAt);
+    let description = `来自聊天 · ${who} · ${when}`;
+    if (m.type === "text") {
+      const full = (m.body || "").trim();
+      if (full.length > 80) description = `${full}\n\n${description}`;
+    }
+    try {
+      await createUnifiedTask({ title, description });
+      toast.success("已添加到任务");
+    } catch (err: any) {
+      toast.error(err?.message || "添加到任务失败");
+    }
+  }, []);
+
+  const addMessageToDiary = useCallback(async (m: ImMessage) => {
+    if (isStickerMessage(m)) {
+      toast.error("表情不能发到说说");
+      return;
+    }
+    try {
+      if (m.type === "image" && m.file) {
+        const file = await fetchMessageFile(m);
+        const uploaded = await api.diaryImages.upload(file);
+        await api.postDiary({ contentText: "", images: [uploaded.id], visibility: "PUBLIC" });
+      } else if (m.type === "voice" && m.file) {
+        const file = await fetchMessageFile(m);
+        const uploaded = await api.diaryImages.upload(file);
+        const duration = Math.max(1, parseInt(m.body, 10) || 1);
+        await api.postDiary({
+          contentText: "",
+          voice: { id: uploaded.id, duration },
+          visibility: "PUBLIC",
+        });
+      } else {
+        const contentText = messageCopyText(m);
+        if (!contentText) {
+          toast.error("没有可发布的内容");
+          return;
+        }
+        await api.postDiary({ contentText, visibility: "PUBLIC" });
+      }
+      toast.success("已发布到说说");
+    } catch (err: any) {
+      toast.error(err?.message || "发布说说失败");
+    }
+  }, []);
+
+  const deleteOneMessage = useCallback(
+    async (m: ImMessage) => {
+      if (!activeId) return;
+      if (!canDeleteMessage(m)) {
+        toast.error("没有权限删除这条消息");
+        return;
+      }
+      const ok = await confirm({
+        title: "删除这条消息",
+        description: "删除后所有成员都看不到这条消息。",
+        confirmText: "删除",
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        const res = await api.im.deleteMessages(activeId, { ids: [m.id] });
+        const gone = new Set(res.deletedIds);
+        setMessages((prev) => prev.filter((x) => !gone.has(x.id)));
+        toast.success("已删除");
+      } catch (err: any) {
+        toast.error(err?.message || "删除失败");
+      }
+    },
+    [activeId, canDeleteMessage],
+  );
+
+  const handleMessageAction = useCallback(
+    async (actionId: string, m: ImMessage) => {
+      closeMessageActions();
+      if (actionId === "copy") await copyMessage(m);
+      else if (actionId === "to-task") await addMessageToTask(m);
+      else if (actionId === "to-diary") await addMessageToDiary(m);
+      else if (actionId === "delete") await deleteOneMessage(m);
+    },
+    [closeMessageActions, copyMessage, addMessageToTask, addMessageToDiary, deleteOneMessage],
+  );
+
+  const messageMenuItems = useCallback(
+    (m: ImMessage): ContextMenuItem[] => [
+      { id: "copy", label: "复制", icon: <Copy size={14} /> },
+      { id: "to-task", label: "添加到任务", icon: <ListTodo size={14} /> },
+      {
+        id: "to-diary",
+        label: "添加到说说",
+        icon: <BookOpen size={14} />,
+        disabled: isStickerMessage(m),
+      },
+      { id: "sep-del", label: "", separator: true },
+      {
+        id: "delete",
+        label: "删除",
+        icon: <Trash2 size={14} />,
+        danger: true,
+        disabled: !canDeleteMessage(m),
+      },
+    ],
+    [canDeleteMessage],
   );
 
   const deleteConversation = useCallback(
@@ -1055,6 +1242,13 @@ export default function ChatCenter() {
     plusOpen,
     () => setPlusOpen(false),
     258,
+  );
+
+  useRegisterBackLayer(
+    "chat-msg-actions",
+    Boolean(actionMsgId),
+    () => setActionMsgId(null),
+    266,
   );
 
   useRegisterBackLayer(
@@ -1876,7 +2070,7 @@ export default function ChatCenter() {
                           key={m.id}
                           data-msg-id={m.id}
                           className={cn(
-                            "flex gap-2 items-end",
+                            "flex gap-2 items-end select-none",
                             mine ? "justify-end" : "justify-start",
                             selecting && "cursor-pointer",
                           )}
@@ -1889,19 +2083,40 @@ export default function ChatCenter() {
                           }}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            if (!selecting) enterSelect(m.id);
-                            else toggleSelected(m.id);
+                            if (selecting) {
+                              toggleSelected(m.id);
+                              return;
+                            }
+                            if (Date.now() - suppressContextMenuRef.current < 800) return;
+                            if (isDesktop) openMenu(e, m.id, "message");
+                            else setActionMsgId(m.id);
                           }}
                           onPointerDown={() => {
-                            if (selecting) return;
+                            if (selecting || isDesktop) return;
                             clearPress();
+                            longPressArmedRef.current = false;
                             pressTimerRef.current = window.setTimeout(() => {
-                              enterSelect(m.id);
+                              longPressArmedRef.current = true;
+                              haptic.medium();
                             }, 450);
                           }}
-                          onPointerUp={clearPress}
-                          onPointerCancel={clearPress}
-                          onPointerLeave={clearPress}
+                          onPointerUp={() => {
+                            const armed = longPressArmedRef.current;
+                            longPressArmedRef.current = false;
+                            clearPress();
+                            if (!armed || selecting) return;
+                            skipClickRef.current = true;
+                            suppressContextMenuRef.current = Date.now();
+                            setActionMsgId(m.id);
+                          }}
+                          onPointerCancel={() => {
+                            longPressArmedRef.current = false;
+                            clearPress();
+                          }}
+                          onPointerLeave={() => {
+                            longPressArmedRef.current = false;
+                            clearPress();
+                          }}
                         >
                           {selecting && (
                             <span
@@ -1919,7 +2134,15 @@ export default function ChatCenter() {
                           {!mine && (
                             <Avatar name={m.senderName || ""} url={m.senderAvatarUrl} size={28} />
                           )}
-                          <div className={cn("max-w-[78%] md:max-w-[64%] min-w-0 flex flex-col", mine && "items-end")}>
+                          <div
+                            className={cn("max-w-[78%] md:max-w-[64%] min-w-0 flex flex-col", mine && "items-end")}
+                            onClickCapture={(e) => {
+                              if (!skipClickRef.current) return;
+                              skipClickRef.current = false;
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                          >
                             {!mine && active?.type === "group" && (
                               <div className="text-[11px] text-tx-tertiary mb-0.5 px-1">
                                 {m.senderName}
@@ -2429,6 +2652,61 @@ export default function ChatCenter() {
           </div>
         </section>
       )}
+
+      <ContextMenu
+        isOpen={menu.isOpen && menu.targetType === "message"}
+        x={menu.x}
+        y={menu.y}
+        menuRef={menuRef}
+        items={
+          menu.targetId
+            ? (() => {
+                const target = messages.find((x) => x.id === menu.targetId);
+                return target ? messageMenuItems(target) : [];
+              })()
+            : []
+        }
+        onAction={(id) => {
+          const target = messages.find((x) => x.id === menu.targetId);
+          if (target) void handleMessageAction(id, target);
+          else closeMenu();
+        }}
+      />
+
+      <BottomSheet
+        open={Boolean(actionMsg)}
+        onClose={() => setActionMsgId(null)}
+        title="消息操作"
+      >
+        {actionMsg ? (
+          <div className="py-1">
+            <MessageActionRow
+              icon={Copy}
+              label="复制"
+              onClick={() => void handleMessageAction("copy", actionMsg)}
+            />
+            <MessageActionRow
+              icon={ListTodo}
+              label="添加到任务"
+              onClick={() => void handleMessageAction("to-task", actionMsg)}
+            />
+            <MessageActionRow
+              icon={BookOpen}
+              label="添加到说说"
+              disabled={isStickerMessage(actionMsg)}
+              onClick={() => void handleMessageAction("to-diary", actionMsg)}
+            />
+            <div className="h-px bg-app-border my-1 mx-2" />
+            <MessageActionRow
+              icon={Trash2}
+              label="删除"
+              danger
+              disabled={!canDeleteMessage(actionMsg)}
+              onClick={() => void handleMessageAction("delete", actionMsg)}
+            />
+          </div>
+        ) : null}
+      </BottomSheet>
 
       {activeId && (
         <ShareItemPickerSheet
