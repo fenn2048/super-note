@@ -150,31 +150,14 @@ function resolveMinClientVersion(): string | null {
 
 /**
  * Android APK 下载地址（给 UpdateNotifier / 关于页）。
- * 优先 ENV 直链；否则若镜像内存在 public downloads APK 则返回站内路径；
- * 再否则指向 GitHub Releases（Docker 默认不打包 .apk）。
+ * 优先 ENV 直链；否则指向本机代理的最新 APK（GitHub/Gitee/站内包）。
  */
 function resolveAndroidApkUrl(): string {
   const envUrl = (process.env.SUPER_ANDROID_APK_URL || process.env.ANDROID_APK_URL || "").trim();
-  if (envUrl) return envUrl;
-
-  const apkCandidates = [
-    path.resolve(process.cwd(), "frontend/dist/downloads/super-note-debug.apk"),
-    path.resolve(process.cwd(), "frontend/dist/downloads/super-note.apk"),
-    path.resolve(process.cwd(), "../frontend/dist/downloads/super-note-debug.apk"),
-    path.resolve(__dirname, "../../../frontend/dist/downloads/super-note-debug.apk"),
-  ];
-  for (const p of apkCandidates) {
-    try {
-      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-        const base = path.basename(p);
-        return `/downloads/${base}`;
-      }
-    } catch {
-      /* continue */
-    }
-  }
-
-  return "https://github.com/cropflre/super-note/releases/latest";
+  // GitHub Releases 页不是安装包直链，不能当 APK URL（WebView / 下载器会拿到 HTML）
+  if (envUrl && !/\/releases\/latest\/?$/i.test(envUrl)) return envUrl;
+  // 由 /api/releases/android-apk/latest.apk 解析最新 GitHub/Gitee 资产并流式返回
+  return "/api/releases/android-apk/latest.apk";
 }
 
 /**

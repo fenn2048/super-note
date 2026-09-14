@@ -150,7 +150,15 @@ app.use("*", cors({
 //   - threshold 默认 1KB，小响应不压缩（避免无谓 CPU）。
 //   - 静态资源（字体、前端 dist）已有自己的 Cache-Control，这里不覆盖它们；
 //     仅包裹 /api/* 足够。
-app.use("/api/*", compress());
+const compressMw = compress();
+app.use("/api/*", async (c, next) => {
+  // APK 已是压缩二进制；gzip 会缓冲整包，拖垮流式代理
+  if (c.req.path.includes("/android-apk/file") || c.req.path.includes("/android-apk/latest.apk")) {
+    await next();
+    return;
+  }
+  return compressMw(c, next);
+});
 
 // 初始化数据库
 getDb();
@@ -853,9 +861,18 @@ if (process.env.NODE_ENV === "production") {
       return c.body(content, 200, { "Content-Type": contentType });
     }
 
-    // 缺失的 APK：重定向到官方下载，避免 SPA 登录页（旧版 Android 客户端也受益）
-    if (reqPath.toLowerCase().endsWith(".apk") && androidApkFallbackUrl) {
-      return c.redirect(androidApkFallbackUrl, 302);
+    // 缺失的 APK：不要 302 到 GitHub Releases 网页（那会下载成 HTML）。
+    // 直链 ENV 才外跳；否则走本机代理的最新 APK 流。
+    if (reqPath.toLowerCase().endsWith(".apk")) {
+      const fallback = androidApkFallbackUrl;
+      if (
+        fallback &&
+        /\.apk(\?|$)/i.test(fallback) &&
+        !/\/releases\/latest\/?$/i.test(fallback)
+      ) {
+        return c.redirect(fallback, 302);
+      }
+      return c.redirect("/api/releases/android-apk/latest.apk", 302);
     }
 
     if (isStaticAssetPath(reqPath)) {

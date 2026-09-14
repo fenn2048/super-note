@@ -31,6 +31,8 @@
  */
 
 import { Hono } from "hono";
+import fs from "fs";
+import path from "path";
 
 const router = new Hono();
 
@@ -48,6 +50,10 @@ const GITHUB_TOKEN = (process.env.SUPER_GITHUB_TOKEN || process.env.GITHUB_TOKEN
 const CACHE_TTL_MS = parseTtl(process.env.SUPER_RELEASE_CACHE_MS, 15 * 60_000);
 const FAIL_CACHE_TTL_MS = parseTtl(process.env.SUPER_RELEASE_FAIL_CACHE_MS, 5 * 60_000);
 const FETCH_TIMEOUT_MS = 5_000;
+const APK_FETCH_TIMEOUT_MS = 180_000;
+
+const GITEE_OWNER = process.env.SUPER_GITEE_OWNER || GITHUB_OWNER;
+const GITEE_REPO = process.env.SUPER_GITEE_REPO || GITHUB_REPO;
 
 function parseTtl(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
@@ -82,6 +88,64 @@ interface Unavailable {
 }
 
 type Payload = LatestRelease | Unavailable;
+
+/** 从 release 资产里挑正式 APK（优先 Super-Note-x.y.z.apk，排除 debug）。 */
+export function pickAndroidApkAsset<T extends { name: string }>(assets: T[]): T | undefined {
+  const apks = assets.filter((a) => /\.apk$/i.test(a.name || ""));
+  if (apks.length === 0) return undefined;
+  const releaseNamed = apks.find((a) => /super-note-\d/i.test(a.name) && !/debug/i.test(a.name));
+  if (releaseNamed) return releaseNamed;
+  const nonDebug = apks.find((a) => !/debug/i.test(a.name));
+  return nonDebug || apks[0];
+}
+
+export function giteeDownloadUrl(owner: string, repo: string, tag: string, filename: string): string {
+  const t = tag.startsWith("v") ? tag : `v${tag}`;
+  return `https://gitee.com/${owner}/${repo}/releases/download/${t}/${encodeURIComponent(filename)}`;
+}
+
+export function githubProxyDownloadUrl(githubUrl: string): string {
+  if (!githubUrl) return githubUrl;
+  if (/^https?:\/\/ghproxy\.net\//i.test(githubUrl)) return githubUrl;
+  return `https://ghproxy.net/${githubUrl}`;
+}
+
+function uniqueUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const u of urls) {
+    const t = (u || "").trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+function isDirectApkUrl(url: string): boolean {
+  if (!url) return false;
+  if (/\/releases\/latest\/?$/i.test(url)) return false;
+  return /\.apk(\?|$)/i.test(url) || /android-apk\/file/i.test(url);
+}
+
+function resolveLocalApkFile(): { path: string; filename: string } | null {
+  const apkCandidates = [
+    path.resolve(process.cwd(), "frontend/dist/downloads/super-note-debug.apk"),
+    path.resolve(process.cwd(), "frontend/dist/downloads/super-note.apk"),
+    path.resolve(process.cwd(), "../frontend/dist/downloads/super-note-debug.apk"),
+    path.resolve(__dirname, "../../../frontend/dist/downloads/super-note-debug.apk"),
+  ];
+  for (const p of apkCandidates) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        return { path: p, filename: path.basename(p) };
+      }
+    } catch {
+      /* continue */
+    }
+  }
+  return null;
+}
 
 /**
  * 缓存槽：
@@ -169,36 +233,170 @@ async function fetchLatestFromGitHub(): Promise<LatestRelease | "not-modified"> 
   }
 }
 
-router.get("/latest", async (c) => {
+async function getLatestReleasePayload(): Promise<Payload> {
   const now = Date.now();
 
-  // 1. 命中当前缓存（成功或失败都尊重各自 TTL）
   if (current && now - current.at < current.ttl) {
-    return c.json(current.payload);
+    return current.payload;
   }
 
-  // 2. 缓存过期 → 尝试外呼
   try {
     const result = await fetchLatestFromGitHub();
     const payload: LatestRelease = result === "not-modified" ? lastSuccess!.payload : result;
     current = { at: now, ttl: CACHE_TTL_MS, payload };
-    return c.json(payload);
+    return payload;
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
 
-    // 3. stale-while-error：外呼失败但有历史成功数据 → 继续返回旧数据，
-    //    并把这条"旧数据"短期缓存（FAIL_CACHE_TTL_MS）防止持续打 GitHub。
-    //    用户体验：版本号短暂停止更新 ≫ 面板挂掉。
     if (lastSuccess) {
       current = { at: now, ttl: FAIL_CACHE_TTL_MS, payload: lastSuccess.payload };
-      return c.json(lastSuccess.payload);
+      return lastSuccess.payload;
     }
 
-    // 4. 完全没有成功历史（首次启动就被 403） → 返回 unavailable
     const payload: Unavailable = { available: false, reason };
     current = { at: now, ttl: FAIL_CACHE_TTL_MS, payload };
-    return c.json(payload);
+    return payload;
   }
+}
+
+router.get("/latest", async (c) => {
+  return c.json(await getLatestReleasePayload());
 });
+
+/**
+ * GET /api/releases/android-apk —— 最新 Android 安装包的候选直链。
+ * GET /api/releases/android-apk/file —— 由本机代理拉取并流式返回 APK
+ *   （手机只连用户自己的服务器，避开 GitHub 在国内不稳定）。
+ */
+async function resolveLatestAndroidApk(): Promise<{
+  available: boolean;
+  version: string;
+  tag: string;
+  filename: string;
+  urls: string[];
+  fileUrl: string;
+  localPath: string | null;
+  remoteUrls: string[];
+  reason?: string;
+}> {
+  const fileUrl = "/api/releases/android-apk/latest.apk";
+  const local = resolveLocalApkFile();
+  const envUrl = (process.env.SUPER_ANDROID_APK_URL || process.env.ANDROID_APK_URL || "").trim();
+  const remoteUrls: string[] = [];
+  const publicUrls: string[] = [];
+
+  if (envUrl && isDirectApkUrl(envUrl)) {
+    remoteUrls.push(envUrl);
+    publicUrls.push(envUrl);
+  }
+
+  const rel = await getLatestReleasePayload();
+  let version = "";
+  let tag = "";
+  let filename = local?.filename || "super-note.apk";
+
+  if (rel.available) {
+    version = rel.version;
+    tag = rel.tag;
+    const apk = pickAndroidApkAsset(rel.assets);
+    if (apk) {
+      filename = apk.name;
+      const gitee = giteeDownloadUrl(GITEE_OWNER, GITEE_REPO, tag, apk.name);
+      remoteUrls.push(gitee);
+      publicUrls.push(gitee);
+      if (apk.browserDownloadUrl) {
+        remoteUrls.push(apk.browserDownloadUrl);
+        publicUrls.push(apk.browserDownloadUrl);
+        remoteUrls.push(githubProxyDownloadUrl(apk.browserDownloadUrl));
+        publicUrls.push(githubProxyDownloadUrl(apk.browserDownloadUrl));
+      }
+    }
+  }
+
+  publicUrls.unshift(fileUrl);
+  if (local) {
+    publicUrls.push(`/downloads/${local.filename}`);
+  }
+
+  const available = remoteUrls.length > 0 || !!local;
+  return {
+    available,
+    version,
+    tag,
+    filename,
+    urls: uniqueUrls(publicUrls),
+    fileUrl,
+    localPath: local?.path ?? null,
+    remoteUrls: uniqueUrls(remoteUrls),
+    ...(available ? {} : { reason: !rel.available ? rel.reason : "no apk asset" }),
+  };
+}
+
+async function fetchRemoteApk(url: string): Promise<Response | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), APK_FETCH_TIMEOUT_MS);
+  try {
+    const headers: Record<string, string> = {
+      "User-Agent": `${GITHUB_OWNER}-${GITHUB_REPO}-server`,
+      Accept: "application/vnd.android.package-archive, application/octet-stream, */*",
+    };
+    if (GITHUB_TOKEN && /github\.com|githubusercontent\.com/i.test(url)) {
+      headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+    }
+    const resp = await fetch(url, { signal: ctrl.signal, redirect: "follow", headers });
+    if (!resp.ok || !resp.body) return null;
+    const ct = (resp.headers.get("content-type") || "").toLowerCase();
+    if (ct.includes("text/html")) return null;
+    return resp;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+router.get("/android-apk", async (c) => {
+  const resolved = await resolveLatestAndroidApk();
+  return c.json({
+    available: resolved.available,
+    version: resolved.version,
+    tag: resolved.tag,
+    filename: resolved.filename,
+    urls: resolved.urls,
+    fileUrl: resolved.fileUrl,
+    ...(resolved.reason ? { reason: resolved.reason } : {}),
+  });
+});
+
+async function serveLatestAndroidApkFile(c: import("hono").Context) {
+  const resolved = await resolveLatestAndroidApk();
+  const filename = resolved.filename || "super-note.apk";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/vnd.android.package-archive",
+    "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+    "Cache-Control": "no-store",
+  };
+
+  for (const url of resolved.remoteUrls) {
+    const resp = await fetchRemoteApk(url);
+    if (!resp?.body) continue;
+    // 不转发 Content-Length：上游可能 gzip，Node fetch 解压后长度对不上
+    for (const [k, v] of Object.entries(headers)) c.header(k, v);
+    return c.body(resp.body, 200);
+  }
+
+  if (resolved.localPath && fs.existsSync(resolved.localPath)) {
+    const stat = fs.statSync(resolved.localPath);
+    headers["Content-Length"] = String(stat.size);
+    for (const [k, v] of Object.entries(headers)) c.header(k, v);
+    return c.body(fs.readFileSync(resolved.localPath), 200);
+  }
+
+  return c.json({ error: "无法获取最新 Android 安装包", reason: resolved.reason || "no apk" }, 404);
+}
+
+router.get("/android-apk/file", (c) => serveLatestAndroidApkFile(c));
+// 带 .apk 后缀：旧客户端用 /\.apk$/ 判断直链，系统下载器也更好识别
+router.get("/android-apk/latest.apk", (c) => serveLatestAndroidApkFile(c));
 
 export default router;
