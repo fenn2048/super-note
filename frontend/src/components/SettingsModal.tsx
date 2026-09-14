@@ -33,7 +33,8 @@ import {
   BACKGROUND_RESUME_MINUTE_OPTIONS,
   DEFAULT_BACKGROUND_RESUME_MINUTES,
 } from "@/lib/appResume";
-import { downloadApkFromUrl, downloadAttachment } from "@/lib/downloadFile";
+import { downloadAttachment } from "@/lib/downloadFile";
+import { installLatestAndroidApk } from "@/lib/androidUpdate";
 import { isDesktop, checkForUpdates, onUpdaterStatus, getReleaseChannel, isPortableDesktop, getAppInfo, setDesktopHideMenuBar as setDesktopHideMenuBarPreference, type UpdaterPayload } from "@/lib/desktopBridge";
 import { CustomFont } from "@/types";
 import { cn } from "@/lib/utils";
@@ -748,6 +749,7 @@ function AboutPanel() {
   const [isIgnoringBattery, setIsIgnoringBattery] = useState<boolean | null>(null);
   const [keepAliveEnabled, setKeepAliveEnabled] = useState(false);
   const [keepAliveBusy, setKeepAliveBusy] = useState(false);
+  const [apkDownloading, setApkDownloading] = useState(false);
 
   const isAndroid =
     typeof window !== "undefined" &&
@@ -819,8 +821,8 @@ function AboutPanel() {
           下载扩展与客户端
         </h3>
         <p className="text-xs text-tx-secondary dark:text-tx-tertiary">
-          剪藏扩展与 Android 安装包由服务器 /downloads 提供。
-          部署时使用 <code className="text-[10px] px-1 rounded bg-app-border/80 dark:bg-app-active">./build_docker.sh --with-assets</code> 可将固定签名 APK 打进镜像；Android 端可覆盖安装。
+          剪藏扩展由服务器 /downloads 提供。Android 端点击下载会拉取最新 APK 并调起系统安装界面。
+          部署时使用 <code className="text-[10px] px-1 rounded bg-app-border/80 dark:bg-app-active">./build_docker.sh --with-assets</code> 可将固定签名 APK 打进镜像作为兜底。
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {([
@@ -847,9 +849,12 @@ function AboutPanel() {
                 </div>
                 <button
                   type="button"
+                  disabled={item.kind === "apk" && apkDownloading}
                   onClick={() => {
                     if (item.kind === "apk") {
-                      downloadApkFromUrl(url, item.file);
+                      if (apkDownloading) return;
+                      setApkDownloading(true);
+                      void installLatestAndroidApk().finally(() => setApkDownloading(false));
                     } else {
                       void downloadAttachment(url, item.file).catch((e) => {
                         console.error(e);
@@ -857,10 +862,10 @@ function AboutPanel() {
                       });
                     }
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent-primary text-white text-[11px] font-medium hover:opacity-90 shrink-0 shadow-sm disabled:opacity-60"
                 >
                   <Download size={11} />
-                  下载
+                  {item.kind === "apk" && apkDownloading ? "下载中…" : "下载"}
                 </button>
               </div>
             );

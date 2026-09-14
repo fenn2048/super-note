@@ -909,9 +909,9 @@ export const api = {
     minClientVersion?: string;
     /**
      * Android APK 下载地址。可能是：
-     *   - 站内相对路径 `/downloads/super-note-debug.apk`
-     *   - ENV 配置的完整 URL
-     *   - GitHub Releases 页（Docker 默认不内置 APK）
+     *   - 本机代理 `/api/releases/android-apk/latest.apk`
+     *   - ENV 配置的完整直链
+     *   - 站内 `/downloads/super-note-debug.apk`
      */
     androidApkUrl?: string;
   }> => {
@@ -946,6 +946,25 @@ export const api = {
   > => {
     try {
       const res = await fetch(`${getBaseUrl()}/releases/latest`);
+      if (!res.ok) return { available: false, reason: `HTTP ${res.status}` };
+      return res.json();
+    } catch (e) {
+      return { available: false, reason: e instanceof Error ? e.message : String(e) };
+    }
+  },
+
+  /** 最新 Android APK 的候选直链（后端聚合 GitHub / Gitee / 站内包） */
+  getAndroidApk: async (): Promise<{
+    available: boolean;
+    version?: string;
+    tag?: string;
+    filename?: string;
+    urls?: string[];
+    fileUrl?: string;
+    reason?: string;
+  }> => {
+    try {
+      const res = await fetch(`${getBaseUrl()}/releases/android-apk`);
       if (!res.ok) return { available: false, reason: `HTTP ${res.status}` };
       return res.json();
     } catch (e) {

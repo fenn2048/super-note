@@ -18,6 +18,8 @@ declare global {
         mimeType: string,
         token: string,
       ) => void;
+      /** 依次尝试多个直链，下载后调起系统安装器 */
+      downloadAndInstallApk?: (urlsJson: string, filename: string, token: string) => void;
       /** 系统浏览器打开外链（更新页 / GitHub 等） */
       openExternalUrl?: (url: string) => void;
       shareText?: (text: string, title: string) => void;
@@ -43,28 +45,40 @@ export function openExternalUrl(url: string): void {
 
 /** 下载远程 APK/安装包：Android 走原生流式并调起安装；其它端触发浏览器下载 */
 export function downloadApkFromUrl(url: string, filename = "super-note.apk"): void {
-  const abs = toAbsoluteUrl(url);
+  downloadAndInstallApkFromUrls([url], filename);
+}
+
+/**
+ * 依次尝试多个 APK 直链。Android 原生会校验 ZIP 魔数并调起安装器；
+ * 旧壳没有 downloadAndInstallApk 时退回第一条 URL。
+ */
+export function downloadAndInstallApkFromUrls(
+  urls: string[],
+  filename = "super-note.apk",
+): void {
+  const unique = [...new Set(urls.map((u) => toAbsoluteUrl(u)).filter(Boolean))];
+  if (unique.length === 0) return;
   const bridge = typeof window !== "undefined" ? window.AndroidDownloadBridge : undefined;
+  const token = getToken() || "";
+  const mime = "application/vnd.android.package-archive";
+  if (bridge?.downloadAndInstallApk) {
+    bridge.downloadAndInstallApk(JSON.stringify(unique), filename, token);
+    return;
+  }
   if (bridge?.downloadFromUrl) {
-    const token = getToken() || "";
-    bridge.downloadFromUrl(
-      abs,
-      filename,
-      "application/vnd.android.package-archive",
-      token,
-    );
+    bridge.downloadFromUrl(unique[0], filename, mime, token);
     return;
   }
   try {
     const a = document.createElement("a");
-    a.href = abs;
+    a.href = unique[0];
     a.download = filename || "super-note.apk";
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
   } catch {
-    openExternalUrl(abs);
+    openExternalUrl(unique[0]);
   }
 }
 
