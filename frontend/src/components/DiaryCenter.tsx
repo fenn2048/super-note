@@ -74,6 +74,12 @@ import {
   LoadingBlock,
 } from "@/components/common/FeedbackStates";
 import { springs } from "@/lib/motion";
+import {
+  createVoiceMediaRecorder,
+  getVoiceMediaStream,
+  voiceBlobFromChunks,
+  voiceFileFromBlob,
+} from "@/lib/voiceRecorder";
 
 
 marked.setOptions({
@@ -512,7 +518,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
         }
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getVoiceMediaStream();
 
       // 创建 AudioContext + AnalyserNode 用于波形可视化
       const audioCtx = new AudioContext();
@@ -536,7 +542,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       loop();
 
       // 创建 MediaRecorder（与 AnalyserNode 共享同一个 stream）
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const recorder = createVoiceMediaRecorder(stream);
       audioChunksRef.current = [];
       mediaRecorderRef.current = recorder;
 
@@ -574,8 +580,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
       const duration = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
 
       recorder.addEventListener("stop", () => {
-        const mimeType = recorder.mimeType || "audio/webm";
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const blob = voiceBlobFromChunks(audioChunksRef.current, recorder.mimeType);
         audioChunksRef.current = [];
         cleanupRecording();
         resolve({ blob, duration: duration || 1 });
@@ -1221,10 +1226,7 @@ function ComposeBox({ onPost }: { onPost: () => void }) {
               try {
                 const { blob, duration } = await stopRecordingAndGetBlob();
                 if (blob.size > 0) {
-                  // 去掉 codecs 后缀（如 "audio/webm;codecs=opus" → "audio/webm"），后端做 Set.has 精确匹配
-                  const cleanMime = blob.type.split(";")[0].trim();
-                  const file = new File([blob], "voice.webm", { type: cleanMime });
-                  handleVoiceUpload(file, duration);
+                  handleVoiceUpload(voiceFileFromBlob(blob, "voice"), duration);
                 }
               } catch (e) {
                 console.error("Recording complete error:", e);

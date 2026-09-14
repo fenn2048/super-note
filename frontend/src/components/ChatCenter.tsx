@@ -38,6 +38,12 @@ import { fieldControlClass } from "@/components/ui/field";
 import MentionPicker, { parseMentionTrigger, replaceMentionText } from "@/components/MentionPicker";
 import { haptic } from "@/hooks/useCapacitor";
 import {
+  createVoiceMediaRecorder,
+  getVoiceMediaStream,
+  voiceBlobFromChunks,
+  voiceFileFromBlob,
+} from "@/lib/voiceRecorder";
+import {
   EmptyState,
   EmptyActionButton,
   LoadingBlock,
@@ -1185,7 +1191,7 @@ export default function ChatCenter() {
     }
     mediaRecorderRef.current = null;
     const duration = Math.max(1, Math.round((Date.now() - recordStartedRef.current) / 1000));
-    const mime = rec.mimeType || "audio/webm";
+    const mime = rec.mimeType;
     await new Promise<void>((resolve) => {
       rec.onstop = () => resolve();
       try {
@@ -1197,15 +1203,14 @@ export default function ChatCenter() {
     stopRecordStreams();
     mediaRecorderRef.current = null;
     setRecording(false);
-    const blob = new Blob(audioChunksRef.current, { type: mime });
+    const blob = voiceBlobFromChunks(audioChunksRef.current, mime);
     audioChunksRef.current = [];
     if (blob.size < 256 || duration < 1) {
       toast.error("录音太短");
       setRecordDuration(0);
       return;
     }
-    const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
-    const file = new File([blob], `voice.${ext}`, { type: mime });
+    const file = voiceFileFromBlob(blob, "voice");
     await sendVoiceFile(file, Math.min(60, duration));
     setRecordDuration(0);
   }, [cancelRecording, sendVoiceFile, stopRecordStreams]);
@@ -1225,7 +1230,7 @@ export default function ChatCenter() {
           /* webview 继续走 getUserMedia */
         }
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getVoiceMediaStream();
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
       if (audioCtx.state === "suspended") await audioCtx.resume();
@@ -1257,9 +1262,7 @@ export default function ChatCenter() {
       };
       waveformAnimRef.current = requestAnimationFrame(loop);
 
-      const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-      const mime = cands.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
-      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const rec = createVoiceMediaRecorder(stream);
       audioChunksRef.current = [];
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
