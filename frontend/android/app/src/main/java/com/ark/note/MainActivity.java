@@ -1,10 +1,13 @@
 package com.ark.note;
 
 import android.Manifest;
+import android.app.PendingIntent;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -21,6 +24,8 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -33,6 +38,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,6 +47,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "MainActivity";
@@ -51,6 +58,9 @@ public class MainActivity extends BridgeActivity {
     private boolean lightSystemBars = true;
     /** 视频全屏等：隐藏状态栏 + 导航栏；主题色变更后需重新 hide */
     private boolean immersiveMode = false;
+    /** 已下载待安装的 APK（用户先去开「安装未知应用」权限时用） */
+    private File pendingApkInstall = null;
+    private volatile boolean apkDownloadInFlight = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,12 +81,8 @@ public class MainActivity extends BridgeActivity {
 
         handleIncomingIntent(getIntent());
 
+        attachJsBridges();
         if (this.bridge != null && this.bridge.getWebView() != null) {
-            this.bridge.getWebView().addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
-            this.bridge.getWebView().addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
-            this.bridge.getWebView().addJavascriptInterface(new AndroidLogBridge(), "AndroidLogBridge");
-            this.bridge.getWebView().addJavascriptInterface(new AndroidSystemBarsBridge(), "AndroidSystemBarsBridge");
-            this.bridge.getWebView().addJavascriptInterface(new AndroidOrientationBridge(), "AndroidOrientationBridge");
 
             this.bridge.getWebView().setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(this.bridge) {
                 @Override
@@ -101,6 +107,35 @@ public class MainActivity extends BridgeActivity {
                 return insets;
             });
             ViewCompat.requestApplyInsets(webView);
+        }
+    }
+
+    private void attachJsBridges() {
+        if (this.bridge == null || this.bridge.getWebView() == null) return;
+        WebView webView = this.bridge.getWebView();
+        webView.addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
+        webView.addJavascriptInterface(new AndroidKeepAliveBridge(), "AndroidKeepAliveBridge");
+        webView.addJavascriptInterface(new AndroidLogBridge(), "AndroidLogBridge");
+        webView.addJavascriptInterface(new AndroidSystemBarsBridge(), "AndroidSystemBarsBridge");
+        webView.addJavascriptInterface(new AndroidOrientationBridge(), "AndroidOrientationBridge");
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        attachJsBridges();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (pendingApkInstall != null && pendingApkInstall.exists()) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+                    || getPackageManager().canRequestPackageInstalls()) {
+                File apk = pendingApkInstall;
+                pendingApkInstall = null;
+                promptInstallApk(apk);
+            }
         }
     }
 
@@ -362,6 +397,11 @@ public class MainActivity extends BridgeActivity {
             scheduleWebViewMediaKeepAlive();
             intent.removeExtra("media_browse_wake");
         }
+        if (intent.hasExtra(PackageInstaller.EXTRA_STATUS)
+                || ApkInstallReceiver.ACTION.equals(intent.getAction())) {
+            handleInstallStatus(intent);
+        }
+
         String action = intent.getAction();
         if (Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action)) {
             ShareReceivePlugin.queueFromIntent(this, intent);
@@ -380,6 +420,37 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void handleInstallStatus(Intent intent) {
+        int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Integer.MIN_VALUE);
+        if (status == Integer.MIN_VALUE) return;
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            Intent confirm = Build.VERSION.SDK_INT >= 33
+                    ? intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class)
+                    : intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            if (confirm != null) {
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try {
+                    startActivity(confirm);
+                } catch (Exception e) {
+                    Log.e(TAG, "start install confirm", e);
+                    Toast.makeText(this, "无法打开安装界面: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+            return;
+        }
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            Toast.makeText(this, "安装完成", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (status == PackageInstaller.STATUS_FAILURE_ABORTED) return;
+        String msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+        Toast.makeText(
+                this,
+                "安装失败" + (msg != null && !msg.isEmpty() ? ": " + msg : ""),
+                Toast.LENGTH_LONG
+        ).show();
+    }
+
     private void dispatchItemNavigate(String sourceType, String sourceId) {
         final String js =
                 "try{sessionStorage.setItem('super:pending-navigate',JSON.stringify({sourceType:"
@@ -396,6 +467,223 @@ public class MainActivity extends BridgeActivity {
             this.bridge.getWebView().post(inject);
         } else {
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(inject, 800);
+        }
+    }
+
+    private static boolean shouldAttachAuth(String urlStr) {
+        if (urlStr == null) return false;
+        String lower = urlStr.toLowerCase(Locale.US);
+        return !(lower.contains("github.com")
+                || lower.contains("githubusercontent.com")
+                || lower.contains("gitee.com")
+                || lower.contains("ghproxy")
+                || lower.contains("llkk.cc"));
+    }
+
+    private File downloadUrlToApkFile(String urlStr, String filename, String token) throws IOException {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(urlStr);
+            int hops = 0;
+            int code;
+            while (true) {
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(20000);
+                conn.setReadTimeout(10 * 60 * 1000);
+                conn.setInstanceFollowRedirects(false);
+                conn.setRequestProperty("User-Agent", "SuperNote-Android");
+                conn.setRequestProperty("Accept",
+                        "application/vnd.android.package-archive, application/octet-stream, */*");
+                conn.setRequestProperty("Accept-Encoding", "identity");
+                if (token != null && !token.isEmpty() && shouldAttachAuth(url.toString())) {
+                    conn.setRequestProperty("Authorization", "Bearer " + token);
+                }
+                conn.connect();
+                code = conn.getResponseCode();
+                if (code >= 300 && code < 400 && hops < 8) {
+                    String loc = conn.getHeaderField("Location");
+                    conn.disconnect();
+                    conn = null;
+                    if (loc == null || loc.isEmpty()) {
+                        throw new IOException("HTTP " + code + " 无跳转地址");
+                    }
+                    url = new URL(url, loc);
+                    hops++;
+                    continue;
+                }
+                break;
+            }
+            if (code < 200 || code >= 300) {
+                throw new IOException("HTTP " + code);
+            }
+            String ct = conn.getContentType();
+            if (ct != null && ct.toLowerCase(Locale.US).contains("text/html")) {
+                throw new IOException("地址返回的是网页而不是安装包");
+            }
+
+            String safeName = (filename != null && !filename.isEmpty())
+                    ? filename.replaceAll("[\\\\/:*?\"<>|]", "_")
+                    : "super-note.apk";
+            if (!safeName.toLowerCase(Locale.US).endsWith(".apk")) {
+                safeName = "super-note.apk";
+            }
+            File updateDir = new File(getCacheDir(), "updates");
+            if (!updateDir.exists() && !updateDir.mkdirs()) {
+                throw new IOException("cannot create updates dir");
+            }
+            File apkFile = new File(updateDir, safeName);
+            boolean checkedMagic = false;
+            try (InputStream in = conn.getInputStream();
+                 FileOutputStream fos = new FileOutputStream(apkFile)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    if (!checkedMagic) {
+                        checkedMagic = true;
+                        if (n < 2 || buf[0] != 'P' || buf[1] != 'K') {
+                            throw new IOException("下载内容不是安装包（可能是网页）");
+                        }
+                    }
+                    fos.write(buf, 0, n);
+                }
+                fos.flush();
+            }
+            if (apkFile.length() < 100 * 1024L) {
+                //noinspection ResultOfMethodCallIgnored
+                apkFile.delete();
+                throw new IOException("安装包过小，下载不完整");
+            }
+            try (InputStream in2 = new FileInputStream(apkFile)) {
+                streamToDownloadsPublic(in2, apkFile.getName(),
+                        "application/vnd.android.package-archive");
+            } catch (Exception copyEx) {
+                Log.w(TAG, "copy apk to Downloads failed", copyEx);
+            }
+            return apkFile;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** 调起系统安装器；需 REQUEST_INSTALL_PACKAGES（Android 8+） */
+    private void promptInstallApk(File apkFile) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!getPackageManager().canRequestPackageInstalls()) {
+                    pendingApkInstall = apkFile;
+                    Toast.makeText(this,
+                            "请允许「安装未知应用」后将自动继续安装", Toast.LENGTH_LONG).show();
+                    Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                    settings.setData(Uri.parse("package:" + getPackageName()));
+                    settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(settings);
+                    return;
+                }
+            }
+            try {
+                installWithPackageInstaller(apkFile);
+                Toast.makeText(this, "正在打开安装界面…", Toast.LENGTH_SHORT).show();
+                return;
+            } catch (Exception sessionEx) {
+                Log.w(TAG, "PackageInstaller session failed, fallback ACTION_VIEW", sessionEx);
+            }
+            installWithActionView(apkFile);
+            Toast.makeText(this, "正在打开安装界面…", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Log.e(TAG, "promptInstallApk", e);
+            Toast.makeText(this,
+                    "无法打开安装器: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void installWithPackageInstaller(File apkFile) throws IOException {
+        PackageInstaller installer = getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams params =
+                new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        params.setAppPackageName(getPackageName());
+        if (Build.VERSION.SDK_INT >= 34) {
+            params.setPackageSource(PackageInstaller.PACKAGE_SOURCE_LOCAL_FILE);
+        }
+        int sessionId = installer.createSession(params);
+        PackageInstaller.Session session = installer.openSession(sessionId);
+        try (InputStream in = new FileInputStream(apkFile);
+             OutputStream out = session.openWrite("package", 0, apkFile.length())) {
+            byte[] buffer = new byte[65536];
+            int n;
+            while ((n = in.read(buffer)) != -1) {
+                out.write(buffer, 0, n);
+            }
+            session.fsync(out);
+        } catch (Exception e) {
+            try { session.abandon(); } catch (Exception ignored) { /* ignore */ }
+            throw e instanceof IOException ? (IOException) e : new IOException(e);
+        }
+        Intent callback = new Intent(this, MainActivity.class);
+        callback.setAction(ApkInstallReceiver.ACTION);
+        callback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            flags |= PendingIntent.FLAG_MUTABLE;
+        }
+        // getActivity：避免从 BroadcastReceiver 后台启动安装确认界面被系统拦
+        PendingIntent pending = PendingIntent.getActivity(this, sessionId, callback, flags);
+        session.commit(pending.getIntentSender());
+        session.close();
+    }
+
+    private void installWithActionView(File apkFile) {
+        Uri uri = FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                apkFile
+        );
+        Intent install = new Intent(Intent.ACTION_VIEW);
+        install.setDataAndType(uri, "application/vnd.android.package-archive");
+        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(
+                install, PackageManager.MATCH_DEFAULT_ONLY);
+        for (ResolveInfo ri : resInfoList) {
+            if (ri.activityInfo == null) continue;
+            grantUriPermission(
+                    ri.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+            );
+        }
+        startActivity(install);
+    }
+
+    private void streamToDownloadsPublic(InputStream in, String filename, String mimeType) throws IOException {
+        String name = filename != null ? filename : "download.bin";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME, name);
+            values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+            values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+            Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) throw new IOException("MediaStore insert failed");
+            try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                if (os == null) throw new IOException("openOutputStream null");
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    os.write(buf, 0, n);
+                }
+                os.flush();
+            }
+        } else {
+            File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            if (!downloadDir.exists()) downloadDir.mkdirs();
+            File file = new File(downloadDir, name);
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    fos.write(buf, 0, n);
+                }
+                fos.flush();
+            }
         }
     }
 
@@ -445,26 +733,38 @@ public class MainActivity extends BridgeActivity {
 
         /**
          * 原生流式下载 URL → Downloads（避免 WebView base64 OOM）
-         * token 可为 null；非空则加 Authorization: Bearer
+         * token 可为 null；非空则加 Authorization: Bearer（不对 GitHub/Gitee 发送）
          */
         @JavascriptInterface
         public void downloadFromUrl(String urlStr, String filename, String mimeType, String token) {
             new Thread(() -> {
                 HttpURLConnection conn = null;
                 try {
+                    String safeName = (filename != null && !filename.isEmpty())
+                            ? filename.replaceAll("[\\\\/:*?\"<>|]", "_")
+                            : "download.bin";
+                    boolean isApk = safeName.toLowerCase(Locale.US).endsWith(".apk")
+                            || (mimeType != null && mimeType.contains("android.package"));
+                    if (isApk) {
+                        File apkFile = downloadUrlToApkFile(urlStr, safeName, token);
+                        runOnUiThread(() -> promptInstallApk(apkFile));
+                        return;
+                    }
+
                     URL url = new URL(urlStr);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(20000);
                     conn.setReadTimeout(120000);
-                    conn.setInstanceFollowRedirects(true);
-                    if (token != null && !token.isEmpty()) {
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setRequestProperty("User-Agent", "SuperNote-Android");
+                    conn.setRequestProperty("Accept-Encoding", "identity");
+                    if (token != null && !token.isEmpty() && shouldAttachAuth(urlStr)) {
                         conn.setRequestProperty("Authorization", "Bearer " + token);
                     }
                     conn.connect();
                     int code = conn.getResponseCode();
-                    // 跟随 3xx（部分环境 instanceFollowRedirects 对 HTTPS→HTTP 会停）
                     int hops = 0;
-                    while (code >= 300 && code < 400 && hops < 5) {
+                    while (code >= 300 && code < 400 && hops < 8) {
                         String loc = conn.getHeaderField("Location");
                         if (loc == null || loc.isEmpty()) break;
                         conn.disconnect();
@@ -472,8 +772,9 @@ public class MainActivity extends BridgeActivity {
                         conn = (HttpURLConnection) url.openConnection();
                         conn.setConnectTimeout(20000);
                         conn.setReadTimeout(120000);
-                        conn.setInstanceFollowRedirects(true);
-                        if (token != null && !token.isEmpty()) {
+                        conn.setInstanceFollowRedirects(false);
+                        conn.setRequestProperty("User-Agent", "SuperNote-Android");
+                        if (token != null && !token.isEmpty() && shouldAttachAuth(url.toString())) {
                             conn.setRequestProperty("Authorization", "Bearer " + token);
                         }
                         conn.connect();
@@ -489,45 +790,12 @@ public class MainActivity extends BridgeActivity {
                         if (ct != null && ct.contains(";")) ct = ct.split(";")[0].trim();
                     }
                     if (ct == null || ct.isEmpty()) ct = "application/octet-stream";
-
-                    String safeName = (filename != null && !filename.isEmpty())
-                            ? filename.replaceAll("[\\\\/:*?\"<>|]", "_")
-                            : "download.bin";
-                    boolean isApk = safeName.toLowerCase().endsWith(".apk")
-                            || (ct != null && ct.contains("android.package"));
-
-                    if (isApk) {
-                        // 写到 app cache，再 FileProvider 调起系统安装器（可覆盖安装）
-                        File updateDir = new File(getCacheDir(), "updates");
-                        if (!updateDir.exists() && !updateDir.mkdirs()) {
-                            throw new IOException("cannot create updates dir");
-                        }
-                        File apkFile = new File(updateDir, safeName.endsWith(".apk") ? safeName : "super-note.apk");
-                        try (InputStream in = conn.getInputStream();
-                             FileOutputStream fos = new FileOutputStream(apkFile)) {
-                            byte[] buf = new byte[8192];
-                            int n;
-                            while ((n = in.read(buf)) != -1) {
-                                fos.write(buf, 0, n);
-                            }
-                            fos.flush();
-                        }
-                        // 同步一份到系统 Downloads，便于用户备份
-                        try (InputStream in2 = new java.io.FileInputStream(apkFile)) {
-                            streamToDownloads(in2, apkFile.getName(),
-                                    "application/vnd.android.package-archive");
-                        } catch (Exception copyEx) {
-                            Log.w(TAG, "copy apk to Downloads failed", copyEx);
-                        }
-                        runOnUiThread(() -> promptInstallApk(apkFile));
-                    } else {
-                        try (InputStream in = conn.getInputStream()) {
-                            streamToDownloads(in, safeName, ct);
-                        }
-                        runOnUiThread(() ->
-                                Toast.makeText(MainActivity.this, "已保存: " + safeName, Toast.LENGTH_SHORT).show()
-                        );
+                    try (InputStream in = conn.getInputStream()) {
+                        streamToDownloads(in, safeName, ct);
                     }
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "已保存: " + safeName, Toast.LENGTH_SHORT).show()
+                    );
                 } catch (Exception e) {
                     Log.e(TAG, "downloadFromUrl", e);
                     runOnUiThread(() ->
@@ -539,36 +807,57 @@ public class MainActivity extends BridgeActivity {
             }).start();
         }
 
-        /** 调起系统安装器；需 REQUEST_INSTALL_PACKAGES（Android 8+） */
-        private void promptInstallApk(File apkFile) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    if (!getPackageManager().canRequestPackageInstalls()) {
-                        Toast.makeText(MainActivity.this,
-                                "请允许「安装未知应用」后再次点击更新", Toast.LENGTH_LONG).show();
-                        Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-                        settings.setData(Uri.parse("package:" + getPackageName()));
-                        settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(settings);
-                        return;
-                    }
-                }
-                Uri uri = FileProvider.getUriForFile(
-                        MainActivity.this,
-                        getPackageName() + ".fileprovider",
-                        apkFile
+        /**
+         * 依次尝试多个 APK 直链，下载成功后调起系统安装器。
+         */
+        @JavascriptInterface
+        public void downloadAndInstallApk(String urlsJson, String filename, String token) {
+            if (apkDownloadInFlight) {
+                runOnUiThread(() ->
+                        Toast.makeText(MainActivity.this, "正在下载，请稍候…", Toast.LENGTH_SHORT).show()
                 );
-                Intent install = new Intent(Intent.ACTION_VIEW);
-                install.setDataAndType(uri, "application/vnd.android.package-archive");
-                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(install);
-                Toast.makeText(MainActivity.this, "正在打开安装界面…", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Log.e(TAG, "promptInstallApk", e);
-                Toast.makeText(MainActivity.this,
-                        "无法打开安装器: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                return;
             }
+            apkDownloadInFlight = true;
+            new Thread(() -> {
+                try {
+                    JSONArray arr = new JSONArray(urlsJson == null ? "[]" : urlsJson);
+                    List<String> urls = new ArrayList<>();
+                    for (int i = 0; i < arr.length(); i++) {
+                        String u = arr.optString(i, "");
+                        if (u != null && !u.isEmpty()) urls.add(u);
+                    }
+                    if (urls.isEmpty()) {
+                        throw new IOException("没有可用的下载地址");
+                    }
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "正在下载最新安装包…", Toast.LENGTH_LONG).show()
+                    );
+                    Exception last = null;
+                    String safeName = (filename != null && !filename.isEmpty())
+                            ? filename.replaceAll("[\\\\/:*?\"<>|]", "_")
+                            : "super-note.apk";
+                    for (String u : urls) {
+                        try {
+                            Log.i(TAG, "apk download try: " + u);
+                            File apkFile = downloadUrlToApkFile(u, safeName, token);
+                            runOnUiThread(() -> promptInstallApk(apkFile));
+                            return;
+                        } catch (Exception e) {
+                            last = e;
+                            Log.w(TAG, "apk candidate failed: " + u, e);
+                        }
+                    }
+                    throw last != null ? last : new IOException("下载失败");
+                } catch (Exception e) {
+                    Log.e(TAG, "downloadAndInstallApk", e);
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "下载失败: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                    );
+                } finally {
+                    apkDownloadInFlight = false;
+                }
+            }).start();
         }
 
         /** 系统分享纯文本 */
