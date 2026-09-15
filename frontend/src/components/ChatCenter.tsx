@@ -398,7 +398,7 @@ function VoiceBubble({ src, duration }: { src: string; duration: number }) {
                 ? {
                     duration: 0.64 + (i % 4) * 0.07,
                     repeat: Infinity,
-                    ease: [0.77, 0, 0.175, 1], // easings.inOut
+                    ease: [0.77, 0, 0.175, 1],
                     delay: (i % 5) * 0.05,
                   }
                 : springs.snappy
