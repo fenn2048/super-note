@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import ContextMenu, { type ContextMenuItem } from "@/components/ContextMenu";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { fieldControlClass } from "@/components/ui/field";
+import SleekDatePicker from "@/components/common/SleekDatePicker";
 import MentionPicker, { parseMentionTrigger, replaceMentionText } from "@/components/MentionPicker";
 import { haptic } from "@/hooks/useCapacitor";
 import {
@@ -166,6 +167,7 @@ function linkifySlice(
           rel="noopener noreferrer"
           className={CONTENT_HTTP_LINK_CLASS}
           onClick={(e) => {
+            // 拖选用完鼠标在链接上松开时，浏览器仍会派发 click——不要打开链接。
             if (hasTextSelectionIn()) {
               e.preventDefault();
               e.stopPropagation();
@@ -237,6 +239,30 @@ function imPreview(m: { type: string; body?: string | null; file?: { filename?: 
   if (m.type === "file") return m.file?.filename ? `[文件] ${m.file.filename}` : "[文件]";
   if (m.type === "card") return cardPreview(m.body);
   return (m.body || "").replace(/\s+/g, " ").trim();
+}
+
+type ThreadSearchKind = "" | "text" | "link" | "card" | "video" | "image";
+
+const THREAD_SEARCH_KINDS: Array<{ id: ThreadSearchKind; label: string }> = [
+  { id: "", label: "全部" },
+  { id: "text", label: "文字" },
+  { id: "link", label: "链接" },
+  { id: "card", label: "卡片" },
+  { id: "video", label: "视频" },
+  { id: "image", label: "图片" },
+];
+
+/** 本地日历日 → ISO，供后端转成 SQLite UTC 比较。 */
+function localDayStartIso(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toISOString();
+}
+
+function localDayEndExclusiveIso(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d + 1).toISOString();
 }
 
 function messageCopyText(m: ImMessage): string {
@@ -684,6 +710,10 @@ export default function ChatCenter() {
   const [listQuery, setListQuery] = useState("");
   const [threadQuery, setThreadQuery] = useState("");
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
+  const [threadSearchKind, setThreadSearchKind] = useState<ThreadSearchKind>("");
+  const [threadDateFrom, setThreadDateFrom] = useState("");
+  const [threadDateTo, setThreadDateTo] = useState("");
+  const [messageDateSet, setMessageDateSet] = useState<Set<string>>(() => new Set());
   const [listHits, setListHits] = useState<ImSearchHit[]>([]);
   const [threadHits, setThreadHits] = useState<ImSearchHit[]>([]);
   const [searchingList, setSearchingList] = useState(false);
@@ -1408,14 +1438,20 @@ export default function ChatCenter() {
     270,
   );
 
+  const closeThreadSearch = useCallback(() => {
+    setThreadSearchOpen(false);
+    setThreadQuery("");
+    setThreadHits([]);
+    setThreadSearchKind("");
+    setThreadDateFrom("");
+    setThreadDateTo("");
+    setMessageDateSet(new Set());
+  }, []);
+
   useRegisterBackLayer(
     "chat-search",
     threadSearchOpen,
-    () => {
-      setThreadSearchOpen(false);
-      setThreadQuery("");
-      setThreadHits([]);
-    },
+    closeThreadSearch,
     255,
   );
 
@@ -1786,18 +1822,71 @@ export default function ChatCenter() {
   }, [listQuery, workspaceId]);
 
   useEffect(() => {
+    if (!threadSearchOpen || !activeId) {
+      setMessageDateSet(new Set());
+      return;
+    }
+    let cancelled = false;
+    api.im
+      .messageDates(activeId, {
+        tzOffset: new Date().getTimezoneOffset(),
+        kind: threadSearchKind || undefined,
+      })
+      .then((res) => {
+        if (cancelled) return;
+        const days = new Set(res.days || []);
+        setMessageDateSet(days);
+        setThreadDateFrom((prev) => (prev && !days.has(prev) ? "" : prev));
+        setThreadDateTo((prev) => (prev && !days.has(prev) ? "" : prev));
+      })
+      .catch(() => {
+        if (!cancelled) setMessageDateSet(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [threadSearchOpen, activeId, threadSearchKind]);
+
+  const fromEnabledDates = useMemo(() => {
+    if (!threadDateTo) return messageDateSet;
+    const next = new Set<string>();
+    for (const d of messageDateSet) if (d <= threadDateTo) next.add(d);
+    return next;
+  }, [messageDateSet, threadDateTo]);
+
+  const toEnabledDates = useMemo(() => {
+    if (!threadDateFrom) return messageDateSet;
+    const next = new Set<string>();
+    for (const d of messageDateSet) if (d >= threadDateFrom) next.add(d);
+    return next;
+  }, [messageDateSet, threadDateFrom]);
+
+  useEffect(() => {
     if (!threadSearchOpen) return;
     const q = threadQuery.trim();
-    if (!activeId || q.length < 1) {
+    const hasFilters = Boolean(threadSearchKind || threadDateFrom || threadDateTo);
+    if (!activeId || (q.length < 1 && !hasFilters)) {
       setThreadHits([]);
       setSearchingThread(false);
       return;
+    }
+    let fromIso = threadDateFrom ? localDayStartIso(threadDateFrom) : "";
+    let toIso = threadDateTo ? localDayEndExclusiveIso(threadDateTo) : "";
+    if (threadDateFrom && threadDateTo && threadDateTo < threadDateFrom) {
+      fromIso = localDayStartIso(threadDateTo);
+      toIso = localDayEndExclusiveIso(threadDateFrom);
     }
     let cancelled = false;
     setSearchingThread(true);
     const t = window.setTimeout(() => {
       api.im
-        .search(q, { conversationId: activeId, limit: 30 })
+        .search(q, {
+          conversationId: activeId,
+          limit: 30,
+          kind: threadSearchKind || undefined,
+          from: fromIso || undefined,
+          to: toIso || undefined,
+        })
         .then((res) => {
           if (!cancelled) setThreadHits(res.items);
         })
@@ -1812,7 +1901,7 @@ export default function ChatCenter() {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [threadQuery, threadSearchOpen, activeId]);
+  }, [threadQuery, threadSearchOpen, activeId, threadSearchKind, threadDateFrom, threadDateTo]);
 
   const showThread = Boolean(activeId) && (isDesktop || Boolean(activeId));
   const showList = isDesktop || !activeId;
@@ -2041,7 +2130,10 @@ export default function ChatCenter() {
                   <MobileChromeIconButton
                     title="搜索消息"
                     active={threadSearchOpen}
-                    onClick={() => setThreadSearchOpen((v) => !v)}
+                    onClick={() => {
+                      if (threadSearchOpen) closeThreadSearch();
+                      else setThreadSearchOpen(true);
+                    }}
                   >
                     <Search size={18} />
                   </MobileChromeIconButton>
@@ -2081,7 +2173,10 @@ export default function ChatCenter() {
                     variant="ghost"
                     size="icon-lg"
                     aria-label="搜索消息"
-                    onClick={() => setThreadSearchOpen((v) => !v)}
+                    onClick={() => {
+                      if (threadSearchOpen) closeThreadSearch();
+                      else setThreadSearchOpen(true);
+                    }}
                   >
                     <Search size={18} />
                   </Button>
@@ -2109,14 +2204,14 @@ export default function ChatCenter() {
           />
 
           {threadSearchOpen && (
-            <div className="shrink-0 border-b border-app-border px-3 py-2">
+            <div className="shrink-0 border-b border-app-border px-3 py-2 space-y-2">
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-quaternary" />
                 <input
                   autoFocus
                   value={threadQuery}
                   onChange={(e) => setThreadQuery(e.target.value)}
-                  placeholder="搜索此会话的消息"
+                  placeholder="搜索此会话，可只按类型或日期筛选"
                   className={cn(fieldControlClass, "pl-8 pr-8")}
                 />
                 {threadQuery && (
@@ -2130,8 +2225,70 @@ export default function ChatCenter() {
                   </button>
                 )}
               </div>
-              {threadQuery.trim() && (
-                <div className="max-h-48 overflow-y-auto mt-1 rounded-card border border-app-border bg-app-elevated">
+              <div
+                className="flex gap-1.5 overflow-x-auto pb-0.5"
+                data-swipe-blocker
+              >
+                {THREAD_SEARCH_KINDS.map((k) => {
+                  const active = threadSearchKind === k.id;
+                  return (
+                    <button
+                      key={k.id || "all"}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setThreadSearchKind(k.id)}
+                      className={cn(
+                        "shrink-0 min-h-11 px-3 rounded-full text-xs font-medium border",
+                        "transition-[transform,background-color,color,border-color] duration-press ease-out active:scale-[0.97]",
+                        active
+                          ? "bg-accent-primary/12 text-accent-primary border-accent-primary/40"
+                          : "bg-app-surface text-tx-secondary border-app-border",
+                      )}
+                    >
+                      {k.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-tx-quaternary shrink-0">从</span>
+                <SleekDatePicker
+                  value={threadDateFrom}
+                  onChange={setThreadDateFrom}
+                  placeholder="开始日期"
+                  variant="mobile-form"
+                  tone="plain"
+                  enabledDates={fromEnabledDates}
+                  className="flex-1 min-w-0 min-h-11"
+                />
+                <span className="text-[11px] text-tx-quaternary shrink-0">至</span>
+                <SleekDatePicker
+                  value={threadDateTo}
+                  onChange={setThreadDateTo}
+                  placeholder="结束日期"
+                  variant="mobile-form"
+                  align="right"
+                  tone="plain"
+                  enabledDates={toEnabledDates}
+                  className="flex-1 min-w-0 min-h-11"
+                />
+                {(threadDateFrom || threadDateTo || threadSearchKind) && (
+                  <button
+                    type="button"
+                    className="shrink-0 min-h-11 min-w-11 flex items-center justify-center text-tx-quaternary"
+                    aria-label="清除筛选"
+                    onClick={() => {
+                      setThreadSearchKind("");
+                      setThreadDateFrom("");
+                      setThreadDateTo("");
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              {(threadQuery.trim() || threadSearchKind || threadDateFrom || threadDateTo) && (
+                <div className="max-h-[40vh] overflow-y-auto rounded-card border border-app-border bg-app-elevated">
                   {searchingThread ? (
                     <LoadingBlock label="搜索中…" size="sm" />
                   ) : threadHits.length === 0 ? (
@@ -2229,6 +2386,7 @@ export default function ChatCenter() {
                             if (selecting) toggleSelected(m.id);
                           }}
                           onContextMenu={(e) => {
+                            // 已拖选出文字时交给系统菜单（复制所选），不要抢走原生选区。
                             if (isDesktop && !selecting && hasTextSelectionIn(e.currentTarget)) {
                               return;
                             }

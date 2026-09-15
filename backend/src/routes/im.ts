@@ -5,6 +5,7 @@
  *   GET    /api/im/unread-count
  *   GET    /api/im/conversations/:id/messages  ?before&beforeId | after&afterId | around
  *   GET    /api/im/search?q=
+ *   GET    /api/im/conversations/:id/message-dates
  *   POST   /api/im/conversations/:id/messages
  *   POST   /api/im/conversations/:id/files
  *   POST   /api/im/dm
@@ -39,6 +40,7 @@ import {
   type ImMessageType,
 } from "../lib/im";
 import { createChatMentions } from "../lib/mentions";
+import { imSearchKindClause, sqliteTzModifier, sqliteUtcFromQuery } from "../lib/imSearch";
 import { MIME_TO_EXT } from "./attachments";
 import {
   parseThumbnailWidth,
@@ -659,12 +661,43 @@ function makeSnippet(text: string, q: string, max = 88): string {
   return slice;
 }
 
+app.get("/conversations/:id/message-dates", (c) => {
+  const scope = requireWorkspace(c);
+  if (scope instanceof Response) return scope;
+  const { userId } = scope;
+  const id = c.req.param("id");
+  try {
+    assertImMember(id, userId);
+  } catch (e: any) {
+    return c.json({ error: e.message || "无权访问" }, e.status || 403);
+  }
+
+  const tz = sqliteTzModifier(c.req.query("tzOffset"));
+  const kindClause = imSearchKindClause(c.req.query("kind"));
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `
+      SELECT DISTINCT date(msg.createdAt, ?) AS day
+      FROM im_messages msg
+      LEFT JOIN im_files f ON f.id = msg.fileId
+      WHERE msg.conversationId = ?
+        ${kindClause ? `AND ${kindClause}` : ""}
+      ORDER BY day
+      `,
+    )
+    .all(tz, id) as { day: string | null }[];
+
+  return c.json({
+    days: rows.map((r) => r.day).filter((d): d is string => Boolean(d && /^\d{4}-\d{2}-\d{2}$/.test(d))),
+  });
+});
+
 app.get("/search", (c) => {
   const scope = requireWorkspace(c);
   if (scope instanceof Response) return scope;
   const { userId, workspaceId } = scope;
   const q = (c.req.query("q") || "").trim();
-  if (!q) return c.json({ items: [], hasMore: false, nextCursor: null });
   const conversationId = (c.req.query("conversationId") || "").trim();
   if (conversationId) {
     try {
@@ -676,15 +709,34 @@ app.get("/search", (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 40);
   const cursorAt = c.req.query("cursor") || "";
   const cursorId = c.req.query("cursorId") || "";
-  const like = likePattern(q);
-  if (like === "%%") return c.json({ items: [], hasMore: false, nextCursor: null });
+  const kindClause = imSearchKindClause(c.req.query("kind"));
+  const fromSql = sqliteUtcFromQuery(c.req.query("from"));
+  const toSql = sqliteUtcFromQuery(c.req.query("to"));
+  const like = q ? likePattern(q) : "";
+  const hasText = like !== "" && like !== "%%";
+  if (!hasText && !kindClause && !fromSql && !toSql) {
+    return c.json({ items: [], hasMore: false, nextCursor: null });
+  }
 
   const db = getDb();
-  const args: unknown[] = [userId, workspaceId, like, like];
+  const args: unknown[] = [userId, workspaceId];
   let extra = "";
   if (conversationId) {
     extra += " AND msg.conversationId = ?";
     args.push(conversationId);
+  }
+  if (kindClause) extra += ` AND ${kindClause}`;
+  if (fromSql) {
+    extra += " AND msg.createdAt >= ?";
+    args.push(fromSql);
+  }
+  if (toSql) {
+    extra += " AND msg.createdAt < ?";
+    args.push(toSql);
+  }
+  if (hasText) {
+    extra += " AND (msg.body LIKE ? OR IFNULL(f.filename, '') LIKE ?)";
+    args.push(like, like);
   }
   if (cursorAt && cursorId) {
     extra += " AND (msg.createdAt < ? OR (msg.createdAt = ? AND msg.id < ?))";
@@ -709,7 +761,6 @@ app.get("/search", (c) => {
         ON c.type = 'dm' AND other.conversationId = c.id AND other.userId != mem.userId
       LEFT JOIN users peer ON peer.id = other.userId
       WHERE c.workspaceId = ?
-        AND (msg.body LIKE ? OR IFNULL(f.filename, '') LIKE ?)
         ${extra}
       ORDER BY msg.createdAt DESC, msg.id DESC
       LIMIT ?

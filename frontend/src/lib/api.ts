@@ -3832,7 +3832,18 @@ export const api = {
         `/im/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
       );
     },
-    search: (q: string, opts?: { conversationId?: string; cursor?: string; cursorId?: string; limit?: number }) => {
+    search: (
+      q: string,
+      opts?: {
+        conversationId?: string;
+        cursor?: string;
+        cursorId?: string;
+        limit?: number;
+        kind?: "text" | "link" | "card" | "video" | "image" | "";
+        from?: string;
+        to?: string;
+      },
+    ) => {
       const ws = getCurrentWorkspace();
       const params = new URLSearchParams();
       if (ws) params.set("workspaceId", ws);
@@ -3840,6 +3851,9 @@ export const api = {
       if (opts?.conversationId) params.set("conversationId", opts.conversationId);
       if (opts?.cursor) params.set("cursor", opts.cursor);
       if (opts?.cursorId) params.set("cursorId", opts.cursorId);
+      if (opts?.kind) params.set("kind", opts.kind);
+      if (opts?.from) params.set("from", opts.from);
+      if (opts?.to) params.set("to", opts.to);
       params.set("limit", String(opts?.limit ?? 20));
       return request<{
         items: import("@/types").ImSearchHit[];
@@ -3847,6 +3861,19 @@ export const api = {
         nextCursor: string | null;
         nextCursorId: string | null;
       }>(`/im/search?${params.toString()}`);
+    },
+    messageDates: (
+      conversationId: string,
+      opts?: { tzOffset?: number; kind?: "text" | "link" | "card" | "video" | "image" | "" },
+    ) => {
+      const ws = getCurrentWorkspace();
+      const params = new URLSearchParams();
+      if (ws) params.set("workspaceId", ws);
+      params.set("tzOffset", String(opts?.tzOffset ?? new Date().getTimezoneOffset()));
+      if (opts?.kind) params.set("kind", opts.kind);
+      return request<{ days: string[] }>(
+        `/im/conversations/${encodeURIComponent(conversationId)}/message-dates?${params.toString()}`,
+      );
     },
     send: (conversationId: string, data: { type?: import("@/types").ImMessageType; body?: string; fileId?: string }) => {
       const ws = getCurrentWorkspace();

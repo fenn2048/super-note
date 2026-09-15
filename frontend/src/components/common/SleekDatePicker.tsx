@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   format,
@@ -29,6 +29,10 @@ interface SleekDatePickerProps {
   align?: "left" | "right";
   variant?: "default" | "mobile-form" | "ghost";
   showTime?: boolean;
+  /** 传入时仅这些 YYYY-MM-DD 可选，其余日期置灰 */
+  enabledDates?: Iterable<string> | null;
+  /** task：逾期/今天语义；plain：中性日期展示 */
+  tone?: "task" | "plain";
 }
 
 export default function SleekDatePicker({
@@ -38,7 +42,9 @@ export default function SleekDatePicker({
   className,
   align = "left",
   variant = "default",
-  showTime = false
+  showTime = false,
+  enabledDates = null,
+  tone = "task",
 }: SleekDatePickerProps) {
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language.startsWith("zh") ? zhCN : enUS;
@@ -65,6 +71,16 @@ export default function SleekDatePicker({
     }
   };
 
+  const enabledSet = useMemo(() => {
+    if (!enabledDates) return null;
+    return enabledDates instanceof Set ? enabledDates : new Set(Array.from(enabledDates));
+  }, [enabledDates]);
+
+  const isDateEnabled = (day: Date) => {
+    if (!enabledSet) return true;
+    return enabledSet.has(format(day, "yyyy-MM-dd"));
+  };
+
   const selectedDate = value ? parseValue(value) : null;
   const [tempDate, setTempDate] = useState<Date | null>(null);
 
@@ -84,6 +100,9 @@ export default function SleekDatePicker({
     const parsed = parseValue(value);
     if (!parsed) return placeholder;
     
+    if (tone === "plain") {
+      return format(parsed, value.includes(" ") ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd");
+    }
     if (isToday(parsed)) {
       return `${t("calendar.today")}${value.includes(" ") ? " " + value.split(" ")[1] : ""}`;
     }
@@ -101,6 +120,7 @@ export default function SleekDatePicker({
 
   const getLabelClass = () => {
     if (!selectedDate) return "text-tx-tertiary";
+    if (tone === "plain") return "text-tx-primary font-medium";
     if (isToday(selectedDate)) return "text-green-500 font-semibold";
     if (isTomorrow(selectedDate)) return "text-accent-primary font-semibold";
     if (isPast(selectedDate)) return "text-red-500 font-semibold";
@@ -187,6 +207,7 @@ export default function SleekDatePicker({
 
   // Date cell click
   const handleDateClick = (day: Date) => {
+    if (!isDateEnabled(day)) return;
     if (showTime) {
       const newDate = new Date(tempDate || new Date());
       newDate.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
@@ -199,6 +220,7 @@ export default function SleekDatePicker({
 
   const handleTodayClick = () => {
     const today = new Date();
+    if (!isDateEnabled(today)) return;
     if (showTime) {
       const newDate = new Date(tempDate || new Date());
       newDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
@@ -241,7 +263,7 @@ export default function SleekDatePicker({
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           variant === "mobile-form"
-            ? "flex items-center gap-2 px-3 py-2.5 rounded-xl border border-app-border bg-app-surface text-xs cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hover:bg-app-hover/80 hover:border-app-border/80 w-full min-w-0"
+            ? "flex items-center gap-2 px-3 py-2.5 min-h-11 rounded-xl border border-app-border bg-app-surface text-xs cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hover:bg-app-hover/80 hover:border-app-border/80 w-full min-w-0"
             : variant === "ghost"
             ? "flex items-center gap-1.5 text-xs cursor-pointer transition-colors w-full min-w-0"
             : "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-border bg-app-sidebar/80 text-xs cursor-pointer transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out hover:bg-app-hover/80 hover:border-app-border/80 min-w-[90px]",
@@ -312,18 +334,23 @@ export default function SleekDatePicker({
               const activeDay = tempDate || selectedDate;
               const isSelected = activeDay ? isSameDay(day, activeDay) : false;
               const isDayToday = isToday(day);
+              const enabled = isDateEnabled(day);
 
               return (
                 <button
                   key={idx}
                   onClick={() => handleDateClick(day)}
                   type="button"
+                  disabled={!enabled}
+                  aria-disabled={!enabled}
                   className={cn(
                     "h-7 w-7 rounded-lg text-[11px] flex items-center justify-center transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out focus:outline-none",
-                    !isCurrentMonth ? "text-tx-tertiary/30" : "text-tx-secondary",
-                    isCurrentMonth && "hover:bg-app-hover hover:text-tx-primary",
-                    isDayToday && !isSelected && "border border-accent-primary/40 text-accent-primary font-semibold",
-                    isSelected && "bg-accent-primary text-white font-bold shadow-sm"
+                    !enabled && "text-tx-quaternary/35 cursor-not-allowed",
+                    enabled && !isCurrentMonth && "text-tx-tertiary",
+                    enabled && isCurrentMonth && "text-tx-secondary hover:bg-app-hover hover:text-tx-primary",
+                    enabled && isDayToday && !isSelected && "border border-accent-primary/40 text-accent-primary font-semibold",
+                    enabled && isSelected && "bg-accent-primary text-white font-bold shadow-sm",
+                    !enabled && isSelected && "bg-app-hover text-tx-quaternary"
                   )}
                 >
                   {format(day, "d")}
@@ -373,7 +400,13 @@ export default function SleekDatePicker({
             <button
               onClick={handleTodayClick}
               type="button"
-              className="text-[10px] font-semibold text-accent-primary hover:underline transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out"
+              disabled={!isDateEnabled(new Date())}
+              className={cn(
+                "text-[10px] font-semibold transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out",
+                isDateEnabled(new Date())
+                  ? "text-accent-primary hover:underline"
+                  : "text-tx-quaternary/50 cursor-not-allowed",
+              )}
             >
               {t("calendar.today")}
             </button>
