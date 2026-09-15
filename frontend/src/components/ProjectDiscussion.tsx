@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
 import { cn, detectSuMention } from "@/lib/utils";
 import MentionPicker, { useMentionState, replaceMentionText } from "@/components/MentionPicker";
+import { renderTextWithLinks } from "@/lib/textLinks";
 
 interface ProjectDiscussionProps {
   project: Project;
@@ -35,51 +36,6 @@ interface AISuggestion {
 
 const AI_AVATAR = "🤖";
 const AI_NAME = "AI 助手";
-
-export function renderTextWithLinks(text: string) {
-  if (!text) return "";
-  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  while ((match = linkRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.substring(lastIndex, match.index));
-    }
-    if (match[1] && match[2]) {
-      parts.push(
-        <a 
-          key={match.index} 
-          href={match[2]} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {match[1]}
-        </a>
-      );
-    } else if (match[3]) {
-      parts.push(
-        <a 
-          key={match.index} 
-          href={match[3]} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {match[3]}
-        </a>
-      );
-    }
-    lastIndex = linkRegex.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex));
-  }
-  return parts.length > 0 ? parts : text;
-}
 
 export default function ProjectDiscussionView({ project, tasks }: ProjectDiscussionProps) {
   const { t } = useTranslation();

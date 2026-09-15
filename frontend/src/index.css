@@ -3003,11 +3003,13 @@ html[data-electron="darwin"][data-fullscreen="1"] main::before {
   padding: 0;
   font-size: inherit;
 }
-.diary-rendered-content a {
+.diary-rendered-content a,
+.content-http-link {
   color: var(--color-accent-primary, #4f46e5);
   text-decoration: underline;
   text-underline-offset: 2px;
   word-break: break-all;
+  cursor: pointer;
 }
 .diary-rendered-content hr {
   border: none;

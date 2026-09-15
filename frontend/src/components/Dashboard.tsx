@@ -29,6 +29,7 @@ import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
 import { useScrollHideBars } from "@/hooks/useScrollHideBars";
 import { renderDiaryContent } from "./DiaryCenter";
+import { handleHttpLinkClick } from "@/lib/textLinks";
 import DashboardQuickActions from "@/components/dashboard/DashboardQuickActions";
 import { isModuleAllowedByPack } from "@/lib/modulePack";
 import { LoadingBlock, EmptyState, EmptyActionButton } from "@/components/common/FeedbackStates";
@@ -93,6 +94,7 @@ function DiaryEntry({ item, onClick }: { item: Diary; onClick: () => void }) {
   return (
     <button
       onClick={(e) => {
+        if (handleHttpLinkClick(e)) return;
         const target = e.target as HTMLElement;
         const placeholder = target.closest(".iframe-placeholder-wrapper") as HTMLDivElement | null;
         if (placeholder) {

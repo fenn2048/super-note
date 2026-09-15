@@ -80,7 +80,11 @@ import {
   voiceBlobFromChunks,
   voiceFileFromBlob,
 } from "@/lib/voiceRecorder";
-
+import {
+  ensureHtmlLinksOpenInNewTab,
+  handleHttpLinkClick,
+  renderTextWithLinks,
+} from "@/lib/textLinks";
 
 marked.setOptions({
   gfm: true,
@@ -158,55 +162,22 @@ export function renderDiaryContent(text: string): string {
   const rawHtml = marked.parse(text) as string;
   const sanitized = DOMPurify.sanitize(rawHtml, {
     ADD_TAGS: ["iframe"],
-    ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "sandbox", "src", "width", "height", "style"],
+    ADD_ATTR: [
+      "allow",
+      "allowfullscreen",
+      "frameborder",
+      "scrolling",
+      "sandbox",
+      "src",
+      "width",
+      "height",
+      "style",
+      "target",
+      "rel",
+    ],
     ALLOWED_SCHEMES: ["http", "https", "ftp", "mailto", "tel", "data", "book", "book-note"],
   } as any).toString();
-  return transformIframesToClickToPlay(sanitized);
-}
-
-export function renderTextWithLinks(text: string) {
-  if (!text) return "";
-  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  while ((match = linkRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.substring(lastIndex, match.index));
-    }
-    if (match[1] && match[2]) {
-      parts.push(
-        <a 
-          key={match.index} 
-          href={match[2]} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {match[1]}
-        </a>
-      );
-    } else if (match[3]) {
-      parts.push(
-        <a 
-          key={match.index} 
-          href={match[3]} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {match[3]}
-        </a>
-      );
-    }
-    lastIndex = linkRegex.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex));
-  }
-  return parts.length > 0 ? parts : text;
+  return ensureHtmlLinksOpenInNewTab(transformIframesToClickToPlay(sanitized));
 }
 
 /**
@@ -2364,6 +2335,7 @@ function DiaryCard({
               <div
                 className="diary-rendered-content prose prose-sm dark:prose-invert max-w-none text-sm text-tx-primary leading-relaxed break-words"
                 onClick={(e) => {
+                  if (handleHttpLinkClick(e)) return;
                   const target = e.target as HTMLElement;
                   const placeholder = target.closest(".iframe-placeholder-wrapper") as HTMLDivElement | null;
                   if (placeholder) {

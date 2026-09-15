@@ -70,6 +70,11 @@ import { useRegisterBackLayer } from "@/hooks/useMobileBackStack";
 import { springs } from "@/lib/motion";
 import { cardPreview } from "@/lib/imCard";
 import { ImShareCardBubble, ShareItemPickerSheet } from "@/components/chat/ShareToChat";
+import {
+  CONTENT_HTTP_LINK_CLASS,
+  preventAndOpenHttpUrl,
+  splitTextUrls,
+} from "@/lib/textLinks";
 
 function selfUserId(): string {
   try {
@@ -89,14 +94,37 @@ function selfUsername(): string {
 
 const MENTION_RE = /@([\w一-鿿-]+)/g;
 
-function MessageBody({ text, query }: { text: string; query?: string }) {
+/** 桌面拖选用：当前是否有未折叠的文字选区（可限定在某个节点内）。 */
+function hasTextSelectionIn(root?: EventTarget | null): boolean {
+  if (typeof window === "undefined") return false;
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+  if (!sel.toString()) return false;
+  if (root == null) return true;
+  if (!(root instanceof Node)) return false;
+  const anchor = sel.anchorNode;
+  const focus = sel.focusNode;
+  return (!!anchor && root.contains(anchor)) || (!!focus && root.contains(focus));
+}
+
+function MessageBody({
+  text,
+  query,
+  disabled,
+}: {
+  text: string;
+  query?: string;
+  disabled?: boolean;
+}) {
   const me = selfUsername();
   const parts: React.ReactNode[] = [];
   let last = 0;
   const re = new RegExp(MENTION_RE.source, "g");
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    if (m.index > last) parts.push(highlightSlice(text.slice(last, m.index), query, last));
+    if (m.index > last) {
+      parts.push(linkifySlice(text.slice(last, m.index), query, last, disabled));
+    }
     const isMe = me && m[1] === me;
     parts.push(
       <span
@@ -108,8 +136,50 @@ function MessageBody({ text, query }: { text: string; query?: string }) {
     );
     last = m.index + m[0].length;
   }
-  if (last < text.length) parts.push(highlightSlice(text.slice(last), query, last));
+  if (last < text.length) parts.push(linkifySlice(text.slice(last), query, last, disabled));
   return <span className="whitespace-pre-wrap">{parts.length ? parts : text}</span>;
+}
+
+function linkifySlice(
+  chunk: string,
+  query: string | undefined,
+  keyBase: number,
+  disabled?: boolean,
+): React.ReactNode {
+  const tokens = splitTextUrls(chunk);
+  if (tokens.length === 1 && tokens[0].kind === "text") {
+    return highlightSlice(chunk, query, keyBase);
+  }
+  return tokens.map((tok, i) => {
+    if (tok.kind === "text") {
+      return (
+        <React.Fragment key={`${keyBase}-t-${i}`}>
+          {highlightSlice(tok.value, query, keyBase + i)}
+        </React.Fragment>
+      );
+    }
+    return (
+      <React.Fragment key={`${keyBase}-u-${i}`}>
+        <a
+          href={tok.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={CONTENT_HTTP_LINK_CLASS}
+          onClick={(e) => {
+            if (hasTextSelectionIn()) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            preventAndOpenHttpUrl(tok.url, e, { disabled });
+          }}
+        >
+          {highlightSlice(tok.url, query, keyBase + i)}
+        </a>
+        {tok.trailing}
+      </React.Fragment>
+    );
+  });
 }
 
 function highlightSlice(chunk: string, query: string | undefined, keyBase: number): React.ReactNode {
@@ -2145,7 +2215,9 @@ export default function ChatCenter() {
                           key={m.id}
                           data-msg-id={m.id}
                           className={cn(
-                            "flex gap-2 items-end select-none",
+                            "flex gap-2 items-end",
+                            // 桌面可拖选文字；移动端长按菜单 / 多选时禁止选字
+                            (!isDesktop || selecting) && "select-none",
                             mine ? "justify-end" : "justify-start",
                             selecting && "cursor-pointer",
                           )}
@@ -2157,6 +2229,9 @@ export default function ChatCenter() {
                             if (selecting) toggleSelected(m.id);
                           }}
                           onContextMenu={(e) => {
+                            if (isDesktop && !selecting && hasTextSelectionIn(e.currentTarget)) {
+                              return;
+                            }
                             e.preventDefault();
                             if (selecting) {
                               toggleSelected(m.id);
@@ -2269,6 +2344,7 @@ export default function ChatCenter() {
                               className={cn(
                                 "rounded-card text-sm leading-relaxed break-words border text-tx-primary",
                                 m.type === "voice" ? "px-2 py-1" : "px-3 py-2",
+                                isDesktop && !selecting && m.type !== "voice" && "select-text",
                                 selected && "ring-2 ring-accent-primary/50",
                                 highlightId === m.id && "ring-2 ring-accent-primary",
                               )}
@@ -2283,7 +2359,7 @@ export default function ChatCenter() {
                                   href={resolveAttachmentUrl(m.file.url)}
                                   download={m.file.filename}
                                   onClick={(e) => {
-                                    if (selecting) e.preventDefault();
+                                    if (selecting || hasTextSelectionIn()) e.preventDefault();
                                   }}
                                   className="flex items-center gap-2 min-h-11 text-tx-primary"
                                 >
@@ -2297,7 +2373,11 @@ export default function ChatCenter() {
                                   <Download size={16} className="shrink-0 ml-auto" />
                                 </a>
                               ) : (
-                                <MessageBody text={m.body} query={threadQuery.trim() || listQuery.trim() || undefined} />
+                                <MessageBody
+                                  text={m.body}
+                                  query={threadQuery.trim() || listQuery.trim() || undefined}
+                                  disabled={selecting}
+                                />
                               )}
                             </div>
                             )}
