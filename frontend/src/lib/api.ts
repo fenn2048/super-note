@@ -2402,7 +2402,7 @@ export const api = {
         body: JSON.stringify(data),
       });
     },
-    updateNote: (bookHash: string, id: string, data: Partial<{ note: string; style: string; color: string }>): Promise<BookNote> => {
+    updateNote: (bookHash: string, id: string, data: Partial<{ note: string; style: string; color: string; visibility: string }>): Promise<BookNote> => {
       return request<BookNote>(`/books/${bookHash}/notes/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),

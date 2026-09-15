@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { api, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
+import { api, getCurrentWorkspace, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
+import { ShareConversationSheet } from "@/components/chat/ShareToChat";
+import { BottomSheet } from "@/components/common/BottomSheet";
+import { isFamilyWorkspace } from "@/lib/imCard";
+import type { ImCardKind } from "@/types";
 import { toast } from "@/lib/toast";
 import { DocumentLoader, TOCItem } from "@/lib/bookDocument";
 import { Book, BookConfig, BookNote } from "@/types";
@@ -40,6 +44,7 @@ import {
   Bookmark,
   Share2,
   List,
+  MessageCircle,
   MessageSquare,
   Play,
   Pause,
@@ -360,6 +365,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
   });
   const [shareComment, setShareComment] = useState("");
   const [sharing, setSharing] = useState(false);
+  const [shareDest, setShareDest] = useState<null | { target: "book" } | { target: "bookNote"; note: BookNote }>(null);
+  const [shareToChatOpen, setShareToChatOpen] = useState(false);
+  const [shareToChatCard, setShareToChatCard] = useState<{ kind: ImCardKind; id: string } | null>(null);
 
   // TTS state
   const [ttsState, setTtsState] = useState<"stopped" | "playing" | "paused">("stopped");
@@ -2568,6 +2576,33 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
     return `本章剩余 ${mins}:${String(secs).padStart(2, "0")}`;
   };
 
+  const familyChat = isFamilyWorkspace(workspaceId || getCurrentWorkspace());
+
+  const ensureBookWorkspaceVisible = async () => {
+    if (!book) throw new Error("书籍未加载");
+    if (book.visibility === "PRIVATE") {
+      await api.books.update(bookHash, { visibility: "WORKSPACE" });
+      setBook((prev) => (prev ? { ...prev, visibility: "WORKSPACE" } : null));
+    }
+  };
+
+  const openShareToChat = async (kind: ImCardKind, id: string, note?: BookNote) => {
+    try {
+      await ensureBookWorkspaceVisible();
+      if (kind === "bookNote") {
+        const vis = (note?.visibility || "public").toLowerCase();
+        if (note && vis === "private") {
+          await api.books.updateNote(bookHash, note.id, { visibility: "public" });
+          setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, visibility: "public" } : n)));
+        }
+      }
+      setShareToChatCard({ kind, id });
+      setShareToChatOpen(true);
+    } catch (err: any) {
+      toast.error(err?.message || "无法分享到聊天");
+    }
+  };
+
   const handleShareNoteToTalk = (note: BookNote) => {
     if (!book) return;
     setShareComment("");
@@ -3291,9 +3326,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
             <Settings size={16} />
           </button>
           <button
-            onClick={handleShareBookToTalk}
+            onClick={() => setShareDest({ target: "book" })}
             className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-[transform,background-color,color,border-color,box-shadow,opacity] duration-fast ease-out text-inherit"
-            title="推荐分享本书到说说"
+            title="分享本书"
           >
             <Share2 size={16} />
           </button>
@@ -3359,7 +3394,7 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
             </button>
             <button
               type="button"
-              onClick={handleShareBookToTalk}
+              onClick={() => setShareDest({ target: "book" })}
               className="flex flex-col items-center justify-center min-w-[44px] min-h-[40px] rounded-lg active:bg-black/10"
               title="分享"
             >
@@ -3591,9 +3626,9 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
                   </button>
                   <div className="flex gap-1.5">
                     <button
-                      onClick={() => handleShareNoteToTalk(inspectingNote)}
+                      onClick={() => setShareDest({ target: "bookNote", note: inspectingNote })}
                       className="p-1 hover:text-accent-primary rounded transition-colors text-[9px] font-bold flex items-center gap-1"
-                      title="分享至说说"
+                      title="分享"
                     >
                       <Share2 size={10} />
                       <span>分享</span>
@@ -4510,6 +4545,63 @@ export default function BookReader({ bookHash, onBack, workspaceId }: BookReader
           </div>
         </div>
       )}
+
+      <BottomSheet
+        open={!!shareDest}
+        onClose={() => setShareDest(null)}
+        title={shareDest?.target === "bookNote" ? "分享读书笔记" : "分享本书"}
+        zClassName="z-lightbox"
+      >
+        <div className="space-y-1 pb-2">
+          <button
+            type="button"
+            className="w-full flex items-center gap-3 min-h-12 px-2 rounded-button hover:bg-app-hover text-left transition-colors duration-press ease-out"
+            onClick={() => {
+              const dest = shareDest;
+              setShareDest(null);
+              if (!dest) return;
+              if (dest.target === "book") handleShareBookToTalk();
+              else handleShareNoteToTalk(dest.note);
+            }}
+          >
+            <MessageCircle size={18} className="shrink-0 text-accent-secondary" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-tx-primary">分享到说说</span>
+              <span className="block text-[11px] text-tx-tertiary">发到工作区时间线</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="w-full flex items-center gap-3 min-h-12 px-2 rounded-button hover:bg-app-hover text-left transition-colors duration-press ease-out disabled:opacity-50"
+            disabled={!familyChat}
+            onClick={() => {
+              const dest = shareDest;
+              setShareDest(null);
+              if (!dest) return;
+              if (dest.target === "book") void openShareToChat("book", bookHash);
+              else void openShareToChat("bookNote", dest.note.id, dest.note);
+            }}
+          >
+            <MessageSquare size={18} className="shrink-0 text-accent-primary" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-tx-primary">分享到聊天</span>
+              <span className="block text-[11px] text-tx-tertiary">
+                {familyChat ? "以卡片发到家庭群或私聊" : "聊天仅在家庭工作区可用"}
+              </span>
+            </span>
+          </button>
+        </div>
+      </BottomSheet>
+
+      <ShareConversationSheet
+        open={shareToChatOpen}
+        onClose={() => {
+          setShareToChatOpen(false);
+          setShareToChatCard(null);
+        }}
+        card={shareToChatCard || { kind: "book", id: bookHash }}
+        zClassName="z-lightbox"
+      />
     </div>
   );
 }

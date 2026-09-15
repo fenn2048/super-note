@@ -11,7 +11,7 @@ import { getUserWorkspaceRole, hasPermission, isSystemAdmin, resolveNotePermissi
 
 export type ImConversationType = "group" | "dm";
 export type ImMessageType = "text" | "image" | "file" | "sticker" | "voice" | "card";
-export type ImCardKind = "note" | "diary" | "task";
+export type ImCardKind = "note" | "diary" | "task" | "book" | "bookNote";
 
 export interface ImCardPayload {
   kind: ImCardKind;
@@ -265,13 +265,19 @@ const CARD_LABEL: Record<ImCardKind, string> = {
   note: "笔记",
   diary: "说说",
   task: "任务",
+  book: "书籍",
+  bookNote: "读书笔记",
 };
+
+function isImCardKind(kind: unknown): kind is ImCardKind {
+  return kind === "note" || kind === "diary" || kind === "task" || kind === "book" || kind === "bookNote";
+}
 
 export function parseImCard(body: string | null): ImCardPayload | null {
   if (!body) return null;
   try {
     const raw = JSON.parse(body) as Partial<ImCardPayload>;
-    if (raw.kind !== "note" && raw.kind !== "diary" && raw.kind !== "task") return null;
+    if (!isImCardKind(raw.kind)) return null;
     if (typeof raw.id !== "string" || !raw.id.trim()) return null;
     return {
       kind: raw.kind,
@@ -308,7 +314,7 @@ export function resolveShareCard(
 ): ImCardPayload {
   const cardId = (id || "").trim();
   if (!cardId) throw new ShareCardError("缺少卡片 id");
-  if (kind !== "note" && kind !== "diary" && kind !== "task") {
+  if (!isImCardKind(kind)) {
     throw new ShareCardError("不支持的卡片类型");
   }
   const d = getDb();
@@ -372,6 +378,97 @@ export function resolveShareCard(
       title: snippet,
       snippet: "",
       label: CARD_LABEL.diary,
+    };
+  }
+
+  if (kind === "book") {
+    const book = d
+      .prepare(
+        `SELECT bookHash, title, author, visibility, workspaceId, userId
+         FROM books
+         WHERE bookHash = ? AND workspaceId = ?
+         ORDER BY CASE WHEN userId = ? THEN 0 ELSE 1 END
+         LIMIT 1`,
+      )
+      .get(cardId, workspaceId, userId) as
+      | {
+          bookHash: string;
+          title: string | null;
+          author: string | null;
+          visibility: string | null;
+          workspaceId: string | null;
+          userId: string;
+        }
+      | undefined;
+    if (!book) throw new ShareCardError("书籍不存在", 404);
+    if ((book.visibility || "PRIVATE") === "PRIVATE" && book.userId !== userId) {
+      throw new ShareCardError("该书仅上传者可见", 403);
+    }
+    if ((book.visibility || "PRIVATE") === "PRIVATE" && book.userId === userId) {
+      d.prepare(
+        `UPDATE books SET visibility = 'WORKSPACE', updatedAt = datetime('now')
+         WHERE userId = ? AND bookHash = ?`,
+      ).run(userId, cardId);
+    }
+    return {
+      kind: "book",
+      id: book.bookHash,
+      title: (book.title || "").trim() || "未命名书籍",
+      snippet: (book.author || "").trim(),
+      label: CARD_LABEL.book,
+    };
+  }
+
+  if (kind === "bookNote") {
+    const row = d
+      .prepare(
+        `SELECT bn.id, bn.userId, bn.bookHash, bn.text, bn.note, bn.visibility,
+                b.workspaceId, b.visibility AS bookVisibility, b.title AS bookTitle, b.userId AS bookOwnerId
+         FROM book_notes bn
+         JOIN books b ON b.bookHash = bn.bookHash AND b.workspaceId = ?
+         WHERE bn.id = ?
+         ORDER BY CASE WHEN b.userId = ? THEN 0 ELSE 1 END
+         LIMIT 1`,
+      )
+      .get(workspaceId, cardId, userId) as
+      | {
+          id: string;
+          userId: string;
+          bookHash: string;
+          text: string | null;
+          note: string | null;
+          visibility: string | null;
+          workspaceId: string | null;
+          bookVisibility: string | null;
+          bookTitle: string | null;
+          bookOwnerId: string;
+        }
+      | undefined;
+    if (!row) throw new ShareCardError("读书笔记不存在", 404);
+    if ((row.bookVisibility || "PRIVATE") === "PRIVATE" && row.bookOwnerId !== userId) {
+      throw new ShareCardError("无权分享该书", 403);
+    }
+    const noteVis = (row.visibility || "public").toLowerCase();
+    if (noteVis === "private" && row.userId !== userId) {
+      throw new ShareCardError("该笔记为私密", 403);
+    }
+    if ((row.bookVisibility || "PRIVATE") === "PRIVATE" && row.bookOwnerId === userId) {
+      d.prepare(
+        `UPDATE books SET visibility = 'WORKSPACE', updatedAt = datetime('now')
+         WHERE userId = ? AND bookHash = ?`,
+      ).run(row.bookOwnerId, row.bookHash);
+    }
+    if (noteVis === "private" && row.userId === userId) {
+      d.prepare(`UPDATE book_notes SET visibility = 'public', updatedAt = datetime('now') WHERE id = ?`).run(cardId);
+    }
+    const quote = clipSnippet(row.text);
+    const comment = clipSnippet(row.note);
+    return {
+      kind: "bookNote",
+      id: row.id,
+      title: (row.bookTitle || "").trim() || "读书笔记",
+      snippet: comment ? (quote ? `${quote} · ${comment}` : comment) : quote,
+      label: CARD_LABEL.bookNote,
     };
   }
 

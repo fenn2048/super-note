@@ -835,6 +835,25 @@ function AppLayout() {
           actions.setMobileView("list");
           openChat(sourceId);
           sessionStorage.removeItem("super:pending-navigate");
+        } else if (sourceType === "book") {
+          window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash: sourceId } }));
+          sessionStorage.removeItem("super:pending-navigate");
+        } else if (sourceType === "bookNote") {
+          try {
+            const { bookHash } = await api.books.getNoteInfo(sourceId);
+            try {
+              localStorage.setItem("super-target-book-note-id", sourceId);
+            } catch {
+              /* ignore */
+            }
+            window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+            window.dispatchEvent(new CustomEvent("super:goto-book-note", { detail: { noteId: sourceId } }));
+          } catch (err) {
+            console.error("Failed to open shared book note:", err);
+            const { toast } = await import("@/lib/toast");
+            toast.error("无法打开读书笔记");
+          }
+          sessionStorage.removeItem("super:pending-navigate");
         }
       } catch (e) {
         console.error("Failed to parse pending navigate:", e);

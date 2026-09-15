@@ -5,7 +5,7 @@
  *   - ImShareCardBubble：消息列表里的可点卡片
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { CheckSquare, ChevronRight, FileText, MessageCircle, Search } from "lucide-react";
+import { BookOpen, CheckSquare, ChevronRight, FileText, Highlighter, MessageCircle, Search } from "lucide-react";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { BottomSheet } from "@/components/common/BottomSheet";
 import { EmptyState, LoadingBlock } from "@/components/common/FeedbackStates";
@@ -30,11 +30,20 @@ export function ImShareCardBubble({
   if (!card) {
     return <span className="text-tx-tertiary text-sm">[卡片]</span>;
   }
-  const Icon = card.kind === "note" ? FileText : card.kind === "diary" ? MessageCircle : CheckSquare;
-  const tone =
+  const Icon =
     card.kind === "note"
-      ? "text-accent-primary"
+      ? FileText
       : card.kind === "diary"
+        ? MessageCircle
+        : card.kind === "book"
+          ? BookOpen
+          : card.kind === "bookNote"
+            ? Highlighter
+            : CheckSquare;
+  const tone =
+    card.kind === "note" || card.kind === "book"
+      ? "text-accent-primary"
+      : card.kind === "diary" || card.kind === "bookNote"
         ? "text-accent-secondary"
         : "text-accent-warning";
   return (
@@ -71,7 +80,7 @@ export function ImShareCardBubble({
   );
 }
 
-type Tab = ImCardKind;
+type Tab = "note" | "diary" | "task";
 
 export function ShareItemPickerSheet({
   open,
@@ -249,10 +258,12 @@ export function ShareConversationSheet({
   open,
   onClose,
   card,
+  zClassName,
 }: {
   open: boolean;
   onClose: () => void;
   card: { kind: ImCardKind; id: string };
+  zClassName?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -288,7 +299,7 @@ export function ShareConversationSheet({
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="分享到聊天" zClassName="z-popover">
+    <BottomSheet open={open} onClose={onClose} title="分享到聊天" zClassName={zClassName || "z-popover"}>
       {!family ? (
         <p className="text-sm text-tx-tertiary text-center py-8 px-2">聊天仅在家庭工作区可用</p>
       ) : loading ? (

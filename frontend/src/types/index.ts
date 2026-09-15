@@ -280,7 +280,7 @@ export type ViewMode = "home" | "notebook" | "favorites" | "trash" | "all" | "se
 
 export type ImConversationType = "group" | "dm";
 export type ImMessageType = "text" | "image" | "file" | "sticker" | "voice" | "card";
-export type ImCardKind = "note" | "diary" | "task";
+export type ImCardKind = "note" | "diary" | "task" | "book" | "bookNote";
 
 export interface ImCardPayload {
   kind: ImCardKind;

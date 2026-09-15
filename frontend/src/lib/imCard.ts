@@ -4,13 +4,19 @@ const CARD_LABEL: Record<ImCardKind, string> = {
   note: "笔记",
   diary: "说说",
   task: "任务",
+  book: "书籍",
+  bookNote: "读书笔记",
 };
+
+function isImCardKind(kind: unknown): kind is ImCardKind {
+  return kind === "note" || kind === "diary" || kind === "task" || kind === "book" || kind === "bookNote";
+}
 
 export function parseImCard(body: string | null | undefined): ImCardPayload | null {
   if (!body) return null;
   try {
     const raw = JSON.parse(body) as Partial<ImCardPayload>;
-    if (raw.kind !== "note" && raw.kind !== "diary" && raw.kind !== "task") return null;
+    if (!isImCardKind(raw.kind)) return null;
     if (typeof raw.id !== "string" || !raw.id.trim()) return null;
     return {
       kind: raw.kind,
