@@ -46,6 +46,7 @@ import {
   isThumbnailable,
   deleteThumbnailsFor,
 } from "../services/thumbnails";
+import { compressRasterImage, replaceFilenameExt } from "../services/imageCompress";
 
 const IM_FILES_DIR = getImFilesDir();
 
@@ -909,34 +910,42 @@ app.post("/conversations/:id/files", async (c) => {
 
   ensureImFilesDir();
   const fileId = uuid();
-  const ext = pickExt(file.name, mime);
-  const relPath = `${fileId}.${ext}`;
-  const abs = path.join(IM_FILES_DIR, relPath);
   let buffer: Buffer;
   try {
     buffer = Buffer.from(await file.arrayBuffer());
   } catch (err: any) {
     return c.json({ error: `读取上传内容失败: ${err?.message || err}` }, 500);
   }
+
+  let saveMime = mime;
+  if (IMAGE_MIMES.has(mime) || mime === "image/jpg") {
+    const compressed = await compressRasterImage(buffer, mime);
+    buffer = compressed.buffer;
+    saveMime = compressed.mime;
+  }
+
+  const ext = MIME_TO_EXT[saveMime] || pickExt(file.name, saveMime);
+  const relPath = `${fileId}.${ext}`;
+  const abs = path.join(IM_FILES_DIR, relPath);
   fs.writeFileSync(abs, buffer);
 
-  const filename = (file.name || relPath).slice(0, 255);
+  const filename = replaceFilenameExt((file.name || relPath).slice(0, 255), ext);
   const db = getDb();
   db.prepare(
     `INSERT INTO im_files (id, conversationId, uploaderId, filename, mimeType, size, path)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(fileId, id, userId, filename, mime, buffer.length, relPath);
+  ).run(fileId, id, userId, filename, saveMime, buffer.length, relPath);
 
   return c.json(
     {
       id: fileId,
       filename,
-      mimeType: mime,
+      mimeType: saveMime,
       size: buffer.length,
       url: `/api/im/files/${fileId}`,
-      kind: IMAGE_MIMES.has(mime)
+      kind: IMAGE_MIMES.has(saveMime)
         ? "image"
-        : AUDIO_MIMES.has(mime) || mime.startsWith("audio/")
+        : AUDIO_MIMES.has(saveMime) || saveMime.startsWith("audio/")
           ? "audio"
           : "file",
     },

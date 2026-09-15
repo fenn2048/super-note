@@ -15,6 +15,7 @@ import {
 import { downloadBlob } from "@/lib/downloadFile";
 import { notifyNetworkAlive } from "@/hooks/useNetworkStatus";
 import { logger } from "@/lib/logger";
+import { compressImageForUpload } from "@/lib/imageCompress";
 
 // 服务器地址管理
 const SERVER_URL_KEY = "super-server-url";
@@ -2135,8 +2136,9 @@ export const api = {
       workspaceId?: string,
     ): Promise<{ id: string; url: string; mimeType: string; size: number }> => {
       const token = getToken();
+      const compressed = await compressImageForUpload(file);
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", compressed);
       // Y2: 上传时即记录目标工作区，发布时再 attach 一致。
       // "personal" / 空串 = 个人空间：不带 query，避免中间件把 "personal" 当 UUID。
       const raw = workspaceId !== undefined ? workspaceId : getCurrentWorkspace();
@@ -3856,8 +3858,9 @@ export const api = {
     },
     uploadFile: async (conversationId: string, file: File): Promise<import("@/types").ImFileInfo> => {
       const token = getToken();
+      const compressed = await compressImageForUpload(file);
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", compressed);
       const ws = getCurrentWorkspace();
       const qs = ws ? `?workspaceId=${encodeURIComponent(ws)}` : "";
       const res = await fetch(

@@ -38,6 +38,7 @@ import {
 } from "../middleware/acl";
 import { createMentions, broadcastToWorkspace } from "../lib/mentions";
 import { getAuthUserId } from "../lib/auth-security";
+import { compressRasterImage } from "../services/imageCompress";
 
 
 const diary = new Hono();
@@ -1042,13 +1043,22 @@ diary.post("/attachments", requireWorkspaceFeature("diaries"), async (c) => {
 
   ensureAttachmentsDir();
   const id = crypto.randomUUID();
-  const ext = MIME_TO_EXT[mime] || "bin";
-  const filename = `${id}.${ext}`;
-  const savePath = path.join(getAttachmentsDir(), filename);
+
+  let saveMime = mime;
+  let saveSize = file.size;
+  let ext = MIME_TO_EXT[mime] || "bin";
+  let filename = `${id}.${ext}`;
+  let savePath = path.join(getAttachmentsDir(), filename);
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(savePath, buffer);
+    const raw = Buffer.from(await file.arrayBuffer());
+    const compressed = await compressRasterImage(raw, mime);
+    saveMime = compressed.mime;
+    saveSize = compressed.buffer.length;
+    ext = MIME_TO_EXT[saveMime] || compressed.ext || "bin";
+    filename = `${id}.${ext}`;
+    savePath = path.join(getAttachmentsDir(), filename);
+    fs.writeFileSync(savePath, compressed.buffer);
   } catch (err: any) {
     return c.json({ error: `写入文件失败: ${err?.message || err}` }, 500);
   }
@@ -1057,7 +1067,7 @@ diary.post("/attachments", requireWorkspaceFeature("diaries"), async (c) => {
     db.prepare(
       `INSERT INTO diary_attachments (id, diaryId, userId, workspaceId, mimeType, size, path)
        VALUES (?, NULL, ?, ?, ?, ?, ?)`,
-    ).run(id, userId, scope.workspaceId, mime, file.size, filename);
+    ).run(id, userId, scope.workspaceId, saveMime, saveSize, filename);
   } catch (err: any) {
     try {
       fs.unlinkSync(savePath);
@@ -1071,8 +1081,8 @@ diary.post("/attachments", requireWorkspaceFeature("diaries"), async (c) => {
     {
       id,
       url: `/api/diary/attachments/${id}`,
-      mimeType: mime,
-      size: file.size,
+      mimeType: saveMime,
+      size: saveSize,
     },
     201,
   );
