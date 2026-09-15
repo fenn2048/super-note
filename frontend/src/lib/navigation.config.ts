@@ -323,6 +323,58 @@ export function openChat(conversationId?: string | null): void {
   }
 }
 
+/** `#/books/<bookHash>` 阅读器深链。其它 hash 返回 null。 */
+export function parseBookReaderHash(hash: string): string | null {
+  if (!hash.startsWith("#/books/")) return null;
+  const raw = hash.slice("#/books/".length).split(/[?#]/)[0];
+  return raw || null;
+}
+
+/** 桌面浏览器开新标签；原生 App / 窄屏仍页内打开。 */
+export function shouldOpenBookInNewTab(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const cap = (window as unknown as {
+      Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string };
+    }).Capacitor;
+    if (cap?.isNativePlatform?.()) return false;
+    const platform = cap?.getPlatform?.();
+    if (platform === "ios" || platform === "android") return false;
+  } catch {
+    /* ignore */
+  }
+  if (typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(min-width: 768px)").matches;
+}
+
+export function openBookReader(bookHash: string): void {
+  const id = (bookHash || "").trim();
+  if (!id || typeof window === "undefined") return;
+  if (shouldOpenBookInNewTab()) {
+    const next = `${window.location.origin}${window.location.pathname}${window.location.search}#/books/${id}`;
+    // 不要把 noopener 写进 window.open 的 features：多数浏览器此时返回 null，
+    // 调用方会误判弹窗被拦，又在当前页打开阅读器。
+    const opened = window.open(next, "_blank");
+    if (opened) {
+      try {
+        opened.opener = null;
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+  }
+  window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash: id } }));
+}
+
+/** 阅读器新标签里点返回：由脚本打开的标签可关；关不掉则调用方继续页内返回。 */
+export function tryCloseBookReaderTab(): void {
+  if (typeof window === "undefined") return;
+  if (!parseBookReaderHash(window.location.hash)) return;
+  if (!shouldOpenBookInNewTab()) return;
+  window.close();
+}
+
 /** `#/tasks` 列表；`#/tasks/<id>` 打开指定任务。其它 hash 返回 null。 */
 export function parseTasksHash(
   hash: string,

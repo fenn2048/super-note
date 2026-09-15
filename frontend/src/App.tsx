@@ -63,6 +63,8 @@ import {
   parseTasksHash,
   parseChatHash,
   openChat,
+  openBookReader,
+  parseBookReaderHash,
   openPlansEntry,
   setLibraryTab,
   shouldShowMobileTabBar,
@@ -371,14 +373,9 @@ function AppLayout() {
   // Initialize from URL eagerly (before effects run) to prevent the hash-sync
   // effect from overwriting a full book URL (e.g. #/books/<64-char-hash>) with
   // just "#/books" when the page is reloaded while reading a book.
-  const [activeBookHash, setActiveBookHash] = useState<string | null>(() => {
-    const h = window.location.hash;
-    if (h.startsWith("#/books/")) {
-      const hash = h.replace("#/books/", "");
-      return hash || null;
-    }
-    return null;
-  });
+  const [activeBookHash, setActiveBookHash] = useState<string | null>(() =>
+    parseBookReaderHash(window.location.hash),
+  );
   const [isChatThreadOpen, setIsChatThreadOpen] = useState(
     () => Boolean(parseChatHash(window.location.hash)?.conversationId),
   );
@@ -395,9 +392,10 @@ function AppLayout() {
       setIsChatThreadOpen(Boolean(parseChatHash(hash)?.conversationId));
       const notesViewModes = ["all", "notebook", "favorites", "search", "tag", "trash"];
       if (hash.startsWith("#/books/")) {
-        const bookHash = hash.replace("#/books/", "");
+        const bookHash = hash.replace("#/books/", "").split(/[?#]/)[0];
         if (bookHash) {
-          actions.setViewMode("books");
+          setLibraryTab("books");
+          actions.setViewMode("library");
           setActiveBookHash(bookHash);
         }
       } else if (hash === "#/books") {
@@ -596,13 +594,13 @@ function AppLayout() {
       if (href.startsWith("book://")) {
         e.preventDefault();
         const bookHash = href.replace("book://", "");
-        window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+        openBookReader(bookHash);
       } else if (href.startsWith("book-note://")) {
         e.preventDefault();
         const noteId = href.replace("book-note://", "");
         try {
           const { bookHash } = await api.books.getNoteInfo(noteId);
-          window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+          openBookReader(bookHash);
         } catch (err) {
           console.warn("无法解析读书笔记关联的书籍:", err);
         }
@@ -836,7 +834,7 @@ function AppLayout() {
           openChat(sourceId);
           sessionStorage.removeItem("super:pending-navigate");
         } else if (sourceType === "book") {
-          window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash: sourceId } }));
+          openBookReader(sourceId);
           sessionStorage.removeItem("super:pending-navigate");
         } else if (sourceType === "bookNote") {
           try {
@@ -846,8 +844,7 @@ function AppLayout() {
             } catch {
               /* ignore */
             }
-            window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
-            window.dispatchEvent(new CustomEvent("super:goto-book-note", { detail: { noteId: sourceId } }));
+            openBookReader(bookHash);
           } catch (err) {
             console.error("Failed to open shared book note:", err);
             const { toast } = await import("@/lib/toast");

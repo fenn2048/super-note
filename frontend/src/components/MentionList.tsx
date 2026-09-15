@@ -20,7 +20,7 @@ import { api } from "@/lib/api";
 import { useApp, useAppActions } from "@/store/AppContext";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { openTaskById, openTasksEntry, openChat } from "@/lib/navigation.config";
+import { openTaskById, openTasksEntry, openChat, openBookReader } from "@/lib/navigation.config";
 
 type InboxItem = {
   id: string;
@@ -149,7 +149,7 @@ export default function MentionList() {
         case "note":
           try {
             const { bookHash } = await api.books.getNoteInfo(sourceId);
-            window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+            openBookReader(bookHash);
             localStorage.setItem("super-target-book-note-id", sourceId);
             window.dispatchEvent(new CustomEvent("super:goto-book-note", { detail: { noteId: sourceId } }));
           } catch {

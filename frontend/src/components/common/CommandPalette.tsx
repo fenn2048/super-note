@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
 import { isModuleAllowedByPack } from "@/lib/modulePack";
-import { openTasksEntry } from "@/lib/navigation.config";
+import { openBookReader, openTasksEntry, shouldOpenBookInNewTab } from "@/lib/navigation.config";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -508,10 +508,12 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           actions.setViewMode("projects");
           window.dispatchEvent(new CustomEvent("super:open-project-task", { detail: hit.id }));
         } else if (hit.type === "book") {
-          const { setLibraryTab } = await import("@/lib/navigation.config");
-          setLibraryTab("books");
-          actions.setViewMode("library");
-          window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash: hit.bookHash || hit.id } }));
+          if (!shouldOpenBookInNewTab()) {
+            const { setLibraryTab } = await import("@/lib/navigation.config");
+            setLibraryTab("books");
+            actions.setViewMode("library");
+          }
+          openBookReader(hit.bookHash || hit.id);
         }
       } catch (err) {
         console.error("[CommandPalette] activate failed:", err);

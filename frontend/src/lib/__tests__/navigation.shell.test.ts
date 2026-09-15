@@ -10,6 +10,7 @@ import {
   getMobileTabModules,
   getMobileMoreModules,
   isChatTabActive,
+  parseBookReaderHash,
 } from "@/lib/navigation.config";
 
 describe("mobile shell rules", () => {
@@ -91,6 +92,14 @@ describe("shouldShowDesktopFAB", () => {
     expect(shouldShowDesktopFAB({ viewMode: "finance" })).toBe(false);
     expect(shouldShowDesktopFAB({ viewMode: "health" })).toBe(false);
     expect(shouldShowDesktopFAB({ viewMode: "all" })).toBe(true);
+  });
+});
+
+describe("parseBookReaderHash", () => {
+  it("reads #/books/<hash>", () => {
+    expect(parseBookReaderHash("#/books/abc123")).toBe("abc123");
+    expect(parseBookReaderHash("#/books/")).toBeNull();
+    expect(parseBookReaderHash("#/library")).toBeNull();
   });
 });
 

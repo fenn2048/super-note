@@ -36,7 +36,7 @@ import { LoadingBlock, EmptyState, EmptyActionButton } from "@/components/common
 import PageHeader from "@/components/layout/PageHeader";
 import ContentCanvas from "@/components/layout/ContentCanvas";
 import ReadingDashboard from "@/components/books/ReadingDashboard";
-import { setLibraryTab } from "@/lib/navigation.config";
+import { openBookReader, setLibraryTab, shouldOpenBookInNewTab } from "@/lib/navigation.config";
 import { springs } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
@@ -539,10 +539,12 @@ export default function Dashboard() {
   const handleOpenBookFromHome = useCallback(
     (bookHash: string) => {
       haptic.light();
-      setLibraryTab("books");
-      actions.setViewMode("library");
-      actions.setMobileView("list");
-      window.dispatchEvent(new CustomEvent("super:open-book", { detail: { bookHash } }));
+      if (!shouldOpenBookInNewTab()) {
+        setLibraryTab("books");
+        actions.setViewMode("library");
+        actions.setMobileView("list");
+      }
+      openBookReader(bookHash);
     },
     [actions],
   );

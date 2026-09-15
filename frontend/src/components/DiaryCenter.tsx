@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { api, getCurrentWorkspace, getBaseUrl, getServerUrl, resolveAttachmentUrl } from "@/lib/api";
 import { ShareConversationSheet } from "@/components/chat/ShareToChat";
+import { openBookReader } from "@/lib/navigation.config";
 import { isFamilyWorkspace } from "@/lib/imCard";
 import { realtime } from "@/lib/realtime";
 import { toast } from "@/lib/toast";
@@ -85,6 +86,7 @@ import {
   handleHttpLinkClick,
   renderTextWithLinks,
 } from "@/lib/textLinks";
+
 
 marked.setOptions({
   gfm: true,
@@ -2246,9 +2248,7 @@ function DiaryCard({
         localStorage.setItem("super-target-book-note-id", item.bookNoteId);
       }
       localStorage.setItem("super-target-book-hash", item.bookHash);
-      window.dispatchEvent(new CustomEvent("super:open-book", {
-        detail: { bookHash: item.bookHash }
-      }));
+      openBookReader(item.bookHash);
     }
   };
 

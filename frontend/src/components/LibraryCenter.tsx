@@ -7,7 +7,7 @@
 import React, { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FolderOpen, Book, Film, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getLibraryTab, setLibraryTab, type LibraryTab } from "@/lib/navigation.config";
+import { getLibraryTab, openBookReader, parseBookReaderHash, setLibraryTab, tryCloseBookReaderTab, type LibraryTab } from "@/lib/navigation.config";
 import { getCurrentWorkspace } from "@/lib/api";
 import { useAppActions } from "@/store/AppContext";
 import MobileChromeHeader from "@/components/common/MobileChromeHeader";
@@ -95,7 +95,10 @@ export default function LibraryCenter() {
     }
     return getLibraryTab();
   });
-  const [activeBookHash, setActiveBookHash] = useState<string | null>(null);
+  const [activeBookHash, setActiveBookHash] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return parseBookReaderHash(window.location.hash);
+  });
   /** 媒体内页动态标题，如「雍正王朝（108）」；null 时用默认 Tab 名 */
   const [mediaChromeTitle, setMediaChromeTitle] = useState<string | null>(null);
   /** 桌面媒体详情打开时隐藏分段顶栏，改由详情顶栏接管 */
@@ -192,6 +195,18 @@ export default function LibraryCenter() {
     };
   }, [mediaDetailOpen, isMobile, tab, mediaChromeTitle]);
 
+  useEffect(() => {
+    const applyHash = () => {
+      const id = parseBookReaderHash(window.location.hash);
+      if (!id) return;
+      setTab("books");
+      setLibraryTab("books");
+      setActiveBookHash(id);
+    };
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
   // 从笔记链接 / 全局事件打开某本书
   useEffect(() => {
     try {
@@ -234,6 +249,7 @@ export default function LibraryCenter() {
           <BookReader
             bookHash={activeBookHash}
             onBack={() => {
+              tryCloseBookReaderTab();
               setActiveBookHash(null);
               setTab("books");
               setLibraryTab("books");
@@ -362,7 +378,7 @@ export default function LibraryCenter() {
           {activeTab === "files" && <FileManager />}
           {activeTab === "books" && (
             <BookCenter
-              onOpenBook={(hash) => setActiveBookHash(hash)}
+              onOpenBook={openBookReader}
               workspaceId={workspaceId}
             />
           )}
